@@ -34,11 +34,15 @@ def manage_eventbridge_rule(should_enable: bool) -> None:
         if should_enable:
             logger.info(f"Enabling EventBridge rule: {EVENTBRIDGE_RULE_NAME}")
             response = events_client.enable_rule(Name=EVENTBRIDGE_RULE_NAME)
-            logger.info(f"EventBridge rule enabled successfully - Status: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
+            logger.info(
+                f"EventBridge rule enabled successfully - Status: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}"
+            )
         else:
             logger.info(f"Disabling EventBridge rule: {EVENTBRIDGE_RULE_NAME}")
             response = events_client.disable_rule(Name=EVENTBRIDGE_RULE_NAME)
-            logger.info(f"EventBridge rule disabled successfully - Status: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}")
+            logger.info(
+                f"EventBridge rule disabled successfully - Status: {response.get('ResponseMetadata', {}).get('HTTPStatusCode')}"
+            )
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "Unknown")
         if error_code == "ResourceNotFoundException":
@@ -95,8 +99,6 @@ def get_polling_state() -> str:
         raise RuntimeError(f"Failed to get polling state: {err}")
 
 
-
-
 def ensure_polling_enabled() -> None:
     """
     Ensure polling is enabled when starting a story.
@@ -105,13 +107,13 @@ def ensure_polling_enabled() -> None:
     """
     try:
         logger.info(f"Enabling polling system - Rule: {EVENTBRIDGE_RULE_NAME}, SSM: {SSM_POLLER_STATE_PARAMETER}")
-        
+
         # Set parameter to run
         update_polling_state("run")
-        
+
         # Enable the EventBridge rule
         manage_eventbridge_rule(True)
-        
+
         logger.info("Polling system enabled successfully")
     except Exception as err:
         # Log error but don't block story start

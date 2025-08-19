@@ -1032,15 +1032,15 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
                 completed_stories = character.get("CompletedStories", {})
                 completed_stories[story_id] = {
                     "LastCompleted": int(time.time()),
-                    "CompletionCount": completed_stories.get(story_id, {}).get("CompletionCount", 0) + 1
+                    "CompletionCount": completed_stories.get(story_id, {}).get("CompletionCount", 0) + 1,
                 }
-                
+
                 # Update character with completed story info
                 dynamo.update_item(
                     TableName.CHARACTERS,
                     Key={"CharacterID": character_id},
                     UpdateExpression="SET CompletedStories = :completed",
-                    ExpressionAttributeValues={":completed": completed_stories}
+                    ExpressionAttributeValues={":completed": completed_stories},
                 )
                 logger.info(f"Updated LastCompleted for repeatable story {story_id} for {character_id}")
         except Exception as err:
@@ -1255,7 +1255,7 @@ def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, at
         if attribute_xp:
             update_expressions.append("AttributeXPAwarded = if_not_exists(AttributeXPAwarded, :empty_attr_map)")
             expression_values[":empty_attr_map"] = {}  # type: ignore
-            
+
         # Add skill XP updates
         for skill, xp_value in skill_xp.items():
             if xp_value > 0:

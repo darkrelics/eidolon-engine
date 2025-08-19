@@ -39,12 +39,12 @@ def format_start_story_response(active_segment: dict, segment: dict) -> dict:
     # Convert Unix timestamps to ISO 8601 for API response
     start_time_unix = active_segment.get("StartTime", 0)
     end_time_unix = active_segment.get("EndTime", 0)
-    
+
     start_time = from_unix(start_time_unix) if start_time_unix else ""
     end_time = from_unix(end_time_unix) if end_time_unix else ""
-    
+
     duration = end_time_unix - start_time_unix if start_time_unix and end_time_unix else 0
-    
+
     return {
         "Success": True,
         "Segment": {
@@ -102,10 +102,12 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
         RuntimeError: If critical operations fail
     """
     logger.debug(f"start_story_business_logic called - char: {character_id}, story: {story_id}, player: {player_id}")
-    
+
     # Start the story (critical - can raise)
     result = start_story_for_character(character_id, story_id, player_id)
-    logger.debug(f"start_story_for_character returned: active_segment={result.get('active_segment', {}).get('ActiveSegmentID', 'N/A')}")
+    logger.debug(
+        f"start_story_for_character returned: active_segment={result.get('active_segment', {}).get('ActiveSegmentID', 'N/A')}"
+    )
 
     active_segment = result.get("active_segment", {})
     segment = result.get("segment", {})
@@ -153,7 +155,9 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
             if not active_story_id and not active_segment_id:
                 logger.info(f"Character {character_id} in Incremental mode but no active story/segment, allowing new story")
             else:
-                logger.warning(f"Character {character_id} already in {game_mode} mode with active story/segment, cannot start new story")
+                logger.warning(
+                    f"Character {character_id} already in {game_mode} mode with active story/segment, cannot start new story"
+                )
                 raise ValueError(f"Character is currently in {game_mode} mode with an active story")
         else:
             logger.warning(f"Character {character_id} already in {game_mode} mode, cannot start new story")
@@ -180,7 +184,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         # Check if story should be removed from available list
         story_type = story.get("StoryType", "repeatable")
         should_remove = story_type != "repeatable"
-        
+
         # Build update expression to set GameMode and optionally remove from AvailableStories
         available_stories = character.get("AvailableStories", [])
         if should_remove and story_id in available_stories:
@@ -195,7 +199,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
 
         # Build condition expression - allow if GameMode is None OR (Incremental with no active story/segment)
         condition_expression = "(GameMode = :none) OR (GameMode = :incremental AND (attribute_not_exists(ActiveStoryID) OR ActiveStoryID = :null) AND (attribute_not_exists(ActiveSegmentID) OR ActiveSegmentID = :null))"
-        
+
         logger.debug(f"Updating character state with GameMode=Incremental, ActiveStoryID={story_id}")
         dynamo.update_item(
             TableName.CHARACTERS,
@@ -215,7 +219,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "Unknown")
         logger.error(f"DynamoDB error updating character {character_id}: Code={error_code}, Error={err}")
-        
+
         # Rollback: Delete the active segment we just created
         try:
             logger.debug(f"Rolling back active segment {active_segment.get('ActiveSegmentID')}")
@@ -312,7 +316,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     if not character_id:
         logger.error("Missing required parameter: CharacterID")
         return lambda_response(400, {"Error": "CharacterID is required"}, event)
-    
+
     if not story_id:
         logger.error("Missing required parameter: StoryID")
         return lambda_response(400, {"Error": "StoryID is required"}, event)

@@ -20,7 +20,7 @@ class SegmentStatusResponse(BaseEidolonModel):
     status: str = Field(..., alias="Status")
     is_complete: bool = Field(..., alias="IsComplete")
     time_remaining: int = Field(..., alias="TimeRemaining")
-    end_time: int = Field(..., alias="EndTime")
+    end_time: str = Field(..., alias="EndTime")
 
     # Optional details when complete
     challenge_results: list[ChallengeResultModel | dict] | None = Field(default=None, alias="ChallengeResults")
@@ -38,8 +38,8 @@ class SegmentHistoryItem(BaseEidolonModel):
     segment_type: str | None = Field(default=None, alias="SegmentType")
     status: str | None = Field(default=None, alias="Status")
     processing_status: str | None = Field(default=None, alias="ProcessingStatus")
-    start_time: int | None = Field(default=None, alias="StartTime")
-    end_time: int | None = Field(default=None, alias="EndTime")
+    start_time: str | None = Field(default=None, alias="StartTime")
+    end_time: str | None = Field(default=None, alias="EndTime")
 
     # Enriched data for clients
     outcome: str | None = Field(default=None, alias="Outcome")

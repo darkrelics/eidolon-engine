@@ -13,58 +13,58 @@ from eidolon.logger import logger
 def now_iso() -> str:
     """
     Get current UTC time as ISO 8601 string.
-    
+
     Returns:
         Current UTC time in ISO 8601 format (e.g., "2025-01-18T10:30:00Z")
     """
-    return datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def future_iso(seconds: int) -> str:
     """
     Get future UTC time as ISO 8601 string.
-    
+
     Args:
         seconds: Number of seconds in the future
-    
+
     Returns:
         Future UTC time in ISO 8601 format
     """
     future_time = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-    return future_time.isoformat().replace('+00:00', 'Z')
+    return future_time.isoformat().replace("+00:00", "Z")
 
 
 def past_iso(seconds: int) -> str:
     """
     Get past UTC time as ISO 8601 string.
-    
+
     Args:
         seconds: Number of seconds in the past
-    
+
     Returns:
         Past UTC time in ISO 8601 format
     """
     past_time = datetime.now(timezone.utc) - timedelta(seconds=seconds)
-    return past_time.isoformat().replace('+00:00', 'Z')
+    return past_time.isoformat().replace("+00:00", "Z")
 
 
 def parse_iso(iso_string: str) -> datetime:
     """
     Parse ISO 8601 string to datetime object.
-    
+
     Args:
         iso_string: ISO 8601 formatted time string
-    
+
     Returns:
         Datetime object in UTC
-    
+
     Raises:
         ValueError: If string is not valid ISO 8601 format
     """
     # Handle both 'Z' suffix and '+00:00' formats
-    if iso_string.endswith('Z'):
-        iso_string = iso_string[:-1] + '+00:00'
-    
+    if iso_string.endswith("Z"):
+        iso_string = iso_string[:-1] + "+00:00"
+
     try:
         dt = datetime.fromisoformat(iso_string)
         # Ensure timezone aware
@@ -79,10 +79,10 @@ def parse_iso(iso_string: str) -> datetime:
 def to_unix(iso_string: str) -> int:
     """
     Convert ISO 8601 string to Unix timestamp (seconds).
-    
+
     Args:
         iso_string: ISO 8601 formatted time string
-    
+
     Returns:
         Unix timestamp in seconds
     """
@@ -93,24 +93,24 @@ def to_unix(iso_string: str) -> int:
 def from_unix(unix_timestamp: int) -> str:
     """
     Convert Unix timestamp to ISO 8601 string.
-    
+
     Args:
         unix_timestamp: Unix timestamp in seconds
-    
+
     Returns:
         ISO 8601 formatted time string
     """
     dt = datetime.fromtimestamp(unix_timestamp, tz=timezone.utc)
-    return dt.isoformat().replace('+00:00', 'Z')
+    return dt.isoformat().replace("+00:00", "Z")
 
 
 def is_past(iso_string: str) -> bool:
     """
     Check if ISO 8601 time is in the past.
-    
+
     Args:
         iso_string: ISO 8601 formatted time string
-    
+
     Returns:
         True if time is in the past
     """
@@ -121,10 +121,10 @@ def is_past(iso_string: str) -> bool:
 def is_future(iso_string: str) -> bool:
     """
     Check if ISO 8601 time is in the future.
-    
+
     Args:
         iso_string: ISO 8601 formatted time string
-    
+
     Returns:
         True if time is in the future
     """
@@ -135,10 +135,10 @@ def is_future(iso_string: str) -> bool:
 def seconds_until(iso_string: str) -> int:
     """
     Calculate seconds until a future ISO 8601 time.
-    
+
     Args:
         iso_string: ISO 8601 formatted time string
-    
+
     Returns:
         Seconds until the time (0 if in the past)
     """
@@ -150,10 +150,10 @@ def seconds_until(iso_string: str) -> int:
 def seconds_since(iso_string: str) -> int:
     """
     Calculate seconds since a past ISO 8601 time.
-    
+
     Args:
         iso_string: ISO 8601 formatted time string
-    
+
     Returns:
         Seconds since the time (0 if in the future)
     """
@@ -165,11 +165,11 @@ def seconds_since(iso_string: str) -> int:
 def duration_between(start_iso: str, end_iso: str) -> int:
     """
     Calculate duration in seconds between two ISO 8601 times.
-    
+
     Args:
         start_iso: Start time in ISO 8601 format
         end_iso: End time in ISO 8601 format
-    
+
     Returns:
         Duration in seconds (positive if end > start)
     """
@@ -182,7 +182,7 @@ def duration_between(start_iso: str, end_iso: str) -> int:
 def now_unix() -> int:
     """
     Get current UTC time as Unix timestamp.
-    
+
     Returns:
         Current UTC time as Unix timestamp in seconds
     """
@@ -192,10 +192,10 @@ def now_unix() -> int:
 def future_unix(seconds: int) -> int:
     """
     Get future UTC time as Unix timestamp.
-    
+
     Args:
         seconds: Number of seconds in the future
-    
+
     Returns:
         Future UTC time as Unix timestamp in seconds
     """
@@ -206,10 +206,10 @@ def future_unix(seconds: int) -> int:
 def past_unix(seconds: int) -> int:
     """
     Get past UTC time as Unix timestamp.
-    
+
     Args:
         seconds: Number of seconds in the past
-    
+
     Returns:
         Past UTC time as Unix timestamp in seconds
     """

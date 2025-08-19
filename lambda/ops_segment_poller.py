@@ -173,7 +173,9 @@ def poll_and_process_segments_business_logic() -> dict:
                 # This sets Status="completed" so the segment won't be picked up again
                 mark_segment_as_completed_exceptional(segment.get("ActiveSegmentID"))
                 segments_marked_done += 1
-                logger.info(f"Marked exhausted segment as exceptional - no further processing needed for {segment.get('ActiveSegmentID')}")
+                logger.info(
+                    f"Marked exhausted segment as exceptional - no further processing needed for {segment.get('ActiveSegmentID')}"
+                )
             except Exception as err:
                 logger.error(f"Failed to mark exhausted segment as done for {segment.get('ActiveSegmentID')} Error: {err}")
 
@@ -187,7 +189,7 @@ def poll_and_process_segments_business_logic() -> dict:
     else:  # poller_state == "stop"
         # Parameter is "stop" - check for active segments
         has_active_segments = check_active_segments_exist()
-        
+
         if has_active_segments:
             # Found active segments - return to "run"
             update_polling_state("run")

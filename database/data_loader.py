@@ -410,7 +410,7 @@ def store_opponents(opponents_data):
 def store_story(story_data):
     """
     Stores story and segments data into DynamoDB tables.
-    
+
     Expects format with "Stories" array containing story objects.
 
     Args:
@@ -422,18 +422,18 @@ def store_story(story_data):
         if not stories:
             logging.warning("No stories found in the data")
             return
-            
+
         total_stories = 0
         total_segments = 0
-        
+
         for story_obj in stories:
             story = story_obj.get("Story", {})
             segments = story_obj.get("Segments", [])
-            
+
             if not story:
                 logging.warning("Story object missing 'Story' field, skipping")
                 continue
-            
+
             # Store the main story
             story_item = {
                 "StoryID": story["StoryID"],
@@ -517,7 +517,7 @@ def store_story(story_data):
                     UpdateExpression=update_expression,
                     ExpressionAttributeValues=expression_attribute_values,
                 )
-            
+
             total_segments += len(segments)
 
         logging.info(f"Successfully stored {total_stories} stories with {total_segments} total segments in DynamoDB")

@@ -196,39 +196,39 @@ def validate_eventbridge_rule(rule_name: str, region: str) -> bool:
 
 def fix_eventbridge_lambda_permission(params) -> bool:
     """Fix EventBridge permission to invoke ops-segment-poller Lambda.
-    
+
     This addresses the issue where CDK's add_permission() doesn't work
     when importing Lambda functions from ARNs.
-    
+
     Args:
         params: Deployment parameters with region
-        
+
     Returns:
         bool: True if permission was successfully added or already exists
     """
     print("\nFixing EventBridge Lambda invocation permission...")
-    
+
     lambda_client = boto3.client("lambda", region_name=params.region)
     events_client = boto3.client("events", region_name=params.region)
-    
+
     function_name = "ops-segment-poller"
     rule_name = "eidolon-story-poller"
     statement_id = "EventBridgeInvokePermission"
-    
+
     try:
         # First check if the permission already exists
         try:
             response = lambda_client.get_policy(FunctionName=function_name)
-            policy = json.loads(response['Policy'])
-            
+            policy = json.loads(response["Policy"])
+
             # Check if EventBridge permission already exists
-            for stmt in policy.get('Statement', []):
-                if stmt.get('Sid') == statement_id:
+            for stmt in policy.get("Statement", []):
+                if stmt.get("Sid") == statement_id:
                     print(f"  [OK] Permission '{statement_id}' already exists")
-                    
+
                     # Verify the target is configured
                     targets_response = events_client.list_targets_by_rule(Rule=rule_name)
-                    targets = targets_response.get('Targets', [])
+                    targets = targets_response.get("Targets", [])
                     if targets:
                         print(f"  [OK] EventBridge rule has {len(targets)} target(s)")
                         return True
@@ -237,50 +237,47 @@ def fix_eventbridge_lambda_permission(params) -> bool:
                         # Continue to add the target
                         break
         except ClientError as e:
-            if e.response['Error']['Code'] != 'ResourceNotFoundException':
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
                 raise
             # No policy exists yet, continue to add permission
-        
+
         # Get the rule ARN
         rule_response = events_client.describe_rule(Name=rule_name)
-        rule_arn = rule_response['Arn']
-        
+        rule_arn = rule_response["Arn"]
+
         # Remove any existing permission with the same statement ID
         try:
-            lambda_client.remove_permission(
-                FunctionName=function_name,
-                StatementId=statement_id
-            )
+            lambda_client.remove_permission(FunctionName=function_name, StatementId=statement_id)
             print(f"  Removed existing permission '{statement_id}'")
         except ClientError as e:
-            if e.response['Error']['Code'] != 'ResourceNotFoundException':
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
                 raise
-        
+
         # Add the permission
         lambda_client.add_permission(
             FunctionName=function_name,
             StatementId=statement_id,
-            Action='lambda:InvokeFunction',
-            Principal='events.amazonaws.com',
-            SourceArn=rule_arn
+            Action="lambda:InvokeFunction",
+            Principal="events.amazonaws.com",
+            SourceArn=rule_arn,
         )
         print(f"  [OK] Added permission for EventBridge to invoke {function_name}")
-        
+
         # Always update/ensure the target is properly configured
         # Get the Lambda function ARN
         function_response = lambda_client.get_function(FunctionName=function_name)
-        function_arn = function_response['Configuration']['FunctionArn']
-        
+        function_arn = function_response["Configuration"]["FunctionArn"]
+
         # Check existing targets
         targets_response = events_client.list_targets_by_rule(Rule=rule_name)
-        existing_targets = targets_response.get('Targets', [])
-        
+        existing_targets = targets_response.get("Targets", [])
+
         # Remove any existing targets (to ensure clean configuration)
         if existing_targets:
-            target_ids = [t['Id'] for t in existing_targets]
+            target_ids = [t["Id"] for t in existing_targets]
             events_client.remove_targets(Rule=rule_name, Ids=target_ids)
             print(f"  Removed {len(target_ids)} existing target(s)")
-        
+
         # Add the target with proper configuration
         # Note: EventBridge uses the Lambda resource-based policy for permissions,
         # not an execution role
@@ -288,48 +285,47 @@ def fix_eventbridge_lambda_permission(params) -> bool:
             Rule=rule_name,
             Targets=[
                 {
-                    'Id': '1',
-                    'Arn': function_arn,
+                    "Id": "1",
+                    "Arn": function_arn,
                     # EventBridge will use the resource-based policy we added above
                     # No RoleArn needed for Lambda targets
                 }
-            ]
+            ],
         )
         print(f"  [OK] Configured Lambda target for EventBridge rule")
-        
+
         # Final verification
         print("  Verifying configuration...")
-        
+
         # Check the permission is set
         response = lambda_client.get_policy(FunctionName=function_name)
-        policy = json.loads(response['Policy'])
+        policy = json.loads(response["Policy"])
         has_permission = any(
-            stmt.get('Sid') == statement_id and 
-            stmt.get('Principal', {}).get('Service') == 'events.amazonaws.com'
-            for stmt in policy.get('Statement', [])
+            stmt.get("Sid") == statement_id and stmt.get("Principal", {}).get("Service") == "events.amazonaws.com"
+            for stmt in policy.get("Statement", [])
         )
-        
+
         # Check the target is set
         targets_response = events_client.list_targets_by_rule(Rule=rule_name)
-        has_target = len(targets_response.get('Targets', [])) > 0
-        
+        has_target = len(targets_response.get("Targets", [])) > 0
+
         # Check the rule state
         rule_response = events_client.describe_rule(Name=rule_name)
-        rule_state = rule_response.get('State', 'UNKNOWN')
-        
+        rule_state = rule_response.get("State", "UNKNOWN")
+
         print(f"    Permission configured: {has_permission}")
         print(f"    Target configured: {has_target}")
         print(f"    Rule state: {rule_state}")
-        
+
         if has_permission and has_target:
             print(f"  [OK] EventBridge->Lambda integration fully configured")
-            if rule_state == 'DISABLED':
+            if rule_state == "DISABLED":
                 print(f"  [INFO] Rule is currently DISABLED (will be enabled when a story starts)")
             return True
         else:
             print(f"  [ERROR] EventBridge->Lambda integration not properly configured")
             return False
-        
+
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "Unknown")
         if error_code == "ResourceNotFoundException":
@@ -468,7 +464,7 @@ def deploy_story(params, config: Config, state: CDKState, config_path: Path, sta
     # Update Lambda function environment variables if queues were created
     if validation.get("processing_queue_url") and validation.get("advancement_queue_url"):
         update_lambda_environments(params, validation.get("processing_queue_url", ""), validation.get("advancement_queue_url", ""))
-    
+
     # Fix EventBridge Lambda permission (CDK doesn't set this correctly when importing Lambda ARNs)
     if validation.get("eventbridge", False):
         fix_eventbridge_lambda_permission(params)

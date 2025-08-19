@@ -17,6 +17,7 @@ from eidolon.items import get_inventory
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.responses import lambda_error, lambda_response
+from eidolon.time_utils import from_unix
 
 
 def get_character_logic(character_id: str, player_id: str) -> dict:
@@ -91,7 +92,29 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
     if active_story:
         response_data["ActiveStory"] = decimal_to_float(active_story)
     if active_segment:
-        response_data["ActiveSegment"] = decimal_to_float(active_segment)
+        # Convert Unix timestamps to ISO 8601 for API response
+        segment_data = decimal_to_float(active_segment)
+        # Type assertion - decimal_to_float returns dict when given dict
+        if isinstance(segment_data, dict):
+
+            # Convert StartTime if present (check for None, not falsy)
+            if "StartTime" in segment_data and segment_data["StartTime"] is not None:
+                try:
+                    # Handle both int and float Unix timestamps
+                    unix_time = float(segment_data["StartTime"])
+                    segment_data["StartTime"] = from_unix(int(unix_time))
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Failed to convert StartTime: {e}")
+
+            # Convert EndTime if present (check for None, not falsy)
+            if "EndTime" in segment_data and segment_data["EndTime"] is not None:
+                try:
+                    # Handle both int and float Unix timestamps
+                    unix_time = float(segment_data["EndTime"])
+                    segment_data["EndTime"] = from_unix(int(unix_time))
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Failed to convert EndTime: {e}")
+        response_data["ActiveSegment"] = segment_data
 
     # If there isn't an active story the available stories will be provided.
     if not active_story:

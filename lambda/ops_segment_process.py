@@ -199,7 +199,7 @@ def lambda_handler(event: dict, context: object) -> dict:
                 )
 
                 success_count += 1
-                
+
                 # No polling management needed here per design
                 # ops-story-advance and ops-segment-poller handle all polling state
 

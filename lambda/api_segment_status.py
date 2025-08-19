@@ -45,15 +45,16 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     # Convert Unix timestamps to ISO 8601 for API response
     end_time_unix = active_segment.get("EndTime", 0)
     end_time = from_unix(end_time_unix) if end_time_unix else ""
-    
+
     # Calculate status using Unix timestamps
     import time
+
     now = time.time()
     is_complete = end_time_unix <= now if end_time_unix else False
     time_remaining = max(0, int(end_time_unix - now)) if end_time_unix else 0
 
     processing_status = active_segment.get("ProcessingStatus", "")
-    
+
     response = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
         "StoryID": active_segment.get("StoryID"),
@@ -69,7 +70,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     # Only include narrative data if segment is processed or if it's not a mechanical segment
     # Mechanical segments need processing before narrative is available
     segment_type = active_segment.get("SegmentType", "").lower()
-    
+
     if segment_type != "mechanical" or processing_status == "processed":
         # Include narrative and events for display
         response["DefaultStatus"] = active_segment.get("DefaultStatus")
@@ -80,12 +81,12 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     else:
         # Segment is still processing - just return basic status
         response["DefaultStatus"] = "Processing..."
-    
+
     # Include decision-specific data
     if segment_type == "decision":
         response["Decision"] = active_segment.get("Decision")
         response["DecisionOptions"] = active_segment.get("DecisionOptions")
-    
+
     # Include healing data for rest segments
     if segment_type == "rest":
         response["HealingApplied"] = active_segment.get("HealingApplied")

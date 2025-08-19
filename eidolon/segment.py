@@ -870,7 +870,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         update_expression += ", ChallengeResults = :results"
         # Use simple converter for stability; Pydantic models available in eidolon.models
         expression_values[":results"] = _challenge_results_to_pascal(challenge_results)  # type: ignore
-    
+
     combat_state = results.get("combatState")
     if combat_state:
         update_expression += ", CombatState = :state"
@@ -1693,7 +1693,12 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
             Key={"ActiveSegmentID": active_segment_id},
             UpdateExpression="SET ProcessingStatus = :proc_status, #status = :status, #outcome = :outcome, RunningFlag = :false",
             ExpressionAttributeNames={"#outcome": "Outcome", "#status": "Status"},
-            ExpressionAttributeValues={":proc_status": "processed", ":status": "completed", ":outcome": "exceptional", ":false": False},
+            ExpressionAttributeValues={
+                ":proc_status": "processed",
+                ":status": "completed",
+                ":outcome": "exceptional",
+                ":false": False,
+            },
         )
         logger.info(f"Marked exhausted segment as completed with exceptional outcome for {active_segment_id}")
     except ClientError as err:

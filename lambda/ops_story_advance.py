@@ -52,12 +52,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     """
     # Get active segment first to check its status
     active_segment = get_active_segment(active_segment_id)
-    
+
     # Check if segment is already completed (e.g., marked as exceptional by poller)
     if active_segment.get("Status") == "completed":
         logger.info(f"Segment already completed, skipping advancement for {active_segment_id}")
         return {"success": True, "skipped": True, "reason": "Segment already completed"}
-    
+
     # Claim segment for processing
     if not claim_segment_for_processing(active_segment_id):
         return {"success": True, "skipped": True, "reason": "Already being processed"}

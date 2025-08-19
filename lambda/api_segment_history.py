@@ -79,7 +79,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
         # Convert Unix timestamps to ISO 8601 for API response
         start_time_unix = segment.get("StartTime", 0)
         end_time_unix = segment.get("EndTime", 0)
-        
+
         formatted_segment_dict = {
             "ActiveSegmentID": segment.get("ActiveSegmentID"),
             "SegmentID": segment.get("SegmentID"),
