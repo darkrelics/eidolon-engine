@@ -418,6 +418,7 @@ class _SimpleSegmentCard extends StatelessWidget {
               const SizedBox(height: 12),
               _SegmentTimer(
                 endTime: endTime,
+                startTime: segment['StartTime'],
                 duration: segment['SegmentDuration'] ?? segment['Duration'],
               ),
               if (defaultStatus.isNotEmpty) ...[
@@ -497,10 +498,12 @@ class _SimpleSegmentCard extends StatelessWidget {
 // Timer widget for active segments
 class _SegmentTimer extends StatefulWidget {
   final String endTime;
+  final String? startTime;
   final dynamic duration;
   
   const _SegmentTimer({
     required this.endTime,
+    this.startTime,
     this.duration,
   });
   
@@ -512,14 +515,37 @@ class _SegmentTimerState extends State<_SegmentTimer> {
   late Timer _timer;
   int _remainingSeconds = 0;
   int _totalDuration = 60;
+  DateTime? _endDateTime;
+  DateTime? _startDateTime;
   
   @override
   void initState() {
     super.initState();
-    // Get total duration from segment data
-    if (widget.duration != null) {
-      _totalDuration = widget.duration is int ? widget.duration : int.tryParse(widget.duration.toString()) ?? 60;
+    
+    // Parse the end time
+    _endDateTime = DateTime.parse(widget.endTime);
+    
+    // Parse start time if provided, otherwise calculate it
+    if (widget.startTime != null) {
+      try {
+        _startDateTime = DateTime.parse(widget.startTime!);
+        // Calculate total duration from actual start and end times
+        _totalDuration = _endDateTime!.difference(_startDateTime!).inSeconds;
+      } catch (e) {
+        // If parsing fails, fall back to calculation method
+        if (widget.duration != null) {
+          _totalDuration = widget.duration is int ? widget.duration : int.tryParse(widget.duration.toString()) ?? 60;
+        }
+        _startDateTime = _endDateTime!.subtract(Duration(seconds: _totalDuration));
+      }
+    } else {
+      // No start time provided, calculate based on duration
+      if (widget.duration != null) {
+        _totalDuration = widget.duration is int ? widget.duration : int.tryParse(widget.duration.toString()) ?? 60;
+      }
+      _startDateTime = _endDateTime!.subtract(Duration(seconds: _totalDuration));
     }
+    
     _updateRemainingTime();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => _updateRemainingTime());
   }
@@ -531,12 +557,10 @@ class _SegmentTimerState extends State<_SegmentTimer> {
   }
   
   void _updateRemainingTime() {
-    if (!mounted) return;
+    if (!mounted || _endDateTime == null) return;
     
-    // Parse ISO 8601 timestamp
-    final endDateTime = DateTime.parse(widget.endTime);
     final now = DateTime.now();
-    final difference = endDateTime.difference(now);
+    final difference = _endDateTime!.difference(now);
     
     setState(() {
       _remainingSeconds = difference.inSeconds > 0 ? difference.inSeconds : 0;
@@ -546,11 +570,37 @@ class _SegmentTimerState extends State<_SegmentTimer> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final minutes = _remainingSeconds ~/ 60;
+    
+    // Calculate hours, minutes, and seconds
+    final hours = _remainingSeconds ~/ 3600;
+    final minutes = (_remainingSeconds % 3600) ~/ 60;
     final seconds = _remainingSeconds % 60;
-    final progress = _totalDuration > 0 
-        ? (_totalDuration - _remainingSeconds) / _totalDuration 
-        : 0.0;
+    
+    // Format time display based on whether we have hours
+    String timeDisplay;
+    if (hours > 0) {
+      // Display hours:minutes:seconds when more than an hour
+      timeDisplay = '${hours.toString().padLeft(2, '0')}:'
+                    '${minutes.toString().padLeft(2, '0')}:'
+                    '${seconds.toString().padLeft(2, '0')}';
+    } else {
+      // Display minutes:seconds when less than an hour
+      timeDisplay = '${minutes.toString().padLeft(2, '0')}:'
+                    '${seconds.toString().padLeft(2, '0')}';
+    }
+    
+    // Calculate progress based on elapsed time from start
+    // Progress starts at 0 when segment begins and reaches 1.0 when it ends
+    double progress = 0.0;
+    if (_startDateTime != null && _endDateTime != null) {
+      final now = DateTime.now();
+      final totalDurationMs = _endDateTime!.difference(_startDateTime!).inMilliseconds;
+      final elapsedMs = now.difference(_startDateTime!).inMilliseconds;
+      
+      if (totalDurationMs > 0) {
+        progress = (elapsedMs / totalDurationMs).clamp(0.0, 1.0);
+      }
+    }
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -574,7 +624,7 @@ class _SegmentTimerState extends State<_SegmentTimer> {
             Icon(Icons.timer, size: 16, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 4),
             Text(
-              '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+              timeDisplay,
               style: TextStyle(
                 fontFamily: 'monospace',
                 color: theme.colorScheme.onSurfaceVariant,
