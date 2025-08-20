@@ -83,7 +83,7 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay> {
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: widget.onDismiss,
-              icon: const Icon(Icons.arrow_forward),
+              icon: const Icon(Icons.chevron_right),
               label: const Text('Continue'),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -192,7 +192,7 @@ class _OutcomeIcon extends StatelessWidget {
     switch (type.toLowerCase()) {
       case 'success':
       case 'exceptional':
-        return Icons.emoji_events;
+        return Icons.workspace_premium;
       case 'normal':
         return Icons.check_circle;
       case 'minimal':

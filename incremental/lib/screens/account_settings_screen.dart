@@ -7,7 +7,9 @@ import 'package:provider/provider.dart';
 
 import '../constants/navigation_constants.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../utils/error_handler.dart';
+import '../widgets/shared/keyboard_shortcuts.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -161,6 +163,45 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
+                    leading: const Icon(Icons.palette),
+                    title: const Text('Appearance'),
+                    subtitle: const Text('Customize the app appearance'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.brightness_6),
+                    title: const Text('Theme'),
+                    subtitle: const Text('Choose between light, dark, or system theme'),
+                    trailing: const ThemeModeSelector(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.help),
+                    title: const Text('Help'),
+                    subtitle: const Text('Get help with the app'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.keyboard),
+                    title: const Text('Keyboard Shortcuts'),
+                    subtitle: const Text('View available keyboard shortcuts'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => KeyboardShortcutHelp.show(context),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
                     leading: const Icon(Icons.security),
                     title: const Text('Security'),
                     subtitle: const Text('Manage your account security'),
@@ -169,7 +210,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.lock_reset),
                     title: const Text('Change Password'),
-                    trailing: const Icon(Icons.arrow_forward_ios),
+                    trailing: const Icon(Icons.chevron_right),
                     onTap: _isLoading
                         ? null
                         : () {
@@ -193,7 +234,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     leading: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
                     title: Text('Delete Account', style: TextStyle(color: Theme.of(context).colorScheme.error)),
                     subtitle: const Text('Permanently delete your account and all data'),
-                    trailing: const Icon(Icons.arrow_forward_ios),
+                    trailing: const Icon(Icons.chevron_right),
                     onTap: _isLoading ? null : _handleDeleteAccount,
                   ),
                 ],

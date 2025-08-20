@@ -5,6 +5,7 @@ import '../../models/character.dart';
 /// Widget displaying the active story with segments
 class ActiveStoryWidget extends StatefulWidget {
   final Character character;
+  final List<Map<String, dynamic>> segmentHistory;
   final Function(String)? onDecisionSelect;
   final VoidCallback? onAbandonStory;
   final VoidCallback? onRestSegment;
@@ -13,6 +14,7 @@ class ActiveStoryWidget extends StatefulWidget {
   const ActiveStoryWidget({
     super.key,
     required this.character,
+    this.segmentHistory = const [],
     this.onDecisionSelect,
     this.onAbandonStory,
     this.onRestSegment,
@@ -24,22 +26,9 @@ class ActiveStoryWidget extends StatefulWidget {
 }
 
 class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
-  List<Map<String, dynamic>> _segmentHistory = [];
-
   @override
   void initState() {
     super.initState();
-    _loadSegmentHistory();
-  }
-
-  void _loadSegmentHistory() {
-    // In a real implementation, this would load from API or local storage
-    // For now, we'll use placeholder data if available
-    if (widget.character.storyState?['SegmentHistory'] != null) {
-      _segmentHistory = List<Map<String, dynamic>>.from(
-        widget.character.storyState!['SegmentHistory'],
-      );
-    }
   }
 
   @override
@@ -87,8 +76,8 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
             const SizedBox(height: 20),
           ],
 
-          // Previous Segments
-          if (_segmentHistory.isNotEmpty) ...[  
+          // Previous Segments (show in reverse order - newest first)
+          if (widget.segmentHistory.isNotEmpty) ...[  
             Text(
               'Previous Segments',
               style: theme.textTheme.titleMedium?.copyWith(
@@ -96,7 +85,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               ),
             ),
             const SizedBox(height: 12),
-            ..._segmentHistory.map((segment) => Padding(
+            ...widget.segmentHistory.reversed.map((segment) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _SimpleSegmentCard(
                 segment: segment,
@@ -448,7 +437,7 @@ class _SimpleSegmentCard extends StatelessWidget {
               Row(
                 children: [
                   Icon(
-                    Icons.emoji_events,
+                    Icons.workspace_premium,
                     size: 16,
                     color: _getOutcomeColor(outcome),
                   ),

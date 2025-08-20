@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/character.dart';
 import '../models/story.dart';
+import '../providers/auth_provider.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/polling_service.dart';
@@ -14,7 +16,6 @@ import '../widgets/shared/error_boundary.dart';
 import '../widgets/game/character_panel.dart';
 import '../widgets/game/inventory_panel.dart';
 import '../widgets/game/story_panel.dart';
-import '../providers/theme_provider.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -33,6 +34,9 @@ class _GameScreenState extends State<GameScreen> {
   StreamSubscription<void>? _mechanicalPollingSubscription;
   StreamSubscription<void>? _storyPollingSubscription;
   Timer? _completionTimer; // Track completion timer to prevent duplicates
+  
+  // Segment history for the current story
+  final List<Map<String, dynamic>> _segmentHistory = [];
   
   // Panel visibility for mobile/tablet
   int _selectedPanelIndex = 1; // 0: Character, 1: Story, 2: Inventory
@@ -250,6 +254,8 @@ class _GameScreenState extends State<GameScreen> {
     try {
       setState(() {
         _isLoading = true;
+        // Clear segment history when starting a new story
+        _segmentHistory.clear();
       });
 
       await _apiService.startStory(
@@ -260,8 +266,7 @@ class _GameScreenState extends State<GameScreen> {
       // Reload character to get the new story state
       await _loadCharacterData();
       
-      // Set up segment status polling
-      // Poll once after 1 minute to get processed narrative
+      // Set up segment polling (60 seconds for processing, then at completion)
       _setupSegmentPolling();
     } catch (e) {
       if (mounted) {
@@ -279,7 +284,7 @@ class _GameScreenState extends State<GameScreen> {
   }
   
   void _setupSegmentPolling() {
-    // Cancel any existing polling timers first to prevent duplicates
+    // Cancel any existing timers first
     _mechanicalPollingSubscription?.cancel();
     _completionTimer?.cancel();
     
@@ -294,9 +299,10 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
     
-    debugPrint('GameScreen: Setting up segment polling for active segment');
+    debugPrint('GameScreen: Setting up polling for segment');
     
     final segmentType = activeSegment['SegmentType'] as String?;
+    final processingStatus = activeSegment['ProcessingStatus'] as String?;
     
     // Parse times - they come as ISO 8601 strings
     DateTime? endDateTime;
@@ -321,87 +327,121 @@ class _GameScreenState extends State<GameScreen> {
     
     final now = DateTime.now();
     
-    // For mechanical segments, poll 60 seconds after the segment started (only once)
-    if (segmentType == 'mechanical') {
+    // RULE: Poll ONCE at 60 seconds after segment start (if not already processed)
+    if (processingStatus != 'processed') {
       final timeSinceStart = now.difference(startDateTime);
-      final timeUntilOneMinute = const Duration(seconds: 60) - timeSinceStart;
+      final timeUntilSixtySeconds = const Duration(seconds: 60) - timeSinceStart;
       
-      debugPrint('GameScreen: Mechanical segment - time since start: ${timeSinceStart.inSeconds}s');
+      debugPrint('GameScreen: Segment type: $segmentType, status: $processingStatus, time since start: ${timeSinceStart.inSeconds}s');
       
-      // Only set timer if we haven't passed the 1-minute mark yet
-      if (timeUntilOneMinute.inSeconds > 0) {
-        debugPrint('GameScreen: Setting timer for 1-minute poll in ${timeUntilOneMinute.inSeconds}s');
-        Timer(timeUntilOneMinute, () async {
-          if (!mounted) return;
-        
-          try {
-            debugPrint('GameScreen: Polling segment status after 1 minute');
-            final statusResponse = await _apiService.getSegmentStatus(
-              characterId: _character!.id,
-            );
-            
-            // Update UI with narrative if available
-            if (statusResponse['ProcessingStatus'] == 'processed' && mounted) {
-              // Reload character to get updated segment data with narrative
-              await _loadCharacterData(silent: true);
-            }
-          } catch (e) {
-            debugPrint('GameScreen: Error polling segment status: $e');
-          }
-        });
+      if (timeUntilSixtySeconds.inSeconds > 0) {
+        // Schedule poll at 60 seconds
+        debugPrint('GameScreen: Will poll in ${timeUntilSixtySeconds.inSeconds}s');
+        Timer(timeUntilSixtySeconds, () => _pollForProcessedSegment());
+      } else if (timeSinceStart.inSeconds >= 60) {
+        // Past 60 seconds but not processed - poll immediately (system may be overloaded)
+        debugPrint('GameScreen: Past 60 seconds and not processed - polling now (system may be overloaded)');
+        _pollForProcessedSegment();
       }
-      // Don't poll immediately if past 1-minute - the narrative should already be loaded
+    } else {
+      debugPrint('GameScreen: Segment already processed, no polling needed');
     }
     
-    // Poll at segment completion time for all segment types
+    // Set timer for segment completion (to advance to next segment)
     final timeUntilCompletion = endDateTime.difference(now);
     if (timeUntilCompletion.inSeconds > 0) {
-      _completionTimer = Timer(timeUntilCompletion, () async {
-        if (!mounted) return;
+      debugPrint('GameScreen: Segment ends in ${timeUntilCompletion.inSeconds}s');
+      _completionTimer = Timer(timeUntilCompletion, () => _handleSegmentCompletion());
+    } else {
+      // Segment already past end time - advance immediately
+      debugPrint('GameScreen: Segment already ended - advancing');
+      _handleSegmentCompletion();
+    }
+  }
+  
+  Future<void> _pollForProcessedSegment() async {
+    if (!mounted || _character == null) return;
+    
+    try {
+      debugPrint('GameScreen: Polling at 60 seconds for processed segment');
+      final statusResponse = await _apiService.getSegmentStatus(
+        characterId: _character!.id,
+      );
+      
+      if (statusResponse['ProcessingStatus'] == 'processed' && mounted) {
+        debugPrint('GameScreen: Segment processed successfully - updating UI');
+        // Reload to get the processed narrative and results
+        await _loadCharacterData(silent: true);
         
-        try {
-          debugPrint('GameScreen: Polling segment status at completion time for $segmentType segment');
-          final statusResponse = await _apiService.getSegmentStatus(
-            characterId: _character!.id,
-          );
-          
-          // Check if segment is complete
-          if (statusResponse['IsComplete'] == true && mounted) {
-            // For decision segments that timed out, the backend will use default decision
-            if (segmentType == 'decision') {
-              debugPrint('GameScreen: Decision segment timed out - default decision will be used');
-            }
-            
-            // Wait a bit for the backend to process the advancement
-            // The poller runs every minute and advancement is async
-            await Future.delayed(const Duration(seconds: 3));
-            
-            // Reload character to advance to next segment or complete story
-            await _loadCharacterData();
-            
-            // Check if story is complete (no active segment after reload)
-            final newActiveSegment = _character?.storyState?['ActiveSegment'];
-            if (newActiveSegment == null) {
-              // Story is complete - save the last segment data for display
-              debugPrint('GameScreen: Story completed with outcome: ${activeSegment['Outcome']}');
-              
-              // Save the last segment data in the story state
-              if (mounted && _character?.storyState != null) {
-                setState(() {
-                  _character!.storyState!['LastSegment'] = activeSegment;
-                });
-              }
-              
-              // The story panel will show the completion UI
-            } else {
-              // Set up polling for the new segment
-              _setupSegmentPolling();
-            }
-          }
-        } catch (e) {
-          debugPrint('GameScreen: Error checking segment completion: $e');
+        // Add to history with processed data
+        _addSegmentToHistory(_character!.storyState?['ActiveSegment']);
+        
+        // STOP polling - we have what we need
+        debugPrint('GameScreen: Polling complete for this segment');
+      } else {
+        // Not processed yet - system may be overloaded
+        debugPrint('GameScreen: Segment not processed yet - system may be overloaded');
+        // Could retry here if needed, but per requirements we just log it
+      }
+    } catch (e) {
+      debugPrint('GameScreen: Error polling segment: $e');
+    }
+  }
+  
+  Future<void> _handleSegmentCompletion() async {
+    if (!mounted || _character == null) return;
+    
+    final activeSegment = _character!.storyState?['ActiveSegment'];
+    
+    try {
+      debugPrint('GameScreen: Segment complete - advancing to next');
+      
+      // Store final state of segment in history
+      if (activeSegment != null) {
+        _addSegmentToHistory(activeSegment);
+      }
+      
+      // Small delay for backend to process advancement
+      await Future.delayed(const Duration(seconds: 2));
+      
+      // Reload to get next segment or story completion
+      await _loadCharacterData();
+      
+      final newActiveSegment = _character?.storyState?['ActiveSegment'];
+      if (newActiveSegment == null && _character?.storyState != null) {
+        // Story complete
+        debugPrint('GameScreen: Story complete');
+        
+        if (mounted) {
+          setState(() {
+            _character!.storyState!['CompletedSegments'] = List.from(_segmentHistory);
+            _character!.storyState!['IsComplete'] = true;
+          });
         }
+      } else if (newActiveSegment != null) {
+        // New segment - start polling cycle again
+        debugPrint('GameScreen: New segment started');
+        _setupSegmentPolling();
+      }
+    } catch (e) {
+      debugPrint('GameScreen: Error advancing segment: $e');
+    }
+  }
+  
+  void _addSegmentToHistory(Map<String, dynamic>? segment) {
+    if (segment == null) return;
+    
+    // Add to history if not already present
+    final segmentId = segment['ActiveSegmentID'] ?? segment['SegmentID'];
+    final alreadyInHistory = _segmentHistory.any((s) => 
+      (s['ActiveSegmentID'] ?? s['SegmentID']) == segmentId
+    );
+    
+    if (!alreadyInHistory) {
+      setState(() {
+        _segmentHistory.add(Map<String, dynamic>.from(segment));
       });
+      debugPrint('GameScreen: Added segment to history, total: ${_segmentHistory.length}');
     }
   }
 
@@ -586,28 +626,30 @@ class _GameScreenState extends State<GameScreen> {
         child: Scaffold(
       backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        title: ResponsiveBreadcrumb(
-          items: [
-            BreadcrumbItem(
-              label: 'Characters',
-              icon: Icons.people,
-              onTap: () {
-                Navigator.pushReplacementNamed(context, '/character-selection');
-              },
-            ),
-            if (_characterInfo != null)
-              BreadcrumbItem(
-                label: _characterInfo!.name,
-                icon: Icons.person,
-              ),
-            if (_character?.storyState != null && 
-                _character!.storyState!['Story'] != null)
-              BreadcrumbItem(
-                label: _character!.storyState!['Story']['Title'] ?? 'Story',
-                icon: Icons.auto_stories,
-              ),
-          ],
-        ),
+        title: deviceType == DeviceType.desktop
+            ? ResponsiveBreadcrumb(
+                items: [
+                  BreadcrumbItem(
+                    label: 'Characters',
+                    icon: Icons.people,
+                    onTap: () {
+                      Navigator.pushReplacementNamed(context, '/character-selection');
+                    },
+                  ),
+                  if (_characterInfo != null)
+                    BreadcrumbItem(
+                      label: _characterInfo!.name,
+                      icon: Icons.person,
+                    ),
+                  if (_character?.storyState != null && 
+                      _character!.storyState!['Story'] != null)
+                    BreadcrumbItem(
+                      label: _character!.storyState!['Story']['Title'] ?? 'Story',
+                      icon: Icons.auto_stories,
+                    ),
+                ],
+              )
+            : Text(_characterInfo?.name ?? 'Game'),
         leading: IconButton(
           icon: const Icon(Icons.chevron_left),
           onPressed: () {
@@ -621,17 +663,22 @@ class _GameScreenState extends State<GameScreen> {
             onPressed: _loadCharacterData,
             tooltip: 'Refresh',
           ),
-          const ThemeModeSelector(),
-          IconButton(
-            icon: const Icon(Icons.help_outline),
-            onPressed: () => KeyboardShortcutHelp.show(context),
-            tooltip: 'Keyboard Shortcuts',
-          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.pushNamed(context, '/account-settings');
             },
+            tooltip: 'Settings',
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              final authProvider = context.read<AuthProvider>();
+              final navigator = Navigator.of(context);
+              await authProvider.signOut();
+              navigator.pushReplacementNamed('/login');
+            },
+            tooltip: 'Sign Out',
           ),
         ],
       ),
@@ -774,6 +821,7 @@ class _GameScreenState extends State<GameScreen> {
         Expanded(
           child: StoryPanel(
             character: _character!,
+            segmentHistory: _segmentHistory,
             isLoading: _isLoading,
             error: _error,
             onRefresh: _loadCharacterData,
@@ -813,6 +861,7 @@ class _GameScreenState extends State<GameScreen> {
         Expanded(
           child: StoryPanel(
             character: _character!,
+            segmentHistory: _segmentHistory,
             isLoading: _isLoading,
             error: _error,
             onRefresh: _loadCharacterData,
@@ -848,6 +897,7 @@ class _GameScreenState extends State<GameScreen> {
       case 1:
         return StoryPanel(
           character: _character!,
+          segmentHistory: _segmentHistory,
           isLoading: _isLoading,
           error: _error,
           onRefresh: _loadCharacterData,

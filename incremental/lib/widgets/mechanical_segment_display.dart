@@ -254,7 +254,7 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
         iconColor = Colors.red;
         break;
       case 'combatVictory':
-        icon = Icons.emoji_events;
+        icon = Icons.workspace_premium;
         iconColor = Colors.amber;
         break;
       case 'combatDefeat':
@@ -481,7 +481,7 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: widget.onComplete,
-            icon: const Icon(Icons.arrow_forward),
+            icon: const Icon(Icons.chevron_right),
             label: const Text('Continue'),
           ),
         ],

@@ -403,7 +403,7 @@ class _StatisticsSummary extends StatelessWidget {
               ),
               Expanded(
                 child: _StatItem(
-                  icon: Icons.emoji_events,
+                  icon: Icons.workspace_premium,
                   label: 'Success Rate',
                   value: '${((successCount / totalStories) * 100).toStringAsFixed(0)}%',
                   color: Colors.green,
@@ -642,7 +642,7 @@ class _OutcomeIcon extends StatelessWidget {
     switch (outcome.toLowerCase()) {
       case 'success':
       case 'exceptional':
-        icon = Icons.emoji_events;
+        icon = Icons.workspace_premium;
         color = Colors.green;
         break;
       case 'normal':
