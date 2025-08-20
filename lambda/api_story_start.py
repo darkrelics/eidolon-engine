@@ -180,7 +180,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
     
     # Create active segment with story instance ID
     logger.info(f"Creating active segment for story '{story_title}'")
-    active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment, story_instance_id)
+    active_segment = create_active_segment(character_id, player_id, story_id, first_segment, story_instance_id)
     logger.info(f"Active segment created: {active_segment.get('ActiveSegmentID', 'unknown')}")
 
     # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID

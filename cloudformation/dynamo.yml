@@ -161,6 +161,8 @@ Resources:
       AttributeDefinitions:
         - AttributeName: ActiveSegmentID
           AttributeType: S
+        - AttributeName: Status
+          AttributeType: S
         - AttributeName: EndTime
           AttributeType: N
         - AttributeName: CharacterID
@@ -171,8 +173,10 @@ Resources:
       GlobalSecondaryIndexes:
         - IndexName: EndTimeIndex
           KeySchema:
-            - AttributeName: EndTime
+            - AttributeName: Status
               KeyType: HASH
+            - AttributeName: EndTime
+              KeyType: RANGE
           Projection:
             ProjectionType: ALL
         - IndexName: CharacterID-index

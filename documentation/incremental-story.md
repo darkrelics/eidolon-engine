@@ -67,10 +67,11 @@ The ActiveSegments table tracks currently running segment instances:
 Records completed story attempts:
 
 - **CharacterID** (HASH): Character UUID
-- **StoryID** (RANGE): Story UUID
-- **AttemptNumber** (RANGE): Increments per attempt
-- **FinalOutcome**: Overall story result
-- **XPEarned**: Total XP from all segments
+- **StoryInstanceID** (RANGE): UUIDv7 for this story instance (unique per execution)
+- **StoryID**: UUID of the story
+- **FinalOutcome**: Overall story result (death/failure/minimal/normal/exceptional/abandoned)
+- **SegmentHistory**: List of ActiveSegmentIDs in chronological order
+- **SkillXPAwarded/AttributeXPAwarded**: Total XP earned from all segments
 
 ### SegmentHistory Table
 
@@ -78,8 +79,10 @@ Archives completed segment instances:
 
 - **CharacterID** (HASH): Character UUID
 - **ActiveSegmentID** (RANGE): Instance UUID from ActiveSegments
-- **All fields from ActiveSegments** are copied here
-- **SkillXPAwarded/AttributeXPAwarded**: XP breakdown for analytics
+- **StoryInstanceID**: UUIDv7 of the story instance from StoryHistory
+- **CharacterUpdates**: All character changes applied (contains SkillXP and AttributeXP)
+- **Outcome**: Final outcome of the segment
+- **ProcessedAt**: Unix timestamp when outcomes were calculated
 
 ## Story State Machine
 

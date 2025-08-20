@@ -1528,8 +1528,6 @@ components:
           type: string
         StoryID:
           type: string
-        StoryTitle:
-          type: string
         Abandoned:
           type: boolean
         Message:

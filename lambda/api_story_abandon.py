@@ -43,7 +43,6 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     active_segment_id = active_segment.get("ActiveSegmentID")
     story_id = active_segment.get("StoryID")
     story_instance_id = active_segment.get("StoryInstanceID")
-    story_title = active_segment.get("StoryTitle", "Unknown Story")
 
     if not active_segment_id or not story_id:
         logger.error(f"Active segment missing required fields for {character_id}")
@@ -120,7 +119,6 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     return {
         "CharacterID": character_id,
         "StoryID": story_id,
-        "StoryTitle": story_title,
         "Abandoned": True,
         "Message": "Story abandoned successfully",
     }

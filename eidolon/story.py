@@ -297,8 +297,8 @@ def get_completed_segment_for_character(character_id: str, player_id: str, segme
         if not history_items:
             raise ValueError("Completed segment not found")
 
-        # Filter to matching SegmentID and PlayerID; choose the latest by CompletedAt (fallback EndTime)
-        candidates = [it for it in history_items if it.get("SegmentID") == segment_id and it.get("PlayerID") == player_id]
+        # Filter to matching SegmentID; choose the latest by CompletedAt (fallback EndTime)
+        candidates = [it for it in history_items if it.get("SegmentID") == segment_id]
         if not candidates:
             raise ValueError("Completed segment not found")
 
@@ -449,7 +449,7 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     return story, first_segment
 
 
-def create_active_segment(character_id: str, player_id: str, story_id: str, story_title: str, segment: dict, story_instance_id: str = None) -> dict:
+def create_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id: str = None) -> dict:
     """
     Create an active segment record for tracking progress.
     Also creates a SegmentHistory record and adds it to StoryHistory if story_instance_id is provided.
@@ -458,7 +458,6 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         character_id: Character UUID
         player_id: Player UUID
         story_id: Story UUID
-        story_title: Story title
         segment: Segment data from Segments table
         story_instance_id: StoryInstanceID for this story execution (optional for backward compatibility)
 
@@ -491,7 +490,6 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         "StoryInstanceID": story_instance_id if story_instance_id else None,  # Store for later use
         "SegmentID": segment_id,
         "SegmentType": segment_type,
-        "StoryTitle": story_title,
         "Status": "active",
         "StartTime": start_time,
         "EndTime": end_time,
@@ -552,9 +550,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
                 "SegmentType": segment_type,
                 "StartTime": start_time,
                 "EndTime": end_time,
-                # These fields will be populated when segment completes
-                "SkillXPAwarded": {},
-                "AttributeXPAwarded": {},
+                # CharacterUpdates (with XP data) will be added when segment completes
             }
             dynamo.put_item(TableName.SEGMENT_HISTORY, segment_history)
             
@@ -850,6 +846,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     record_segment_history(character_id, story_id, active_segment_id, active_segment)
 
     # Get segment definition to determine next segment
+    story_instance_id = active_segment.get("StoryInstanceID")
     segment_id = active_segment.get("SegmentID")
     if not segment_id:
         raise ValueError("Segment ID not found in active segment")
@@ -873,7 +870,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                 player_id,
                 story_id,
                 next_segment_def,
-                active_segment.get("StoryTitle", "Unknown Story"),
+                story_instance_id,  # Pass instance ID for history tracking
             )
 
             # Update character with new active segment

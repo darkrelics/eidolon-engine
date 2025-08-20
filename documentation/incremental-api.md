@@ -555,7 +555,7 @@ Maps inventory slot numbers to detailed item information:
    - **Without active story:** Does NOT include `ActiveStory` or `ActiveSegment`, but includes `AvailableStories` array if any stories are available
    - Fields are completely omitted from the response rather than being set to null
 
-4. **Available Stories:** When the character doesn't have an active story, the `AvailableStories` field is automatically populated with story details including availability status, cooldown information, prerequisites, and metadata. This eliminates the need for a separate API call to get available stories.
+4. **Available Stories:** When the character doesn't have an active story, the `AvailableStories` field is automatically populated with story details including availability status, prerequisites, and metadata. This eliminates the need for a separate API call to get available stories.
 
 5. **Inventory Enrichment:** The `InventoryDetails` field provides full item information for UI display without requiring additional API calls. If item lookups fail, the character is still returned without enrichment.
 
@@ -702,7 +702,7 @@ Content-Type: application/json
 
 ### Abandon Story
 
-Abandons the current active story for a character.
+Abandons the current active story for a character. The story cannot be resumed and must be restarted if repeatable.
 
 **Endpoint:** `POST /story/abandon`
 
@@ -725,6 +725,9 @@ Authorization: Bearer <jwt-token>
 
 ```json
 {
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "StoryID": "story_uuid",
+  "Abandoned": true,
   "Message": "Story abandoned successfully"
 }
 ```
@@ -880,7 +883,7 @@ Authorization: Bearer <jwt-token>
 
 ### Get Segment History
 
-Retrieves historical segment data for a character.
+Retrieves historical segment data for a character from the segment_history table.
 
 **Endpoint:** `GET /segment/history`
 
@@ -903,18 +906,32 @@ Authorization: Bearer <jwt-token>
 
 ```json
 {
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "StoryID": "story_uuid",
   "Segments": [
     {
-      "SegmentID": "segment_uuid_1",
+      "ActiveSegmentID": "segment_uuid_1",
+      "SegmentID": "segment_def_uuid_1",
+      "SegmentType": "mechanical",
+      "StartTime": "2025-01-15T14:25:00Z",
+      "EndTime": "2025-01-15T14:30:00Z",
       "CompletedAt": "2025-01-15T14:30:00Z",
-      "Outcome": "success",
-      "StoryID": "story_uuid"
+      "Outcome": "exceptional",
+      "ClientEvents": [...],
+      "CharacterUpdates": {...},
+      "ChallengeResults": [...]
     },
     {
-      "SegmentID": "segment_uuid_2",
-      "CompletedAt": "2025-01-15T14:35:00Z",
-      "Outcome": "failure",
-      "StoryID": "story_uuid"
+      "ActiveSegmentID": "segment_uuid_2",
+      "SegmentID": "segment_def_uuid_2",
+      "SegmentType": "decision",
+      "StartTime": "2025-01-15T14:30:00Z",
+      "EndTime": "2025-01-15T14:35:00Z",
+      "CompletedAt": "2025-01-15T14:31:00Z",
+      "Outcome": "normal",
+      "Decision": "option_a",
+      "ClientEvents": [...],
+      "CharacterUpdates": {...}
     }
   ]
 }

@@ -50,28 +50,24 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
         logger.info(f"No active story for character for {character_id}")
         return SegmentHistoryResponse(CharacterID=character_id, StoryID=None, Segments=[])
 
-    # Query completed segments from ActiveSegments table
+    # Query completed segments from SegmentHistory table
     # This gives us the full segment data including ClientEvents, CharacterUpdates, etc.
     try:
         segments = dynamo.query(
-            TableName.ACTIVE_SEGMENTS,
-            IndexName="CharacterID-index",
+            TableName.SEGMENT_HISTORY,
             KeyConditionExpression="CharacterID = :cid",
-            FilterExpression="StoryID = :sid AND #status IN (:completed, :processed)",
-            ExpressionAttributeNames={"#status": "Status"},
+            FilterExpression="StoryID = :sid",
             ExpressionAttributeValues={
                 ":cid": character_id,
                 ":sid": story_id,
-                ":completed": "completed",
-                ":processed": "processed",
             },
         )
     except ClientError as err:
         logger.error(
-            f"Failed to query active segments for {character_id} Error: {err}",
+            f"Failed to query segment history for {character_id} Error: {err}",
             exc_info=True,
         )
-        raise RuntimeError(f"Failed to query active segments: {err}") from err
+        raise RuntimeError(f"Failed to query segment history: {err}") from err
 
     # Format segments for response with all the data Flutter expects
     formatted_segments: list[SegmentHistoryItem] = []
@@ -79,16 +75,19 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
         # Convert Unix timestamps to ISO 8601 for API response
         start_time_unix = segment.get("StartTime", 0)
         end_time_unix = segment.get("EndTime", 0)
+        completed_at_unix = segment.get("CompletedAt", 0)
 
         formatted_segment_dict = {
             "ActiveSegmentID": segment.get("ActiveSegmentID"),
             "SegmentID": segment.get("SegmentID"),
             "SegmentType": segment.get("SegmentType"),
-            "Status": segment.get("Status"),
-            "ProcessingStatus": segment.get("ProcessingStatus"),
             "StartTime": from_unix(start_time_unix) if start_time_unix else None,
             "EndTime": from_unix(end_time_unix) if end_time_unix else None,
         }
+
+        # Add completed timestamp if available
+        if completed_at_unix:
+            formatted_segment_dict["CompletedAt"] = from_unix(completed_at_unix)
 
         # Add enriched data that Flutter needs
         if segment.get("Outcome"):
@@ -106,17 +105,9 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
         if segment.get("ChallengeResults"):
             formatted_segment_dict["ChallengeResults"] = segment.get("ChallengeResults")
 
-        if segment.get("SkillXPAwarded"):
-            formatted_segment_dict["SkillXPAwarded"] = segment.get("SkillXPAwarded")
-
-        if segment.get("AttributeXPAwarded"):
-            formatted_segment_dict["AttributeXPAwarded"] = segment.get("AttributeXPAwarded")
-
         if segment.get("CombatState"):
             formatted_segment_dict["CombatState"] = segment.get("CombatState")
 
-        if segment.get("NextSegmentID"):
-            formatted_segment_dict["NextSegmentID"] = segment.get("NextSegmentID")
         formatted_segments.append(SegmentHistoryItem.model_validate(formatted_segment_dict))
 
     # Sort by start time, newest first

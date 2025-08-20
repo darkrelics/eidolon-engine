@@ -182,7 +182,6 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 active_segment.get("PlayerID"),  # type: ignore
                 story_id,  # type: ignore
                 next_segment_def,
-                active_segment.get("StoryTitle"),  # type: ignore
                 story_instance_id,  # Pass instance ID for history tracking
             )
 

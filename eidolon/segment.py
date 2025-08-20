@@ -943,7 +943,7 @@ def process_mech_segment(segment_def: dict, character: dict, active_segment: dic
     return process_mechanical_segment(segment_def, character, active_segment)
 
 
-def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_title: str, story_instance_id: str = None) -> str:
+def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id: str = None) -> str:
     """
     Create an active segment record for the next segment.
 
@@ -952,7 +952,6 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         player_id: Player UUID
         story_id: Story UUID
         segment: Segment data from Segments table
-        story_title: Story title for display
         story_instance_id: Story instance UUID for history tracking
 
     Returns:
@@ -976,7 +975,6 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         "PlayerID": player_id,
         "StoryID": story_id,
         "StoryInstanceID": story_instance_id if story_instance_id else None,  # Store for history tracking
-        "StoryTitle": story_title,
         "SegmentID": segment_id,
         "SegmentType": segment_type,
         "StartTime": start_time,
@@ -1034,9 +1032,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
                 "SegmentType": segment_type,
                 "StartTime": start_time,
                 "EndTime": end_time,
-                # These fields will be populated when segment completes
-                "SkillXPAwarded": {},
-                "AttributeXPAwarded": {},
+                # CharacterUpdates (with XP data) will be added when segment completes
             }
             dynamo.put_item(TableName.SEGMENT_HISTORY, segment_history)
             
@@ -1257,9 +1253,8 @@ def record_abandoned_segment_history(character_id: str, story_id: str, active_se
         history_entry = {
             "CharacterID": character_id,
             "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
-            "PlayerID": active_segment.get("PlayerID"),
             "StoryID": story_id,
-            "StoryTitle": active_segment.get("StoryTitle"),
+            "StoryInstanceID": active_segment.get("StoryInstanceID"),  # Include story instance ID
             "SegmentID": active_segment.get("SegmentID"),
             "SegmentType": active_segment.get("SegmentType"),
             "StartTime": active_segment.get("StartTime"),
@@ -1268,9 +1263,7 @@ def record_abandoned_segment_history(character_id: str, story_id: str, active_se
             "CompletedAt": now_unix(),
             "Outcome": "abandoned",
             "ClientEvents": active_segment.get("ClientEvents", []),
-            "CharacterUpdates": {},
-            "SkillXPAwarded": {},
-            "AttributeXPAwarded": {},
+            "CharacterUpdates": {},  # Empty since no XP awarded for abandoned segments
         }
 
         dynamo.put_item(TableName.SEGMENT_HISTORY, history_entry)
@@ -1478,10 +1471,8 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
     Raises:
         RuntimeError: If database operation fails
     """
-    # Extract XP awards from CharacterUpdates
+    # Get CharacterUpdates which contains all XP data
     character_updates = segment_data.get("CharacterUpdates", {})
-    skill_xp_awarded = character_updates.get("SkillXP", {})
-    attribute_xp_awarded = character_updates.get("AttributeXP", {})
 
     # Build update expression for completion fields
     update_expressions = []
@@ -1496,12 +1487,6 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
     
     update_expressions.append("CharacterUpdates = :char_updates")
     expression_values[":char_updates"] = character_updates
-    
-    update_expressions.append("SkillXPAwarded = :skill_xp")
-    expression_values[":skill_xp"] = skill_xp_awarded
-    
-    update_expressions.append("AttributeXPAwarded = :attr_xp")
-    expression_values[":attr_xp"] = attribute_xp_awarded
     
     # Add optional fields if present
     if segment_data.get("ProcessedAt"):
@@ -1699,12 +1684,13 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, RunningFlag = :false",
+            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, ProcessedAt = :processed_at, RunningFlag = :false",
             ExpressionAttributeNames={"#outcome": "Outcome"},
             ExpressionAttributeValues={
                 ":status": "processed",
                 ":outcome": outcome,
                 ":updates": character_updates,
+                ":processed_at": now_unix(),
                 ":false": False,
             },
         )
