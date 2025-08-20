@@ -123,6 +123,29 @@ class _GameScreenState extends State<GameScreen> {
         _pollingManager.resetRetries('mechanical_${_characterInfo!.id}');
         _pollingManager.resetRetries('story_${_characterInfo!.id}');
         _startPollingIfNeeded();
+        
+        // Set up segment polling if there's an active story
+        if (character?.storyState != null && character!.storyState!.isNotEmpty) {
+          _setupSegmentPolling();
+          
+          // Immediately poll for segment status to get any existing narrative
+          debugPrint('GameScreen: Active segment found, polling for current status');
+          () async {
+            try {
+              final statusResponse = await _apiService.getSegmentStatus(
+                characterId: character.id,
+              );
+              debugPrint('GameScreen: Initial segment status poll completed');
+              
+              // Check if narrative is available
+              if (statusResponse['ProcessingStatus'] == 'processed') {
+                debugPrint('GameScreen: Segment narrative is available');
+              }
+            } catch (e) {
+              debugPrint('GameScreen: Error polling initial segment status: $e');
+            }
+          }();
+        }
       }
     } catch (e) {
       debugPrint('GameScreen: ERROR loading character: $e');
@@ -251,26 +274,60 @@ class _GameScreenState extends State<GameScreen> {
   }
   
   void _setupSegmentPolling() {
-    if (_character == null || _character!.storyState == null) return;
+    if (_character == null || _character!.storyState == null) {
+      debugPrint('GameScreen: No character or story state, skipping segment polling setup');
+      return;
+    }
     
     final activeSegment = _character!.storyState?['ActiveSegment'];
-    if (activeSegment == null) return;
+    if (activeSegment == null) {
+      debugPrint('GameScreen: No active segment, skipping segment polling setup');
+      return;
+    }
+    
+    debugPrint('GameScreen: Setting up segment polling for active segment');
     
     final segmentType = activeSegment['SegmentType'] as String?;
-    final endTime = activeSegment['EndTime'] as int?;
-    final startTime = activeSegment['StartTime'] as int?;
     
-    if (endTime == null || startTime == null) return;
+    // Parse times - they come as ISO 8601 strings
+    DateTime? endDateTime;
+    DateTime? startDateTime;
     
-    final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    try {
+      final endTimeStr = activeSegment['EndTime'];
+      final startTimeStr = activeSegment['StartTime'];
+      
+      if (endTimeStr != null) {
+        endDateTime = DateTime.parse(endTimeStr);
+      }
+      if (startTimeStr != null) {
+        startDateTime = DateTime.parse(startTimeStr);
+      }
+    } catch (e) {
+      debugPrint('GameScreen: Error parsing segment times: $e');
+      return;
+    }
+    
+    if (endDateTime == null || startDateTime == null) return;
+    
+    final now = DateTime.now();
     
     // Cancel any existing polling timers
     _mechanicalPollingSubscription?.cancel();
     
-    // For mechanical segments, poll after 1 minute to get processed narrative
+    // For mechanical segments, poll 60 seconds after the segment started
     if (segmentType == 'mechanical') {
-      Timer(const Duration(minutes: 1), () async {
-        if (!mounted) return;
+      final timeSinceStart = now.difference(startDateTime);
+      final timeUntilOneMinute = const Duration(seconds: 60) - timeSinceStart;
+      
+      debugPrint('GameScreen: Mechanical segment - time since start: ${timeSinceStart.inSeconds}s');
+      debugPrint('GameScreen: Time until 1-minute poll: ${timeUntilOneMinute.inSeconds}s');
+      
+      // Only set timer if we haven't passed the 1-minute mark yet
+      if (timeUntilOneMinute.inSeconds > 0) {
+        debugPrint('GameScreen: Setting timer for 1-minute poll in ${timeUntilOneMinute.inSeconds}s');
+        Timer(timeUntilOneMinute, () async {
+          if (!mounted) return;
         
         try {
           debugPrint('GameScreen: Polling segment status after 1 minute');
@@ -287,12 +344,31 @@ class _GameScreenState extends State<GameScreen> {
           debugPrint('GameScreen: Error polling segment status: $e');
         }
       });
+      } else {
+        // We're already past the 1-minute mark, poll immediately
+        debugPrint('GameScreen: Already past 1-minute mark, polling immediately');
+        () async {
+          try {
+            final statusResponse = await _apiService.getSegmentStatus(
+              characterId: _character!.id,
+            );
+            
+            // Update UI with narrative if available
+            if (statusResponse['ProcessingStatus'] == 'processed' && mounted) {
+              // Reload character to get updated segment data with narrative
+              await _loadCharacterData(silent: true);
+            }
+          } catch (e) {
+            debugPrint('GameScreen: Error polling segment status: $e');
+          }
+        }();
+      }
     }
     
     // Poll at segment completion time for all segment types
-    final timeUntilCompletion = endTime - currentTime;
-    if (timeUntilCompletion > 0) {
-      Timer(Duration(seconds: timeUntilCompletion), () async {
+    final timeUntilCompletion = endDateTime.difference(now);
+    if (timeUntilCompletion.inSeconds > 0) {
+      Timer(timeUntilCompletion, () async {
         if (!mounted) return;
         
         try {
@@ -307,8 +383,18 @@ class _GameScreenState extends State<GameScreen> {
             if (segmentType == 'decision') {
               debugPrint('GameScreen: Decision segment timed out - default decision will be used');
             }
+            
+            // Wait a bit for the backend to process the advancement
+            // The poller runs every minute and advancement is async
+            await Future.delayed(const Duration(seconds: 3));
+            
             // Reload character to advance to next segment or complete story
             await _loadCharacterData();
+            
+            // Set up polling for the new segment if there is one
+            if (_character?.storyState != null && _character!.storyState!.isNotEmpty) {
+              _setupSegmentPolling();
+            }
           }
         } catch (e) {
           debugPrint('GameScreen: Error checking segment completion: $e');
