@@ -15,6 +15,7 @@ class StoryPanel extends StatefulWidget {
   final Function(String)? onDecisionSelect;
   final VoidCallback? onAbandonStory;
   final VoidCallback? onRestSegment;
+  final VoidCallback? onReturnToStories;
 
   const StoryPanel({
     super.key,
@@ -26,6 +27,7 @@ class StoryPanel extends StatefulWidget {
     this.onDecisionSelect,
     this.onAbandonStory,
     this.onRestSegment,
+    this.onReturnToStories,
   });
 
   @override
@@ -38,6 +40,13 @@ class _StoryPanelState extends State<StoryPanel> {
   bool _hasActiveStory([Character? character]) {
     final char = character ?? widget.character;
     return char.storyState != null && char.storyState!.isNotEmpty;
+  }
+
+  bool _isStoryComplete() {
+    // Story is complete if we have story state but no active segment
+    if (!_hasActiveStory()) return false;
+    final activeSegment = widget.character.storyState?['ActiveSegment'];
+    return activeSegment == null;
   }
 
   @override
@@ -112,7 +121,9 @@ class _StoryPanelState extends State<StoryPanel> {
   }
 
   String _getHeaderTitle() {
-    if (_hasActiveStory()) {
+    if (_isStoryComplete()) {
+      return 'Story Complete';
+    } else if (_hasActiveStory()) {
       return 'Story';
     } else if (_showHistory) {
       return 'Story History';
@@ -144,6 +155,10 @@ class _StoryPanelState extends State<StoryPanel> {
 
     if (widget.error != null) {
       return _buildErrorWidget();
+    }
+
+    if (_isStoryComplete()) {
+      return _buildStoryCompleteWidget();
     }
 
     if (_hasActiveStory()) {
@@ -224,6 +239,148 @@ class _StoryPanelState extends State<StoryPanel> {
     return StoryHistoryWidget(
       key: const ValueKey('story_history'),
       character: widget.character,
+    );
+  }
+
+  Widget _buildStoryCompleteWidget() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    // Get the last segment data to show the outcome
+    final storyData = widget.character.storyState?['Story'] as Map<String, dynamic>?;
+    final lastSegment = widget.character.storyState?['LastSegment'] as Map<String, dynamic>?;
+    final outcome = lastSegment?['Outcome'] ?? 'completed';
+    
+    // Determine outcome color and icon
+    Color outcomeColor;
+    IconData outcomeIcon;
+    String outcomeText;
+    
+    switch (outcome) {
+      case 'failure':
+      case 'death':
+        outcomeColor = colorScheme.error;
+        outcomeIcon = Icons.dangerous;
+        outcomeText = 'Story Failed';
+        break;
+      case 'exceptional':
+        outcomeColor = Colors.amber;
+        outcomeIcon = Icons.star;
+        outcomeText = 'Exceptional Success!';
+        break;
+      case 'normal':
+      case 'completed':
+      default:
+        outcomeColor = colorScheme.primary;
+        outcomeIcon = Icons.check_circle;
+        outcomeText = 'Story Complete';
+        break;
+    }
+    
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              outcomeIcon,
+              size: 80,
+              color: outcomeColor,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              outcomeText,
+              style: theme.textTheme.headlineMedium?.copyWith(
+                color: outcomeColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (storyData != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                storyData['Title'] ?? 'Unknown Story',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: colorScheme.onSurface,
+                ),
+              ),
+            ],
+            const SizedBox(height: 16),
+            
+            // Show failure reason if available
+            if (outcome == 'failure' && lastSegment != null) ...[
+              Card(
+                color: colorScheme.errorContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Challenge Failed',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colorScheme.onErrorContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (lastSegment['ChallengeResults'] != null) ...[
+                        ...List<Map<String, dynamic>>.from(lastSegment['ChallengeResults']).map((challenge) => 
+                          Text(
+                            '${challenge['Skill'] ?? 'Unknown'}: Failed',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onErrorContainer,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+            
+            // Show rewards if successful
+            if (outcome != 'failure' && outcome != 'death') ...[
+              Card(
+                color: colorScheme.primaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Rewards',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Story rewards will be applied',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+            
+            // Return to stories button
+            FilledButton.icon(
+              onPressed: widget.onReturnToStories,
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Return to Stories'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

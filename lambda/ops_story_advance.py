@@ -32,7 +32,7 @@ from eidolon.segment import (
     update_segment_processing_status,
 )
 from eidolon.sqs import send_message
-from eidolon.story import apply_combat_rewards, complete_story, ensure_story_history_exists, update_story_history_xp
+from eidolon.story import apply_combat_rewards, complete_story, update_story_history_xp
 from eidolon.validation_messages import validate_advancement_message
 
 
@@ -71,9 +71,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     logger.info(f"Advancing story for {character_id}")
 
-    # Ensure story history exists
-    story_title = active_segment.get("StoryTitle", "Unknown Story")
-    ensure_story_history_exists(character_id, story_id, story_title)  # type: ignore
+    # Story history should already exist (created when story started)
 
     # Process simple segments if not already processed
     processing_status = active_segment.get("ProcessingStatus")
@@ -142,10 +140,11 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
 
     # Update story history with accumulated XP
+    story_instance_id = active_segment.get("StoryInstanceID")
     skill_xp = character_updates.get("SkillXP", {})
     attribute_xp = character_updates.get("AttributeXP", {})
-    if skill_xp or attribute_xp:
-        update_story_history_xp(character_id, story_id, skill_xp, attribute_xp)  # type: ignore
+    if skill_xp or attribute_xp and story_instance_id:
+        update_story_history_xp(character_id, story_instance_id, skill_xp, attribute_xp)  # type: ignore
 
     # Get segment definition to determine next action
     segment_def = get_segment_definition(story_id, segment_id)  # type: ignore
@@ -184,6 +183,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 story_id,  # type: ignore
                 next_segment_def,
                 active_segment.get("StoryTitle"),  # type: ignore
+                story_instance_id,  # Pass instance ID for history tracking
             )
 
             # Update character with new active segment
@@ -213,7 +213,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         # Story complete
-        complete_story(character_id, story_id, outcome)  # type: ignore
+        complete_story(character_id, story_id, story_instance_id, outcome)  # type: ignore
 
     # Delete processed segment
     delete_active_segment(active_segment_id)

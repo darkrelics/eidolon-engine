@@ -943,7 +943,7 @@ def process_mech_segment(segment_def: dict, character: dict, active_segment: dic
     return process_mechanical_segment(segment_def, character, active_segment)
 
 
-def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_title: str) -> str:
+def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_title: str, story_instance_id: str = None) -> str:
     """
     Create an active segment record for the next segment.
 
@@ -953,6 +953,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         story_id: Story UUID
         segment: Segment data from Segments table
         story_title: Story title for display
+        story_instance_id: Story instance UUID for history tracking
 
     Returns:
         Active segment ID
@@ -974,6 +975,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         "CharacterID": character_id,
         "PlayerID": player_id,
         "StoryID": story_id,
+        "StoryInstanceID": story_instance_id if story_instance_id else None,  # Store for history tracking
         "StoryTitle": story_title,
         "SegmentID": segment_id,
         "SegmentType": segment_type,
@@ -1018,6 +1020,38 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     except ClientError as err:
         logger.error(f"Failed to create active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to create active segment: {err}") from err
+
+    # Create SegmentHistory record and update StoryHistory if story_instance_id provided
+    if story_instance_id:
+        try:
+            # Create SegmentHistory record
+            segment_history = {
+                "CharacterID": character_id,
+                "ActiveSegmentID": active_segment_id,
+                "StoryInstanceID": story_instance_id,
+                "StoryID": story_id,
+                "SegmentID": segment_id,
+                "SegmentType": segment_type,
+                "StartTime": start_time,
+                "EndTime": end_time,
+                # These fields will be populated when segment completes
+                "SkillXPAwarded": {},
+                "AttributeXPAwarded": {},
+            }
+            dynamo.put_item(TableName.SEGMENT_HISTORY, segment_history)
+            
+            # Add ActiveSegmentID to StoryHistory's SegmentHistory list
+            dynamo.update_item(
+                TableName.STORY_HISTORY,
+                Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
+                UpdateExpression="SET SegmentHistory = list_append(SegmentHistory, :segment_id)",
+                ExpressionAttributeValues={":segment_id": [active_segment_id]},
+            )
+            
+            logger.info(f"Created SegmentHistory record and updated StoryHistory for segment {active_segment_id}")
+        except ClientError as err:
+            # Non-critical - don't fail segment creation if history update fails
+            logger.error(f"Failed to create segment history for {active_segment_id}: {err}")
 
     return active_segment_id
 
@@ -1432,7 +1466,8 @@ def claim_segment_for_processing(active_segment_id: str) -> bool:
 
 def record_segment_history(character_id: str, story_id: str, active_segment_id: str, segment_data: dict) -> None:
     """
-    Record segment completion in history table with all required fields.
+    Update segment history record with completion data.
+    The record should already exist (created when segment started).
 
     Args:
         character_id: Character UUID
@@ -1448,39 +1483,59 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
     skill_xp_awarded = character_updates.get("SkillXP", {})
     attribute_xp_awarded = character_updates.get("AttributeXP", {})
 
-    # Build complete history entry with all required fields
-    history_entry = {
-        "CharacterID": character_id,
-        "ActiveSegmentID": active_segment_id,
-        "PlayerID": segment_data.get("PlayerID"),  # Required for ownership verification
-        "StoryID": story_id,
-        "StoryTitle": segment_data.get("StoryTitle"),
-        "SegmentID": segment_data.get("SegmentID"),
-        "SegmentType": segment_data.get("SegmentType"),
-        "StartTime": segment_data.get("StartTime"),  # Unix timestamp from active segment
-        "EndTime": segment_data.get("EndTime"),  # Unix timestamp from active segment
-        "ProcessedAt": segment_data.get("ProcessedAt"),  # When outcomes were calculated
-        "CompletedAt": now_unix(),  # When segment was advanced
-        "Outcome": segment_data.get("Outcome"),
-        "ClientEvents": segment_data.get("ClientEvents", []),
-        "CharacterUpdates": character_updates,  # Complete updates applied
-        "SkillXPAwarded": skill_xp_awarded,  # Extracted skill XP
-        "AttributeXPAwarded": attribute_xp_awarded,  # Extracted attribute XP
-    }
-
-    # Add type-specific data
+    # Build update expression for completion fields
+    update_expressions = []
+    expression_values = {}
+    
+    # Add completion data
+    update_expressions.append("CompletedAt = :completed_at")
+    expression_values[":completed_at"] = now_unix()
+    
+    update_expressions.append("Outcome = :outcome")
+    expression_values[":outcome"] = segment_data.get("Outcome", "unknown")
+    
+    update_expressions.append("CharacterUpdates = :char_updates")
+    expression_values[":char_updates"] = character_updates
+    
+    update_expressions.append("SkillXPAwarded = :skill_xp")
+    expression_values[":skill_xp"] = skill_xp_awarded
+    
+    update_expressions.append("AttributeXPAwarded = :attr_xp")
+    expression_values[":attr_xp"] = attribute_xp_awarded
+    
+    # Add optional fields if present
+    if segment_data.get("ProcessedAt"):
+        update_expressions.append("ProcessedAt = :processed_at")
+        expression_values[":processed_at"] = segment_data["ProcessedAt"]
+    
+    if segment_data.get("ClientEvents"):
+        update_expressions.append("ClientEvents = :client_events")
+        expression_values[":client_events"] = segment_data["ClientEvents"]
+    
     if segment_data.get("ChallengeResults"):
-        history_entry["ChallengeResults"] = segment_data["ChallengeResults"]
+        update_expressions.append("ChallengeResults = :challenge_results")
+        expression_values[":challenge_results"] = segment_data["ChallengeResults"]
+    
     if segment_data.get("CombatState"):
-        history_entry["CombatState"] = segment_data["CombatState"]
+        update_expressions.append("CombatState = :combat_state")
+        expression_values[":combat_state"] = segment_data["CombatState"]
+    
     if segment_data.get("Decision"):
-        history_entry["Decision"] = segment_data["Decision"]
+        update_expressions.append("Decision = :decision")
+        expression_values[":decision"] = segment_data["Decision"]
+        
     if segment_data.get("DecisionMadeAt"):
-        history_entry["DecisionMadeAt"] = segment_data["DecisionMadeAt"]
+        update_expressions.append("DecisionMadeAt = :decision_made_at")
+        expression_values[":decision_made_at"] = segment_data["DecisionMadeAt"]
 
     try:
-        # Create segment history record
-        dynamo.put_item(TableName.SEGMENT_HISTORY, history_entry)
+        # Update existing segment history record
+        dynamo.update_item(
+            TableName.SEGMENT_HISTORY,
+            Key={"CharacterID": character_id, "ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET " + ", ".join(update_expressions),
+            ExpressionAttributeValues=expression_values,
+        )
 
         logger.info(f"Segment history recorded for {character_id}")
     except ClientError as err:

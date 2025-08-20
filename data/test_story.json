@@ -396,7 +396,7 @@
         "Description": "A simple encounter with a mischievous gremlin causing trouble near the forest entrance.",
         "NarrativeText": "Reports of small items going missing and strange noises at night have the villagers worried. A small, impish creature has been spotted near the forest entrance. Someone needs to deal with this pest before it causes real problems.",
         "StoryType": "repeatable",
-        "EstimatedDuration": 2700,
+        "EstimatedDuration": 600,
         "Prerequisites": {
           "MinSkills": {},
           "RequiredItems": [],
@@ -419,7 +419,7 @@
           "SegmentType": "mechanical",
           "ShortStatus": "Tracking the gremlin",
           "DefaultStatus": "You are searching for signs of the troublesome gremlin",
-          "SegmentDuration": 900,
+          "SegmentDuration": 180,
           "Challenges": [
             {
               "Attribute": "Perception",
@@ -473,7 +473,7 @@
           "SegmentType": "mechanical",
           "ShortStatus": "Cornering the gremlin",
           "DefaultStatus": "You attempt to corner the elusive gremlin",
-          "SegmentDuration": 900,
+          "SegmentDuration": 180,
           "Challenges": [
             {
               "Attribute": "Agility",
@@ -529,12 +529,12 @@
           "SegmentType": "mechanical",
           "ShortStatus": "Fighting the gremlin",
           "DefaultStatus": "You are in combat with the cornered gremlin",
-          "SegmentDuration": 900,
+          "SegmentDuration": 240,
           "Combat": {
             "OpponentID": "51eadb06-e05c-4515-84a7-1e415d6b88e1",
             "MaxRounds": 10,
             "Environment": {}
-          },
+        },
           "Results": {
             "Death": {
               "Narrative": "The gremlin's wild flailing catches you off guard. You trip and fall, hitting your head. The last thing you hear is its cackling laughter.",

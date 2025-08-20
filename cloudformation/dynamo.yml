@@ -224,12 +224,12 @@ Resources:
       AttributeDefinitions:
         - AttributeName: CharacterID
           AttributeType: S
-        - AttributeName: StoryID
+        - AttributeName: StoryInstanceID
           AttributeType: S
       KeySchema:
         - AttributeName: CharacterID
           KeyType: HASH
-        - AttributeName: StoryID
+        - AttributeName: StoryInstanceID
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: true

@@ -172,10 +172,15 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
     story, first_segment = get_story_and_first_segment(story_id)
     logger.debug(f"Story: {story.get('Title', 'Unknown')}, First segment: {first_segment.get('SegmentID', 'unknown')}")
 
-    # Create active segment first to get the segment ID
+    # Create story history entry first to get the story instance ID
     story_title = story.get("Title", "Unknown Story")
+    story_type = story.get("StoryType", "repeatable")
+    logger.info(f"Creating story history entry for '{story_title}'")
+    story_instance_id = create_story_history_entry(character_id, story_id, story_title, story_type)
+    
+    # Create active segment with story instance ID
     logger.info(f"Creating active segment for story '{story_title}'")
-    active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment)
+    active_segment = create_active_segment(character_id, player_id, story_id, story_title, first_segment, story_instance_id)
     logger.info(f"Active segment created: {active_segment.get('ActiveSegmentID', 'unknown')}")
 
     # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID
@@ -238,12 +243,11 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
         logger.error(f"Failed to update character state for {character_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update character state: {err}") from err
 
-    # Create history entry (story_type already extracted above)
-    create_story_history_entry(character_id, story_id, story_title, story_type)
+    # History entry was already created above with story_instance_id
 
     logger.info(f"Story started successfully for {character_id}")
 
-    return {"active_segment": active_segment, "segment": first_segment, "story": story}
+    return {"active_segment": active_segment, "segment": first_segment, "story": story, "story_instance_id": story_instance_id}
 
 
 def lambda_handler(event: dict, context: object) -> dict:

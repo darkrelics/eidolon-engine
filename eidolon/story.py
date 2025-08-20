@@ -95,48 +95,38 @@ def mark_segment_as_abandoned(active_segment_id: str) -> None:
     logger.info(f"Marked segment as abandoned for {active_segment_id}")
 
 
-def record_story_abandonment(character_id: str, story_id: str) -> None:
+def record_story_abandonment(character_id: str, story_instance_id: str) -> None:
     """
     Update history to record story abandonment.
 
     Args:
         character_id: Character UUID
-        story_id: Story UUID
+        story_instance_id: Story instance UUID (UUIDv7)
 
     Raises:
-        ValueError: If character_id or story_id is empty
+        ValueError: If character_id or story_instance_id is empty
         RuntimeError: If database operations fail
     """
     if not character_id:
         raise ValueError("Character ID cannot be empty")
-    if not story_id:
-        raise ValueError("Story ID cannot be empty")
+    if not story_instance_id:
+        raise ValueError("Story instance ID cannot be empty")
 
     try:
-        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
+        dynamo.update_item(
+            TableName.STORY_HISTORY,
+            Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
+            UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
+            ExpressionAttributeValues={
+                ":finished": now_iso(),
+                ":outcome": "abandoned",
+            },
+        )
     except ClientError as err:
-        logger.error(f"Failed to get story history for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to get story history: {err}") from err
+        logger.error(f"Failed to update story history for {character_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to update story history: {err}") from err
 
-    if history:
-        abandoned_count = history.get("AbandonedCount", 0) + 1
-
-        try:
-            dynamo.update_item(
-                TableName.STORY_HISTORY,
-                Key={"CharacterID": character_id, "StoryID": story_id},
-                UpdateExpression="SET FinishedAt = :finished, AbandonedCount = :count, FinalOutcome = :outcome",
-                ExpressionAttributeValues={
-                    ":finished": now_iso(),
-                    ":count": abandoned_count,
-                    ":outcome": "abandoned",
-                },
-            )
-        except ClientError as err:
-            logger.error(f"Failed to update story history for {character_id} Error: {err}", exc_info=True)
-            raise RuntimeError(f"Failed to update story history: {err}") from err
-
-        logger.info(f"Updated story history with abandonment for {character_id}")
+    logger.info(f"Updated story history with abandonment for {character_id}")
 
 
 def add_story_to_abandoned_list(character_id: str, story_id: str) -> None:
@@ -459,9 +449,10 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     return story, first_segment
 
 
-def create_active_segment(character_id: str, player_id: str, story_id: str, story_title: str, segment: dict) -> dict:
+def create_active_segment(character_id: str, player_id: str, story_id: str, story_title: str, segment: dict, story_instance_id: str = None) -> dict:
     """
     Create an active segment record for tracking progress.
+    Also creates a SegmentHistory record and adds it to StoryHistory if story_instance_id is provided.
 
     Args:
         character_id: Character UUID
@@ -469,6 +460,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         story_id: Story UUID
         story_title: Story title
         segment: Segment data from Segments table
+        story_instance_id: StoryInstanceID for this story execution (optional for backward compatibility)
 
     Returns:
         Active segment record
@@ -496,6 +488,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         "CharacterID": character_id,
         "PlayerID": player_id,
         "StoryID": story_id,
+        "StoryInstanceID": story_instance_id if story_instance_id else None,  # Store for later use
         "SegmentID": segment_id,
         "SegmentType": segment_type,
         "StoryTitle": story_title,
@@ -546,12 +539,44 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, stor
         logger.error(f"Failed to create active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to create active segment: {err}") from err
 
+    # Create SegmentHistory record and update StoryHistory if story_instance_id provided
+    if story_instance_id:
+        try:
+            # Create SegmentHistory record
+            segment_history = {
+                "CharacterID": character_id,
+                "ActiveSegmentID": active_segment_id,
+                "StoryInstanceID": story_instance_id,
+                "StoryID": story_id,
+                "SegmentID": segment_id,
+                "SegmentType": segment_type,
+                "StartTime": start_time,
+                "EndTime": end_time,
+                # These fields will be populated when segment completes
+                "SkillXPAwarded": {},
+                "AttributeXPAwarded": {},
+            }
+            dynamo.put_item(TableName.SEGMENT_HISTORY, segment_history)
+            
+            # Add ActiveSegmentID to StoryHistory's SegmentHistory list
+            dynamo.update_item(
+                TableName.STORY_HISTORY,
+                Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
+                UpdateExpression="SET SegmentHistory = list_append(SegmentHistory, :segment_id)",
+                ExpressionAttributeValues={":segment_id": [active_segment_id]},
+            )
+            
+            logger.info(f"Created SegmentHistory record and updated StoryHistory for segment {active_segment_id}")
+        except ClientError as err:
+            # Non-critical - don't fail segment creation if history update fails
+            logger.error(f"Failed to create segment history for {active_segment_id}: {err}")
+
     return active_segment
 
 
-def create_story_history_entry(character_id: str, story_id: str, story_title: str, story_type: str) -> None:
+def create_story_history_entry(character_id: str, story_id: str, story_title: str, story_type: str) -> str:
     """
-    Create initial history entry for story tracking.
+    Create initial history entry for story tracking with new schema.
 
     Args:
         character_id: Character UUID
@@ -559,24 +584,34 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
         story_title: Story title
         story_type: Type of story (one-time, daily, repeatable)
 
+    Returns:
+        StoryInstanceID (UUIDv7) for this story execution
+
     Raises:
         RuntimeError: If database operation fails
     """
     try:
+        # Generate UUIDv7 for this story instance
+        story_instance_id = str(uuid7())
+        
         history_entry = {
             "CharacterID": character_id,
+            "StoryInstanceID": story_instance_id,
             "StoryID": story_id,
             "StoryTitle": story_title,
             "StartedAt": now_iso(),
             "StoryType": story_type,
-            "SegmentHistory": [],
-            "AbandonedCount": 0,
+            "SegmentHistory": [],  # Will contain ActiveSegmentIDs as they're created
             "SkillXPAwarded": {},
             "AttributeXPAwarded": {},
         }
 
-        # Put item (will overwrite if exists - handles retries)
+        # Put item (will not overwrite due to unique StoryInstanceID)
         dynamo.put_item(TableName.STORY_HISTORY, history_entry)
+        
+        logger.info(f"Created story history entry with StoryInstanceID: {story_instance_id}")
+        return story_instance_id
+        
     except ClientError as err:
         logger.error(f"Failed to create history entry for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to create history entry: {err}") from err
@@ -961,14 +996,12 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
     return response
 
 
-def complete_story_for_character(character_id: str, story_id: str, final_outcome: str) -> None:
+def complete_story_for_character(character_id: str) -> None:
     """
-    Mark a story as completed and clean up character state.
+    Clean up character state when story is completed.
 
     Args:
         character_id: Character UUID
-        story_id: Story UUID
-        final_outcome: Story outcome (death, failure, minimal, normal, exceptional)
 
     Raises:
         RuntimeError: If database operations fail
@@ -982,35 +1015,54 @@ def complete_story_for_character(character_id: str, story_id: str, final_outcome
             ExpressionAttributeValues={":none": "None"},
         )
 
-        # Update story history with completion
-        dynamo.update_item(
-            TableName.STORY_HISTORY,
-            Key={"CharacterID": character_id, "StoryID": story_id},
-            UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome",
-            ExpressionAttributeValues={
-                ":finished": now_iso(),
-                ":outcome": final_outcome,
-            },
-        )
-
-        logger.info(f"Story completed for {character_id}")
+        logger.info(f"Character state cleared for {character_id}")
     except ClientError as err:
-        logger.error(f"Failed to complete story for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to complete story: {err}") from err
+        logger.error(f"Failed to clear character state for {character_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to clear character state: {err}") from err
 
 
-def complete_story(character_id: str, story_id: str, outcome: str) -> None:
+def complete_story(character_id: str, story_id: str, story_instance_id: str, outcome: str) -> None:
     """
     Complete the story, apply rewards, and update character state.
 
     Args:
         character_id: Character UUID
         story_id: Story UUID
+        story_instance_id: Story instance UUID
         outcome: Final outcome
     """
 
-    # Complete the story and clean up character state
-    complete_story_for_character(character_id, story_id, outcome)
+    # Clean up character state
+    complete_story_for_character(character_id)
+
+    # Update story history with completion data
+    if story_instance_id:
+        try:
+            # Calculate duration
+            history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryInstanceID": story_instance_id})
+            if history:
+                started_at = history.get("StartedAt", "")
+                if started_at:
+                    # Calculate duration in seconds
+                    from datetime import datetime
+                    start_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                    end_time = datetime.utcnow()
+                    duration = int((end_time - start_time).total_seconds())
+                else:
+                    duration = 0
+                
+                dynamo.update_item(
+                    TableName.STORY_HISTORY,
+                    Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
+                    UpdateExpression="SET FinishedAt = :finished, FinalOutcome = :outcome, TotalDuration = :duration",
+                    ExpressionAttributeValues={
+                        ":finished": now_iso(),
+                        ":outcome": outcome,
+                        ":duration": duration,
+                    },
+                )
+        except Exception as err:
+            logger.warning(f"Failed to update story history completion: {err}")
 
     # Get story metadata for reward calculation and type checking
     try:
@@ -1047,10 +1099,12 @@ def complete_story(character_id: str, story_id: str, outcome: str) -> None:
             # Non-critical - cooldown tracking will just not work properly
             logger.warning(f"Failed to update LastCompleted for story {story_id}: {err}")
 
-    history = get_story_history(character_id, story_id)
-
     # Count completed segments from history
-    segments_completed = len(history.get("SegmentHistory", []))
+    if story_instance_id:
+        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryInstanceID": story_instance_id})
+        segments_completed = len(history.get("SegmentHistory", [])) if history else 0
+    else:
+        segments_completed = 0
 
     # Calculate and apply rewards
     rewards = calculate_story_rewards(story_metadata, outcome, segments_completed)
@@ -1189,13 +1243,13 @@ def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
         raise RuntimeError(f"Failed to apply combat rewards: {err}") from err
 
 
-def add_segment_to_history(character_id: str, story_id: str, segment_id: str, outcome: str) -> None:
+def add_segment_to_history(character_id: str, story_instance_id: str, segment_id: str, outcome: str) -> None:
     """
     Add a completed segment to the story history.
 
     Args:
         character_id: Character UUID
-        story_id: Story UUID
+        story_instance_id: Story instance UUID
         segment_id: Segment UUID
         outcome: Segment outcome
 
@@ -1211,7 +1265,7 @@ def add_segment_to_history(character_id: str, story_id: str, segment_id: str, ou
 
         dynamo.update_item(
             TableName.STORY_HISTORY,
-            Key={"CharacterID": character_id, "StoryID": story_id},
+            Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
             UpdateExpression="SET SegmentHistory = list_append(SegmentHistory, :segment)",
             ExpressionAttributeValues={
                 ":segment": [segment_entry],
@@ -1224,13 +1278,13 @@ def add_segment_to_history(character_id: str, story_id: str, segment_id: str, ou
         raise RuntimeError(f"Failed to add segment to history: {err}") from err
 
 
-def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, attribute_xp: dict) -> None:
+def update_story_history_xp(character_id: str, story_instance_id: str, skill_xp: dict, attribute_xp: dict) -> None:
     """
     Update the story history with accumulated XP from this segment.
 
     Args:
         character_id: Character UUID
-        story_id: Story UUID
+        story_instance_id: Story instance UUID
         skill_xp: Skill XP awarded in this segment
         attribute_xp: Attribute XP awarded in this segment
 
@@ -1243,10 +1297,9 @@ def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, at
 
     try:
         # Build update expressions for XP accumulation
-        # Use if_not_exists to handle case where SegmentCount doesn't exist yet
-        update_expressions = ["SegmentCount = if_not_exists(SegmentCount, :zero) + :one"]
+        update_expressions = []
         expression_names = {}
-        expression_values = {":one": Decimal("1"), ":zero": Decimal("0")}
+        expression_values = {":zero": Decimal("0")}
 
         # Update individual fields within the maps
         # The maps should already exist from ensure_story_history_exists()
@@ -1279,7 +1332,7 @@ def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, at
 
         dynamo.update_item(
             TableName.STORY_HISTORY,
-            Key={"CharacterID": character_id, "StoryID": story_id},
+            Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
             UpdateExpression=update_expression,
             ExpressionAttributeNames=expression_names if expression_names else None,
             ExpressionAttributeValues=expression_values,
@@ -1321,7 +1374,6 @@ def ensure_story_history_exists(character_id: str, story_id: str, story_title: s
                     "StoryID": story_id,
                     "StoryTitle": story_title,
                     "StartedAt": now_iso(),
-                    "SegmentCount": 0,
                     "SkillXPAwarded": {},
                     "AttributeXPAwarded": {},
                 },

@@ -8,7 +8,6 @@ Updates character state, marks active segments as abandoned, and updates history
 """
 
 from eidolon.character_data import character_get
-from eidolon.character_story import reset_character_game_mode
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
@@ -43,32 +42,66 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     active_segment = get_active_story_segment(character_id)
     active_segment_id = active_segment.get("ActiveSegmentID")
     story_id = active_segment.get("StoryID")
+    story_instance_id = active_segment.get("StoryInstanceID")
     story_title = active_segment.get("StoryTitle", "Unknown Story")
 
     if not active_segment_id or not story_id:
         logger.error(f"Active segment missing required fields for {character_id}")
         raise ValueError("Invalid active segment data")
 
-    # Reset character game mode first to immediately free the character
-    reset_character_game_mode(character_id)
-
-    # Add story to abandoned list
-    try:
-        add_story_to_abandoned_list(character_id, story_id)
-    except (ValueError, RuntimeError) as err:
-        logger.error(f"Failed to add story to abandoned list but continuing for {character_id} Error: {err}")
-
-    # Record story abandonment in story history
-    try:
-        record_story_abandonment(character_id, story_id)
-    except (ValueError, RuntimeError) as err:
-        logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
-
-    # Mark segment as abandoned
+    # Mark segment as abandoned (set Status to "abandoned")
     try:
         mark_segment_as_abandoned(active_segment_id)
     except (ValueError, RuntimeError) as err:
-        logger.error(f"Failed to mark segment as abandoned but continuing for {active_segment_id} Error: {err}")
+        logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}")
+        # Continue anyway since we still want to update character state
+
+    # Update character: add to AbandonedStories, clear GameMode and ActiveStoryID/ActiveSegmentID
+    # The story cannot be resumed - if repeatable, player must start fresh
+    try:
+        from eidolon.dynamo import TableName, dynamo
+        from botocore.exceptions import ClientError
+        
+        # Get current character data to check AbandonedStories list
+        character_data = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        abandoned_stories = character_data.get("AbandonedStories", [])
+        
+        if story_id not in abandoned_stories:
+            # Add to abandoned list if not already there
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression="SET AbandonedStories = list_append(if_not_exists(AbandonedStories, :empty_list), :story)",
+                ExpressionAttributeValues={
+                    ":empty_list": [],
+                    ":story": [story_id]
+                }
+            )
+            logger.info(f"Added story {story_id} to abandoned list for {character_id}")
+        
+        # Clear GameMode, ActiveStoryID and ActiveSegmentID - character exits story completely
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET GameMode = :none REMOVE ActiveSegmentID, ActiveStoryID",
+            ExpressionAttributeValues={
+                ":none": "None"
+            }
+        )
+        logger.info(f"Reset character {character_id} to GameMode=None, story abandoned")
+        
+    except ClientError as err:
+        logger.error(f"Failed to update character abandoned state for {character_id} Error: {err}")
+        raise RuntimeError(f"Failed to update character state: {err}") from err
+
+    # Record story abandonment in story history if we have instance ID
+    try:
+        if story_instance_id:
+            record_story_abandonment(character_id, story_instance_id)
+        else:
+            logger.warning(f"No StoryInstanceID found for {character_id}, skipping history update")
+    except (ValueError, RuntimeError) as err:
+        logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
 
     # Record abandoned segment in history
     try:
@@ -76,11 +109,11 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     except RuntimeError as err:
         logger.error(f"Failed to record segment history but continuing for {character_id} Error: {err}")
 
-    # Delete the active segment after recording history
+    # Delete the active segment since it's been recorded in history
     try:
         delete_active_segment(active_segment_id)
     except ValueError as err:
-        logger.error(f"Failed to delete active segment - invalid ID for {active_segment_id} Error: {err}")
+        logger.error(f"Failed to delete active segment for {active_segment_id} Error: {err}")
 
     logger.info(f"Story abandoned successfully for {character_id}")
 

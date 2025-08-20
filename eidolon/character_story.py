@@ -16,14 +16,17 @@ from eidolon.mechanics import calculate_heal_time
 
 def get_story_history(character_id: str, story_id: str) -> dict:
     """
-    Get story history for a character.
+    Get most recent story history for a character and story.
+    
+    Since a character can have multiple instances of the same story,
+    this returns the most recent completed or abandoned instance.
 
     Args:
         character_id: Character UUID
         story_id: Story UUID
 
     Returns:
-        History record dict or empty dict if not found
+        Most recent history record dict or empty dict if not found
 
     Raises:
         RuntimeError: If database query fails
@@ -34,8 +37,26 @@ def get_story_history(character_id: str, story_id: str) -> dict:
         raise ValueError("Story ID cannot be empty")
 
     try:
-        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
-        return history or {}
+        # Query all story instances for this character
+        response = dynamo.query(
+            TableName.STORY_HISTORY,
+            KeyConditionExpression="CharacterID = :character_id",
+            ExpressionAttributeValues={":character_id": character_id},
+            ScanIndexForward=False,  # Most recent first (UUIDv7 sorts by time)
+        )
+        
+        # Filter for the specific story and find the most recent finished instance
+        items = response.get("Items", [])
+        for item in items:
+            if item.get("StoryID") == story_id and item.get("FinishedAt"):
+                return item
+        
+        # No finished instance found, check for in-progress
+        for item in items:
+            if item.get("StoryID") == story_id:
+                return item
+                
+        return {}  # No history found for this story
     except ClientError as err:
         logger.error(f"Failed to get story history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get story history: {err}") from err

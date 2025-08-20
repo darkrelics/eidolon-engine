@@ -32,6 +32,7 @@ class _GameScreenState extends State<GameScreen> {
   String? _error;
   StreamSubscription<void>? _mechanicalPollingSubscription;
   StreamSubscription<void>? _storyPollingSubscription;
+  Timer? _completionTimer; // Track completion timer to prevent duplicates
   
   // Panel visibility for mobile/tablet
   int _selectedPanelIndex = 1; // 0: Character, 1: Story, 2: Inventory
@@ -92,6 +93,7 @@ class _GameScreenState extends State<GameScreen> {
   void dispose() {
     _mechanicalPollingSubscription?.cancel();
     _storyPollingSubscription?.cancel();
+    _completionTimer?.cancel();
     _pollingManager.stopAllPolling();
     super.dispose();
   }
@@ -125,7 +127,10 @@ class _GameScreenState extends State<GameScreen> {
         _startPollingIfNeeded();
         
         // Set up segment polling if there's an active story
-        if (character?.storyState != null && character!.storyState!.isNotEmpty) {
+        // Only do this on initial load, not on subsequent reloads from polling
+        if (character?.storyState != null && 
+            character!.storyState!.isNotEmpty && 
+            !silent) {
           _setupSegmentPolling();
           
           // Immediately poll for segment status to get any existing narrative
@@ -274,6 +279,10 @@ class _GameScreenState extends State<GameScreen> {
   }
   
   void _setupSegmentPolling() {
+    // Cancel any existing polling timers first to prevent duplicates
+    _mechanicalPollingSubscription?.cancel();
+    _completionTimer?.cancel();
+    
     if (_character == null || _character!.storyState == null) {
       debugPrint('GameScreen: No character or story state, skipping segment polling setup');
       return;
@@ -312,16 +321,12 @@ class _GameScreenState extends State<GameScreen> {
     
     final now = DateTime.now();
     
-    // Cancel any existing polling timers
-    _mechanicalPollingSubscription?.cancel();
-    
-    // For mechanical segments, poll 60 seconds after the segment started
+    // For mechanical segments, poll 60 seconds after the segment started (only once)
     if (segmentType == 'mechanical') {
       final timeSinceStart = now.difference(startDateTime);
       final timeUntilOneMinute = const Duration(seconds: 60) - timeSinceStart;
       
       debugPrint('GameScreen: Mechanical segment - time since start: ${timeSinceStart.inSeconds}s');
-      debugPrint('GameScreen: Time until 1-minute poll: ${timeUntilOneMinute.inSeconds}s');
       
       // Only set timer if we haven't passed the 1-minute mark yet
       if (timeUntilOneMinute.inSeconds > 0) {
@@ -329,26 +334,8 @@ class _GameScreenState extends State<GameScreen> {
         Timer(timeUntilOneMinute, () async {
           if (!mounted) return;
         
-        try {
-          debugPrint('GameScreen: Polling segment status after 1 minute');
-          final statusResponse = await _apiService.getSegmentStatus(
-            characterId: _character!.id,
-          );
-          
-          // Update UI with narrative if available
-          if (statusResponse['ProcessingStatus'] == 'processed' && mounted) {
-            // Reload character to get updated segment data with narrative
-            await _loadCharacterData(silent: true);
-          }
-        } catch (e) {
-          debugPrint('GameScreen: Error polling segment status: $e');
-        }
-      });
-      } else {
-        // We're already past the 1-minute mark, poll immediately
-        debugPrint('GameScreen: Already past 1-minute mark, polling immediately');
-        () async {
           try {
+            debugPrint('GameScreen: Polling segment status after 1 minute');
             final statusResponse = await _apiService.getSegmentStatus(
               characterId: _character!.id,
             );
@@ -361,14 +348,15 @@ class _GameScreenState extends State<GameScreen> {
           } catch (e) {
             debugPrint('GameScreen: Error polling segment status: $e');
           }
-        }();
+        });
       }
+      // Don't poll immediately if past 1-minute - the narrative should already be loaded
     }
     
     // Poll at segment completion time for all segment types
     final timeUntilCompletion = endDateTime.difference(now);
     if (timeUntilCompletion.inSeconds > 0) {
-      Timer(timeUntilCompletion, () async {
+      _completionTimer = Timer(timeUntilCompletion, () async {
         if (!mounted) return;
         
         try {
@@ -391,8 +379,22 @@ class _GameScreenState extends State<GameScreen> {
             // Reload character to advance to next segment or complete story
             await _loadCharacterData();
             
-            // Set up polling for the new segment if there is one
-            if (_character?.storyState != null && _character!.storyState!.isNotEmpty) {
+            // Check if story is complete (no active segment after reload)
+            final newActiveSegment = _character?.storyState?['ActiveSegment'];
+            if (newActiveSegment == null) {
+              // Story is complete - save the last segment data for display
+              debugPrint('GameScreen: Story completed with outcome: ${activeSegment['Outcome']}');
+              
+              // Save the last segment data in the story state
+              if (mounted && _character?.storyState != null) {
+                setState(() {
+                  _character!.storyState!['LastSegment'] = activeSegment;
+                });
+              }
+              
+              // The story panel will show the completion UI
+            } else {
+              // Set up polling for the new segment
               _setupSegmentPolling();
             }
           }
@@ -495,6 +497,18 @@ class _GameScreenState extends State<GameScreen> {
         });
       }
     }
+  }
+
+  Future<void> _handleReturnToStories() async {
+    // Clear story state locally and reload to get available stories
+    setState(() {
+      if (_character != null) {
+        _character!.storyState = null;
+      }
+    });
+    
+    // Reload character to get available stories
+    await _loadCharacterData();
   }
 
   Future<void> _handleAbandonStory() async {
@@ -769,6 +783,7 @@ class _GameScreenState extends State<GameScreen> {
                 ? _handleAbandonStory
                 : null,
             onRestSegment: _handleRestSegment,
+            onReturnToStories: _handleReturnToStories,
           ),
         ),
         // Inventory Panel (Right)
@@ -807,6 +822,7 @@ class _GameScreenState extends State<GameScreen> {
                 ? _handleAbandonStory
                 : null,
             onRestSegment: _handleRestSegment,
+            onReturnToStories: _handleReturnToStories,
           ),
         ),
         // Inventory Panel (Collapsible)
@@ -841,6 +857,7 @@ class _GameScreenState extends State<GameScreen> {
               ? _handleAbandonStory
               : null,
           onRestSegment: _handleRestSegment,
+          onReturnToStories: _handleReturnToStories,
         );
       case 2:
         return InventoryPanel(
