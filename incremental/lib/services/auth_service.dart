@@ -281,22 +281,22 @@ class AuthService {
     await _ensureInitialized();
 
     try {
-      debugPrint('AuthService: isAuthenticated check - _currentUser: ${_currentUser != null}, _session: ${_session != null}');
+      // debugPrint('AuthService: isAuthenticated check - _currentUser: ${_currentUser != null}, _session: ${_session != null}');
 
       if (_currentUser == null || _session == null) {
-        debugPrint('AuthService: No current session in memory, attempting restore...');
+        // debugPrint('AuthService: No current session in memory, attempting restore...');
         final restored = await _restoreSession();
-        debugPrint('AuthService: Restore session result: $restored');
+        // debugPrint('AuthService: Restore session result: $restored');
         if (!restored) return false;
       }
 
       if (_session == null) return false;
 
       final isValid = _session!.isValid();
-      debugPrint('AuthService: Session validity: $isValid');
+      // debugPrint('AuthService: Session validity: $isValid');
 
       if (!isValid) {
-        debugPrint('AuthService: Session invalid, attempting refresh...');
+        // debugPrint('AuthService: Session invalid, attempting refresh...');
         return await _refreshSession();
       }
 

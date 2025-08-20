@@ -44,14 +44,14 @@ class ApiService {
 
   /// Get authorization headers
   Future<Map<String, String>> _getHeaders() async {
-    debugPrint('ApiService: Getting ID token...');
+    // debugPrint('ApiService: Getting ID token...');
     final token = await _authService.getIdToken();
     if (token == null) {
       debugPrint('ApiService: ERROR - No ID token available');
       throw Exception('Not authenticated');
     }
 
-    debugPrint('ApiService: Got ID token, length: ${token.length}');
+    // debugPrint('ApiService: Got ID token, length: ${token.length}');
     return {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
@@ -113,17 +113,17 @@ class ApiService {
 
   /// Get character by ID
   Future<Character?> getCharacterById(String characterId) async {
-    debugPrint('ApiService: Getting character by ID: $characterId');
+    // debugPrint('ApiService: Getting character by ID: $characterId');
     final headers = await _getHeaders();
     final uri = Uri.parse('$baseUrl/character?CharacterID=$characterId');
-    debugPrint('ApiService: Request URI: $uri');
+    // debugPrint('ApiService: Request URI: $uri');
 
     final response = await _httpClient.get(uri, headers: headers);
 
-    debugPrint(
-      'ApiService: Get character response status: ${response.statusCode}',
-    );
-    debugPrint('ApiService: Get character response body: ${response.body}');
+    // debugPrint(
+    //   'ApiService: Get character response status: ${response.statusCode}',
+    // );
+    // debugPrint('ApiService: Get character response body: ${response.body}');
 
     if (response.statusCode == 404) {
       return null;
@@ -148,18 +148,18 @@ class ApiService {
         'Story': activeStory,
         'ActiveSegment': activeSegment,
       };
-      debugPrint('ApiService: Found active story: ${activeStory['Title']}');
-      debugPrint('ApiService: Found active segment: ${activeSegment['SegmentType']}');
+      // debugPrint('ApiService: Found active story: ${activeStory['Title']}');
+      // debugPrint('ApiService: Found active segment: ${activeSegment['SegmentType']}');
     } else if (activeSegment != null) {
       // Fallback for backward compatibility
       characterData['StoryState'] = activeSegment;
-      debugPrint('ApiService: Found active segment (no story): ${activeSegment['SegmentType']}');
+      // debugPrint('ApiService: Found active segment (no story): ${activeSegment['SegmentType']}');
     }
     
     // If no active story but available stories are provided, add them to character data
     if (availableStories != null && activeStory == null) {
       characterData['AvailableStoriesDetails'] = availableStories;
-      debugPrint('ApiService: Found ${availableStories.length} available stories from character response');
+      // debugPrint('ApiService: Found ${availableStories.length} available stories from character response');
     }
     
     return Character.fromJson(characterData);
@@ -167,19 +167,19 @@ class ApiService {
 
   /// List all characters for the player
   Future<List<CharacterInfo>> listCharacters() async {
-    debugPrint('ApiService: Calling listCharacters...');
-    debugPrint('ApiService: API URL: $baseUrl/character/list');
+    // debugPrint('ApiService: Calling listCharacters...');
+    // debugPrint('ApiService: API URL: $baseUrl/character/list');
 
     final headers = await _getHeaders();
-    debugPrint('ApiService: Headers prepared, making request...');
+    // debugPrint('ApiService: Headers prepared, making request...');
 
     final response = await _httpClient.get(
       Uri.parse('$baseUrl/character/list'),
       headers: headers,
     );
 
-    debugPrint('ApiService: Response status: ${response.statusCode}');
-    debugPrint('ApiService: Response body: ${response.body}');
+    // debugPrint('ApiService: Response status: ${response.statusCode}');
+    // debugPrint('ApiService: Response body: ${response.body}');
 
     if (response.statusCode == 404) {
       debugPrint('ApiService: No characters found (404)');
@@ -201,9 +201,9 @@ class ApiService {
           .map((char) => CharacterInfo.fromJson(char))
           .toList();
 
-      debugPrint(
-        'ApiService: Successfully parsed ${characterList.length} characters',
-      );
+      // debugPrint(
+      //   'ApiService: Successfully parsed ${characterList.length} characters',
+      // );
       return characterList;
     } catch (e) {
       debugPrint('ApiService: Validation error - $e');
@@ -219,7 +219,7 @@ class ApiService {
     required String characterId,
     required String storyId,
   }) async {
-    debugPrint('ApiService: Starting story - characterId: $characterId, storyId: $storyId');
+    // debugPrint('ApiService: Starting story - characterId: $characterId, storyId: $storyId');
     final headers = await _getHeaders();
     final response = await _httpClient.post(
       Uri.parse('$baseUrl/story/start'),
@@ -227,8 +227,8 @@ class ApiService {
       body: jsonEncode({'CharacterID': characterId, 'StoryID': storyId}),
     );
 
-    debugPrint('ApiService: Start story response status: ${response.statusCode}');
-    debugPrint('ApiService: Start story response body: ${response.body}');
+    // debugPrint('ApiService: Start story response status: ${response.statusCode}');
+    // debugPrint('ApiService: Start story response body: ${response.body}');
 
     if (response.statusCode == 403) {
       throw Exception('Story not available');
@@ -239,8 +239,20 @@ class ApiService {
     }
 
     if (response.statusCode != 200) {
-      final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
-      throw Exception(errorBody['Error'] ?? errorBody['error'] ?? 'Failed to start story');
+      debugPrint('ApiService: Start story error - status: ${response.statusCode}, body: ${response.body}');
+      
+      // Try to parse error message from response
+      String errorMessage = 'Failed to start story';
+      try {
+        final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+        errorMessage = errorBody['Error'] ?? errorBody['error'] ?? errorBody['message'] ?? 'Failed to start story';
+      } catch (e) {
+        // If we can't parse the error, use the raw body if it's not too long
+        if (response.body.length < 100) {
+          errorMessage = response.body.isNotEmpty ? response.body : 'Failed to start story';
+        }
+      }
+      throw Exception(errorMessage);
     }
 
     final json = jsonDecode(response.body) as Map<String, dynamic>;

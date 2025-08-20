@@ -1248,28 +1248,22 @@ def update_story_history_xp(character_id: str, story_id: str, skill_xp: dict, at
         expression_names = {}
         expression_values = {":one": Decimal("1"), ":zero": Decimal("0")}
 
-        # Initialize maps if they don't exist
-        if skill_xp:
-            update_expressions.append("SkillXPAwarded = if_not_exists(SkillXPAwarded, :empty_skill_map)")
-            expression_values[":empty_skill_map"] = {}  # type: ignore
-        if attribute_xp:
-            update_expressions.append("AttributeXPAwarded = if_not_exists(AttributeXPAwarded, :empty_attr_map)")
-            expression_values[":empty_attr_map"] = {}  # type: ignore
-
-        # Add skill XP updates
+        # Update individual fields within the maps
+        # The maps should already exist from ensure_story_history_exists()
         for skill, xp_value in skill_xp.items():
             if xp_value > 0:
-                safe_skill = skill.replace("-", "_")
+                safe_skill = skill.replace("-", "_").replace(" ", "_")
+                # Use placeholder for skill name to handle special characters
                 update_expressions.append(
                     f"SkillXPAwarded.#skill_{safe_skill} = if_not_exists(SkillXPAwarded.#skill_{safe_skill}, :zero) + :xp_{safe_skill}"
                 )
                 expression_names[f"#skill_{safe_skill}"] = skill
                 expression_values[f":xp_{safe_skill}"] = Decimal(str(xp_value))
 
-        # Add attribute XP updates
         for attribute, xp_value in attribute_xp.items():
             if xp_value > 0:
-                safe_attr = attribute.replace("-", "_")
+                safe_attr = attribute.replace("-", "_").replace(" ", "_")
+                # Use placeholder for attribute name to handle special characters
                 update_expressions.append(
                     f"AttributeXPAwarded.#attr_{safe_attr} = if_not_exists(AttributeXPAwarded.#attr_{safe_attr}, :zero) + :xp_attr_{safe_attr}"
                 )

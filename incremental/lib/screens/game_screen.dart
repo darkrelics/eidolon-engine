@@ -49,33 +49,42 @@ class _GameScreenState extends State<GameScreen> {
     super.didChangeDependencies();
     // Get character info from route arguments
     final args = ModalRoute.of(context)?.settings.arguments;
-    debugPrint(
-      'GameScreen: didChangeDependencies called, args type: ${args.runtimeType}',
-    );
+    debugPrint('GameScreen: didChangeDependencies called, args type: ${args.runtimeType}');
     
     // Handle both Character and CharacterInfo types
     if (args is Character) {
-      debugPrint('GameScreen: Got full Character - name: ${args.name}, id: ${args.id}');
-      if (_character?.id != args.id) {
+      // Only update if it's a different character or first load
+      if (_character == null || _character!.id != args.id) {
+        debugPrint('GameScreen: Got full Character - name: ${args.name}, id: ${args.id}');
         _character = args;
         _characterInfo = CharacterInfo(
           name: args.name,
           id: args.id,
           dead: args.health <= 0,
         );
-        setState(() {
-          _isLoading = false;
-        });
+        // Only call setState if actually changing from loading state
+        if (_isLoading) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
         _startPollingIfNeeded();
+      } else {
+        debugPrint('GameScreen: didChangeDependencies called but same character - skipping update');
       }
-    } else if (args is CharacterInfo && args != _characterInfo) {
-      debugPrint(
-        'GameScreen: Got CharacterInfo - name: ${args.name}, id: ${args.id}',
-      );
-      _characterInfo = args;
-      _loadCharacterData();
-    } else {
-      debugPrint('GameScreen: No valid character data in arguments');
+    } else if (args is CharacterInfo) {
+      // Only update if it's a different character or first load
+      if (_characterInfo == null || _characterInfo!.id != args.id) {
+        debugPrint(
+          'GameScreen: Got CharacterInfo - name: ${args.name}, id: ${args.id}',
+        );
+        _characterInfo = args;
+        _loadCharacterData();
+      } else {
+        debugPrint('GameScreen: didChangeDependencies called but same CharacterInfo - skipping update');
+      }
+    } else if (args != null) {
+      debugPrint('GameScreen: didChangeDependencies called with unexpected args type: ${args.runtimeType}');
     }
   }
 
@@ -452,7 +461,7 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('GameScreen: Building with character: ${_character?.name}, loading: $_isLoading, error: $_error');
+    debugPrint('GameScreen: Building with character: ${_character?.name}, loading: $_isLoading, error: $_error}');
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final deviceType = ResponsiveLayout.getDeviceType(context);

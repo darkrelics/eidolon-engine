@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Character model for display purposes only.
 /// All progression and calculations happen server-side.
 class Character {
@@ -61,12 +59,12 @@ class Character {
 
   /// Create character from server response
   factory Character.fromJson(Map<String, dynamic> json) {
-    // Debug logging
-    debugPrint('Character.fromJson - Raw JSON keys: ${json.keys.toList()}');
-    debugPrint('Character.fromJson - Attributes: ${json['Attributes']}');
-    debugPrint('Character.fromJson - Skills: ${json['Skills']}');
-    debugPrint('Character.fromJson - Inventory: ${json['Inventory']}');
-    debugPrint('Character.fromJson - InventoryDetails: ${json['InventoryDetails']}');
+    // Debug logging (commented out to reduce verbosity)
+    // debugPrint('Character.fromJson - Raw JSON keys: ${json.keys.toList()}');
+    // debugPrint('Character.fromJson - Attributes: ${json['Attributes']}');
+    // debugPrint('Character.fromJson - Skills: ${json['Skills']}');
+    // debugPrint('Character.fromJson - Inventory: ${json['Inventory']}');
+    // debugPrint('Character.fromJson - InventoryDetails: ${json['InventoryDetails']}');
     
     // Parse attributes and skills, converting numbers to doubles
     final Map<String, double> parsedAttributes = parseMapToDouble(
@@ -79,9 +77,9 @@ class Character {
       json['Resources'] ?? {},
     );
 
-    // Debug parsed data
-    debugPrint('Character.fromJson - Parsed attributes: $parsedAttributes');
-    debugPrint('Character.fromJson - Parsed skills: $parsedSkills');
+    // Debug parsed data (commented out to reduce verbosity)
+    // debugPrint('Character.fromJson - Parsed attributes: $parsedAttributes');
+    // debugPrint('Character.fromJson - Parsed skills: $parsedSkills');
 
     // The archetype from server is just a string name, not an object with ID
     final archetypeName = json['Archetype'] as String? ?? 'default';
