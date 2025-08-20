@@ -1,0 +1,302 @@
+"""
+Core segment operations and data access.
+
+Provides fundamental functions for accessing and managing segments.
+"""
+
+from botocore.exceptions import ClientError
+
+from eidolon.dynamo import TableName, dynamo
+from eidolon.logger import logger
+from eidolon.models import StorySegment
+from eidolon.schema import normalize_segment_definition
+
+# Valid segment types for the incremental game
+VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
+MECHANICAL_ONLY_TYPES = ["mechanical"]
+
+
+def is_mechanical_segment(segment_type: str) -> bool:
+    """
+    Check if a segment type should be processed as mechanical.
+
+    Mechanical segments include challenges and/or combat and are
+    processed by the ops_process_segment Lambda via SQS.
+
+    Args:
+        segment_type: Type of segment to check
+
+    Returns:
+        True if segment should be processed as mechanical
+    """
+    return segment_type.lower() in MECHANICAL_ONLY_TYPES
+
+
+def is_simple_segment(segment_type: str) -> bool:
+    """
+    Check if a segment type can be processed directly by the poller.
+
+    Simple segments (rest and decision) don't require complex processing
+    and can be handled directly without queuing.
+
+    Args:
+        segment_type: Type of segment to check
+
+    Returns:
+        True if segment can be processed directly
+    """
+    return segment_type.lower() in ["rest", "decision"]
+
+
+def get_active_segment(active_segment_id: str) -> dict:
+    """
+    Get active segment by ID.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Returns:
+        Active segment data
+
+    Raises:
+        ValueError: If segment not found
+        RuntimeError: If database operation fails
+    """
+    try:
+        active_segment = dynamo.get_item(
+            TableName.ACTIVE_SEGMENTS,
+            {"ActiveSegmentID": active_segment_id},
+        )
+        if not active_segment:
+            raise ValueError(f"Active segment not found: {active_segment_id}")
+        return active_segment
+    except ClientError as err:
+        logger.error(f"Failed to get active segment for {active_segment_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to get active segment: {err}") from err
+
+
+def get_segment_definition(story_id: str, segment_id: str) -> dict:
+    """
+    Get segment definition from Segments table.
+
+    Args:
+        story_id: Story UUID
+        segment_id: Segment ID
+
+    Returns:
+        Segment definition
+
+    Raises:
+        ValueError: If segment not found
+        RuntimeError: If database operation fails
+    """
+    try:
+        segment_def = dynamo.get_item(
+            TableName.SEGMENTS,
+            {"StoryID": story_id, "SegmentID": segment_id},
+        )
+        if not segment_def:
+            raise ValueError(f"Segment definition not found: {segment_id}")
+        # Normalize mixed-case inputs from content or tools
+        normalized = normalize_segment_definition(segment_def)
+        # Validate and return canonical PascalCase dict (tolerant fallback)
+        try:
+            _model = StorySegment.model_validate(normalized)
+            return _model.model_dump(by_alias=True, exclude_none=True)
+        except Exception:
+            # Fall back to normalized dict when validation fails (tolerant)
+            return normalized
+    except ClientError as err:
+        logger.error(f"Failed to get segment definition for {segment_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to get segment definition: {err}") from err
+
+
+def get_active_segment_info(active_segment_id: str) -> dict:
+    """
+    Get active segment information for processing.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Returns:
+        Dict with segment data and metadata
+
+    Raises:
+        ValueError: If segment not found or invalid state
+        RuntimeError: If database operations fail
+    """
+    # Get active segment
+    active_segment = get_active_segment(active_segment_id)
+
+    # Extract key fields
+    story_id = active_segment.get("StoryID")
+    segment_id = active_segment.get("SegmentID")
+    segment_type = active_segment.get("SegmentType")
+
+    if not story_id or not segment_id:
+        raise ValueError(f"Active segment missing required fields: {active_segment_id}")
+
+    # Get segment definition
+    segment_def = get_segment_definition(story_id, segment_id)
+
+    return {
+        "active_segment": active_segment,
+        "segment_def": segment_def,
+        "segment_type": segment_type,
+        "story_id": story_id,
+        "segment_id": segment_id,
+    }
+
+
+def delete_active_segment(active_segment_id: str) -> None:
+    """
+    Delete an active segment from the database.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    try:
+        dynamo.delete_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
+        logger.info(f"Deleted active segment for {active_segment_id}")
+    except ClientError as err:
+        logger.error(f"Failed to delete active segment for {active_segment_id} Error: {err}", exc_info=True)
+        logger.warning(f"Failed to delete active segment for {active_segment_id}: {err}")
+
+
+def claim_segment_for_processing(active_segment_id: str) -> bool:
+    """
+    Atomically claim a segment for processing using conditional update.
+
+    Sets RunningFlag to true only if currently false, preventing double processing.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Returns:
+        True if segment was successfully claimed, False if already being processed
+
+    Raises:
+        RuntimeError: If database operation fails (not ConditionalCheckFailed)
+    """
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET RunningFlag = :true",
+            ConditionExpression="attribute_exists(ActiveSegmentID) AND (attribute_not_exists(RunningFlag) OR RunningFlag = :false)",
+            ExpressionAttributeValues={":true": True, ":false": False},
+        )
+        logger.info(f"Successfully claimed segment for processing for {active_segment_id}")
+        return True
+    except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.info(f"Segment already being processed for {active_segment_id}")
+            return False
+        logger.error(f"Failed to claim segment for processing for {active_segment_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to claim segment for processing: {err}") from err
+
+
+def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
+    """
+    Validate and extract outcome data from segment Results field.
+
+    Ensures the Results field and its contents are properly structured,
+    providing safe defaults when data is missing or malformed.
+
+    Args:
+        segment: Segment definition from database
+        outcome: Outcome string (e.g., "exceptional", "normal", "failure")
+
+    Returns:
+        Dict with validated narrative and effects, guaranteed to have PascalCase keys:
+            - Narrative (str): The outcome narrative text
+            - Effects (dict): Effects to apply (may be empty)
+    """
+    results = segment.get("Results")
+
+    if results is None:
+        logger.warning(f"Segment has no Results field for {segment.get('SegmentID')}")
+        if outcome == "exceptional":
+            return {"Narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "Effects": {}}
+        return {"Narrative": "", "Effects": {}}
+
+    if not isinstance(results, dict):
+        logger.error(f"Results field is not a dictionary for {segment.get('SegmentID')}")
+        return {"Narrative": "", "Effects": {}}
+
+    outcome_key = str(outcome).lower() if outcome else "normal"
+    outcome_result = results.get(outcome_key)
+
+    if outcome_result is None:
+        logger.info(f"No specific result for outcome for {segment.get('SegmentID')}")
+        if outcome == "exceptional":
+            return {"Narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "Effects": {}}
+        return {"Narrative": "", "Effects": {}}
+
+    if not isinstance(outcome_result, dict):
+        logger.error(f"Outcome result is not a dictionary for {segment.get('SegmentID')}")
+        return {"Narrative": "", "Effects": {}}
+
+    narrative = outcome_result.get("Narrative", "")
+    if not isinstance(narrative, str):
+        logger.warning(f"Narrative is not a string for {segment.get('SegmentID')}")
+    narrative = str(narrative) if narrative else ""
+
+    effects = outcome_result.get("Effects", {})
+    if not isinstance(effects, dict):
+        logger.warning(f"Effects is not a dictionary for {segment.get('SegmentID')}")
+        effects = {}
+
+    return {"Narrative": narrative, "Effects": effects}
+
+
+def extract_character_updates_from_results(results: dict, segment_def: dict, outcome: str) -> dict:
+    """
+    Extract all character updates for storage in ActiveSegments.
+
+    Note: XP and wounds are applied immediately to the database during segment processing.
+    This function extracts ALL updates for client display and history.
+
+    Args:
+        results: Results from segment processing
+        segment_def: Segment definition containing outcome effects
+        outcome: The calculated outcome
+
+    Returns:
+        Dict containing all character updates
+    """
+    updates = {}
+
+    xp_updates = results.get("xpUpdates")
+    if xp_updates:
+        updates.update(xp_updates)
+
+    wound_updates = results.get("woundUpdates")
+    if wound_updates:
+        updates.update(wound_updates)
+
+    combat_state = results.get("combatState", {})
+    if combat_state.get("opponentDefeated"):
+        opponent_id = combat_state.get("opponentId")
+        if opponent_id:
+            try:
+                opponent_data = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+                if opponent_data:
+                    updates["CombatRewards"] = {
+                        "opponentId": opponent_id,
+                        "defeated": True,
+                        "opponentData": opponent_data,
+                    }
+            except Exception as err:
+                logger.error(f"Failed to get opponent data for rewards for {opponent_id} Error: {err}", exc_info=True)
+
+    if outcome in ["death", "failure", "minimal", "normal", "exceptional"]:
+        outcome_results = segment_def.get("Results", {}).get(outcome, {})
+        outcome_effects = outcome_results.get("effects", {})
+        if outcome_effects:
+            updates["StoryEffects"] = outcome_effects
+
+    return updates

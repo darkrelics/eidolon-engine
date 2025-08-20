@@ -11,7 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from eidolon.schema import normalize_segment_definition
-from eidolon.segment import determine_next_segment
+from eidolon.segment_processing import determine_next_segment
 
 
 def load_test_story():

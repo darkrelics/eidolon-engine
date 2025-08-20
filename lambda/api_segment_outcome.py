@@ -15,7 +15,7 @@ from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.schema import normalize_segment_definition
-from eidolon.segment import validate_segment_outcome_results
+from eidolon.segment_core import validate_segment_outcome_results
 from eidolon.story import get_completed_segment_for_character, get_story_segment
 
 

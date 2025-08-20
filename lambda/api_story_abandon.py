@@ -14,7 +14,8 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment import delete_active_segment, record_abandoned_segment_history
+from eidolon.segment_history import record_abandoned_segment_history
+from eidolon.segment_polling import delete_active_segment
 from eidolon.story import add_story_to_abandoned_list, get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment
 from eidolon.validation import validate_uuid
 

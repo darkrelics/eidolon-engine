@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from eidolon.schema import normalize_segment_definition
-from eidolon.segment import validate_segment_outcome_results
+from eidolon.segment_core import validate_segment_outcome_results
 
 
 def load_test_story():

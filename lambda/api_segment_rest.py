@@ -9,7 +9,8 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment import get_active_segment_info, insert_rest_segment
+from eidolon.segment_history import insert_rest_segment
+from eidolon.segment_polling import get_active_segment_info
 
 # Rest segment configuration
 REST_SEGMENT_DURATION = 900  # 15 minutes (time to heal a bashing wound)

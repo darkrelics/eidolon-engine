@@ -16,13 +16,9 @@ from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import get_polling_state, manage_eventbridge_rule, update_polling_state
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment import (
-    check_active_segments_exist,
-    get_completed_segments,
-    is_mechanical_segment,
-    mark_segment_as_completed_exceptional,
-    reset_segment_processing_status,
-)
+from eidolon.segment_core import is_mechanical_segment
+from eidolon.segment_polling import check_active_segments_exist, get_completed_segments
+from eidolon.segment_state import mark_segment_as_completed_exceptional, reset_segment_processing_status
 from eidolon.sqs import send_message_batch
 from eidolon.time_utils import now_iso
 

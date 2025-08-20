@@ -19,13 +19,11 @@ from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
 from eidolon.schema import normalize_segment_definition
-from eidolon.segment import (
-    create_next_active_segment,
-    delete_active_segment,
-    determine_next_segment,
-    get_segment_definition,
-    record_segment_history,
-)
+from eidolon.segment_core import get_segment_definition
+from eidolon.segment_history import record_segment_history
+from eidolon.segment_polling import delete_active_segment
+from eidolon.segment_processing import determine_next_segment
+from eidolon.segment_state import create_next_active_segment
 from eidolon.sqs import send_message
 from eidolon.time_utils import now_iso, future_iso, now_unix, future_unix, from_unix
 

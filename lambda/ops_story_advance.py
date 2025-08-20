@@ -16,21 +16,11 @@ from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome
 from eidolon.polling import update_polling_state
-from eidolon.segment import (
-    check_active_segments_exist,
-    claim_segment_for_processing,
-    create_next_active_segment,
-    delete_active_segment,
-    determine_next_segment,
-    get_active_segment,
-    get_segment_definition,
-    insert_rest_segment,
-    is_simple_segment,
-    process_decision_segment,
-    process_rest_segment,
-    record_segment_history,
-    update_segment_processing_status,
-)
+from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
+from eidolon.segment_history import insert_rest_segment, record_segment_history
+from eidolon.segment_polling import check_active_segments_exist, claim_segment_for_processing, delete_active_segment
+from eidolon.segment_processing import determine_next_segment, process_decision_segment, process_rest_segment
+from eidolon.segment_state import create_next_active_segment, update_segment_processing_status
 from eidolon.sqs import send_message
 from eidolon.story import apply_combat_rewards, complete_story, update_story_history_xp
 from eidolon.validation_messages import validate_advancement_message
