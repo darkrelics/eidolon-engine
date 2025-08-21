@@ -29,7 +29,7 @@ def get_completed_segments(max_segments: int) -> list:
     current_time = now_unix()
 
     try:
-        response = dynamo.query(
+        segments: list = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
             IndexName="StatusEndTimeIndex",
             KeyConditionExpression="Status = :status AND EndTime < :current_time",
@@ -40,9 +40,7 @@ def get_completed_segments(max_segments: int) -> list:
                 ":proc_status": "processed",
             },
             Limit=max_segments,
-        )
-
-        segments = response.get("Items", [])
+        ) # type: ignore
         logger.info(f"Found {len(segments)} completed segments ready for advancement")
         return segments
 
@@ -59,15 +57,15 @@ def check_active_segments_exist() -> bool:
         True if active segments exist, False otherwise
     """
     try:
-        response = dynamo.query(
+        segments: list = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
             IndexName="StatusEndTimeIndex",
             KeyConditionExpression="Status = :status",
             ExpressionAttributeValues={":status": "active"},
             Limit=1,
-        )
+        ) # type: ignore
 
-        return len(response.get("Items", [])) > 0
+        return len(segments) > 0
 
     except ClientError as err:
         logger.error(f"Failed to check for active segments Error: {err}", exc_info=True)

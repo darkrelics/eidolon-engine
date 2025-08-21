@@ -4,6 +4,7 @@ from aws_cdk import CfnOutput, Stack
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
@@ -103,6 +104,9 @@ class ApiStack(Stack):
         # Add Lambda integrations for available functions
         self._add_api_endpoints(api, authorizer)  # type: ignore
 
+        # Configure CORS for error responses
+        self._configure_gateway_responses(api, client_origin)
+
         # Configure custom domain
         self._configure_api_domain(api)
 
@@ -175,11 +179,58 @@ class ApiStack(Stack):
             logical_id = self._get_lambda_import_logical_id(function_name)
             lambda_function = lambda_.Function.from_function_arn(self, logical_id, self.lambda_arns[function_name])
 
+            # Create integration
+            integration = apigateway.LambdaIntegration(lambda_function)
+
+            # Add method
             resource.add_method(
                 method,
-                apigateway.LambdaIntegration(lambda_function),
+                integration,
                 authorizer=authorizer,
                 authorization_type=apigateway.AuthorizationType.COGNITO if authorizer else None,
+            )
+
+            # Grant API Gateway permission to invoke the Lambda
+            lambda_function.grant_invoke(iam.ServicePrincipal("apigateway.amazonaws.com"))
+
+    def _configure_gateway_responses(self, api: apigateway.RestApi, client_origin: str) -> None:
+        """Configure CORS headers for gateway error responses."""
+        # CORS headers to add to all error responses
+        cors_headers = {
+            "gatewayresponse.header.Access-Control-Allow-Origin": f"'{client_origin}'",
+            "gatewayresponse.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+            "gatewayresponse.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+            "gatewayresponse.header.Access-Control-Allow-Credentials": "'true'"
+        }
+
+        # Add gateway responses with CORS headers for common error types
+        # Note: DEFAULT4XX and DEFAULT5XX handle all 4xx and 5xx responses
+        api.add_gateway_response(
+            "GatewayResponseDefault4XX",
+            type=apigateway.ResponseType.DEFAULT4XX, # type: ignore
+            response_headers=cors_headers,
+        )
+
+        api.add_gateway_response(
+            "GatewayResponseDefault5XX",
+            type=apigateway.ResponseType.DEFAULT5XX, # type: ignore
+            response_headers=cors_headers,
+        )
+
+        # Add specific error responses that might need special handling
+        specific_errors = [
+            (apigateway.ResponseType.UNAUTHORIZED, "Unauthorized"),
+            (apigateway.ResponseType.ACCESS_DENIED, "AccessDenied"),
+            (apigateway.ResponseType.EXPIRED_TOKEN, "ExpiredToken"),
+            (apigateway.ResponseType.INVALID_API_KEY, "InvalidApiKey"),
+            (apigateway.ResponseType.MISSING_AUTHENTICATION_TOKEN, "MissingAuthToken"),
+        ]
+
+        for response_type, name in specific_errors:
+            api.add_gateway_response(
+                f"GatewayResponse{name}",
+                type=response_type,
+                response_headers=cors_headers,
             )
 
     def _configure_api_domain(self, api: apigateway.RestApi) -> None:

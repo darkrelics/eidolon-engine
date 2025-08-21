@@ -171,20 +171,42 @@ class StoryStack(Stack):
         function_logical_id = "ImportedProcessFunction" if trigger_id == "ProcessorTrigger" else "ImportedAdvanceFunction"
         role_logical_id = "ImportedProcessRole" if trigger_id == "ProcessorTrigger" else "ImportedAdvanceRole"
         mapping_logical_id = "ProcessMapping" if trigger_id == "ProcessorTrigger" else "AdvanceMapping"
+        policy_logical_id = "ImportedProcessRolePolicy" if trigger_id == "ProcessorTrigger" else "ImportedAdvanceRolePolicy"
+
+        # Import the Lambda role
+        lambda_role = iam.Role.from_role_arn(self, role_logical_id, self.lambda_role_arn) if self.lambda_role_arn else None
 
         lambda_function = lambda_.Function.from_function_attributes(
             self,
             function_logical_id,
             function_arn=lambda_arn,
-            # Use the same role that was passed to the stack
-            role=iam.Role.from_role_arn(self, role_logical_id, self.lambda_role_arn) if self.lambda_role_arn else None,
+            role=lambda_role,
         )
 
         # Add SQS event source with fixed logical ID
         lambda_function.add_event_source_mapping(mapping_logical_id, event_source_arn=queue.queue_arn, batch_size=10)
 
         # Grant SQS permissions to Lambda execution role
-        queue.grant_consume_messages(lambda_function)
+        # Since we're using an imported role, we need to add the policy explicitly
+        if lambda_role:
+            lambda_role.attach_inline_policy(
+                iam.Policy(
+                    self,
+                    policy_logical_id,
+                    statements=[
+                        iam.PolicyStatement(
+                            effect=iam.Effect.ALLOW,
+                            actions=[
+                                "sqs:ReceiveMessage",
+                                "sqs:DeleteMessage",
+                                "sqs:GetQueueAttributes",
+                                "sqs:ChangeMessageVisibility",
+                            ],
+                            resources=[queue.queue_arn],
+                        )
+                    ],
+                )
+            )
 
     def _create_polling_rule(self) -> events.Rule:
         """Create EventBridge rule for polling (starts disabled)."""
@@ -203,8 +225,15 @@ class StoryStack(Stack):
             enabled=False,  # Starts disabled
         )
 
-        # Add Lambda target
-        rule.add_target(targets.LambdaFunction(poller_function))  # type: ignore
+        # Add Lambda target with removal policy
+        # The target will be automatically removed when the rule is deleted
+        rule.add_target(
+            targets.LambdaFunction(
+                poller_function,
+                retry_attempts=2,
+                max_event_age=Duration.minutes(5),
+            )  # type: ignore
+        )
 
         # Grant EventBridge permission to invoke Lambda
         poller_function.add_permission(
@@ -212,6 +241,9 @@ class StoryStack(Stack):
             principal=iam.ServicePrincipal("events.amazonaws.com"),  # type: ignore
             source_arn=rule.rule_arn,
         )
+
+        # Apply removal policy to ensure clean deletion
+        rule.apply_removal_policy(RemovalPolicy.DESTROY)
 
         return rule
 

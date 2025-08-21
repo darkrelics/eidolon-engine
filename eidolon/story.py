@@ -447,7 +447,7 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     return story, first_segment
 
 
-def create_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id: str = None) -> dict:
+def create_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id = None) -> dict:
     """
     Create an active segment record for tracking progress.
     Also creates a SegmentHistory record and adds it to StoryHistory if story_instance_id is provided.
@@ -551,7 +551,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, segm
                 # CharacterUpdates (with XP data) will be added when segment completes
             }
             dynamo.put_item(TableName.SEGMENT_HISTORY, segment_history)
-            
+
             # Add ActiveSegmentID to StoryHistory's SegmentHistory list
             dynamo.update_item(
                 TableName.STORY_HISTORY,
@@ -559,7 +559,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, segm
                 UpdateExpression="SET SegmentHistory = list_append(SegmentHistory, :segment_id)",
                 ExpressionAttributeValues={":segment_id": [active_segment_id]},
             )
-            
+
             logger.info(f"Created SegmentHistory record and updated StoryHistory for segment {active_segment_id}")
         except ClientError as err:
             # Non-critical - don't fail segment creation if history update fails
@@ -587,7 +587,7 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
     try:
         # Generate UUIDv7 for this story instance
         story_instance_id = str(uuid7())
-        
+
         history_entry = {
             "CharacterID": character_id,
             "StoryInstanceID": story_instance_id,
@@ -602,10 +602,10 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
 
         # Put item (will not overwrite due to unique StoryInstanceID)
         dynamo.put_item(TableName.STORY_HISTORY, history_entry)
-        
+
         logger.info(f"Created story history entry with StoryInstanceID: {story_instance_id}")
         return story_instance_id
-        
+
     except ClientError as err:
         logger.error(f"Failed to create history entry for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to create history entry: {err}") from err
@@ -904,7 +904,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
             raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         # Story complete
-        complete_story(character_id, story_id, "normal")
+        complete_story(character_id, story_id, story_instance_id, "normal") # type: ignore
         logger.info(f"Story completed after decision for {character_id}")
 
     logger.info(f"Decision submitted and story advanced for {active_segment_id}")
@@ -1045,7 +1045,7 @@ def complete_story(character_id: str, story_id: str, story_instance_id: str, out
                     duration = int((end_time - start_time).total_seconds())
                 else:
                     duration = 0
-                
+
                 dynamo.update_item(
                     TableName.STORY_HISTORY,
                     Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},

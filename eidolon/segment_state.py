@@ -36,18 +36,18 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
     challenge_results = results.get("challengeResults")
     if challenge_results:
         update_expression += ", ChallengeResults = :results"
-        expression_values[":results"] = challenge_results_to_pascal(challenge_results)
+        expression_values[":results"] = challenge_results_to_pascal(challenge_results)  # type: ignore
 
     combat_state = results.get("combatState")
     if combat_state:
         update_expression += ", CombatState = :state"
-        expression_values[":state"] = combat_state_to_pascal(combat_state)
+        expression_values[":state"] = combat_state_to_pascal(combat_state)  # type: ignore
 
     if segment_def:
         character_updates = extract_character_updates_from_results(results, segment_def, outcome)
         if character_updates:
             update_expression += ", CharacterUpdates = :updates"
-            expression_values[":updates"] = character_updates
+            expression_values[":updates"] = character_updates  # type: ignore
 
     client_events = []
 
@@ -59,9 +59,9 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
             if narrative:
                 client_events.append(
                     ClientEvent(
-                        eventType="narrative",
-                        title="Outcome",
-                        description=narrative,
+                        EventType="narrative",
+                        Title="Outcome",
+                        Description=narrative,
                     ).model_dump(by_alias=True, exclude_none=True)
                 )
         except Exception as err:
@@ -82,10 +82,10 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
             client_events.append(
                 ClientEvent(
-                    eventType="skill_check",
-                    title=title,
-                    description=description,
-                    challengeResult=challenge,
+                    EventType="skill_check",
+                    Title=title,
+                    Description=description,
+                    Data=challenge,
                 ).model_dump(by_alias=True, exclude_none=True)
             )
 
@@ -94,10 +94,10 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         for round_data in combat_log[:5]:
             client_events.append(
                 ClientEvent(
-                    eventType="combat",
-                    title=f"Round {round_data.get('round', 0)}",
-                    description="Combat round",
-                    combatRound=round_data,
+                    EventType="combat",
+                    Title=f"Round {round_data.get('round', 0)}",
+                    Description="Combat round",
+                    Data=round_data,
                 ).model_dump(by_alias=True, exclude_none=True)
             )
 
@@ -112,15 +112,15 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
             client_events.append(
                 ClientEvent(
-                    eventType="combat_result",
-                    title=title,
-                    description=description,
+                    EventType="combat_result",
+                    Title=title,
+                    Description=description,
                 ).model_dump(by_alias=True, exclude_none=True)
             )
 
     if client_events:
         update_expression += ", ClientEvents = :events"
-        expression_values[":events"] = events_to_pascal(client_events)
+        expression_values[":events"] = events_to_pascal(client_events)  # type: ignore
 
     try:
         dynamo.update_item(
@@ -136,7 +136,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         raise RuntimeError(f"Failed to update active segment outcome: {err}") from err
 
 
-def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id: str = None) -> str:
+def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id: str | None = None) -> str:
     """
     Create an active segment record for the next segment.
 

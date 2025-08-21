@@ -158,10 +158,10 @@ def generate_combat_client_events(combat_state: dict) -> list:
     # Add event for each combat round
     for round_data in combat_state.get("rounds", []):
         event = ClientEvent(
-            eventType="combat",
-            title=f"Round {round_data.get('round', 0)}",
-            description=f"{round_data.get('playerAction', 'Attack')} vs {round_data.get('opponentAction', 'Attack')}",
-            combatRound=round_data,
+            EventType="combat",
+            Title=f"Round {round_data.get('round', 0)}",
+            Description=f"{round_data.get('playerAction', 'Attack')} vs {round_data.get('opponentAction', 'Attack')}",
+            Data=round_data,
         )
         events.append(event.model_dump(by_alias=True, exclude_none=True))
 
@@ -175,7 +175,7 @@ def generate_combat_client_events(combat_state: dict) -> list:
             title = "Defeat"
             description = "You have been defeated in combat."
 
-        event = ClientEvent(eventType="combat_result", title=title, description=description)
+        event = ClientEvent(EventType="combat_result", Title=title, Description=description)
         events.append(event.model_dump(by_alias=True, exclude_none=True))
 
     return events
@@ -204,7 +204,7 @@ def generate_skill_check_events(challenge_results: list) -> list:
             title = f"{skill or attribute} Failure"
             description = f"You failed the {skill or attribute} challenge."
 
-        event = ClientEvent(eventType="skill_check", title=title, description=description, challengeResult=challenge)
+        event = ClientEvent(EventType="skill_check", Title=title, Description=description, Data=challenge)
         events.append(event.model_dump(by_alias=True, exclude_none=True))
 
     return events

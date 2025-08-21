@@ -7,9 +7,12 @@ Lambda function to abandon an active story.
 Updates character state, marks active segments as abandoned, and updates history.
 """
 
+from botocore.exceptions import ClientError
+
 from eidolon.character_data import character_get
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
+from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.requests import get_query_parameter_flexible
@@ -18,6 +21,10 @@ from eidolon.segment_history import record_abandoned_segment_history
 from eidolon.segment_polling import delete_active_segment
 from eidolon.story import add_story_to_abandoned_list, get_active_story_segment, mark_segment_as_abandoned, record_story_abandonment
 from eidolon.validation import validate_uuid
+
+
+
+
 
 
 def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
@@ -59,13 +66,11 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     # Update character: add to AbandonedStories, clear GameMode and ActiveStoryID/ActiveSegmentID
     # The story cannot be resumed - if repeatable, player must start fresh
     try:
-        from eidolon.dynamo import TableName, dynamo
-        from botocore.exceptions import ClientError
-        
+
         # Get current character data to check AbandonedStories list
-        character_data = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+        character_data: dict = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id}) # type: ignore
         abandoned_stories = character_data.get("AbandonedStories", [])
-        
+
         if story_id not in abandoned_stories:
             # Add to abandoned list if not already there
             dynamo.update_item(
@@ -78,7 +83,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
                 }
             )
             logger.info(f"Added story {story_id} to abandoned list for {character_id}")
-        
+
         # Clear GameMode, ActiveStoryID and ActiveSegmentID - character exits story completely
         dynamo.update_item(
             TableName.CHARACTERS,
@@ -89,7 +94,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
             }
         )
         logger.info(f"Reset character {character_id} to GameMode=None, story abandoned")
-        
+
     except ClientError as err:
         logger.error(f"Failed to update character abandoned state for {character_id} Error: {err}")
         raise RuntimeError(f"Failed to update character state: {err}") from err
