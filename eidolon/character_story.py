@@ -46,7 +46,7 @@ def get_story_history(character_id: str, story_id: str) -> dict:
         )
         
         # Filter for the specific story and find the most recent finished instance
-        items = response.get("Items", [])
+        items = response.get("Items", []) # type: ignore
         for item in items:
             if item.get("StoryID") == story_id and item.get("FinishedAt"):
                 return item

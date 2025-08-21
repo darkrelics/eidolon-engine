@@ -2,6 +2,7 @@
 
 import json
 import sys
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -249,7 +250,13 @@ def main():
     try:
         params = collect_deployment_params(config)
     except ValueError as err:
+        print(f"\nError during parameter collection: {err}")
+        return 1
+    except Exception as err:
+        print(f"\nUnexpected error during parameter collection")
         print(f"Error: {err}")
+        print(f"\nFull stack trace:")
+        print(traceback.format_exc())
         return 1
 
     # Check CDK bootstrap
@@ -311,7 +318,13 @@ def main():
                 if not success:
                     print(f"WARNING: {stack_name} deployment had issues")
             except Exception as e:
-                print(f"ERROR deploying {stack_name}: {e}")
+                print(f"\n{'='*60}")
+                print(f"ERROR deploying {stack_name} stack")
+                print(f"{'='*60}")
+                print(f"Error: {e}")
+                print(f"\nFull stack trace:")
+                print(traceback.format_exc())
+                print(f"{'='*60}")
                 deployment_results[stack_name] = False
         else:
             print(f"\nSkipping {stack_name} stack (not yet implemented)")

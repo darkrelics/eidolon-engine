@@ -1,6 +1,6 @@
 """S3 stack for Eidolon Engine scripts bucket."""
 
-from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
@@ -31,6 +31,8 @@ class S3Stack(Stack):
         self.region_name = region_name
         self.scripts_bucket_name = scripts_bucket
         super().__init__(scope, stack_id, **kwargs)
+        # Apply system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Import existing bucket or create new one with fixed logical ID
         if bucket_exists:

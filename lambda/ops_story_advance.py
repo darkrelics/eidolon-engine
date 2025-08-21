@@ -22,7 +22,9 @@ from eidolon.segment_polling import check_active_segments_exist, claim_segment_f
 from eidolon.segment_processing import determine_next_segment, process_decision_segment, process_rest_segment
 from eidolon.segment_state import create_next_active_segment, update_segment_processing_status
 from eidolon.sqs import send_message
-from eidolon.story import apply_combat_rewards, complete_story, update_story_history_xp
+from eidolon.story_completion import complete_story
+from eidolon.story_history import update_story_history_xp
+from eidolon.story_rewards import apply_combat_rewards
 from eidolon.validation_messages import validate_advancement_message
 
 

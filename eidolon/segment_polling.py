@@ -42,7 +42,7 @@ def get_completed_segments(max_segments: int) -> list:
             Limit=max_segments,
         )
 
-        segments = response.get("Items", [])
+        segments = response.get("Items", []) # type: ignore
         logger.info(f"Found {len(segments)} completed segments ready for advancement")
         return segments
 
@@ -67,7 +67,7 @@ def check_active_segments_exist() -> bool:
             Limit=1,
         )
 
-        return len(response.get("Items", [])) > 0
+        return len(response.get("Items", [])) > 0 # type: ignore
 
     except ClientError as err:
         logger.error(f"Failed to check for active segments Error: {err}", exc_info=True)

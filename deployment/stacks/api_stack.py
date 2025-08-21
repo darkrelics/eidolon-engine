@@ -1,6 +1,6 @@
 """API stack for API Gateway and related resources."""
 
-from aws_cdk import CfnOutput, Stack
+from aws_cdk import CfnOutput, Stack, Tags
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cognito as cognito
@@ -57,6 +57,9 @@ class ApiStack(Stack):
         self.cognito_user_pool_arn = cognito_user_pool_arn
 
         super().__init__(scope, stack_id, description="API Gateway with custom domain and Lambda integrations", **kwargs)
+
+        # Add system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Create API Gateway
         self.api = self._create_api_gateway()

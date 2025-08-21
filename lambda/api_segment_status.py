@@ -16,7 +16,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player, verify_character_ownership
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.story import get_active_story_segment_with_player_check
+from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.time_utils import from_unix
 
 

@@ -8,11 +8,11 @@ from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
+from stacks import stack_utilities as utils
 
 
 def check_existing_log_group(region: str) -> str:
     """Check if the CloudWatch log group already exists."""
-    from stacks import stack_utilities as utils
 
     log_group_name = "/eidolon/server"
     if utils.check_cloudwatch_log_group_exists(log_group_name, region):

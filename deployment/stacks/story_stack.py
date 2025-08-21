@@ -1,6 +1,6 @@
 """Story processing stack with SSM, SQS, and EventBridge."""
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_events as events
 from aws_cdk import aws_events_targets as targets
 from aws_cdk import aws_iam as iam
@@ -43,6 +43,8 @@ class StoryStack(Stack):
         self.advance_lambda_arn = advance_lambda_arn
 
         super().__init__(scope, stack_id, **kwargs)
+        # Apply system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Create SSM Parameter for story configuration
         self.story_param = self._create_ssm_parameter()

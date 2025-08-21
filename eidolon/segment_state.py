@@ -31,7 +31,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
     update_expression = "SET #outcome = :outcome, ProcessingStatus = :proc_status"
     expression_names = {"#outcome": "Outcome"}
-    expression_values = {":outcome": outcome, ":proc_status": "processed"}
+    expression_values: dict = {":outcome": outcome, ":proc_status": "processed"}
 
     challenge_results = results.get("challengeResults")
     if challenge_results:
@@ -59,9 +59,9 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
             if narrative:
                 client_events.append(
                     ClientEvent(
-                        eventType="narrative",
-                        title="Outcome",
-                        description=narrative,
+                        EventType="narrative",
+                        Title="Outcome",
+                        Description=narrative,
                     ).model_dump(by_alias=True, exclude_none=True)
                 )
         except Exception as err:
@@ -82,10 +82,10 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
             client_events.append(
                 ClientEvent(
-                    eventType="skill_check",
-                    title=title,
-                    description=description,
-                    challengeResult=challenge,
+                    EventType="skill_check",
+                    Title=title,
+                    Description=description,
+                    Data={"challengeResult": challenge},
                 ).model_dump(by_alias=True, exclude_none=True)
             )
 
@@ -94,10 +94,10 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         for round_data in combat_log[:5]:
             client_events.append(
                 ClientEvent(
-                    eventType="combat",
-                    title=f"Round {round_data.get('round', 0)}",
-                    description="Combat round",
-                    combatRound=round_data,
+                    EventType="combat",
+                    Title=f"Round {round_data.get('round', 0)}",
+                    Description="Combat round",
+                    Data={"combatRound": round_data},
                 ).model_dump(by_alias=True, exclude_none=True)
             )
 
@@ -112,9 +112,9 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
             client_events.append(
                 ClientEvent(
-                    eventType="combat_result",
-                    title=title,
-                    description=description,
+                    EventType="combat_result",
+                    Title=title,
+                    Description=description,
                 ).model_dump(by_alias=True, exclude_none=True)
             )
 
@@ -136,7 +136,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         raise RuntimeError(f"Failed to update active segment outcome: {err}") from err
 
 
-def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id: str = None) -> str:
+def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id=None) -> str:
     """
     Create an active segment record for the next segment.
 
@@ -164,7 +164,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         "CharacterID": character_id,
         "PlayerID": player_id,
         "StoryID": story_id,
-        "StoryInstanceID": story_instance_id if story_instance_id else None,
+        "StoryInstanceID": story_instance_id if story_instance_id else "",
         "SegmentID": segment_id,
         "SegmentType": segment_type,
         "StartTime": start_time,
