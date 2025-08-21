@@ -23,6 +23,7 @@ class ApiStack(Stack):
         hosted_zone_id: str,
         domain: str,
         api_host: str = "api",
+        client_host: str = "portal",
         deployment_mode: str = "hybrid",
         lambda_arns=None,
         cognito_user_pool_id: str = "",
@@ -39,6 +40,7 @@ class ApiStack(Stack):
             hosted_zone_id: Route53 Hosted Zone ID
             domain: Base domain name
             api_host: Subdomain for API (default: api)
+            client_host: Subdomain for client (default: portal)
             deployment_mode: Deployment mode (mud/incremental/hybrid)
             lambda_arns: Dictionary of Lambda function ARNs
             cognito_user_pool_id: Cognito User Pool ID
@@ -50,6 +52,7 @@ class ApiStack(Stack):
         self.hosted_zone_id = hosted_zone_id
         self.domain = domain
         self.api_host = api_host
+        self.client_host = client_host
         self.deployment_mode = deployment_mode
         self.lambda_arns = lambda_arns or {}
         self.cognito_user_pool_id = cognito_user_pool_id
@@ -68,6 +71,9 @@ class ApiStack(Stack):
         """Create API Gateway with Lambda integrations."""
         print("  Creating API Gateway")
 
+        # Build client origin URL
+        client_origin = f"https://{self.client_host}.{self.domain}"
+
         # Create API
         api = apigateway.RestApi(
             self,
@@ -75,7 +81,7 @@ class ApiStack(Stack):
             rest_api_name="eidolon-api",
             description="Eidolon Engine API",
             default_cors_preflight_options=apigateway.CorsOptions(
-                allow_origins=["*"],
+                allow_origins=[client_origin],
                 allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                 allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
                 allow_credentials=True,

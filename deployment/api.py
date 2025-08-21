@@ -104,6 +104,8 @@ def deploy_api_stack(params, state: CDKState) -> dict:
         "-c",
         f"api_host={params.api_host}",
         "-c",
+        f"client_host={params.client_host}",
+        "-c",
         f"deployment_mode={params.deployment_mode}",
     ]
 
