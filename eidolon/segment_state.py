@@ -31,7 +31,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
     update_expression = "SET #outcome = :outcome, ProcessingStatus = :proc_status"
     expression_names = {"#outcome": "Outcome"}
-    expression_values = {":outcome": outcome, ":proc_status": "processed"}
+    expression_values: dict = {":outcome": outcome, ":proc_status": "processed"}
 
     challenge_results = results.get("challengeResults")
     if challenge_results:
@@ -136,7 +136,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         raise RuntimeError(f"Failed to update active segment outcome: {err}") from err
 
 
-def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id: str | None = None) -> str:
+def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id=None) -> str:
     """
     Create an active segment record for the next segment.
 
@@ -164,7 +164,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         "CharacterID": character_id,
         "PlayerID": player_id,
         "StoryID": story_id,
-        "StoryInstanceID": story_instance_id if story_instance_id else None,
+        "StoryInstanceID": story_instance_id if story_instance_id else "",
         "SegmentID": segment_id,
         "SegmentType": segment_type,
         "StartTime": start_time,

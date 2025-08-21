@@ -13,7 +13,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.story import submit_decision_for_character
+from eidolon.story_decision import submit_decision_for_character
 
 
 def submit_decision_business_logic(character_id: str, decision_id: str, player_id: str) -> dict:

@@ -10,12 +10,14 @@ from core.state import CDKState
 from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 
+from core.dynamodb_tables import TABLE_CONFIGS
+from stacks import stack_utilities as utils
+
+
 
 def check_existing_tables(region: str) -> dict:
     """Check for existing DynamoDB tables and validate their schemas."""
 
-    from core.dynamodb_tables import TABLE_CONFIGS
-    from stacks import stack_utilities as utils
 
     existing_tables = {}
 

@@ -1,6 +1,6 @@
 """Player stack for Cognito User Pool."""
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
@@ -37,6 +37,8 @@ class PlayerStack(Stack):
         self.existing_user_pool_id = existing_user_pool_id
         self.is_imported_pool = False  # Initialize flag
         super().__init__(scope, stack_id, **kwargs)
+        # Apply system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Create Cognito User Pool
         self.user_pool = self._create_user_pool()

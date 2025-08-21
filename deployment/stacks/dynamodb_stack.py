@@ -1,6 +1,6 @@
 """DynamoDB stack for Eidolon Engine."""
 
-from aws_cdk import CfnDeletionPolicy, CfnOutput, RemovalPolicy, Stack
+from aws_cdk import CfnDeletionPolicy, CfnOutput, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_dynamodb as dynamodb
 from aws_cdk import aws_iam as iam
 from constructs import Construct
@@ -21,6 +21,9 @@ class DynamoDBStack(Stack):
         """
         self.region_name = region_name
         super().__init__(scope, stack_id, **kwargs)
+
+        # Add system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Initialize existing tables from context
         self.existing_tables = {}

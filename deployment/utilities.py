@@ -1,6 +1,7 @@
 """Utility functions for deployment scripts."""
 
 import subprocess
+import traceback
 from functools import cache
 from pathlib import Path
 
@@ -19,8 +20,13 @@ def get_aws_account_id() -> str:
         sts = boto3.client("sts")
         identity = sts.get_caller_identity()
         return identity.get("Account", "")
+    except ClientError as err:
+        print(f"Error: AWS API error while getting account ID - {err}")
+        return ""
     except Exception as err:
-        print(f"Error: Unable to get AWS account ID - {err}")
+        print(f"Error: Unexpected error getting AWS account ID - {err}")
+        print("Stack trace:")
+        print(traceback.format_exc())
         return ""
 
 
@@ -37,8 +43,13 @@ def verify_aws_credentials() -> bool:
         print(f"AWS Account: {account_id}")
         print(f"AWS User/Role: {identity.get('Arn', '')}")
         return True
+    except ClientError as err:
+        print(f"Error: AWS API error during credential verification - {err}")
+        return False
     except Exception as err:
-        print(f"Error: Unable to access AWS - {err}")
+        print(f"Error: Unexpected error accessing AWS - {err}")
+        print("Stack trace:")
+        print(traceback.format_exc())
         return False
 
 

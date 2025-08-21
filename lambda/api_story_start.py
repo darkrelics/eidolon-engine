@@ -20,7 +20,10 @@ from eidolon.polling import ensure_polling_enabled
 from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.sqs import send_message
-from eidolon.story import create_active_segment, create_story_history_entry, get_story_and_first_segment, validate_story_available
+from eidolon.story_history import create_story_history_entry
+from eidolon.story_retrieval import get_story_and_first_segment
+from eidolon.story_segment import create_active_segment
+from eidolon.story_validation import validate_story_available
 from eidolon.time_utils import duration_between, from_unix
 from eidolon.validation import validate_uuid
 

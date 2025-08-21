@@ -16,7 +16,7 @@ from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.schema import normalize_segment_definition
 from eidolon.segment_core import validate_segment_outcome_results
-from eidolon.story import get_completed_segment_for_character, get_story_segment
+from eidolon.story_retrieval import get_completed_segment_for_character, get_story_segment
 
 
 def get_last_segment_history_record(character_id: str, segment_id: str, player_id: str) -> dict | None:

@@ -7,14 +7,13 @@ from botocore.exceptions import ClientError
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
+from stacks.stack_utilities import check_s3_bucket_exists
 from utilities import run_cdk_deploy, validate_policies
 
 
 def deploy_s3_stack(params) -> dict:
     """Deploy the S3 stack using CDK."""
     # Check if S3 bucket already exists
-    from stacks.stack_utilities import check_s3_bucket_exists
-
     bucket_exists = check_s3_bucket_exists(params.scripts_bucket, params.region)
 
     # Pass parameters through context

@@ -1,6 +1,6 @@
 """Lambda stack for all Lambda functions and layer."""
 
-from aws_cdk import CfnOutput, Duration, Stack
+from aws_cdk import CfnOutput, Duration, Stack, Tags
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_s3 as s3
@@ -39,6 +39,8 @@ class LambdaStack(Stack):
         self.dynamodb_policy_arn = dynamodb_policy_arn
         self.dynamodb_tables = dynamodb_tables or {}
         super().__init__(scope, stack_id, **kwargs)
+        # Apply system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Create Lambda layer
         self.lambda_layer = self._create_lambda_layer()

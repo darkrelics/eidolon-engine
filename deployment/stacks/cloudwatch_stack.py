@@ -1,6 +1,6 @@
 """CloudWatch stack for logging and monitoring."""
 
-from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_logs as logs
 from constructs import Construct
@@ -24,6 +24,9 @@ class CloudWatchStack(Stack):
         self.region_name = region_name
         self.existing_log_group = existing_log_group
         super().__init__(scope, stack_id, **kwargs)
+
+        # Add system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Create or import log group
         self.log_group = self._create_log_group()

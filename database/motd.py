@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import dynamo  # noqa: E402
+from eidolon.dynamo import dynamo
 from eidolon.dynamo import TableName
 
 
