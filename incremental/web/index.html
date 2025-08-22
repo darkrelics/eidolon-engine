@@ -45,36 +45,6 @@
       // Options: "canvaskit", "html", or "auto"
       // CanvasKit provides better performance and consistency across browsers
       window.flutterWebRenderer = "canvaskit";
-      
-      // Fix for password field warning in Flutter Web
-      // Flutter creates hidden input elements that aren't wrapped in forms
-      // This observer wraps any password inputs in forms to satisfy browser security
-      window.addEventListener('DOMContentLoaded', function() {
-        const observer = new MutationObserver(function(mutations) {
-          mutations.forEach(function(mutation) {
-            mutation.addedNodes.forEach(function(node) {
-              if (node.nodeType === 1 && node.tagName === 'INPUT' && 
-                  node.type === 'password' && !node.closest('form')) {
-                // Create a form wrapper for the password input
-                const form = document.createElement('form');
-                form.style.display = 'contents';
-                form.setAttribute('autocomplete', 'on');
-                form.setAttribute('onsubmit', 'return false;');
-                
-                // Wrap the input in the form
-                node.parentNode.insertBefore(form, node);
-                form.appendChild(node);
-              }
-            });
-          });
-        });
-        
-        // Start observing the body for dynamically added elements
-        observer.observe(document.body, {
-          childList: true,
-          subtree: true
-        });
-      });
     </script>
   </head>
   <body>
