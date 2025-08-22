@@ -18,7 +18,6 @@ from eidolon.player import validate_player
 from eidolon.requests import get_query_parameter_flexible
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_history import record_abandoned_segment_history
-from eidolon.segment_polling import delete_active_segment
 from eidolon.story_active import get_active_story_segment, mark_segment_as_abandoned
 from eidolon.story_history import record_story_abandonment
 from eidolon.validation import validate_uuid
@@ -114,11 +113,9 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     except RuntimeError as err:
         logger.error(f"Failed to record segment history but continuing for {character_id} Error: {err}")
 
-    # Delete the active segment since it's been recorded in history
-    try:
-        delete_active_segment(active_segment_id)
-    except ValueError as err:
-        logger.error(f"Failed to delete active segment for {active_segment_id} Error: {err}")
+    # Note: We do NOT delete the active segment - it remains with status="abandoned"
+    # This preserves the record for history and analytics
+    # The segment is already marked as abandoned by mark_segment_as_abandoned() above
 
     logger.info(f"Story abandoned successfully for {character_id}")
 
