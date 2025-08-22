@@ -207,16 +207,16 @@ class ApiStack(Stack):
         }
 
         # Add gateway responses with CORS headers for common error types
-        # Note: DEFAULT4XX and DEFAULT5XX handle all 4xx and 5xx responses
+        # Note: DEFAULT_4_XX and DEFAULT_5_XX handle all 4xx and 5xx responses
         api.add_gateway_response(
             "GatewayResponseDefault4XX",
-            type=apigateway.ResponseType.DEFAULT4XX, # type: ignore
+            type=apigateway.ResponseType.DEFAULT_4_XX, # type: ignore
             response_headers=cors_headers,
         )
 
         api.add_gateway_response(
             "GatewayResponseDefault5XX",
-            type=apigateway.ResponseType.DEFAULT5XX, # type: ignore
+            type=apigateway.ResponseType.DEFAULT_5_XX, # type: ignore
             response_headers=cors_headers,
         )
 
