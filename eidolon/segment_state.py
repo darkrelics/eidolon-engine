@@ -167,6 +167,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         "StoryInstanceID": story_instance_id if story_instance_id else "",
         "SegmentID": segment_id,
         "SegmentType": segment_type,
+        "ProcessingStatus": "pending",  # Add ProcessingStatus field
         "StartTime": start_time,
         "EndTime": end_time,
         "Status": "active",

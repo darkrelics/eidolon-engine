@@ -31,7 +31,7 @@ def get_completed_segments(max_segments: int) -> list:
     try:
         segments: list = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
-            IndexName="StatusEndTimeIndex",
+            IndexName="EndTimeIndex",
             KeyConditionExpression="Status = :status AND EndTime < :current_time",
             FilterExpression="ProcessingStatus = :proc_status",
             ExpressionAttributeValues={
@@ -59,7 +59,7 @@ def check_active_segments_exist() -> bool:
     try:
         segments: list = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
-            IndexName="StatusEndTimeIndex",
+            IndexName="EndTimeIndex",
             KeyConditionExpression="Status = :status",
             ExpressionAttributeValues={":status": "active"},
             Limit=1,
@@ -83,7 +83,7 @@ def delete_active_segment(active_segment_id: str) -> None:
         RuntimeError: If database operation fails
     """
     try:
-        dynamo.delete_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
+        dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": active_segment_id})
         logger.info(f"Deleted active segment for {active_segment_id}")
     except ClientError as err:
         logger.error(f"Failed to delete active segment for {active_segment_id} Error: {err}", exc_info=True)

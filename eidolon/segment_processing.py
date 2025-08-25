@@ -147,9 +147,11 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             # Also store XP in results for CharacterUpdates (for client display)
             results["xpUpdates"] = xp_updates
 
-    # Process combat if present
+    # Process combat if present and has an opponent defined
     combat_config = segment_def.get("Combat", {})
-    if combat_config:
+    # Check if combat config exists AND has an OpponentID (either case)
+    has_opponent = combat_config and (combat_config.get("OpponentID") or combat_config.get("opponentId"))
+    if has_opponent:
         logger.info(f"Processing combat encounter for {segment_def.get('SegmentID')}")
         combat_outcome, combat_state = process_combat_segment(active_segment, segment_def, character)
         results["combatState"] = combat_state

@@ -219,7 +219,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
     except ClientError as err:
         logger.error(f"Failed to update segment to point to rest for {insertion_point_id} Error: {err}", exc_info=True)
         try:
-            dynamo.delete_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": rest_segment_id})
+            dynamo.delete_item(TableName.SEGMENTS, Key={"StoryID": story_id, "SegmentID": rest_segment_id})
         except ClientError:
             pass
         raise RuntimeError(f"Failed to update segment to point to rest: {err}") from err

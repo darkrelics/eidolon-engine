@@ -57,6 +57,7 @@ def format_start_story_response(active_segment: dict, segment: dict) -> dict:
             "EndTime": end_time,
             "ShortStatus": segment.get("ShortStatus", "Starting your adventure..."),
             "Duration": duration,
+            "ProcessingStatus": active_segment.get("ProcessingStatus", "pending"),
         },
     }
 

@@ -148,55 +148,6 @@ def get_active_segment_info(active_segment_id: str) -> dict:
     }
 
 
-def delete_active_segment(active_segment_id: str) -> None:
-    """
-    Delete an active segment from the database.
-
-    Args:
-        active_segment_id: Active segment UUID
-
-    Raises:
-        RuntimeError: If database operation fails
-    """
-    try:
-        dynamo.delete_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
-        logger.info(f"Deleted active segment for {active_segment_id}")
-    except ClientError as err:
-        logger.error(f"Failed to delete active segment for {active_segment_id} Error: {err}", exc_info=True)
-        logger.warning(f"Failed to delete active segment for {active_segment_id}: {err}")
-
-
-def claim_segment_for_processing(active_segment_id: str) -> bool:
-    """
-    Atomically claim a segment for processing using conditional update.
-
-    Sets RunningFlag to true only if currently false, preventing double processing.
-
-    Args:
-        active_segment_id: Active segment UUID
-
-    Returns:
-        True if segment was successfully claimed, False if already being processed
-
-    Raises:
-        RuntimeError: If database operation fails (not ConditionalCheckFailed)
-    """
-    try:
-        dynamo.update_item(
-            TableName.ACTIVE_SEGMENTS,
-            Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET RunningFlag = :true",
-            ConditionExpression="attribute_exists(ActiveSegmentID) AND (attribute_not_exists(RunningFlag) OR RunningFlag = :false)",
-            ExpressionAttributeValues={":true": True, ":false": False},
-        )
-        logger.info(f"Successfully claimed segment for processing for {active_segment_id}")
-        return True
-    except ClientError as err:
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            logger.info(f"Segment already being processed for {active_segment_id}")
-            return False
-        logger.error(f"Failed to claim segment for processing for {active_segment_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to claim segment for processing: {err}") from err
 
 
 def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
