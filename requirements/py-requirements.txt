@@ -26,7 +26,7 @@ mdurl==0.1.2
 msgpack==1.1.1 
 packageurl-python==0.17.5 
 packaging==25.0 
-pbr==7.0.0 
+pbr==7.0.1 
 pip==25.2 
 pip-api==0.0.34 
 pip-requirements-parser==32.0.1 
