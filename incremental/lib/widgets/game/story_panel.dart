@@ -41,14 +41,13 @@ class _StoryPanelState extends State<StoryPanel> {
 
   bool _hasActiveStory([Character? character]) {
     final char = character ?? widget.character;
-    return char.storyState != null && char.storyState!.isNotEmpty;
+    return char.activeStoryID != null;
   }
 
   bool _isStoryComplete() {
-    // Story is complete if we have story state but no active segment
-    if (!_hasActiveStory()) return false;
-    final activeSegment = widget.character.storyState?['ActiveSegment'];
-    return activeSegment == null;
+    // Story is complete if we have an active story but no active segment
+    final char = widget.character;
+    return char.activeStoryID != null && char.activeSegmentID == null;
   }
 
   @override

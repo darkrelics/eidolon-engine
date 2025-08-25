@@ -8,7 +8,6 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.models import StorySegment
 from eidolon.schema import normalize_segment_definition
 
 # Valid segment types for the incremental game
@@ -99,13 +98,17 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
             raise ValueError(f"Segment definition not found: {segment_id}")
         # Normalize mixed-case inputs from content or tools
         normalized = normalize_segment_definition(segment_def)
-        # Validate and return canonical PascalCase dict (tolerant fallback)
-        try:
-            _model = StorySegment.model_validate(normalized)
-            return _model.model_dump(by_alias=True, exclude_none=True)
-        except Exception:
-            # Fall back to normalized dict when validation fails (tolerant)
-            return normalized
+        # Skip Pydantic validation for now to preserve normalized structure
+        # The normalization already handles the key conversions we need
+        results = normalized.get('Results', {})
+        logger.info(f"Segment {segment_id} normalized Results keys: {list(results.keys())}")
+        # Log the structure of one result to debug
+        if results and 'normal' in results:
+            normal_result = results['normal']
+            logger.info(f"  'normal' result keys: {list(normal_result.keys()) if isinstance(normal_result, dict) else 'not a dict'}")
+            if isinstance(normal_result, dict) and 'NextSegmentID' in normal_result:
+                logger.info(f"  'normal' NextSegmentID: {normal_result['NextSegmentID']}")
+        return normalized
     except ClientError as err:
         logger.error(f"Failed to get segment definition for {segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get segment definition: {err}") from err

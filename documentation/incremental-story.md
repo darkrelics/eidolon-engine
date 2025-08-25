@@ -237,16 +237,100 @@ completed/false → [deleted]
 
 #### Rest Segments
 
-Rest segments are special healing segments that allow characters to recover from wounds between story adventures. Unlike regular story segments, rest segments:
+Rest segments are special 15-minute rest periods that allow characters to take a break between story adventures. Unlike regular story segments, rest segments:
 
 - Are initiated by the player via POST /segments/rest endpoint (handled by **api-segment-rest**)
-- Provide healing over time based on wound severity
-- Heal wounds based on type (bashing: 15min, lethal: 6hr, aggravated: 7d)
+- Provide a 15-minute rest period (REST_SEGMENT_DURATION = 900 seconds)
+- Do NOT automatically heal wounds - wounds heal independently based on their HealAt timestamps
+- During the 15-minute rest, any bashing wounds that are 15+ minutes old will naturally heal
+- Lethal (6 hours) and aggravated (7 days) wounds are unlikely to heal during the short rest period
 - Always have "normal" outcome with no decision points
-- No special processing required - healing is automatic
 - Can be initiated when character is not in an active story
-- Create a temporary ActiveSegment that manages the healing process
+- Create a temporary ActiveSegment that manages the rest period
 - Character remains in "rest" mode until segment completion
+
+Note: Wound healing is time-based and independent of rest segments. Wounds heal based on their type:
+- Bashing wounds: heal after 15 minutes from infliction
+- Lethal wounds: heal after 6 hours from infliction  
+- Aggravated wounds: heal after 7 days from infliction
+
+### Flexible Branching Design
+
+#### Outcome-Based Branching
+
+The story system supports flexible narrative branching where any outcome can lead to different paths. Each segment's Results block maps outcomes to their consequences:
+
+```json
+"Results": {
+  "death": {
+    "Narrative": "Your journey ends here...",
+    "NextSegmentID": null  // Story ends
+  },
+  "failure": {
+    "Narrative": "You are captured by guards...",
+    "NextSegmentID": "prison-escape-segment"  // Continue in prison
+  },
+  "minimal": {
+    "Narrative": "You barely succeed...",
+    "NextSegmentID": "next-segment-wounded"  // Different path
+  },
+  "normal": {
+    "Narrative": "You succeed as expected...",
+    "NextSegmentID": "next-segment-standard"  // Standard path
+  },
+  "exceptional": {
+    "Narrative": "Your exceptional performance is noted...",
+    "NextSegmentID": "next-segment-bonus"  // Bonus path
+  }
+}
+```
+
+#### Non-Traditional Death Handling
+
+Death outcomes don't always end the story. The system supports:
+
+- **Ghost Stories**: Death leads to afterlife segments
+- **Divine Intervention**: Death triggers resurrection paths
+- **Underworld Journeys**: Death begins a new quest
+- **Reincarnation**: Death leads to rebirth scenarios
+
+Example:
+```json
+"death": {
+  "Narrative": "As darkness takes you, you feel your spirit rise...",
+  "NextSegmentID": "ghost-revenge-segment-1",
+  "Effects": {
+    "State": "ghost"  // Character becomes a ghost
+  }
+}
+```
+
+#### Failure as Opportunity
+
+Failure outcomes can open entirely new storylines:
+
+- **Capture and Escape**: Failure leads to prison break stories
+- **Redemption Arcs**: Failure triggers second chance narratives
+- **Alternative Solutions**: Failure reveals hidden paths
+- **Training Montages**: Failure leads to improvement segments
+
+Example:
+```json
+"failure": {
+  "Narrative": "The master shakes his head. 'You need more training.'",
+  "NextSegmentID": "training-montage-segment",
+  "Effects": {
+    "Room": 15  // Training grounds
+  }
+}
+```
+
+#### Branching Principles
+
+1. **No Hardcoded Assumptions**: The system doesn't assume death or failure ends stories
+2. **Narrative Freedom**: Designers control all branching through data
+3. **Outcome Equality**: Any outcome can lead to any result
+4. **Conditional Progression**: Different outcomes create different player experiences
 
 ### Segment Lifecycle
 

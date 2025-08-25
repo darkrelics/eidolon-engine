@@ -866,80 +866,97 @@ def claim_segment_for_processing(active_segment_id):
 
 ## 6. Client Implementation
 
-### 6.1 Flutter State Management
+### 6.1 Server-Authoritative Design
 
-The Flutter provider manages active segment state with dynamic polling intervals that increase frequency as segments near completion, ensuring responsive UI updates while minimizing unnecessary API calls.
+The Flutter client follows a server-authoritative design where all state determination happens on the server. The client maintains a simple polling loop and displays what the server provides without making any state decisions.
+
+#### Key Principles
+
+1. **Server Authority**: The server determines all state transitions. Clients never modify story state.
+2. **Simple Polling**: Fixed cadence polling rather than dynamic intervals.
+3. **Display-Only History**: Local segment history is maintained purely for UI display.
+4. **Completion Detection**: Story completion is detected by checking `activeSegmentID == null`.
+
+### 6.2 Polling Implementation
 
 ```dart
-class IncrementalProvider extends ChangeNotifier {
-  ActiveSegment? _activeSegment;
-  Timer? _pollingTimer;
-  Timer? _countdownTimer;
+class GameScreen extends StatefulWidget {
+  // ... widget code
+}
 
-  Duration _timeRemaining = Duration.zero;
-
-  void startSegment(SegmentData segmentData) {
-    _activeSegment = ActiveSegment.fromJson(segmentData);
-    _startCountdown();
-    _schedulePolling();
-    notifyListeners();
-  }
-
-  void _startCountdown() {
-    _countdownTimer?.cancel();
-
-    _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final endTime = _activeSegment?.endTime ?? 0;
-
-      if (now >= endTime) {
-        _timeRemaining = Duration.zero;
-        timer.cancel();
-      } else {
-        _timeRemaining = Duration(seconds: endTime - now);
-      }
-
-      notifyListeners();
-    });
-  }
-
-  void _schedulePolling() {
-    _pollingTimer?.cancel();
-
-    // Calculate polling interval based on time remaining
-    Duration interval;
-    if (_timeRemaining.inSeconds <= 30) {
-      interval = Duration(seconds: 1);
-    } else if (_timeRemaining.inSeconds <= 300) {
-      interval = Duration(seconds: 10);
-    } else {
-      interval = Duration(seconds: 30);
+class _GameScreenState extends State<GameScreen> {
+  Character? _character;
+  bool _isPolling = false;
+  
+  // Segment history for UI display only
+  final List<Map<String, dynamic>> _segmentHistory = [];
+  
+  /// Simple polling loop following the server cadence
+  Future<void> _runStoryPolling() async {
+    if (_character?.activeSegmentID == null) {
+      _isPolling = false;
+      return;
     }
-
-    _pollingTimer = Timer(interval, () async {
-      await _checkSegmentStatus();
-      _schedulePolling(); // Reschedule
-    });
-  }
-
-  Future<void> _checkSegmentStatus() async {
-    try {
-      final response = await IncrementalService.getSegmentStatus(
-        characterId: _activeSegment!.characterId,
-      );
-
-      if (response['segmentReady'] == true) {
-        // Fetch full results
-        await _loadSegmentResults();
+    
+    debugPrint('Starting story polling loop');
+    
+    // Wait 60 seconds for initial processing
+    await Future.delayed(const Duration(seconds: 60));
+    
+    while (_isPolling && _character?.activeSegmentID != null) {
+      try {
+        // Get segment status
+        final status = await retryWithBackoff(
+          () => _apiService.getSegmentStatus(
+            characterId: _character!.id,
+          ),
+        );
+        
+        // Add to display history if processed
+        if (status['ProcessingStatus'] == 'processed') {
+          _addSegmentToHistory(status);
+        }
+        
+        // Wait for segment to complete
+        final timeRemaining = status['TimeRemaining'] as int? ?? 0;
+        if (timeRemaining > 0) {
+          await Future.delayed(Duration(seconds: timeRemaining));
+        }
+        
+        // Get updated character
+        await _loadCharacterData();
+        
+        // If story continues, wait for next segment processing
+        if (_character?.activeSegmentID != null) {
+          await Future.delayed(const Duration(seconds: 60));
+        }
+      } catch (e) {
+        debugPrint('Error in polling loop: $e');
+        // Continue polling after a delay
+        await Future.delayed(const Duration(seconds: 5));
       }
-    } catch (e) {
-      print('Polling error: $e');
     }
+    
+    debugPrint('Story polling loop ended');
+    _isPolling = false;
+  }
+  
+  /// Retry helper with exponential backoff
+  Future<T> retryWithBackoff<T>(Future<T> Function() operation) async {
+    for (int i = 0; i < 3; i++) {
+      try {
+        return await operation();
+      } catch (e) {
+        if (i == 2) rethrow;
+        await Future.delayed(Duration(seconds: math.pow(2, i).toInt()));
+      }
+    }
+    throw Exception('Unreachable');
   }
 }
 ```
 
-### 6.2 Progressive Event Display
+### 6.3 Progressive Event Display
 
 This widget progressively reveals story events over the segment duration, creating an engaging narrative experience by timing event display to match the segment's progress rather than showing all events immediately.
 
@@ -994,6 +1011,42 @@ class _StoryEventDisplayState extends State<StoryEventDisplay> {
   }
 }
 ```
+
+### 6.4 Character Model Updates
+
+The Flutter Character model now includes direct properties for story state, eliminating the need for complex state determination logic:
+
+```dart
+class Character {
+  final String id;
+  final String name;
+  final String? activeStoryID;    // Currently active story ID
+  final String? activeSegmentID;  // Currently active segment ID
+  Map<String, dynamic>? storyState; // Detailed segment data for display
+  // ... other fields
+  
+  /// Story completion is determined by server state
+  bool get hasActiveStory => activeStoryID != null;
+  bool get isStoryComplete => activeStoryID != null && activeSegmentID == null;
+  
+  factory Character.fromJson(Map<String, dynamic> json) {
+    return Character(
+      id: json['CharacterID'],
+      name: json['CharacterName'],
+      activeStoryID: json['ActiveStoryID'] as String?,
+      activeSegmentID: json['ActiveSegmentID'] as String?,
+      storyState: json['StoryState'] as Map<String, dynamic>?,
+      // ... parse other fields
+    );
+  }
+}
+```
+
+**Key Changes:**
+- Added `activeStoryID` and `activeSegmentID` as direct properties
+- Story completion detected via `activeSegmentID == null`
+- Server provides these IDs directly in character response
+- Client never modifies these values
 
 ## 7. Infrastructure Configuration
 

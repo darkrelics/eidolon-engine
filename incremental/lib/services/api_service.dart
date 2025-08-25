@@ -114,6 +114,10 @@ class ApiService {
     final json = jsonDecode(response.body) as Map<String, dynamic>;
     final characterData = json['Character'] as Map<String, dynamic>;
     
+    // Pass through active story and segment IDs directly
+    characterData['ActiveStoryID'] = json['ActiveStoryID'];
+    characterData['ActiveSegmentID'] = json['ActiveSegmentID'];
+    
     // Check if there's an active story and segment
     final activeStory = json['ActiveStory'] as Map<String, dynamic>?;
     final activeSegment = json['ActiveSegment'] as Map<String, dynamic>?;

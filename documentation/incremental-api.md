@@ -78,6 +78,35 @@ Common HTTP status codes:
 
 ---
 
+## Client Polling Cadence
+
+The client should follow a specific polling cadence to track story progression efficiently while minimizing API calls:
+
+### Recommended Polling Flow
+
+1. **Start Story** - Call `POST /story/start`
+2. **Wait 60 seconds** - Allow time for server-side processing
+3. **Poll Segment Status** - Call `GET /segment/status`
+   - Check `ProcessingStatus` field
+   - If "processed", segment narrative is available
+   - Calculate segment end time from `TimeRemaining` or `EndTime`
+4. **Wait for Segment Completion** - Wait until `TimeRemaining` reaches 0
+5. **Get Updated Character** - Call `GET /character`
+   - Check `ActiveSegmentID` field
+   - If null, story is complete
+   - If not null, new segment has started
+6. **Repeat** - If story continues, wait 60 seconds for processing and go to step 3
+
+### Important Notes
+
+- **Server Authority**: The server determines all state transitions. Clients should never modify story state locally.
+- **Segment Timing**: Clients can calculate segment end time from `StartTime + Duration` or use the provided `EndTime` field.
+- **Completion Detection**: Story completion is indicated by `ActiveSegmentID == null` in the character response.
+- **Local Display**: Clients may maintain a local segment history for UI display, but this should never be used for state determination.
+- **Error Handling**: Implement exponential backoff (1s, 2s, 4s) for failed requests with a maximum of 3 retries.
+
+---
+
 ## Endpoints
 
 ### Get Archetypes
@@ -842,7 +871,7 @@ Authorization: Bearer <jwt-token>
 
 ### Get Segment Status
 
-Gets the current status of an active segment.
+Gets the current status of an active segment, including timing information for client polling.
 
 **Endpoint:** `GET /segment/status`
 
@@ -865,11 +894,26 @@ Authorization: Bearer <jwt-token>
 
 ```json
 {
+  "ActiveSegmentID": "seg-uuid",
+  "StoryID": "story-uuid",
+  "SegmentID": "segment-def-uuid",
   "Status": "active",
+  "IsComplete": false,
   "TimeRemaining": 120,
-  "DecisionSubmitted": false
+  "EndTime": "2025-01-15T14:30:00Z",
+  "ProcessingStatus": "processed",
+  "SegmentType": "mechanical",
+  "DefaultStatus": "Walking through the forest",
+  "ClientEvents": [...],
+  "ChallengeResults": [...]
 }
 ```
+
+**Timing Fields:**
+- `TimeRemaining`: Seconds until segment completes (0 if complete)
+- `EndTime`: ISO 8601 timestamp when segment will complete
+- `IsComplete`: True if EndTime has passed
+- `ProcessingStatus`: "pending", "processing", or "processed"
 
 **Error Responses:**
 

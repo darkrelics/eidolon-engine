@@ -140,6 +140,10 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Get segment definition to determine next action
     segment_def = get_segment_definition(story_id, segment_id)  # type: ignore
+    logger.info(f"Retrieved segment_def for {segment_id}")
+    logger.info(f"  SegmentType: {segment_def.get('SegmentType')}")
+    logger.info(f"  Results keys: {list(segment_def.get('Results', {}).keys())}")
+    logger.info(f"  Has top-level NextSegmentID: {segment_def.get('NextSegmentID') is not None}")
 
     # Check if we need to insert a rest segment for unconscious character
     if new_character_state == "unconscious":

@@ -16,6 +16,8 @@ class Character {
   final Map<String, dynamic> inventoryDetails; // Enriched inventory data with item details
   final Map<String, dynamic> progress; // Story progress flags
   Map<String, dynamic>? storyState; // Current story position
+  final String? activeStoryID; // Currently active story ID
+  final String? activeSegmentID; // Currently active segment ID
   final String gameMode; // "MUD" or "Incremental"
   final DateTime lastUpdated;
   final List<String> availableStories;
@@ -39,6 +41,8 @@ class Character {
     this.inventoryDetails = const {},
     required this.progress,
     this.storyState,
+    this.activeStoryID,
+    this.activeSegmentID,
     required this.gameMode,
     required this.lastUpdated,
     this.availableStories = const [],
@@ -100,6 +104,8 @@ class Character {
       inventoryDetails: Map<String, dynamic>.from(json['InventoryDetails'] ?? {}),
       progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
       storyState: json['StoryState'] as Map<String, dynamic>?,
+      activeStoryID: json['ActiveStoryID'] as String?,
+      activeSegmentID: json['ActiveSegmentID'] as String?,
       gameMode: json['GameMode'] as String? ?? 'Incremental',
       lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
       availableStories: (json['AvailableStories'] as List? ?? [])

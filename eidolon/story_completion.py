@@ -4,7 +4,6 @@ Story completion and abandonment operations.
 Provides functions for completing stories and cleaning up state.
 """
 
-import time
 from datetime import datetime
 
 from botocore.exceptions import ClientError
@@ -86,24 +85,9 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
 
     story_type = story_metadata.get("StoryType", "repeatable")
     if story_type == "repeatable":
-        try:
-            character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-            if character:
-                completed_stories = character.get("CompletedStories", {})
-                completed_stories[story_id] = {
-                    "LastCompleted": int(time.time()),
-                    "CompletionCount": completed_stories.get(story_id, {}).get("CompletionCount", 0) + 1,
-                }
-
-                dynamo.update_item(
-                    TableName.CHARACTERS,
-                    Key={"CharacterID": character_id},
-                    UpdateExpression="SET CompletedStories = :completed",
-                    ExpressionAttributeValues={":completed": completed_stories},
-                )
-                logger.info(f"Updated LastCompleted for repeatable story {story_id} for {character_id}")
-        except Exception as err:
-            logger.warning(f"Failed to update LastCompleted for story {story_id}: {err}")
+        # For repeatable stories, we don't track in CompletedStories
+        # since they can be repeated. Just log the completion.
+        logger.info(f"Repeatable story {story_id} completed for {character_id}")
 
     if story_instance_id:
         history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryInstanceID": story_instance_id})
