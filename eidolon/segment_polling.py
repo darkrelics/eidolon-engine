@@ -32,8 +32,11 @@ def get_completed_segments(max_segments: int) -> list:
         segments: list = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
             IndexName="EndTimeIndex",
-            KeyConditionExpression="Status = :status AND EndTime < :current_time",
+            KeyConditionExpression="#status = :status AND EndTime < :current_time",
             FilterExpression="ProcessingStatus = :proc_status",
+            ExpressionAttributeNames={
+                "#status": "Status"
+            },
             ExpressionAttributeValues={
                 ":status": "active",
                 ":current_time": current_time,
@@ -60,7 +63,10 @@ def check_active_segments_exist() -> bool:
         segments: list = dynamo.query(
             TableName.ACTIVE_SEGMENTS,
             IndexName="EndTimeIndex",
-            KeyConditionExpression="Status = :status",
+            KeyConditionExpression="#status = :status",
+            ExpressionAttributeNames={
+                "#status": "Status"
+            },
             ExpressionAttributeValues={":status": "active"},
             Limit=1,
         ) # type: ignore
