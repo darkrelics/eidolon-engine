@@ -154,7 +154,6 @@ def lambda_handler(event: dict, context: object) -> dict:
         # SQS batch event
         success_count = 0
         failure_count = 0
-        invalid_count = 0
         batch_item_failures = []
 
         for record in event.get("Records", []):
@@ -170,7 +169,6 @@ def lambda_handler(event: dict, context: object) -> dict:
                 except ValueError as validation_err:
                     # Invalid message - log and don't retry
                     logger.error(f"Invalid message schema for messageId={message_id}: {validation_err}")
-                    invalid_count += 1
                     # Don't add to batch_item_failures - invalid messages should not be retried
                     continue
 
@@ -212,12 +210,6 @@ def lambda_handler(event: dict, context: object) -> dict:
                 failure_count += 1
                 # Add to batch item failures for SQS retry
                 batch_item_failures.append({"itemIdentifier": message_id})
-
-        # Log summary
-        if invalid_count > 0:
-            logger.warning(f"Batch processing summary: Success={success_count}, Failed={failure_count}, Invalid={invalid_count}")
-        else:
-            logger.info(f"Batch processing summary: Success={success_count}, Failed={failure_count}")
 
         return {"batchItemFailures": batch_item_failures}
 

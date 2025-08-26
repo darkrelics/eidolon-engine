@@ -9,18 +9,19 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 
+from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import logger
 
 sqs_client = boto3.client("sqs")
 
 
-def send_message(queue_url: str, message_body: dict, message_attributes=None) -> str:
+def send_message(queue_url: str, message_body, message_attributes=None) -> str:
     """
     Send a single message to an SQS queue.
 
     Args:
         queue_url: URL of the SQS queue
-        message_body: Message body as dict (will be JSON encoded)
+        message_body: Message body (dict will be JSON encoded, string sent as-is)
         message_attributes: Optional message attributes
 
     Returns:
@@ -30,9 +31,15 @@ def send_message(queue_url: str, message_body: dict, message_attributes=None) ->
         RuntimeError: If SQS operation fails
     """
     try:
+        # Handle both dict and string message bodies
+        if isinstance(message_body, dict):
+            body = json.dumps(message_body)
+        else:
+            body = str(message_body)
+            
         params = {
             "QueueUrl": queue_url,
-            "MessageBody": json.dumps(message_body),
+            "MessageBody": body,
         }
 
         if message_attributes:
@@ -96,3 +103,28 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
     except ClientError as err:
         logger.error(f"Failed to send batch messages to SQS for {queue_url} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to send batch messages to SQS: {err}") from err
+
+
+def queue_segment_for_processing(active_segment: dict) -> None:
+    """
+    Queue mechanical segment to SQS for processing.
+
+    Args:
+        active_segment: Active segment record containing segment details
+        
+    Raises:
+        RuntimeError: If SEGMENT_QUEUE_URL not configured
+    """
+    if not SEGMENT_QUEUE_URL:
+        logger.error("SEGMENT_QUEUE_URL not configured")
+        raise RuntimeError("Segment processing queue not configured")
+
+    active_segment_id = active_segment.get("ActiveSegmentID", "")
+    
+    try:
+        # Send just the ActiveSegmentID as plain text
+        send_message(SEGMENT_QUEUE_URL, active_segment_id)
+        logger.info(f"Queued mechanical segment for processing for {active_segment_id}")
+    except RuntimeError as err:
+        # Non-critical - segment will be picked up by ops-segment-poller
+        logger.warning(f"Failed to queue segment for processing for {active_segment_id} Error: {err}")

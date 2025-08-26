@@ -13,80 +13,18 @@ from eidolon.character_data import character_get
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
-from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.polling import ensure_polling_enabled
 from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.sqs import send_message
+from eidolon.segment_response import new_segment_response
+from eidolon.sqs import queue_segment_for_processing
 from eidolon.story_history import create_story_history_entry
 from eidolon.story_retrieval import get_story_and_first_segment
 from eidolon.story_segment import create_active_segment
 from eidolon.story_validation import validate_story_available
-from eidolon.time_utils import duration_between, from_unix
 from eidolon.validation import validate_uuid
-
-
-def format_start_story_response(active_segment: dict, segment: dict) -> dict:
-    """
-    Format response per API documentation.
-
-    Args:
-        active_segment: Active segment record from database
-        segment: Segment definition from Segments table
-
-    Returns:
-        Dict with success and segment data
-    """
-    # Convert Unix timestamps to ISO 8601 for API response
-    start_time_unix = active_segment.get("StartTime", 0)
-    end_time_unix = active_segment.get("EndTime", 0)
-
-    start_time = from_unix(start_time_unix) if start_time_unix else ""
-    end_time = from_unix(end_time_unix) if end_time_unix else ""
-
-    duration = end_time_unix - start_time_unix if start_time_unix and end_time_unix else 0
-
-    return {
-        "Success": True,
-        "Segment": {
-            "ActiveSegmentID": active_segment.get("ActiveSegmentID", ""),
-            "SegmentType": segment.get("SegmentType", "mechanical"),
-            "StartTime": start_time,
-            "EndTime": end_time,
-            "ShortStatus": segment.get("ShortStatus", "Starting your adventure..."),
-            "Duration": duration,
-            "ProcessingStatus": active_segment.get("ProcessingStatus", "pending"),
-        },
-    }
-
-
-def queue_mechanical_segment_for_processing(active_segment: dict) -> None:
-    """
-    Queue mechanical segment to SQS for processing.
-
-    Args:
-        active_segment: Active segment record containing segment details
-    """
-    if not SEGMENT_QUEUE_URL:
-        logger.warning("SEGMENT_QUEUE_URL not configured")
-        return
-
-    message_body = {
-        "ActiveSegmentID": active_segment.get("ActiveSegmentID", ""),
-        "CharacterID": active_segment.get("CharacterID", ""),
-        "StoryID": active_segment.get("StoryID", ""),
-        "SegmentID": active_segment.get("SegmentID", ""),
-        "SegmentType": "mechanical",
-    }
-
-    try:
-        send_message(SEGMENT_QUEUE_URL, message_body)
-        logger.info(f"Queued mechanical segment for processing for {active_segment.get('ActiveSegmentID', '')}")
-    except RuntimeError as err:
-        # Non-critical failure - log but don't block story start
-        logger.warning(f"Failed to queue segment for processing for {active_segment.get('ActiveSegmentID', '')} Error: {err}")
 
 
 def start_story_business_logic(character_id: str, story_id: str, player_id: str) -> dict:
@@ -108,9 +46,9 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
     logger.debug(f"start_story_business_logic called - char: {character_id}, story: {story_id}, player: {player_id}")
 
     # Start the story (critical - can raise)
-    result = start_story_for_character(character_id, story_id, player_id)
+    result = start_story(character_id, story_id, player_id)
     logger.debug(
-        f"start_story_for_character returned: active_segment={result.get('active_segment', {}).get('ActiveSegmentID', 'N/A')}"
+        f"start_story returned: active_segment={result.get('active_segment', {}).get('ActiveSegmentID', 'N/A')}"
     )
 
     active_segment = result.get("active_segment", {})
@@ -118,16 +56,16 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
 
     # Queue mechanical segments (non-critical)
     if segment.get("SegmentType") == "mechanical":
-        queue_mechanical_segment_for_processing(active_segment)
+        queue_segment_for_processing(active_segment)
 
     # Enable polling (non-critical)
     ensure_polling_enabled()
 
     # Format response
-    return format_start_story_response(active_segment, segment)
+    return new_segment_response(active_segment, segment)
 
 
-def start_story_for_character(character_id: str, story_id: str, player_id: str) -> dict:
+def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     """
     Start a story for a character with atomic state updates.
 
@@ -188,23 +126,9 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
     logger.info(f"Active segment created: {active_segment.get('ActiveSegmentID', 'unknown')}")
 
     # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID
-    # Only remove from available list if story is not repeatable
     try:
-        # Check if story should be removed from available list
-        story_type = story.get("StoryType", "repeatable")
-        should_remove = story_type != "repeatable"
-
-        # Build update expression to set GameMode and optionally remove from AvailableStories
-        available_stories = character.get("AvailableStories", [])
-        if should_remove and story_id in available_stories:
-            story_index = available_stories.index(story_id)
-            update_expression = (
-                "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id "
-                f"REMOVE AvailableStories[{story_index}]"
-            )
-        else:
-            # Either story is repeatable or not in list (race condition), just update the mode
-            update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
+        # Simple update - AvailableStories manipulation will be handled separately later
+        update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
 
         # Build condition expression - allow if GameMode is None OR (Incremental with no active story/segment)
         condition_expression = "(GameMode = :none) OR (GameMode = :incremental AND (attribute_not_exists(ActiveStoryID) OR ActiveStoryID = :null) AND (attribute_not_exists(ActiveSegmentID) OR ActiveSegmentID = :null))"
@@ -251,7 +175,7 @@ def start_story_for_character(character_id: str, story_id: str, player_id: str) 
 
     logger.info(f"Story started successfully for {character_id}")
 
-    return {"active_segment": active_segment, "segment": first_segment, "story": story, "story_instance_id": story_instance_id}
+    return {"active_segment": active_segment, "segment": first_segment}
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -311,14 +235,16 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         body = parse_event_body(event)
         logger.debug(f"Parsed body: {body}")
-        character_id: str = body.get("character_id") or body.get("CharacterID")  # type: ignore
-        story_id: str = body.get("story_id") or body.get("StoryID")  # type: ignore
+        character_id: str =  body.get("CharacterID", "")  # type: ignore
+        story_id: str = body.get("StoryID", "")  # type: ignore
         logger.info(f"Request parameters - CharacterID: {character_id}, StoryID: {story_id}")
 
     except ValueError as err:
-        return lambda_response(400, {"Error": str(err)}, event)
+        logger.error(f"Failed to parse request body Error: {err}", exc_info=True)
+        return lambda_response(400, {"Error": "Improper request body"}, event)
     except Exception as err:
-        return lambda_error(event, err)
+        logger.error(f"Unexpected error occurred: {err}", exc_info=True)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
 
     # Validate required parameters
     if not character_id:
