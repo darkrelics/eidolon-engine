@@ -105,12 +105,12 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
         raise RuntimeError(f"Failed to send batch messages to SQS: {err}") from err
 
 
-def queue_segment_for_processing(active_segment: dict) -> None:
+def queue_segment_for_processing(active_segment_id: str) -> None:
     """
     Queue mechanical segment to SQS for processing.
 
     Args:
-        active_segment: Active segment record containing segment details
+        active_segment_id: Active segment UUID to process
 
     Raises:
         RuntimeError: If SEGMENT_QUEUE_URL not configured
@@ -119,7 +119,9 @@ def queue_segment_for_processing(active_segment: dict) -> None:
         logger.error("SEGMENT_QUEUE_URL not configured")
         raise RuntimeError("Segment processing queue not configured")
 
-    active_segment_id = active_segment.get("ActiveSegmentID", "")
+    if not active_segment_id:
+        logger.error("ActiveSegmentID cannot be empty")
+        return
 
     try:
         # Send just the ActiveSegmentID as plain text

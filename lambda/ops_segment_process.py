@@ -14,22 +14,6 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_core import get_active_segment, is_mechanical_segment
 from eidolon.segment_processing import process_segment_completely
-from eidolon.validation_messages import validate_processing_message
-
-
-def validate_segment_for_processing(segment_type: str) -> bool:
-    """
-    Validate that the segment type should be processed by this handler.
-
-    Args:
-        segment_type: Type of segment
-
-    Returns:
-        True if segment should be processed, False otherwise
-    """
-    # Only mechanical segments should be processed by this handler
-    # Rest and Decision segments are handled directly by the poller
-    return is_mechanical_segment(segment_type)
 
 
 def process_segment_business_logic(
@@ -57,7 +41,7 @@ def process_segment_business_logic(
         RuntimeError: If database operations fail
     """
     # Validate segment type
-    if not validate_segment_for_processing(segment_type):
+    if not is_mechanical_segment(segment_type):
         logger.warning(f"Invalid segment type for mechanical processing for {active_segment_id}")
         raise ValueError(f"Segment type '{segment_type}' should not be processed by this handler")
 
@@ -160,27 +144,32 @@ def lambda_handler(event: dict, context: object) -> dict:
             message_id = record.get("messageId", "unknown")
 
             try:
-                # Parse message body
-                message_body = json.loads(record.get("body", "{}"))
-
-                # Validate message schema
-                try:
-                    validated_msg = validate_processing_message(message_body)
-                except ValueError as validation_err:
-                    # Invalid message - log and don't retry
-                    logger.error(f"Invalid message schema for messageId={message_id}: {validation_err}")
-                    # Don't add to batch_item_failures - invalid messages should not be retried
+                # Parse message body - now just the ActiveSegmentID as a plain string
+                message_body = record.get("body", "").strip()
+                
+                if not message_body:
+                    logger.error(f"Empty message body for messageId={message_id}")
                     continue
-
-                # Extract validated segment data
-                active_segment_id = validated_msg["ActiveSegmentID"]
-                character_id = validated_msg["CharacterID"]
-                story_id = validated_msg["StoryID"]
-                segment_id = validated_msg["SegmentID"]
-                segment_type = validated_msg["SegmentType"]
+                
+                # The message body is just the ActiveSegmentID
+                active_segment_id = message_body
+                
+                # Fetch the full active segment record from DynamoDB
+                try:
+                    active_segment = get_active_segment(active_segment_id)
+                except (ValueError, RuntimeError) as err:
+                    logger.error(f"Failed to fetch active segment {active_segment_id}: {err}")
+                    # Don't retry if segment not found or DB error
+                    continue
+                
+                # Extract segment data from the fetched record
+                character_id = active_segment.get("CharacterID")
+                story_id = active_segment.get("StoryID")
+                segment_id = active_segment.get("SegmentID")
+                segment_type = active_segment.get("SegmentType")
 
                 # Check if segment type should be processed by this handler
-                if not validate_segment_for_processing(segment_type):
+                if not is_mechanical_segment(segment_type):
                     logger.info(f"Skipping non-mechanical segment from SQS for {active_segment_id}: type={segment_type}")
                     # Don't fail the message, just skip it
                     success_count += 1
@@ -216,25 +205,22 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Legacy direct invocation support (for testing)
     else:
         try:
-            # Extract segment information from event
+            # Extract segment ID from event - now just expects ActiveSegmentID
             active_segment_id: str = event.get("ActiveSegmentID", "")
-            character_id = event.get("CharacterID")
-            story_id = event.get("StoryID")
-            segment_id = event.get("SegmentID")
-            segment_type = event.get("SegmentType")
 
             if not active_segment_id:
                 raise ValueError("ActiveSegmentID is required")
-            if not character_id:
-                raise ValueError("CharacterID is required")
-            if not story_id:
-                raise ValueError("StoryID is required")
-            if not segment_id:
-                raise ValueError("SegmentID is required")
-            if not segment_type:
-                raise ValueError("SegmentType is required")
 
             logger.info(f"Processing single segment (direct invocation) for {active_segment_id}")
+            
+            # Fetch the full active segment record from DynamoDB
+            active_segment = get_active_segment(active_segment_id)
+            
+            # Extract segment data from the fetched record
+            character_id = active_segment.get("CharacterID")
+            story_id = active_segment.get("StoryID")
+            segment_id = active_segment.get("SegmentID")
+            segment_type = active_segment.get("SegmentType")
 
             # Call business logic
             result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)

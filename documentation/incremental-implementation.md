@@ -165,47 +165,52 @@ CharacterNameIndex:
   Purpose: Ensure character name uniqueness
 ```
 
-### 1.3 DynamoDB Transaction Examples
+### 1.3 DynamoDB Update Examples
 
-DynamoDB transactions ensure atomic updates across multiple tables when starting a story. This prevents partial state where a character might be locked in Incremental mode without an active segment, maintaining data consistency even if failures occur.
+The story start process uses sequential operations with eventual consistency. If a failure occurs after creating the active segment but before updating the character, the ops-segment-poller will detect and clean up orphaned segments.
 
-#### Story Start Transaction
+#### Story Start Process
 
-This transaction atomically updates the character's game mode and creates the active segment record, ensuring data consistency even if failures occur during the story start process.
+The story start creates the active segment first, then updates the character state. Any orphaned segments from failures are handled by the background poller, avoiding complex rollback logic.
 
 ```python
 from uuid_extension import uuid7  # Repo-provided helper for UUIDv7-like IDs
 
-def start_story_transaction(character_id, story_id, segment_data):
+def start_story(character_id, story_id, segment_data):
     # Generate UUIDv7 for the active segment
     segment_data['ActiveSegmentID'] = str(uuid7())
-
-    return {
-        'TransactItems': [
-            {
-                'Update': {
-                    'TableName': CHARACTER_TABLE,
-                    'Key': {'CharacterID': {'S': character_id}},
-                    'UpdateExpression': 'SET GameMode = :mode, ActiveStoryID = :story, ActiveSegmentID = :segment, AvailableStories = :updated_list',
-                    'ExpressionAttributeValues': {
-                        ':mode': {'S': 'Incremental'},
-                        ':story': {'S': story_id},
-                        ':segment': {'S': segment_data['ActiveSegmentID']},
-                        ':updated_list': {'L': updated_stories}
-                    },
-                    'ConditionExpression': 'GameMode = :none',
-                    'ExpressionAttributeValues': {':none': {'S': 'None'}}
-                }
-            },
-            {
-                'Put': {
-                    'TableName': ACTIVE_SEGMENTS_TABLE,
-                    'Item': segment_data,
-                    'ConditionExpression': 'attribute_not_exists(ActiveSegmentID)'
-                }
-            }
-        ]
-    }
+    
+    # 1. Create active segment first
+    dynamodb.put_item(
+        TableName=ACTIVE_SEGMENTS_TABLE,
+        Item=segment_data,
+        ConditionExpression='attribute_not_exists(ActiveSegmentID)'
+    )
+    
+    # 2. Update character state
+    # If this fails, ops-segment-poller will clean up the orphaned segment
+    dynamodb.update_item(
+        TableName=CHARACTER_TABLE,
+        Key={'CharacterID': {'S': character_id}},
+        UpdateExpression='SET GameMode = :mode, ActiveStoryID = :story, ActiveSegmentID = :segment',
+        ExpressionAttributeValues={
+            ':mode': {'S': 'Incremental'},
+            ':story': {'S': story_id},
+            ':segment': {'S': segment_data['ActiveSegmentID']}
+        },
+        ConditionExpression='GameMode = :none OR (GameMode = :incremental AND attribute_not_exists(ActiveStoryID))',
+        ExpressionAttributeValues={
+            ':none': {'S': 'None'},
+            ':incremental': {'S': 'Incremental'}
+        }
+    )
+    
+    # 3. Queue mechanical segments (send only ActiveSegmentID)
+    if segment_data['SegmentType'] == 'mechanical':
+        sqs.send_message(
+            QueueUrl=SEGMENT_QUEUE_URL,
+            MessageBody=segment_data['ActiveSegmentID']  # Plain string, not JSON
+        )
 ```
 
 ## 2. Lambda Function Implementation
@@ -817,9 +822,8 @@ def advance_story_handler(event, context):
 
     for record in event['Records']:
         try:
-            # Parse message
-            message = json.loads(record['body'])
-            active_segment_id = message['ActiveSegmentID']
+            # Parse message - now just the ActiveSegmentID as a plain string
+            active_segment_id = record['body'].strip()
 
             # Claim segment
             if not claim_segment_for_processing(active_segment_id):

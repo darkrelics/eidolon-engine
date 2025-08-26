@@ -4,6 +4,8 @@ Core segment operations and data access.
 Provides fundamental functions for accessing and managing segments.
 """
 
+from functools import cache
+
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
@@ -15,6 +17,7 @@ VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
 MECHANICAL_ONLY_TYPES = ["mechanical"]
 
 
+@cache
 def is_mechanical_segment(segment_type: str) -> bool:
     """
     Check if a segment type should be processed as mechanical.

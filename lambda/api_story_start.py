@@ -90,7 +90,7 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
 
     # Queue mechanical segments
     if first_segment.get("SegmentType") == "mechanical":
-        queue_segment_for_processing(active_segment)
+        queue_segment_for_processing(active_segment_id)
 
     # Enable polling
     ensure_polling_enabled()
