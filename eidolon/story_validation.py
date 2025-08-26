@@ -4,6 +4,8 @@ Story validation and prerequisites.
 Provides functions for checking story availability and prerequisites.
 """
 
+from eidolon.logger import logger
+
 
 def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
     """
@@ -48,3 +50,27 @@ def validate_story_available(character: dict, story_id: str) -> None:
     available_stories = character.get("AvailableStories", [])
     if story_id not in available_stories:
         raise ValueError("Story not available")
+
+
+def story_eligability(character: dict) -> bool:
+    """
+    Check if a character is in a valid state to start a story.
+
+    Args:
+        character: Character data from database
+
+    Returns:
+        True if character can start a new story, False otherwise
+    """
+    game_mode = character.get("GameMode", "None")
+    if game_mode == "None":
+        return True
+
+    if game_mode == "Incremental":
+        # Allow if no active story/segment (recovery from inconsistent state)
+        if not character.get("ActiveStoryID") and not character.get("ActiveSegmentID"):
+            character_id = character.get("CharacterID")
+            logger.info(f"Character {character_id} in Incremental mode but no active story/segment, allowing new story")
+            return True
+
+    return False

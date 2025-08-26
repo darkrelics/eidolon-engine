@@ -213,8 +213,6 @@ def process_rest_segment(_: dict, character: dict) -> tuple:
     return "normal", {}
 
 
-
-
 def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str) -> object:
     """
     Determine the next segment ID based on segment type and outcome.
@@ -230,7 +228,7 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
     segment_type = segment_def.get("SegmentType")
     segment_id = segment_def.get("SegmentID", "unknown")
     active_segment_id = active_segment.get("ActiveSegmentID", "unknown")
-    
+
     # Debug logging
     logger.info(f"determine_next_segment called for {active_segment_id}")
     logger.info(f"  segment_type: {segment_type}")
@@ -265,7 +263,9 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
 
         # Get results dict (should have lowercase keys after normalization)
         results = segment_def.get("Results", {})
-        logger.info(f"  Original Results type: {type(results)}, keys: {list(results.keys()) if isinstance(results, dict) else 'not a dict'}")
+        logger.info(
+            f"  Original Results type: {type(results)}, keys: {list(results.keys()) if isinstance(results, dict) else 'not a dict'}"
+        )
         if not isinstance(results, dict):
             logger.warning(f"Results is not a dict for {segment_id}, treating as no branching")
             results = {}
@@ -274,10 +274,16 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         outcome_result = results.get(outcome_key)
         logger.info(f"Looking for outcome '{outcome_key}' in results: found={outcome_result is not None}")
         if outcome_result:
-            logger.info(f"  outcome_result type: {type(outcome_result)}, keys: {list(outcome_result.keys()) if isinstance(outcome_result, dict) else 'not a dict'}")
+            logger.info(
+                f"  outcome_result type: {type(outcome_result)}, keys: {list(outcome_result.keys()) if isinstance(outcome_result, dict) else 'not a dict'}"
+            )
             if isinstance(outcome_result, dict):
                 # Check for NextSegmentID (might be capitalized or not)
-                next_segment_id = outcome_result.get("NextSegmentID") or outcome_result.get("nextSegmentID") or outcome_result.get("next_segment_id")
+                next_segment_id = (
+                    outcome_result.get("NextSegmentID")
+                    or outcome_result.get("nextSegmentID")
+                    or outcome_result.get("next_segment_id")
+                )
                 if next_segment_id:
                     logger.info(f"Using per-outcome branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
                     return next_segment_id

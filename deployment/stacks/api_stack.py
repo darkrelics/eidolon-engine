@@ -203,20 +203,20 @@ class ApiStack(Stack):
             "gatewayresponse.header.Access-Control-Allow-Origin": f"'{client_origin}'",
             "gatewayresponse.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
             "gatewayresponse.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
-            "gatewayresponse.header.Access-Control-Allow-Credentials": "'true'"
+            "gatewayresponse.header.Access-Control-Allow-Credentials": "'true'",
         }
 
         # Add gateway responses with CORS headers for common error types
         # Note: DEFAULT_4_XX and DEFAULT_5_XX handle all 4xx and 5xx responses
         api.add_gateway_response(
             "GatewayResponseDefault4XX",
-            type=apigateway.ResponseType.DEFAULT_4_XX, # type: ignore
+            type=apigateway.ResponseType.DEFAULT_4_XX,  # type: ignore
             response_headers=cors_headers,
         )
 
         api.add_gateway_response(
             "GatewayResponseDefault5XX",
-            type=apigateway.ResponseType.DEFAULT_5_XX, # type: ignore
+            type=apigateway.ResponseType.DEFAULT_5_XX,  # type: ignore
             response_headers=cors_headers,
         )
 

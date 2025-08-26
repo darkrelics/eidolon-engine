@@ -36,7 +36,7 @@ def send_message(queue_url: str, message_body, message_attributes=None) -> str:
             body = json.dumps(message_body)
         else:
             body = str(message_body)
-            
+
         params = {
             "QueueUrl": queue_url,
             "MessageBody": body,
@@ -111,7 +111,7 @@ def queue_segment_for_processing(active_segment: dict) -> None:
 
     Args:
         active_segment: Active segment record containing segment details
-        
+
     Raises:
         RuntimeError: If SEGMENT_QUEUE_URL not configured
     """
@@ -120,7 +120,7 @@ def queue_segment_for_processing(active_segment: dict) -> None:
         raise RuntimeError("Segment processing queue not configured")
 
     active_segment_id = active_segment.get("ActiveSegmentID", "")
-    
+
     try:
         # Send just the ActiveSegmentID as plain text
         send_message(SEGMENT_QUEUE_URL, active_segment_id)

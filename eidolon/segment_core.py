@@ -100,13 +100,15 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
         normalized = normalize_segment_definition(segment_def)
         # Skip Pydantic validation for now to preserve normalized structure
         # The normalization already handles the key conversions we need
-        results = normalized.get('Results', {})
+        results = normalized.get("Results", {})
         logger.info(f"Segment {segment_id} normalized Results keys: {list(results.keys())}")
         # Log the structure of one result to debug
-        if results and 'normal' in results:
-            normal_result = results['normal']
-            logger.info(f"  'normal' result keys: {list(normal_result.keys()) if isinstance(normal_result, dict) else 'not a dict'}")
-            if isinstance(normal_result, dict) and 'NextSegmentID' in normal_result:
+        if results and "normal" in results:
+            normal_result = results["normal"]
+            logger.info(
+                f"  'normal' result keys: {list(normal_result.keys()) if isinstance(normal_result, dict) else 'not a dict'}"
+            )
+            if isinstance(normal_result, dict) and "NextSegmentID" in normal_result:
                 logger.info(f"  'normal' NextSegmentID: {normal_result['NextSegmentID']}")
         return normalized
     except ClientError as err:
@@ -149,8 +151,6 @@ def get_active_segment_info(active_segment_id: str) -> dict:
         "story_id": story_id,
         "segment_id": segment_id,
     }
-
-
 
 
 def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:

@@ -20,16 +20,17 @@ from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_response import new_segment_response
 from eidolon.sqs import queue_segment_for_processing
+from eidolon.story_active import story_update_character
 from eidolon.story_history import create_story_history_entry
 from eidolon.story_retrieval import get_story_and_first_segment
 from eidolon.story_segment import create_active_segment
-from eidolon.story_validation import validate_story_available
+from eidolon.story_validation import story_eligability, validate_story_available
 from eidolon.validation import validate_uuid
 
 
-def start_story_business_logic(character_id: str, story_id: str, player_id: str) -> dict:
+def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     """
-    Business logic for starting a story.
+    Business logic for starting a story - orchestrates the complete process.
 
     Args:
         character_id: Character UUID
@@ -43,67 +44,18 @@ def start_story_business_logic(character_id: str, story_id: str, player_id: str)
         ValueError: If validation fails
         RuntimeError: If critical operations fail
     """
-    logger.debug(f"start_story_business_logic called - char: {character_id}, story: {story_id}, player: {player_id}")
+    logger.debug(f"start_story called - char: {character_id}, story: {story_id}, player: {player_id}")
 
-    # Start the story (critical - can raise)
-    result = start_story(character_id, story_id, player_id)
-    logger.debug(
-        f"start_story returned: active_segment={result.get('active_segment', {}).get('ActiveSegmentID', 'N/A')}"
-    )
-
-    active_segment = result.get("active_segment", {})
-    segment = result.get("segment", {})
-
-    # Queue mechanical segments (non-critical)
-    if segment.get("SegmentType") == "mechanical":
-        queue_segment_for_processing(active_segment)
-
-    # Enable polling (non-critical)
-    ensure_polling_enabled()
-
-    # Format response
-    return new_segment_response(active_segment, segment)
-
-
-def start_story(character_id: str, story_id: str, player_id: str) -> dict:
-    """
-    Start a story for a character with atomic state updates.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        player_id: Player UUID
-
-    Returns:
-        Dict with active_segment data
-
-    Raises:
-        ValueError: If validation fails
-        RuntimeError: If database operations fail
-    """
-
-    logger.debug(f"Getting character {character_id} for player {player_id}")
     # Get character and verify ownership
-    character: dict = character_get(character_id, player_id)
+    logger.debug(f"Getting character {character_id} for player {player_id}")
+    character = character_get(character_id, player_id)
     logger.debug(f"Character retrieved: {character.get('CharacterName', 'unknown')}, Mode: {character.get('GameMode', 'None')}")
 
-    # Check if character is already in a game mode
-    game_mode = character.get("GameMode", "None")
-    if game_mode != "None":
-        # Safety check: Allow starting a new story in Incremental mode if no active story/segment
-        if game_mode == "Incremental":
-            active_story_id = character.get("ActiveStoryID")
-            active_segment_id = character.get("ActiveSegmentID")
-            if not active_story_id and not active_segment_id:
-                logger.info(f"Character {character_id} in Incremental mode but no active story/segment, allowing new story")
-            else:
-                logger.warning(
-                    f"Character {character_id} already in {game_mode} mode with active story/segment, cannot start new story"
-                )
-                raise ValueError(f"Character is currently in {game_mode} mode with an active story")
-        else:
-            logger.warning(f"Character {character_id} already in {game_mode} mode, cannot start new story")
-            raise ValueError(f"Character is currently in {game_mode} mode")
+    # Check if character can start a story
+    if not story_eligability(character):
+        game_mode = character.get("GameMode", "None")
+        logger.warning(f"Character {character_id} in {game_mode} mode, cannot start new story")
+        raise ValueError(f"Character is currently in {game_mode} mode with an active story")
 
     # Validate story is available
     logger.debug(f"Validating story {story_id} is available for character")
@@ -114,68 +66,39 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     story, first_segment = get_story_and_first_segment(story_id)
     logger.debug(f"Story: {story.get('Title', 'Unknown')}, First segment: {first_segment.get('SegmentID', 'unknown')}")
 
-    # Create story history entry first to get the story instance ID
-    story_title = story.get("Title", "Unknown Story")
-    story_type = story.get("StoryType", "repeatable")
-    logger.info(f"Creating story history entry for '{story_title}'")
-    story_instance_id = create_story_history_entry(character_id, story_id, story_title, story_type)
-    
-    # Create active segment with story instance ID
-    logger.info(f"Creating active segment for story '{story_title}'")
+    # Create story instance
+    logger.info(f"Creating story history entry for '{story.get('Title', 'Unknown Story')}'")
+    story_instance_id = create_story_history_entry(character_id, story_id, story)
+
+    # Create initial segment
+    logger.info(f"Creating active segment for story")
     active_segment = create_active_segment(character_id, player_id, story_id, first_segment, story_instance_id)
     logger.info(f"Active segment created: {active_segment.get('ActiveSegmentID', 'unknown')}")
 
-    # Atomically update character to set GameMode, ActiveStoryID, ActiveSegmentID
+    # Update character state
+    active_segment_id = active_segment.get("ActiveSegmentID")
+    if not active_segment_id:
+        raise RuntimeError("Active segment creation failed - no ActiveSegmentID")
+
     try:
-        # Simple update - AvailableStories manipulation will be handled separately later
-        update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
+        response = story_update_character(character_id, story_id, active_segment_id)
+        logger.debug(f"Character state updated successfully, response metadata: {response.get('ResponseMetadata', {})}")
+    except (ValueError, RuntimeError) as err:
+        # Let ops_segment_poller handle cleanup of orphaned segments
+        logger.error(f"Failed to update character state, segment {active_segment_id} will be cleaned up by poller: {err}")
+        raise
 
-        # Build condition expression - allow if GameMode is None OR (Incremental with no active story/segment)
-        condition_expression = "(GameMode = :none) OR (GameMode = :incremental AND (attribute_not_exists(ActiveStoryID) OR ActiveStoryID = :null) AND (attribute_not_exists(ActiveSegmentID) OR ActiveSegmentID = :null))"
+    # Queue mechanical segments
+    if first_segment.get("SegmentType") == "mechanical":
+        queue_segment_for_processing(active_segment)
 
-        logger.debug(f"Updating character state with GameMode=Incremental, ActiveStoryID={story_id}")
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression=update_expression,
-            ExpressionAttributeValues={
-                ":mode": "Incremental",
-                ":none": "None",
-                ":incremental": "Incremental",
-                ":null": None,
-                ":story_id": story_id,
-                ":segment_id": active_segment.get("ActiveSegmentID"),
-            },
-            ConditionExpression=condition_expression,
-        )
-
-    except ClientError as err:
-        error_code = err.response.get("Error", {}).get("Code", "Unknown")
-        logger.error(f"DynamoDB error updating character {character_id}: Code={error_code}, Error={err}")
-
-        # Rollback: Delete the active segment we just created
-        try:
-            logger.debug(f"Rolling back active segment {active_segment.get('ActiveSegmentID')}")
-            dynamo.delete_item(
-                TableName.ACTIVE_SEGMENTS,
-                Key={"ActiveSegmentID": active_segment.get("ActiveSegmentID")},
-            )
-            logger.debug("Rollback successful")
-        except Exception as rollback_err:
-            logger.error(f"Rollback failed for segment {active_segment.get('ActiveSegmentID')}: {rollback_err}")
-
-        if error_code == "ConditionalCheckFailedException":
-            logger.warning(f"Character {character_id} state changed during story start (race condition)")
-            raise ValueError("Character state conflict") from err
-
-        logger.error(f"Failed to update character state for {character_id}: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to update character state: {err}") from err
-
-    # History entry was already created above with story_instance_id
+    # Enable polling
+    ensure_polling_enabled()
 
     logger.info(f"Story started successfully for {character_id}")
 
-    return {"active_segment": active_segment, "segment": first_segment}
+    # Format response
+    return new_segment_response(active_segment, first_segment)
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -235,7 +158,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         body = parse_event_body(event)
         logger.debug(f"Parsed body: {body}")
-        character_id: str =  body.get("CharacterID", "")  # type: ignore
+        character_id: str = body.get("CharacterID", "")  # type: ignore
         story_id: str = body.get("StoryID", "")  # type: ignore
         logger.info(f"Request parameters - CharacterID: {character_id}, StoryID: {story_id}")
 
@@ -268,7 +191,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        response_data = start_story_business_logic(character_id, story_id, player_id)  # type: ignore
+        response_data = start_story(character_id, story_id, player_id)  # type: ignore
         logger.info(f"Story started successfully for {character_id}")
         return lambda_response(200, response_data, event)
     except ValueError as err:

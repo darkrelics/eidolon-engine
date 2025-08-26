@@ -43,7 +43,7 @@ def get_story_history(character_id: str, story_id: str) -> dict:
             KeyConditionExpression="CharacterID = :character_id",
             ExpressionAttributeValues={":character_id": character_id},
             ScanIndexForward=False,  # Most recent first (UUIDv7 sorts by time)
-        ) # type: ignore
+        )  # type: ignore
 
         # Filter for the specific story and find the most recent finished instance
         for item in items:

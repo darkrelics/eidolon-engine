@@ -12,7 +12,7 @@ import json
 
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment_core import is_mechanical_segment
+from eidolon.segment_core import get_active_segment, is_mechanical_segment
 from eidolon.segment_processing import process_segment_completely
 from eidolon.validation_messages import validate_processing_message
 

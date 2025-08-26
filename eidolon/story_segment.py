@@ -12,7 +12,7 @@ from eidolon.logger import logger
 from eidolon.time_utils import from_unix, future_unix, now_unix
 
 
-def create_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id = None) -> dict:
+def create_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id=None) -> dict:
     """
     Create an active segment record for tracking progress.
     Also creates a SegmentHistory record and adds it to StoryHistory if story_instance_id is provided.
@@ -66,7 +66,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, segm
         combat_config = segment.get("Combat", {})
         if combat_config:
             opponent_id = combat_config.get("OpponentID") or combat_config.get("opponentId")
-            
+
             # Only create CombatState if there's actually an opponent
             if opponent_id:
                 opponent_health = 5

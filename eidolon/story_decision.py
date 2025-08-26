@@ -164,7 +164,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
 
     if next_segment_id:
         try:
-            next_segment_def = get_segment_definition(story_id, next_segment_id) # type: ignore
+            next_segment_def = get_segment_definition(story_id, next_segment_id)  # type: ignore
 
             next_active_segment_id = create_next_active_segment(
                 character_id,

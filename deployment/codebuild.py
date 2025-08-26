@@ -11,10 +11,10 @@ from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 from stacks.stack_utilities import check_s3_bucket_exists
 
+
 def deploy_codebuild_stack(params) -> dict:
     """Deploy the CodeBuild stack using CDK."""
     # Check if S3 bucket already exists
-    
 
     bucket_exists = check_s3_bucket_exists(params.s3_bucket, params.region)
 

@@ -37,7 +37,7 @@ def poll_and_process_segments_business_logic() -> dict:
         RuntimeError: If database or SQS operations fail
     """
     import time
-    
+
     # First check SSM parameter state
     poller_state = get_polling_state()
 

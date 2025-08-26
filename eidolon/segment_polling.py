@@ -34,16 +34,14 @@ def get_completed_segments(max_segments: int) -> list:
             IndexName="EndTimeIndex",
             KeyConditionExpression="#status = :status AND EndTime < :current_time",
             FilterExpression="ProcessingStatus = :proc_status",
-            ExpressionAttributeNames={
-                "#status": "Status"
-            },
+            ExpressionAttributeNames={"#status": "Status"},
             ExpressionAttributeValues={
                 ":status": "active",
                 ":current_time": current_time,
                 ":proc_status": "processed",
             },
             Limit=max_segments,
-        ) # type: ignore
+        )  # type: ignore
         logger.info(f"Found {len(segments)} completed segments ready for advancement")
         return segments
 
@@ -64,12 +62,10 @@ def check_active_segments_exist() -> bool:
             TableName.ACTIVE_SEGMENTS,
             IndexName="EndTimeIndex",
             KeyConditionExpression="#status = :status",
-            ExpressionAttributeNames={
-                "#status": "Status"
-            },
+            ExpressionAttributeNames={"#status": "Status"},
             ExpressionAttributeValues={":status": "active"},
             Limit=1,
-        ) # type: ignore
+        )  # type: ignore
 
         return len(segments) > 0
 

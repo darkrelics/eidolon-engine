@@ -14,15 +14,14 @@ from eidolon.logger import logger
 from eidolon.time_utils import now_iso
 
 
-def create_story_history_entry(character_id: str, story_id: str, story_title: str, story_type: str) -> str:
+def create_story_history_entry(character_id: str, story_id: str, story: dict) -> str:
     """
     Create initial history entry for story tracking with new schema.
 
     Args:
         character_id: Character UUID
         story_id: Story UUID
-        story_title: Story title
-        story_type: Type of story (one-time, daily, repeatable)
+        story: Story data from database containing Title and StoryType
 
     Returns:
         StoryInstanceID (UUIDv7) for this story execution
@@ -30,9 +29,12 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
     Raises:
         RuntimeError: If database operation fails
     """
+    story_title = story.get("Title", "Unknown Story")
+    story_type = story.get("StoryType", "repeatable")
+
     try:
         story_instance_id = str(uuid7())
-        
+
         history_entry = {
             "CharacterID": character_id,
             "StoryInstanceID": story_instance_id,
@@ -46,10 +48,10 @@ def create_story_history_entry(character_id: str, story_id: str, story_title: st
         }
 
         dynamo.put_item(TableName.STORY_HISTORY, history_entry)
-        
+
         logger.info(f"Created story history entry with StoryInstanceID: {story_instance_id}")
         return story_instance_id
-        
+
     except ClientError as err:
         logger.error(f"Failed to create history entry for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to create history entry: {err}") from err

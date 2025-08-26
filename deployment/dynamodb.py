@@ -14,10 +14,8 @@ from core.dynamodb_tables import TABLE_CONFIGS
 from stacks import stack_utilities as utils
 
 
-
 def check_existing_tables(region: str) -> dict:
     """Check for existing DynamoDB tables and validate their schemas."""
-
 
     existing_tables = {}
 

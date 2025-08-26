@@ -61,7 +61,7 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
                     duration = int((end_time - start_time).total_seconds())
                 else:
                     duration = 0
-                
+
                 dynamo.update_item(
                     TableName.STORY_HISTORY,
                     Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},

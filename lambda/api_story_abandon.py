@@ -23,10 +23,6 @@ from eidolon.story_history import record_story_abandonment
 from eidolon.validation import validate_uuid
 
 
-
-
-
-
 def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     """Business logic for abandoning an active story.
 
@@ -67,7 +63,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     # The story cannot be resumed - if repeatable, player must start fresh
     try:
         # Get current character data to check AbandonedStories list
-        character_data: dict = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id}) # type: ignore
+        character_data: dict = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})  # type: ignore
         abandoned_stories = character_data.get("AbandonedStories", [])
 
         if story_id not in abandoned_stories:
@@ -76,10 +72,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
                 TableName.CHARACTERS,
                 Key={"CharacterID": character_id},
                 UpdateExpression="SET AbandonedStories = list_append(if_not_exists(AbandonedStories, :empty_list), :story)",
-                ExpressionAttributeValues={
-                    ":empty_list": [],
-                    ":story": [story_id]
-                }
+                ExpressionAttributeValues={":empty_list": [], ":story": [story_id]},
             )
             logger.info(f"Added story {story_id} to abandoned list for {character_id}")
 
@@ -88,9 +81,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
             UpdateExpression="SET GameMode = :none REMOVE ActiveSegmentID, ActiveStoryID",
-            ExpressionAttributeValues={
-                ":none": "None"
-            }
+            ExpressionAttributeValues={":none": "None"},
         )
         logger.info(f"Reset character {character_id} to GameMode=None, story abandoned")
 
