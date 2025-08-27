@@ -148,10 +148,14 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         logger.error(f"Failed to get current segment for {current_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get current segment: {err}") from err
 
-    next_segment_id = current_segment.get("NextSegmentID")
+    # Get the next segment ID from the current segment's normal outcome
+    results = current_segment.get("Results", {})
+    normal_result = results.get("normal", {})
+    next_segment_id = normal_result.get("NextSegmentID") if isinstance(normal_result, dict) else None
+    
     if not next_segment_id:
-        logger.warning(f"Cannot insert rest - current segment is the last in story for {story_id}")
-        raise ValueError("Cannot insert rest segment - current segment is the last in the story")
+        logger.warning(f"Cannot insert rest - current segment has no normal outcome NextSegmentID for {story_id}")
+        raise ValueError("Cannot insert rest segment - current segment has no normal outcome continuation")
 
     if time_remaining >= min_time_required:
         insertion_point_id = current_segment_id
@@ -171,12 +175,18 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
             segment_duration = next_segment.get("SegmentDuration", 300)
             if segment_duration >= min_time_required:
                 insertion_point_id = next_segment_id
-                rest_next_segment_id = next_segment.get("NextSegmentID")
+                # Get the next segment ID from this segment's normal outcome
+                next_results = next_segment.get("Results", {})
+                next_normal = next_results.get("normal", {})
+                rest_next_segment_id = next_normal.get("NextSegmentID") if isinstance(next_normal, dict) else None
                 logger.info(f"Inserting rest after segment {next_segment_id} for {story_id}")
                 break
 
             checked_segments.add(next_segment_id)
-            next_segment_id = next_segment.get("NextSegmentID")
+            # Get the next segment ID from this segment's normal outcome
+            next_results = next_segment.get("Results", {})
+            next_normal = next_results.get("normal", {})
+            next_segment_id = next_normal.get("NextSegmentID") if isinstance(next_normal, dict) else None
         else:
             logger.warning(f"Cannot insert rest - no suitable segment found for {story_id}")
             raise ValueError("Cannot insert rest segment - no suitable segment with enough time found")
@@ -194,9 +204,9 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
             "normal": {
                 "Narrative": "Your rest was restorative. You feel refreshed and ready to continue.",
                 "Effects": {},
+                "NextSegmentID": rest_next_segment_id,
             }
         },
-        "NextSegmentID": rest_next_segment_id,
         "Created": now_unix(),
         "IsTemporary": True,
     }
@@ -212,10 +222,11 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         dynamo.update_item(
             TableName.SEGMENTS,
             Key={"StoryID": story_id, "SegmentID": insertion_point_id},
-            UpdateExpression="SET NextSegmentID = :rest_id",
+            UpdateExpression="SET Results.#normal.NextSegmentID = :rest_id",
+            ExpressionAttributeNames={"#normal": "normal"},
             ExpressionAttributeValues={":rest_id": rest_segment_id},
         )
-        logger.info(f"Updated segment to point to rest for {insertion_point_id}")
+        logger.info(f"Updated segment normal outcome to point to rest for {insertion_point_id}")
     except ClientError as err:
         logger.error(f"Failed to update segment to point to rest for {insertion_point_id} Error: {err}", exc_info=True)
         try:

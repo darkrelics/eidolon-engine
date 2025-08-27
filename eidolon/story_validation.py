@@ -52,7 +52,7 @@ def validate_story_available(character: dict, story_id: str) -> None:
         raise ValueError("Story not available")
 
 
-def story_eligability(character: dict) -> bool:
+def story_eligibility(character: dict) -> bool:
     """
     Check if a character is in a valid state to start a story.
 

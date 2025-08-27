@@ -24,7 +24,7 @@ from eidolon.story_active import story_update_character
 from eidolon.story_history import create_story_history_entry
 from eidolon.story_retrieval import get_story_and_first_segment
 from eidolon.story_segment import create_active_segment
-from eidolon.story_validation import story_eligability, validate_story_available
+from eidolon.story_validation import story_eligibility, validate_story_available
 from eidolon.validation import validate_uuid
 
 
@@ -44,36 +44,26 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
         ValueError: If validation fails
         RuntimeError: If critical operations fail
     """
-    logger.debug(f"start_story called - char: {character_id}, story: {story_id}, player: {player_id}")
-
     # Get character and verify ownership
-    logger.debug(f"Getting character {character_id} for player {player_id}")
     character = character_get(character_id, player_id)
-    logger.debug(f"Character retrieved: {character.get('CharacterName', 'unknown')}, Mode: {character.get('GameMode', 'None')}")
 
     # Check if character can start a story
-    if not story_eligability(character):
+    if not story_eligibility(character):
         game_mode = character.get("GameMode", "None")
         logger.warning(f"Character {character_id} in {game_mode} mode, cannot start new story")
         raise ValueError(f"Character is currently in {game_mode} mode with an active story")
 
     # Validate story is available
-    logger.debug(f"Validating story {story_id} is available for character")
     validate_story_available(character, story_id)
 
     # Get story and first segment
-    logger.debug(f"Getting story {story_id} and first segment")
     story, first_segment = get_story_and_first_segment(story_id)
-    logger.debug(f"Story: {story.get('Title', 'Unknown')}, First segment: {first_segment.get('SegmentID', 'unknown')}")
 
     # Create story instance
-    logger.info(f"Creating story history entry for '{story.get('Title', 'Unknown Story')}'")
     story_instance_id = create_story_history_entry(character_id, story_id, story)
 
     # Create initial segment
-    logger.info(f"Creating active segment for story")
     active_segment = create_active_segment(character_id, player_id, story_id, first_segment, story_instance_id)
-    logger.info(f"Active segment created: {active_segment.get('ActiveSegmentID', 'unknown')}")
 
     # Update character state
     active_segment_id = active_segment.get("ActiveSegmentID")
@@ -81,8 +71,7 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
         raise RuntimeError("Active segment creation failed - no ActiveSegmentID")
 
     try:
-        response = story_update_character(character_id, story_id, active_segment_id)
-        logger.debug(f"Character state updated successfully, response metadata: {response.get('ResponseMetadata', {})}")
+        story_update_character(character_id, story_id, active_segment_id)
     except (ValueError, RuntimeError) as err:
         # Let ops_segment_poller handle cleanup of orphaned segments
         logger.error(f"Failed to update character state, segment {active_segment_id} will be cleaned up by poller: {err}")
@@ -157,17 +146,12 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Parse request body with flexible field names
     try:
         body = parse_event_body(event)
-        logger.debug(f"Parsed body: {body}")
-        character_id: str = body.get("CharacterID", "")  # type: ignore
-        story_id: str = body.get("StoryID", "")  # type: ignore
-        logger.info(f"Request parameters - CharacterID: {character_id}, StoryID: {story_id}")
+        character_id = body.get("CharacterID", "")
+        story_id = body.get("StoryID", "")
 
     except ValueError as err:
         logger.error(f"Failed to parse request body Error: {err}", exc_info=True)
         return lambda_response(400, {"Error": "Improper request body"}, event)
-    except Exception as err:
-        logger.error(f"Unexpected error occurred: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
 
     # Validate required parameters
     if not character_id:
@@ -179,11 +163,11 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(400, {"Error": "StoryID is required"}, event)
 
     # Validate UUIDs
-    if not validate_uuid(character_id):  # type: ignore
+    if not validate_uuid(character_id):
         logger.error(f"Invalid character ID format: {character_id}")
         return lambda_response(400, {"Error": "Invalid character ID format"}, event)
 
-    if not validate_uuid(story_id):  # type: ignore
+    if not validate_uuid(story_id):
         logger.error(f"Invalid story ID format: {story_id}")
         return lambda_response(400, {"Error": "Invalid story ID format"}, event)
 
@@ -191,7 +175,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        response_data = start_story(character_id, story_id, player_id)  # type: ignore
+        response_data = start_story(character_id, story_id, player_id)
         logger.info(f"Story started successfully for {character_id}")
         return lambda_response(200, response_data, event)
     except ValueError as err:

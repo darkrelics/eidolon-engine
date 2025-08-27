@@ -7,19 +7,39 @@ Provides functions for processing different segment types.
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import apply_character_updates
+from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.segment_challenges import process_skill_challenges
 from eidolon.segment_combat import process_combat_segment
-from eidolon.segment_core import extract_character_updates_from_results, get_segment_definition, validate_segment_outcome_results
-from eidolon.segment_events import (
-    challenge_results_to_pascal,
-    combat_state_to_pascal,
-    events_to_pascal,
-    generate_combat_client_events,
-    generate_skill_check_events,
-)
-from eidolon.segment_state import update_active_segment_outcome
+
+
+def route_segment_processing(segment_def: dict, character: dict, active_segment: dict) -> tuple:
+    """
+    Route segment to appropriate processor based on type.
+    
+    Args:
+        segment_def: Segment definition
+        character: Character data
+        active_segment: Active segment record
+        
+    Returns:
+        Tuple of (outcome, results)
+        
+    """
+    segment_type = active_segment.get("SegmentType")
+    
+    if segment_type == "mechanical":
+        return process_mechanical_segment(segment_def, character, active_segment)
+    elif segment_type == "rest":
+        logger.debug(f"Rest segment processed for {active_segment.get('ActiveSegmentID')}")
+        return "normal", {}
+    elif segment_type == "decision":
+        outcome = process_decision_segment(active_segment, segment_def)
+        return outcome, {}
+    else:
+        logger.warning(f"Unknown segment type '{segment_type}' for {active_segment.get('ActiveSegmentID')}, defaulting to normal")
+        return "normal", {}
 
 
 def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
@@ -85,21 +105,16 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         skill_xp = {}
         attribute_xp = {}
 
-        # Constants from experience.md
-        base_xp = 0.25  # Base experience per action
-        failure_penalty = 0.5  # Failed actions give 50% XP
-        attribute_xp_ratio = 0.1  # Attributes gain 10% of skill XP
-
         for challenge in challenge_results:
             skill = challenge.get("skill")
             attribute = challenge.get("attribute")
             passed = challenge.get("passed", False)
 
             # Get the best attempt to calculate variance modifier
-            best_attempt = {}
-            for attempt in challenge.get("attempts", []):
-                if attempt.get("sigma") > best_attempt.get("sigma", -10):
-                    best_attempt = attempt
+            attempts = challenge.get("attempts", [])
+            best_attempt = max((a for a in attempts if "sigma" in a), 
+                              key=lambda a: a["sigma"], 
+                              default=None)
 
             if best_attempt and (skill or attribute):
                 effective_score = best_attempt.get("effectiveScore", 0)
@@ -113,11 +128,11 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                     variance_modifier = 1.0  # Default if can't calculate
 
                 # Calculate base XP with variance modifier
-                xp_amount = base_xp * variance_modifier
+                xp_amount = BASE_XP * variance_modifier
 
                 # Apply failure penalty if challenge wasn't passed
                 if not passed:
-                    xp_amount *= failure_penalty
+                    xp_amount *= FAILURE_XP_PENALTY
 
                 # Award XP to skill (full amount)
                 if skill:
@@ -125,7 +140,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
                 # Award XP to attribute (10% of skill XP)
                 if attribute:
-                    attr_xp_amount = xp_amount * attribute_xp_ratio
+                    attr_xp_amount = xp_amount * ATTRIBUTE_XP_RATIO
                     attribute_xp[attribute] = attribute_xp.get(attribute, 0) + attr_xp_amount
 
         if skill_xp or attribute_xp:
@@ -196,23 +211,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     return "normal", results
 
 
-def process_rest_segment(_: dict, character: dict) -> tuple:
-    """
-    Process a rest segment.
-
-    Rest segments are simply time delays that allow natural wound healing.
-
-    Args:
-        _: Segment definition (unused)
-        character: Character data
-
-    Returns:
-        Tuple of (outcome, empty dict)
-    """
-    logger.info(f"Rest segment completed for {character.get('CharacterID')}")
-    return "normal", {}
-
-
 def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str) -> object:
     """
     Determine the next segment ID based on segment type and outcome.
@@ -230,10 +228,10 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
     active_segment_id = active_segment.get("ActiveSegmentID", "unknown")
 
     # Debug logging
-    logger.info(f"determine_next_segment called for {active_segment_id}")
-    logger.info(f"  segment_type: {segment_type}")
-    logger.info(f"  outcome: {outcome}")
-    logger.info(f"  Results keys: {list(segment_def.get('Results', {}).keys())}")
+    logger.debug(f"determine_next_segment called for {active_segment_id}")
+    logger.debug(f"  segment_type: {segment_type}")
+    logger.debug(f"  outcome: {outcome}")
+    logger.debug(f"  Results keys: {list(segment_def.get('Results', {}).keys())}")
 
     if segment_type == "decision":
         # Use decision to determine next segment
@@ -244,145 +242,55 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
             next_segment_id = decision_options.get(decision)
             logger.info(f"Selected decision branch for {active_segment_id}: decision={decision}, next={next_segment_id}")
             return next_segment_id
-        else:
-            # No decision made (timeout) - use default if specified
-            default_decision = segment_def.get("DefaultDecision")
-            if default_decision and default_decision in decision_options:
-                next_segment_id = decision_options.get(default_decision)
-                logger.info(f"Using default decision for {active_segment_id}: default={default_decision}, next={next_segment_id}")
-                return next_segment_id
-            # Fall back to NextSegmentID if no default specified
-            fallback = segment_def.get("NextSegmentID")
-            if not decision:
-                logger.warning(f"No decision made for {active_segment_id}, no default available, using fallback: {fallback}")
-            return fallback
+        
+        # No decision made (timeout) - use default if specified
+        default_decision = segment_def.get("DefaultDecision")
+        if default_decision and default_decision in decision_options:
+            next_segment_id = decision_options.get(default_decision)
+            logger.info(f"Using default decision for {active_segment_id}: default={default_decision}, next={next_segment_id}")
+            return next_segment_id
+        
+        # No valid decision path found
+        logger.warning(f"No decision made for {active_segment_id} and no default available - story ends")
+        return None
 
     elif segment_type in ["mechanical", "rest"]:
-        # Normalize outcome to lowercase for consistent lookup
-        outcome_key = str(outcome).lower() if outcome else "normal"
-
-        # Get results dict (should have lowercase keys after normalization)
-        results = segment_def.get("Results", {})
-        logger.info(
-            f"  Original Results type: {type(results)}, keys: {list(results.keys()) if isinstance(results, dict) else 'not a dict'}"
-        )
-        if not isinstance(results, dict):
-            logger.warning(f"Results is not a dict for {segment_id}, treating as no branching")
-            results = {}
-
-        # Check for per-outcome NextSegmentID
-        outcome_result = results.get(outcome_key)
-        logger.info(f"Looking for outcome '{outcome_key}' in results: found={outcome_result is not None}")
-        if outcome_result:
-            logger.info(
-                f"  outcome_result type: {type(outcome_result)}, keys: {list(outcome_result.keys()) if isinstance(outcome_result, dict) else 'not a dict'}"
-            )
-            if isinstance(outcome_result, dict):
-                # Check for NextSegmentID (might be capitalized or not)
-                next_segment_id = (
-                    outcome_result.get("NextSegmentID")
-                    or outcome_result.get("nextSegmentID")
-                    or outcome_result.get("next_segment_id")
-                )
-                if next_segment_id:
-                    logger.info(f"Using per-outcome branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
-                    return next_segment_id
-                else:
-                    logger.info(f"  No NextSegmentID found in outcome_result for {outcome_key}")
-
-        # Fall back to segment-level NextSegmentID
-        fallback = segment_def.get("NextSegmentID")
-
-        # Log the branching decision regardless of outcome
-        if fallback is None:
-            logger.info(f"No next segment found for {active_segment_id} with outcome '{outcome_key}' - story will terminate")
+        # Rest segments always use normal outcome
+        if segment_type == "rest":
+            outcome_key = "normal"
         else:
-            logger.info(f"Using segment-level NextSegmentID for {active_segment_id}: outcome={outcome_key}, next={fallback}")
+            # Normalize outcome to lowercase for consistent lookup
+            outcome_key = str(outcome).lower() if outcome else "normal"
 
-        return fallback
+        # Get results dict
+        results = segment_def.get("Results", {})
+        if not isinstance(results, dict):
+            logger.warning(f"Results is not a dict for {segment_id} - story ends")
+            return None
 
-    # Unknown segment type - use segment-level NextSegmentID
-    return segment_def.get("NextSegmentID")
+        # Get outcome-specific result
+        outcome_result = results.get(outcome_key)
+        if not outcome_result:
+            logger.warning(f"No result found for outcome '{outcome_key}' in {segment_id} - story ends")
+            return None
+        
+        if not isinstance(outcome_result, dict):
+            logger.warning(f"Outcome result for '{outcome_key}' is not a dict in {segment_id} - story ends")
+            return None
+        
+        # Get NextSegmentID from outcome result
+        next_segment_id = outcome_result.get("NextSegmentID")
+        
+        if next_segment_id:
+            logger.info(f"Using outcome-based next segment for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
+        else:
+            logger.info(f"No NextSegmentID for outcome '{outcome_key}' in {segment_id} - story ends")
+        
+        return next_segment_id
+
+    # Unknown segment type
+    logger.error(f"Unknown segment type '{segment_type}' for {segment_id} - story ends")
+    return None
 
 
-def process_segment_completely(
-    active_segment_id: str,
-    character_id: str,
-    story_id: str,
-    segment_id: str,
-    segment_type: str,
-) -> dict:
-    """
-    Process a completed segment including all database operations.
 
-    This is the main orchestration function that handles segment processing.
-
-    Args:
-        active_segment_id: Active segment UUID
-        character_id: Character UUID
-        story_id: Story UUID
-        segment_id: Segment UUID
-        segment_type: Type of segment
-
-    Returns:
-        Dict with outcome and next segment ID
-
-    Raises:
-        ValueError: If required data not found
-        RuntimeError: If database operations fail
-    """
-    # Get active segment
-    try:
-        active_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
-
-        if not active_segment:
-            logger.error(f"Active segment not found for {active_segment_id}")
-            raise ValueError("Active segment not found")
-    except ClientError as err:
-        logger.error(f"Failed to get active segment for {active_segment_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to get active segment: {err}") from err
-
-    # Check if segment has already been processed to prevent double XP application
-    if active_segment.get("ProcessingStatus") == "processed":
-        logger.info(f"Segment already processed, skipping reprocessing for {active_segment_id}")
-        return {"outcome": active_segment.get("Outcome", "normal"), "nextSegment": None, "processed": True, "skipped": True}
-
-    # Get segment definition
-    segment_def = get_segment_definition(story_id, segment_id)
-
-    # Get character data
-    try:
-        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-
-        if not character:
-            logger.error(f"Character not found for {character_id}")
-            raise ValueError("Character not found")
-    except ClientError as err:
-        logger.error(f"Failed to get character for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to get character: {err}") from err
-
-    # Process segment based on type
-    outcome = None
-    results = {}
-
-    if segment_type == "mechanical":
-        outcome, results = process_mechanical_segment(segment_def, character, active_segment)
-    elif segment_type == "rest":
-        outcome, healing_data = process_rest_segment(segment_def, character)
-        results.update(healing_data)
-    elif segment_type == "decision":
-        outcome = process_decision_segment(active_segment, segment_def)
-    else:
-        logger.error(f"Unknown segment type for {segment_type}")
-        outcome = "failure"
-
-    # Update active segment with outcome
-    update_active_segment_outcome(active_segment_id, outcome, results, segment_def)
-
-    logger.info(f"Segment processed, waiting for timer to expire before advancement for {active_segment_id}")
-
-    return {
-        "outcome": outcome,
-        "nextSegment": None,
-        "processed": True,
-    }

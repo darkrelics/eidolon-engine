@@ -19,7 +19,7 @@ from eidolon.polling import update_polling_state
 from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
 from eidolon.segment_history import insert_rest_segment, record_segment_history
 from eidolon.segment_polling import check_active_segments_exist, claim_segment_for_processing, delete_active_segment
-from eidolon.segment_processing import determine_next_segment, process_decision_segment, process_rest_segment
+from eidolon.segment_processing import determine_next_segment, process_decision_segment
 from eidolon.segment_state import create_next_active_segment, update_segment_processing_status
 from eidolon.sqs import send_message
 from eidolon.story_completion import complete_story
@@ -78,7 +78,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
         # Process based on type
         if segment_type == "rest":
-            outcome, _ = process_rest_segment(segment_def, character)
+            outcome, _ = "normal", {}
             character_updates = {}
         elif segment_type == "decision":
             outcome = process_decision_segment(active_segment, segment_def)
