@@ -165,7 +165,7 @@ All functions use:
 **ops-story-advance** (SQS triggered)
 
 - Triggered by `eidolon-advancement-queue`
-- Claims segment with RunningFlag to prevent duplicates
+- Claims segment with ProcessingStatus state transition to prevent duplicates
 - Processes simple segments (rest/decision) if not already processed
 - Applies CharacterUpdates (XP, wounds, room changes)
 - Creates next segment if story continues

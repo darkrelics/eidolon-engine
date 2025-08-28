@@ -338,7 +338,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 | `StartTime`        | `NUMBER`  |          | Unix timestamp when segment started.                                       |
 | `EndTime`          | `NUMBER`  | **GSI**  | Unix timestamp when segment will complete.                                 |
 | `ProcessedAt`      | `NUMBER`  |          | Unix timestamp when outcomes were calculated by ops-segment-process.       |
-| `ProcessingStatus` | `STRING`  |          | Status: pending, processing, or processed.                                 |
+| `ProcessingStatus` | `STRING`  |          | Status: pending (awaiting), processing (in progress), or processed (ready).|
 | `NextSegmentID`    | `STRING`  |          | Pre-calculated next segment ID based on outcome.                           |
 | `ClientEvents`     | `LIST`    |          | Complete event sequence for client to display over time.                   |
 | `CharacterUpdates` | `MAP`     |          | All character changes to apply when segment completes.                     |
@@ -348,9 +348,6 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 | `ChallengeResults` | `LIST`    |          | For mechanical segments: results of each challenge roll.                   |
 | `CombatState`      | `MAP`     |          | For mechanical segments: final combat state (if applicable).               |
 | `Outcome`          | `STRING`  |          | Final outcome (death/failure/minimal/normal/exceptional).                  |
-| `Transmitted`      | `BOOLEAN` |          | Set when segment has been sent to SQS for processing.                      |
-| `TransmittedAt`    | `NUMBER`  |          | Unix timestamp when sent to SQS.                                           |
-| `RunningFlag`      | `BOOLEAN` |          | True when segment is being processed, prevents double processing.          |
 
 **Primary Key:** ActiveSegmentID (HASH)
 
@@ -372,7 +369,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 | `StoryType`          | `STRING`  |           | Type: one-time, daily, or repeatable.                       |
 | `StartedAt`          | `STRING`  |           | ISO 8601 timestamp when story started.                      |
 | `FinishedAt`         | `STRING`  |           | ISO 8601 timestamp when completed or abandoned.             |
-| `FinalOutcome`       | `STRING`  |           | death, failure, minimal, normal, exceptional, or abandoned. |
+| `FinalOutcome`       | `STRING`  |           | Completed: death/failure/minimal/normal/exceptional, or abandoned (player quit). |
 | `TotalDuration`      | `NUMBER`  |           | Total seconds from start to finish.                         |
 | `SegmentHistory`     | `LIST`    |           | List of ActiveSegmentIDs in chronological order.            |
 | `SkillXPAwarded`     | `MAP`     |           | Total skill XP earned: {skill_name: amount}.                |
@@ -405,16 +402,19 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
    - XP accumulates in SkillXPAwarded/AttributeXPAwarded maps via `update_story_history_xp()`
    - Creates complete audit trail of all segments attempted
 
-3. **Completion**: When story ends successfully via `complete_story()`
-   - Sets FinishedAt timestamp and FinalOutcome (normal/exceptional/minimal/death/failure)
+3. **Completion (Success or Failure)**: When story reaches its conclusion via `complete_story()`
+   - Sets FinishedAt timestamp and FinalOutcome (death/failure/minimal/normal/exceptional)
+   - Death and failure outcomes are still considered "completed" attempts, not abandonments
+   - Story added to character's CompletedStories list (regardless of outcome)
    - Calculates TotalDuration in seconds
    - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
 
-4. **Abandonment**: When player abandons via `api_story_abandon`
+4. **Abandonment (Player-Initiated)**: When player voluntarily quits via `api_story_abandon`
    - Sets FinishedAt timestamp and FinalOutcome to "abandoned"
-   - Story added to character's AbandonedStories list
+   - Story added to character's AbandonedStories list (not CompletedStories)
    - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
    - **Cannot be resumed** - must start fresh if repeatable
+   - Distinct from death/failure - represents player choice to quit, not story outcome
 
 5. **Multiple Executions**: 
    - Repeatable stories create new record with new StoryInstanceID each time

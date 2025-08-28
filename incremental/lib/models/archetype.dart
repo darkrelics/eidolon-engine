@@ -88,24 +88,3 @@ class StartingItem {
     return {'PrototypeID': prototypeID, 'Slot': slot, 'IsWorn': isWorn};
   }
 }
-
-/// Archetype manifest for dynamic loading
-class ArchetypeManifest {
-  final String version;
-  final DateTime lastUpdated;
-  final Map<String, String> archetypes; // id -> download URL
-
-  ArchetypeManifest({
-    required this.version,
-    required this.lastUpdated,
-    required this.archetypes,
-  });
-
-  factory ArchetypeManifest.fromJson(Map<String, dynamic> json) {
-    return ArchetypeManifest(
-      version: json['version'] as String,
-      lastUpdated: DateTime.parse(json['lastUpdated'] as String),
-      archetypes: Map<String, String>.from(json['archetypes'] as Map),
-    );
-  }
-}

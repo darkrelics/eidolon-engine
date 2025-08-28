@@ -55,8 +55,7 @@ The ActiveSegments table tracks currently running segment instances:
 
 - **ActiveSegmentID** (HASH): Instance UUID
 - **CharacterID** (GSI): Character UUID for querying
-- **ProcessingStatus**: pending → processing → processed → completed
-- **RunningFlag**: Claim flag to prevent concurrent processing
+- **ProcessingStatus**: pending → processing → processed (then segment deleted)
 - **StartTime/EndTime**: Unix timestamps defining the segment window
 - **ClientEvents**: Pre-calculated event sequence for display
 - **CharacterUpdates**: Changes to apply on completion
@@ -111,26 +110,28 @@ Available → Active
     - Enable polling infrastructure
     - Create StoryHistory entry
 
-Active → Completed
-  Trigger: Final segment completes with non-terminal outcome
+Active → Completed (Success or Failure)
+  Trigger: Final segment completes (any outcome including death/failure)
   Lambda: ops-story-advance
   Actions:
     - Apply final character updates and rewards
-    - Move StoryID to CompletedStories
+    - Move StoryID to CompletedStories (even for death/failure)
     - Clear ActiveStoryID and ActiveSegmentID
     - Set GameMode = "None"
-    - Update StoryHistory with completion data
+    - Update StoryHistory with FinalOutcome (death/failure/minimal/normal/exceptional)
     - Delete ActiveSegment record
+  Note: Death/failure are completed attempts with negative outcomes, not abandonments
 
 Active → Abandoned
-  Trigger: POST /stories/abandon OR death/failure outcome
-  Lambda: api-story-abandon OR ops-story-advance
+  Trigger: POST /stories/abandon (player-initiated quit)
+  Lambda: api-story-abandon
   Actions:
     - Move StoryID to AbandonedStories
     - Clear ActiveStoryID and ActiveSegmentID
     - Set GameMode = "None"
-    - Update StoryHistory as abandoned
+    - Update StoryHistory with FinalOutcome = "abandoned"
     - Delete ActiveSegment record
+  Note: Only player-initiated quits count as abandoned, not story failures
 ```
 
 ### Story Lifecycle
@@ -164,15 +165,22 @@ Active → Abandoned
 Segments use ProcessingStatus to track their processing state:
 
 1. **pending**: Mechanical segments awaiting processing
-2. **processing**: Mechanical segments currently being processed
+2. **processing**: Mechanical segments currently being processed  
 3. **processed**: Segment ready for advancement when timer expires
 
-### RunningFlag States
+**Note**: There is no "completed" ProcessingStatus. When a segment advances (timer expires), 
+it is deleted from ActiveSegments and archived to SegmentHistory. The segment lifecycle ends 
+at "processed" status.
 
-The RunningFlag provides concurrency control:
+### ProcessingStatus Concurrency Control
 
-- **false**: Segment available for processing
-- **true**: Segment claimed by a Lambda instance
+The ProcessingStatus field provides atomic state transitions to prevent duplicate processing:
+
+- **false** (or absent): Segment available for processing
+- **true**: Segment claimed by a Lambda instance for exclusive processing
+
+This is implemented as a DynamoDB conditional update to ensure atomicity. Despite documentation 
+suggesting it would store a request ID, the implementation uses a simple boolean for efficiency.
 
 ### Complete State Transitions
 
@@ -190,7 +198,7 @@ pending/false → processing/true
   Trigger: SQS message received from immediate queueing
   Lambda: ops-segment-process (via SQS)
   Actions:
-    - Claim segment with RunningFlag
+    - Atomically transition ProcessingStatus from pending to processing
     - Process challenges and combat
     - Apply XP and wounds immediately
     - Store results in segment
@@ -200,7 +208,7 @@ processing/true → processed/false
   Lambda: ops-segment-process
   Actions:
     - Update segment with results
-    - Clear RunningFlag
+    - ProcessingStatus set to processed
     - Mark ProcessingStatus as "processed"
 
 processed/false → [deleted]
@@ -477,7 +485,7 @@ All Lambda functions are deployed with:
 **ops-segment-process** (Logical ID: `OpsSegmentProcessFunction`):
 
 - **Trigger**: SQS `eidolon-processing-queue`
-- Claims segment with RunningFlag (prevents duplicates)
+- Claims segment by transitioning ProcessingStatus to processing (prevents duplicates)
 - Processes mechanical challenges and combat
 - Applies XP and wounds immediately to character
 - Updates segment with outcome and results
@@ -487,7 +495,7 @@ All Lambda functions are deployed with:
 **ops-story-advance** (Logical ID: `OpsStoryAdvanceFunction`):
 
 - **Trigger**: SQS `eidolon-advancement-queue`
-- Claims segment with RunningFlag for idempotency
+- Claims segment by checking ProcessingStatus for idempotency
 - Processes simple segments (rest/decision) if not already processed
 - Applies deferred CharacterUpdates (combat rewards, story effects)
 - Creates next segment or completes story
@@ -523,11 +531,20 @@ All Lambda functions are deployed with:
 
 **IMPORTANT: The Poller's Role**
 
-The ops-segment-poller Lambda (triggered every minute by EventBridge) has THREE specific jobs:
+The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **two-query approach** for different segment scenarios:
 
-1. **Retry Stuck Segments**: Find pending/processing mechanical segments >5 minutes old and re-queue them to SEGMENT_QUEUE_URL
-2. **Advance Ready Segments**: Find processed segments within 30 seconds of EndTime and queue them to STORY_ADVANCEMENT_QUEUE  
-3. **Recovery**: Find expired unprocessed segments and mark them as exceptional to protect players from system failures
+**Query 1 - Segments Approaching Expiry** (within 90 seconds):
+- Finds ALL segments that will expire before the next poll (90-second buffer)
+- For processed segments: Queues them to STORY_ADVANCEMENT_QUEUE for normal advancement
+- For unprocessed segments: Marks them as "exceptional" (protecting players from failures), then queues for advancement
+
+**Query 2 - Stuck Mechanical Segments**:
+- Finds mechanical segments where:
+  - StartTime > 5 minutes ago (stuck threshold)
+  - EndTime > 90 seconds from now (enough time to retry)
+  - ProcessingStatus is "pending" or "processing"
+- Resets stuck "processing" segments to "pending"
+- Re-queues them to SEGMENT_QUEUE_URL for retry
 
 **The poller does NOT**:
 - Initially queue mechanical segments (that happens immediately at creation)
@@ -591,12 +608,12 @@ The polling system follows this state machine:
 ### Stuck Segment Recovery
 
 - Mechanical segments stuck >15 minutes get retried
-- RunningFlag reset to allow reprocessing
+- ProcessingStatus reset to pending to allow reprocessing
 - Maximum 3 retry attempts
 
 ### Concurrent Processing Prevention
 
-- RunningFlag prevents duplicate processing
+- ProcessingStatus state machine prevents duplicate processing
 - Atomic DynamoDB operations ensure consistency
 - SQS provides at-least-once delivery
 
@@ -616,7 +633,7 @@ The polling system follows this state machine:
 
 **Lambda Timeout**:
 
-- RunningFlag remains set
+- ProcessingStatus remains in processing state
 - Poller detects stuck segment
 - Automatic retry after 15 minutes
 

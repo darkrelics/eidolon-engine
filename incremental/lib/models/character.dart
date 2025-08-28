@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// Character model for display purposes only.
 /// All progression and calculations happen server-side.
 class Character {
@@ -51,14 +53,57 @@ class Character {
     this.availableStoriesDetails,
   });
 
-  /// Parse a map of dynamic values to doubles
+  /// Safely parse a map of dynamic values to doubles.
+  /// 
+  /// This method handles various input types gracefully:
+  /// - If value is already a double, it's used as-is
+  /// - If value is an int or other num type, it's converted to double
+  /// - If value is null, it defaults to 0.0
+  /// - If value is not a number, it logs a warning and defaults to 0.0
+  /// 
+  /// This prevents runtime crashes from unexpected server data formats.
   static Map<String, double> parseMapToDouble(Map<String, dynamic> rawMap) {
-    return rawMap.map((key, value) => MapEntry(key, (value as num).toDouble()));
+    return rawMap.map((key, value) {
+      // Handle null values explicitly - skills/attributes might not exist yet
+      if (value == null) {
+        return MapEntry(key, 0.0);
+      }
+      
+      // Try to convert to double safely
+      if (value is num) {
+        return MapEntry(key, value.toDouble());
+      }
+      
+      // Log warning for unexpected types and provide safe default
+      // This could happen if server data format changes unexpectedly
+      debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0.0');
+      return MapEntry(key, 0.0);
+    });
   }
 
-  /// Parse a map of dynamic values to integers
+  /// Safely parse a map of dynamic values to integers.
+  /// 
+  /// Similar to parseMapToDouble but for integer values:
+  /// - Handles null by defaulting to 0
+  /// - Converts any numeric type to int safely
+  /// - Logs warnings for unexpected types
   static Map<String, int> parseMapToInt(Map<String, dynamic> rawMap) {
-    return rawMap.map((key, value) => MapEntry(key, (value as num).toInt()));
+    return rawMap.map((key, value) {
+      // Handle null values explicitly - resources might not exist yet
+      if (value == null) {
+        return MapEntry(key, 0);
+      }
+      
+      // Try to convert to int safely
+      if (value is num) {
+        // Use round() instead of toInt() to handle floating point values gracefully
+        return MapEntry(key, value.round());
+      }
+      
+      // Log warning for unexpected types and provide safe default
+      debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0');
+      return MapEntry(key, 0);
+    });
   }
 
   /// Create character from server response
@@ -93,10 +138,12 @@ class Character {
       name: json['CharacterName'] as String,
       archetypeId: archetypeName, // Use archetype name as ID for now
       archetypeName: archetypeName,
-      health: (json['Health'] as num).toDouble(),
-      maxHealth: (json['MaxHealth'] as num).toDouble(),
-      essence: (json['Essence'] as num).toDouble(),
-      maxEssence: (json['MaxEssence'] as num).toDouble(),
+      // Safely handle health and essence values with defaults
+      // These are critical values that must always have valid numbers
+      health: (json['Health'] as num?)?.toDouble() ?? 10.0,
+      maxHealth: (json['MaxHealth'] as num?)?.toDouble() ?? 10.0,
+      essence: (json['Essence'] as num?)?.toDouble() ?? 0.0,
+      maxEssence: (json['MaxEssence'] as num?)?.toDouble() ?? 3.0,
       attributes: parsedAttributes,
       skills: parsedSkills,
       resources: parsedResources,

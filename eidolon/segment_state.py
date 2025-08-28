@@ -217,14 +217,13 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, ProcessedAt = :processed_at, RunningFlag = :false",
+            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, ProcessedAt = :processed_at",
             ExpressionAttributeNames={"#outcome": "Outcome"},
             ExpressionAttributeValues={
                 ":status": "processed",
                 ":outcome": outcome,
                 ":updates": character_updates,
                 ":processed_at": now_unix(),
-                ":false": False,
             },
         )
         logger.info(f"Updated segment processing status for {active_segment_id}")
@@ -249,8 +248,8 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status, RunningFlag = :false",
-            ExpressionAttributeValues={":status": "pending", ":false": False},
+            UpdateExpression="SET ProcessingStatus = :status",
+            ExpressionAttributeValues={":status": "pending"},
         )
         logger.info(f"Reset segment processing status to pending for {active_segment_id}")
     except ClientError as err:
@@ -275,13 +274,12 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :proc_status, #status = :status, #outcome = :outcome, RunningFlag = :false",
+            UpdateExpression="SET ProcessingStatus = :proc_status, #status = :status, #outcome = :outcome",
             ExpressionAttributeNames={"#outcome": "Outcome", "#status": "Status"},
             ExpressionAttributeValues={
                 ":proc_status": "processed",
                 ":status": "completed",
                 ":outcome": "exceptional",
-                ":false": False,
             },
         )
         logger.info(f"Marked exhausted segment as completed with exceptional outcome for {active_segment_id}")

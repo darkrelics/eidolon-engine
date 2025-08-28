@@ -145,7 +145,7 @@ This document defines the functional and non-functional requirements for the Inc
 **NFR-009**: Failed segment processing SHALL automatically retry.
 
 - **Implementation**: SQS retry logic, DLQ for failed messages
-- **Status**: RunningFlag prevents duplicate processing
+- **Status**: ProcessingStatus state transitions prevent duplicate processing
 
 **NFR-010**: Character state SHALL remain consistent during failures.
 

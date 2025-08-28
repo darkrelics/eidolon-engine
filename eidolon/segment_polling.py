@@ -193,9 +193,9 @@ def claim_segment_for_processing(active_segment_id: str) -> bool:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET RunningFlag = :true",
-            ConditionExpression="attribute_exists(ActiveSegmentID) AND (attribute_not_exists(RunningFlag) OR RunningFlag = :false)",
-            ExpressionAttributeValues={":true": True, ":false": False},
+            UpdateExpression="SET ProcessingStatus = :processing",
+            ConditionExpression="attribute_exists(ActiveSegmentID) AND ProcessingStatus = :pending",
+            ExpressionAttributeValues={":processing": "processing", ":pending": "pending"},
         )
         logger.info(f"Successfully claimed segment for processing for {active_segment_id}")
         return True

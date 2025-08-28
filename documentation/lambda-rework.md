@@ -139,7 +139,7 @@ Rest segments serve two distinct purposes:
 
 - [x] Processes mechanical segments only
 - [x] Validates message schema
-- [x] Claims segment with RunningFlag
+- [x] Claims segment with ProcessingStatus state transition
 - [x] Uses MUD mechanics for calculations
 - [x] Generates ClientEvents array
 - [x] Invalid messages not retried
@@ -148,7 +148,7 @@ Rest segments serve two distinct purposes:
 
 #### ✅ ops-story-advance (SQS triggered)
 
-- [x] Claims segment with RunningFlag for idempotency
+- [x] Claims segment with ProcessingStatus state transition for idempotency
 - [x] Processes simple segments if needed
 - [x] Applies CharacterUpdates and combat rewards
 - [x] Creates next segment or completes story
@@ -200,7 +200,7 @@ Available → Active → Completed/Abandoned
 pending → processing → processed → completed → [deleted]
 ```
 
-- RunningFlag prevents concurrent processing
+- ProcessingStatus state transitions prevent concurrent processing
 - Idempotent operations via claim_segment_for_processing
 - Automatic timeout handling for stuck segments
 
@@ -208,7 +208,7 @@ pending → processing → processed → completed → [deleted]
 
 ### Concurrency Control ✅
 
-- **RunningFlag**: Prevents duplicate processing
+- **ProcessingStatus**: State machine prevents duplicate processing
 - **Conditional Updates**: DynamoDB conditions prevent race conditions
 - **Atomic Operations**: Story state changes are transactional
 

@@ -761,45 +761,111 @@ def segment_poller_handler(event, context):
     state = param['Parameter']['Value']
 
     current_time = int(time.time())
-    buffer_time = 15  # Half the polling interval
+    next_poll_buffer = 90  # 60 seconds to next poll + 30 second buffer
 
-    # Phase 1: Find ready segments
-    ready_segments = query_ready_segments(current_time + buffer_time)
+    # Phase 1: Find ALL segments approaching expiry (within 90 seconds)
+    # These need advancement (if processed) or recovery (if not processed)
+    expiring_segments = get_segments_approaching_expiry(current_time + next_poll_buffer)
+    
+    advancement_messages = []
+    segments_marked_exceptional = 0
+    
+    for segment in expiring_segments:
+        active_segment_id = segment['ActiveSegmentID']
+        processing_status = segment.get('ProcessingStatus', 'pending')
+        
+        if processing_status == 'processed':
+            # Normal advancement - segment completed processing
+            advancement_messages.append({'body': active_segment_id})
+        else:
+            # Not processed in time - mark exceptional to protect player
+            mark_segment_as_completed_exceptional(active_segment_id)
+            advancement_messages.append({'body': active_segment_id})
+            segments_marked_exceptional += 1
 
-    # Phase 2: Find stuck segments
-    stuck_segments = query_stuck_segments(current_time - 900)  # 15 minutes
+    # Phase 2: Find stuck mechanical segments with time to retry
+    # Criteria: StartTime > 5 minutes ago, EndTime > 90 seconds from now, 
+    # ProcessingStatus in (pending, processing), SegmentType = mechanical
+    stuck_segments = get_stuck_mechanical_segments(current_time)
+    
+    processing_messages = []
+    for segment in stuck_segments:
+        active_segment_id = segment['ActiveSegmentID']
+        processing_status = segment.get('ProcessingStatus', 'pending')
+        
+        # Reset if stuck in processing
+        if processing_status == 'processing':
+            reset_segment_processing_status(active_segment_id)
+        
+        processing_messages.append({'body': active_segment_id})
 
-    all_segments = ready_segments + stuck_segments
+    # Send messages to appropriate queues
+    if advancement_messages:
+        send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
+    
+    if processing_messages:
+        send_message_batch(SEGMENT_QUEUE_URL, processing_messages)
 
-    if all_segments:
-        # Process segments
-        process_discovered_segments(all_segments)
-
-        # Update state if needed
-        if state == 'stop':
+    # Manage polling state transitions
+    if state == 'run':
+        # Check if there are still active segments
+        if not check_active_segments_exist():
+            update_polling_state('stop', enable_rule=False)
+    else:  # state == 'stop'
+        # Check for active segments
+        if check_active_segments_exist():
             update_polling_state('run', enable_rule=True)
 
-    elif state == 'run':
-        # Check if table is empty
-        if is_active_segments_empty():
-            update_polling_state('stop', enable_rule=False)
+    return {'statusCode': 200}
 
-    return {
-        'statusCode': 200,
-        'processed': len(all_segments),
-        'state': state
-    }
-
-def query_ready_segments(end_time_threshold):
-    """Query segments ready for processing."""
+def get_segments_approaching_expiry(threshold_time):
+    """Get ALL segments that will expire before next poll (90 seconds).
+    
+    These segments need advancement (if processed) or recovery (if not processed).
+    NO ProcessingStatus filter - we need to handle all expiring segments.
+    """
     response = dynamodb.query(
         TableName=ACTIVE_SEGMENTS_TABLE,
         IndexName='EndTimeIndex',
-        KeyConditionExpression='EndTime <= :threshold',
+        KeyConditionExpression='#status = :status AND EndTime < :threshold',
+        ExpressionAttributeNames={'#status': 'Status'},
         ExpressionAttributeValues={
-            ':threshold': {'N': str(end_time_threshold)}
-        },
-        FilterExpression='attribute_not_exists(Transmitted) AND attribute_not_exists(RunningFlag)'
+            ':status': {'S': 'active'},
+            ':threshold': {'N': str(threshold_time)}
+        }
+        # NO FilterExpression - get ALL segments approaching expiry
+    )
+    return response.get('Items', [])
+
+def get_stuck_mechanical_segments(current_time):
+    """Get mechanical segments stuck in pending/processing with time to retry.
+    
+    Criteria:
+    - StartTime > 5 minutes ago (stuck threshold)
+    - EndTime > 90 seconds from now (enough time to process)
+    - ProcessingStatus in (pending, processing)
+    - SegmentType = mechanical
+    """
+    five_minutes_ago = current_time - 300
+    ninety_seconds_future = current_time + 90
+    
+    # Use scan since we need to filter on StartTime which isn't indexed
+    response = dynamodb.scan(
+        TableName=ACTIVE_SEGMENTS_TABLE,
+        FilterExpression='#status = :status AND '
+                        'SegmentType = :mechanical AND '
+                        'StartTime < :old_time AND '
+                        'EndTime > :min_time AND '
+                        'ProcessingStatus IN (:pending, :processing)',
+        ExpressionAttributeNames={'#status': 'Status'},
+        ExpressionAttributeValues={
+            ':status': {'S': 'active'},
+            ':mechanical': {'S': 'mechanical'},
+            ':old_time': {'N': str(five_minutes_ago)},
+            ':min_time': {'N': str(ninety_seconds_future)},
+            ':pending': {'S': 'pending'},
+            ':processing': {'S': 'processing'}
+        }
     )
     return response.get('Items', [])
 ```
@@ -849,16 +915,17 @@ def advance_story_handler(event, context):
     return {'statusCode': 200}
 
 def claim_segment_for_processing(active_segment_id):
-    """Atomically claim a segment for processing."""
+    """Atomically claim a segment for processing using ProcessingStatus state transition."""
     try:
         dynamodb.update_item(
             TableName=ACTIVE_SEGMENTS_TABLE,
             Key={'ActiveSegmentID': {'S': active_segment_id}},
-            UpdateExpression='SET RunningFlag = :request_id',
+            UpdateExpression='SET ProcessingStatus = :processing',
             ExpressionAttributeValues={
-                ':request_id': {'S': context.request_id}
+                ':processing': {'S': 'processing'},
+                ':pending': {'S': 'pending'}
             },
-            ConditionExpression='attribute_not_exists(RunningFlag)'
+            ConditionExpression='attribute_exists(ActiveSegmentID) AND ProcessingStatus = :pending'
         )
         return True
     except ClientError as e:
@@ -1325,9 +1392,9 @@ class TestSegmentPolling:
             },
             {
                 'ActiveSegmentID': 'stuck-001',
-                'EndTime': current_time - 1800,  # 30 min ago
-                'Transmitted': True,
-                'TransmittedAt': current_time - 1200  # 20 min ago
+                'EndTime': current_time + 600,  # Still has 10 min to go
+                'ProcessingStatus': 'processing',  # Stuck in processing
+                'StartTime': current_time - 400  # Started >5 min ago (stuck threshold)
             },
             {
                 'ActiveSegmentID': 'future-001',
