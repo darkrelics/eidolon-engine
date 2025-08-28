@@ -39,7 +39,7 @@ def get_active_story_segment(character_id: str) -> dict:
         )
     except ClientError as err:
         logger.error(f"Failed to query active segments for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError from err
+        raise RuntimeError(f"Failed to query active segments: {err}") from err
 
     if not items:
         raise ValueError(f"No active story found for character {character_id}")
@@ -156,13 +156,8 @@ def get_active_decision_segment(character_id: str, player_id: str) -> dict:
         logger.warning(f"No active decision segment found for {character_id}")
         raise ValueError("No active decision segment found")
 
-    active_segment = items[0]
-
-    if active_segment.get("PlayerID") != player_id:
-        logger.warning(f"Active segment ownership mismatch for {active_segment.get('ActiveSegmentID')}")
-        raise ValueError("Active segment not found")
-
-    return active_segment
+    # No need to check PlayerID again - already filtered in query
+    return items[0]
 
 
 def story_update_character(character_id: str, story_id: str, active_segment_id: str) -> dict:

@@ -913,7 +913,7 @@ Authorization: Bearer <jwt-token>
 - `TimeRemaining`: Seconds until segment completes (0 if complete)
 - `EndTime`: ISO 8601 timestamp when segment will complete
 - `IsComplete`: True if EndTime has passed
-- `ProcessingStatus`: "pending", "processing", or "processed"
+- `ProcessingStatus`: "pending" (mechanical awaiting processing), "processing" (mechanical in progress), or "processed" (ready for advancement)
 
 **Error Responses:**
 

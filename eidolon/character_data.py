@@ -144,21 +144,22 @@ def character_get(character_id: str, player_id: str) -> dict:
         wounds: list = character.get("Wounds", [])
         current_time: datetime = datetime.now(timezone.utc)
 
-        remainging_wounds: list = []
+        remaining_wounds: list = []
 
         for wound in wounds:
             heal_at: str = wound.get("HealedAt")
 
             try:
                 if datetime.fromisoformat(heal_at.replace("Z", "+00:00")) > current_time:
-                    remainging_wounds.append(wound)
-            except AttributeError:
+                    remaining_wounds.append(wound)
+            except AttributeError as err:
+                logger.warning(f"Malformed wound heal time for character {character_id}: {heal_at}, Error: {err}")
                 continue
 
-        if len(remainging_wounds) < len(wounds):
-            character["Wounds"] = remainging_wounds
+        if len(remaining_wounds) < len(wounds):
+            character["Wounds"] = remaining_wounds
 
-            logger.info("It's a mircical!")
+            logger.info("It's a miracle!")
 
             # Update character with healed wounds
             if character.get("CharState", "standing") == "unconscious":
@@ -167,7 +168,7 @@ def character_get(character_id: str, player_id: str) -> dict:
             # Update the character's wounds in the database
             update_expression = "SET Wounds = :wounds, CharState = :state, UpdatedAt = :timestamp"
             expression_values: dict = {
-                ":wounds": remainging_wounds,
+                ":wounds": remaining_wounds,
                 ":state": character.get("CharState", "standing"),
                 ":timestamp": datetime.now(timezone.utc).isoformat(),
             }
@@ -278,7 +279,7 @@ def build_character_record(
         "ActiveStoryID": None,
         "ActiveSegmentID": None,
         "Hidden": False,
-        "CharState": "Standing",
+        "CharState": "standing",
         "GameMode": "None",
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,

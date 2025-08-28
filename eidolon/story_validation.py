@@ -28,9 +28,10 @@ def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
     required_items = prerequisites.get("requiredItems", [])
     if required_items:
         inventory = character.get("Inventory", {})
-        inventory_items = list(inventory.values())
-        for item_id in required_items:
-            if item_id not in inventory_items:
+        # Inventory is a dict where keys are slot numbers and values are item IDs
+        inventory_item_ids = list(inventory.values())
+        for required_item_id in required_items:
+            if required_item_id not in inventory_item_ids:
                 return False
 
     return True

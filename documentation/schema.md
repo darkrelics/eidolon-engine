@@ -338,8 +338,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 | `StartTime`        | `NUMBER`  |          | Unix timestamp when segment started.                                       |
 | `EndTime`          | `NUMBER`  | **GSI**  | Unix timestamp when segment will complete.                                 |
 | `ProcessedAt`      | `NUMBER`  |          | Unix timestamp when outcomes were calculated by ops-segment-process.       |
-| `ProcessingStatus` | `STRING`  |          | Status: pending, processed, failed, or awaiting_decision.                  |
-| `ProcessingError`  | `STRING`  |          | Error details if processing failed.                                        |
+| `ProcessingStatus` | `STRING`  |          | Status: pending, processing, or processed.                                 |
 | `NextSegmentID`    | `STRING`  |          | Pre-calculated next segment ID based on outcome.                           |
 | `ClientEvents`     | `LIST`    |          | Complete event sequence for client to display over time.                   |
 | `CharacterUpdates` | `MAP`     |          | All character changes to apply when segment completes.                     |

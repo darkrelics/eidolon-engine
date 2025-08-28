@@ -41,7 +41,6 @@ This complete example shows how segment processing results are stored, including
   "EndTime": 1737003900,
   "ProcessedAt": 1737000305,
   "ProcessingStatus": "processed",
-  "ProcessingError": null,
   "NextSegmentID": "seg-forest-003",
   "Outcome": "minimal",
   "ClientEvents": [
