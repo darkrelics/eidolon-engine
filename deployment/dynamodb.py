@@ -191,7 +191,15 @@ def deploy_dynamodb(params, config: Config, state: CDKState, config_path: Path, 
         # Store infrastructure resources needed by other stacks
         if "infrastructure" not in state.__dict__:
             state.infrastructure = {}
-        state.infrastructure["dynamodb_policy_arn"] = f"arn:aws:iam::{params.account_id}:policy/eidolon-dynamodb-policy"
+        
+        # Extract DynamoDB policy ARN from stack outputs
+        dynamodb_policy_arn = result.get("outputs", {}).get("DynamoDBPolicyArn")
+        if dynamodb_policy_arn:
+            state.infrastructure["dynamodb_policy_arn"] = dynamodb_policy_arn
+        else:
+            # Fallback to constructed ARN if output not available (for backwards compatibility)
+            print("  [WARNING] DynamoDB policy ARN not found in stack outputs, using constructed ARN")
+            state.infrastructure["dynamodb_policy_arn"] = f"arn:aws:iam::{params.account_id}:policy/eidolon-dynamodb-policy"
 
         state.save(str(state_path))
 

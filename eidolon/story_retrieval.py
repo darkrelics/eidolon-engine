@@ -184,6 +184,11 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
             return 0
 
         if story_type == "daily":
+            # Allow retry if story was abandoned
+            final_outcome = history.get("FinalOutcome", "")
+            if final_outcome == "abandoned":
+                return 0
+                
             finished_at = datetime.fromisoformat(history.get("FinishedAt", "").replace("Z", "+00:00"))
             now = datetime.now(timezone.utc)
 

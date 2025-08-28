@@ -11,93 +11,86 @@ from deploy_mode import get_stack_phase_number
 from utilities import run_cdk_deploy, validate_policies
 
 
-def get_lambda_arns(params, state: CDKState) -> dict:
-    """Get Lambda function ARNs for story processing.
+def get_shared_resources(params, state: CDKState) -> dict:
+    """Get shared Lambda resources from Character stack.
 
     Args:
         params: Deployment parameters with account_id and region
         state: CDK state containing infrastructure details
 
     Returns:
-        Dict with Lambda ARNs
+        Dict with Lambda layer and role ARNs
     """
-    # Construct expected ARNs using known patterns
-    arns = {
-        "lambda_role_arn": f"arn:aws:iam::{params.account_id}:role/eidolon-lambda-execution-role",
-        "poller_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-segment-poller",
-        "processor_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-segment-process",
-        "advance_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-story-advance",
+    resources = {
+        "lambda_layer_arn": "",
+        "lambda_role_arn": "",
     }
 
-    # Check if ARNs are stored in state from Lambda stack deployment
+    # Check if ARNs are stored in state from Character stack deployment
     if hasattr(state, "infrastructure") and state.infrastructure:
+        # Use stored layer ARN if available
+        if state.infrastructure.get("lambda_layer_arn"):
+            resources["lambda_layer_arn"] = state.infrastructure.get("lambda_layer_arn")  # type: ignore
+            print("  Using Lambda layer ARN from state")
+            
         # Use stored role ARN if available
         if state.infrastructure.get("lambda_role_arn"):
-            arns["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
+            resources["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
             print("  Using Lambda role ARN from state")
 
-        # Check for function ARNs in state (if stored)
-        lambda_arns = state.infrastructure.get("lambda_arns", {})
-        if lambda_arns.get("ops-segment-poller"):
-            arns["poller_arn"] = lambda_arns.get("ops-segment-poller")
-            print("  Using ops-segment-poller ARN from state")
-        if lambda_arns.get("ops-segment-process"):
-            arns["processor_arn"] = lambda_arns.get("ops-segment-process")
-            print("  Using ops-segment-process ARN from state")
-        if lambda_arns.get("ops-story-advance"):
-            arns["advance_arn"] = lambda_arns.get("ops-story-advance")
-            print("  Using ops-story-advance ARN from state")
-
-    # Verify resources actually exist (optional - for logging only)
-    try:
-        # Check Lambda role exists
-        iam_client = boto3.client("iam", region_name=params.region)
+    # If not in state, try to get from CloudFormation stack outputs
+    if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
         try:
-            iam_client.get_role(RoleName="eidolon-lambda-execution-role")
-            print("  Verified Lambda execution role exists")
-        except ClientError:
-            print("  Warning: Lambda execution role not found - using constructed ARN")
+            from utilities import extract_stack_outputs
+            character_outputs = extract_stack_outputs("character", params.region)
+            
+            if not resources["lambda_layer_arn"] and character_outputs.get("LambdaLayerArn"):
+                resources["lambda_layer_arn"] = character_outputs["LambdaLayerArn"]
+                print("  Using Lambda layer ARN from Character stack outputs")
+                
+            if not resources["lambda_role_arn"] and character_outputs.get("LambdaRoleArn"):
+                resources["lambda_role_arn"] = character_outputs["LambdaRoleArn"]
+                print("  Using Lambda role ARN from Character stack outputs")
+        except Exception as e:
+            print(f"  Warning: Could not get shared resources from Character stack: {e}")
 
-        # Check Lambda functions exist
-        lambda_client = boto3.client("lambda", region_name=params.region)
-
-        functions = [
-            ("ops-segment-poller", "poller_arn"),
-            ("ops-segment-process", "processor_arn"),
-            ("ops-story-advance", "advance_arn"),
-        ]
-
-        for function_name, arn_key in functions:
-            try:
-                lambda_client.get_function(FunctionName=function_name)
-                print(f"  Verified Lambda function exists: {function_name}")
-            except ClientError:
-                print(f"  Warning: Lambda function {function_name} not found - using constructed ARN")
-
-    except Exception as err:
-        print(f"  Error verifying Lambda resources: {err}")
-        print("  Using constructed ARN patterns")
-
-    return arns
+    return resources
 
 
 def deploy_story_stack(params, state: CDKState) -> dict:
     """Deploy the Story stack using CDK."""
-    # Get Lambda ARNs from state or construct them
-    arns = get_lambda_arns(params, state)
+    # Get shared resources from Character stack
+    resources = get_shared_resources(params, state)
+    
+    # Get config for DynamoDB tables
+    config_path = Path(__file__).parent.parent / "config.yml"
+    config = Config.load(str(config_path))
+    
+    # Build client FQDN
+    client_fqdn = f"{params.client_host}.{params.domain}"
+    
+    # Convert DynamoDB tables to JSON for context passing
+    tables_json = json.dumps(config.dynamodb_tables)
+    
+    # Get DynamoDB policy ARN from state
+    dynamodb_policy_arn = state.infrastructure.get("dynamodb_policy_arn", "")
 
     # Pass all parameters through context - each -c and key=value must be separate
     context_args = [
         "-c",
         f"region={params.region}",
         "-c",
-        f"lambda_role_arn={arns['lambda_role_arn']}",
+        f"s3_bucket={params.s3_bucket}",
         "-c",
-        f"poller_lambda_arn={arns['poller_arn']}",
+        f"client_fqdn={client_fqdn}",
         "-c",
-        f"processor_lambda_arn={arns['processor_arn']}",
+        f"dynamodb_policy_arn={dynamodb_policy_arn}",
         "-c",
-        f"advance_lambda_arn={arns['advance_arn']}",
+        f"dynamodb_tables={tables_json}",
+        "-c",
+        f"lambda_layer_arn={resources['lambda_layer_arn']}",
+        "-c",
+        f"lambda_role_arn={resources['lambda_role_arn']}",
     ]
 
     # App command is just the Python script, context goes to CDK

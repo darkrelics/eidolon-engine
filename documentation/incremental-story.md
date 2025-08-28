@@ -64,7 +64,7 @@ The ActiveSegments table tracks currently running segment instances:
 
 ### StoryHistory Table
 
-Records completed story attempts:
+Records completed story attempts (one per character-story combination):
 
 - **CharacterID** (HASH): Character UUID
 - **StoryInstanceID** (RANGE): UUIDv7 for this story instance (unique per execution)
@@ -72,6 +72,8 @@ Records completed story attempts:
 - **FinalOutcome**: Overall story result (death/failure/minimal/normal/exceptional/abandoned)
 - **SegmentHistory**: List of ActiveSegmentIDs in chronological order
 - **SkillXPAwarded/AttributeXPAwarded**: Total XP earned from all segments
+
+Note: Each story attempt creates a new StoryInstanceID. The system does not track attempt numbers.
 
 ### SegmentHistory Table
 
@@ -231,9 +233,9 @@ completed/false → [deleted]
 #### Decision Segments
 
 - Present choices to player
-- No processing needed (outcome predetermined)
+- No outcomes - player choice determines path via DecisionOptions
 - Player submits via api-segment-decision
-- Timeout uses DefaultDecision if specified
+- Timeout uses DefaultDecision if specified (auto-selects that path)
 
 #### Rest Segments
 

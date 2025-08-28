@@ -1,5 +1,6 @@
 """Player stack deployment functions."""
 
+import json
 from pathlib import Path
 
 import boto3
@@ -9,6 +10,52 @@ from core.state import CDKState
 from deploy_mode import get_stack_phase_number
 from stacks import stack_utilities as utils
 from utilities import run_cdk_deploy
+
+
+def get_shared_resources(params, state: CDKState) -> dict:
+    """Get shared Lambda resources from Character stack.
+
+    Args:
+        params: Deployment parameters with account_id and region
+        state: CDK state containing infrastructure details
+
+    Returns:
+        Dict with Lambda layer and role ARNs
+    """
+    resources = {
+        "lambda_layer_arn": "",
+        "lambda_role_arn": "",
+    }
+
+    # Check if ARNs are stored in state from Character stack deployment
+    if hasattr(state, "infrastructure") and state.infrastructure:
+        # Use stored layer ARN if available
+        if state.infrastructure.get("lambda_layer_arn"):
+            resources["lambda_layer_arn"] = state.infrastructure.get("lambda_layer_arn")  # type: ignore
+            print("  Using Lambda layer ARN from state")
+            
+        # Use stored role ARN if available
+        if state.infrastructure.get("lambda_role_arn"):
+            resources["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
+            print("  Using Lambda role ARN from state")
+
+    # If not in state, try to get from CloudFormation stack outputs
+    if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
+        try:
+            from utilities import extract_stack_outputs
+            character_outputs = extract_stack_outputs("character", params.region)
+            
+            if not resources["lambda_layer_arn"] and character_outputs.get("LambdaLayerArn"):
+                resources["lambda_layer_arn"] = character_outputs["LambdaLayerArn"]
+                print("  Using Lambda layer ARN from Character stack outputs")
+                
+            if not resources["lambda_role_arn"] and character_outputs.get("LambdaRoleArn"):
+                resources["lambda_role_arn"] = character_outputs["LambdaRoleArn"]
+                print("  Using Lambda role ARN from Character stack outputs")
+        except Exception as e:
+            print(f"  Warning: Could not get shared resources from Character stack: {e}")
+
+    return resources
 
 
 def get_cognito_player_new_arn(region: str) -> str:
@@ -43,25 +90,50 @@ def check_existing_user_pool(region: str) -> tuple[bool, str]:
     return False, ""
 
 
-def deploy_player_stack(params) -> dict:
+def deploy_player_stack(params, state: CDKState) -> dict:
     """Deploy the Player stack using CDK."""
     print("\nChecking for existing Cognito resources...")
     exists, user_pool_id = check_existing_user_pool(params.region)
 
+    # Get shared resources from Character stack
+    resources = get_shared_resources(params, state)
+    
+    # Get config for DynamoDB tables
+    config_path = Path(__file__).parent.parent / "config.yml"
+    config = Config.load(str(config_path))
+    
+    # Build client FQDN
+    client_fqdn = f"{params.client_host}.{params.domain}"
+    
+    # Convert DynamoDB tables to JSON for context passing
+    tables_json = json.dumps(config.dynamodb_tables)
+    
+    # Get DynamoDB policy ARN from state
+    dynamodb_policy_arn = state.infrastructure.get("dynamodb_policy_arn", "")
+
     # Pass all parameters through context - each -c and key=value must be separate
-    context_args = ["-c", f"region={params.region}", "-c", f"reply_email={params.reply_email}"]
+    context_args = [
+        "-c",
+        f"region={params.region}",
+        "-c",
+        f"s3_bucket={params.s3_bucket}",
+        "-c",
+        f"client_fqdn={client_fqdn}",
+        "-c",
+        f"dynamodb_policy_arn={dynamodb_policy_arn}",
+        "-c",
+        f"dynamodb_tables={tables_json}",
+        "-c",
+        f"lambda_layer_arn={resources['lambda_layer_arn']}",
+        "-c",
+        f"lambda_role_arn={resources['lambda_role_arn']}",
+        "-c",
+        f"reply_email={params.reply_email}",
+    ]
 
     # Add existing user pool ID to context if found
     if exists and user_pool_id:
         context_args.extend(["-c", f"existing_user_pool_id={user_pool_id}"])
-
-    # Get Lambda ARN if available
-    lambda_arn = get_cognito_player_new_arn(params.region)
-    if lambda_arn:
-        context_args.extend(["-c", f"lambda_function_arn={lambda_arn}"])
-    else:
-        print("Warning: cognito-player-new Lambda not found")
-        print("PostConfirmation trigger will not be configured")
 
     app_command = "python3 app_player.py"
     return run_cdk_deploy("player", params.region, app_command, context_args)
@@ -237,7 +309,7 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
     print("=" * 60)
 
     # Deploy stack
-    result = deploy_player_stack(params)
+    result = deploy_player_stack(params, state)
 
     if not result.get("success", False):
         print("\nPlayer deployment failed!")

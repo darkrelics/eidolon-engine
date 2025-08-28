@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from api import deploy_api
+from character import deploy_character
 from client import deploy_client
 from cloudwatch import deploy_cloudwatch
 from codebuild import deploy_codebuild
@@ -14,7 +15,6 @@ from core.config import Config
 from core.state import CDKState
 from deploy_mode import display_mode_summary, get_deployment_order, validate_deployment_mode
 from dynamodb import deploy_dynamodb
-from lambda_functions import deploy_lambda
 from player import deploy_player
 from s3 import deploy_s3
 from story import deploy_story
@@ -297,7 +297,7 @@ def main():
     deployment_functions = {
         "codebuild": deploy_codebuild,
         "dynamodb": deploy_dynamodb,
-        "lambda": deploy_lambda,
+        "character": deploy_character,
         "player": deploy_player,
         "story": deploy_story,
         "s3": deploy_s3,

@@ -142,13 +142,6 @@ class CodeBuildStack(Stack):
                 "AWS_DEFAULT_REGION": codebuild.BuildEnvironmentVariable(value=self.region_name),
             },
             build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-layer.yml"),
-            artifacts=codebuild.Artifacts.s3(
-                bucket=self.artifacts_bucket,
-                include_build_id=False,
-                package_zip=False,
-                path="lambda-layer",
-                name="lambda-layer.zip",
-            ),
         )
 
         # Set removal policy
@@ -184,12 +177,6 @@ class CodeBuildStack(Stack):
                 "AWS_DEFAULT_REGION": codebuild.BuildEnvironmentVariable(value=self.region_name),
             },
             build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-functions.yml"),
-            artifacts=codebuild.Artifacts.s3(
-                bucket=self.artifacts_bucket,
-                include_build_id=False,
-                package_zip=False,
-                path="lambda-functions",
-            ),
         )
 
         # Set removal policy

@@ -1,9 +1,11 @@
-"""Player stack for Cognito User Pool."""
+"""Player stack for Cognito User Pool and Lambda function."""
 
+import aws_cdk as cdk
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
+from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 
@@ -15,7 +17,12 @@ class PlayerStack(Stack):
         scope: Construct,
         stack_id: str,
         region_name: str = "us-east-1",
-        lambda_function_arn: str = "",
+        s3_bucket: str = "",
+        client_fqdn: str = "",
+        dynamodb_policy_arn: str = "",
+        dynamodb_tables=None,
+        lambda_layer_arn: str = "",
+        lambda_role_arn: str = "",
         reply_email: str = "contact@darkrelics.net",
         existing_user_pool_id: str = "",
         **kwargs,
@@ -26,13 +33,23 @@ class PlayerStack(Stack):
             scope: CDK construct scope
             stack_id: Stack identifier
             region_name: AWS region for resource operations
-            lambda_function_arn: ARN of cognito-player-new Lambda function
+            s3_bucket: S3 bucket containing Lambda artifacts
+            client_fqdn: Client FQDN for CORS configuration
+            dynamodb_policy_arn: ARN of DynamoDB policy to attach
+            dynamodb_tables: Dictionary of DynamoDB table names
+            lambda_layer_arn: ARN of shared Lambda layer from Character stack
+            lambda_role_arn: ARN of shared Lambda execution role from Character stack
             reply_email: Email address for Cognito notifications
             existing_user_pool_id: ID of existing user pool to import (empty if none)
             **kwargs: Additional stack properties
         """
         self.region_name = region_name
-        self.lambda_function_arn = lambda_function_arn
+        self.s3_bucket_name = s3_bucket
+        self.client_fqdn = client_fqdn
+        self.dynamodb_policy_arn = dynamodb_policy_arn
+        self.dynamodb_tables = dynamodb_tables or {}
+        self.lambda_layer_arn = lambda_layer_arn
+        self.lambda_role_arn = lambda_role_arn
         self.reply_email = reply_email
         self.existing_user_pool_id = existing_user_pool_id
         self.is_imported_pool = False  # Initialize flag
@@ -40,15 +57,25 @@ class PlayerStack(Stack):
         # Apply system tag to all resources in this stack
         Tags.of(self).add("System", "Eidolon")
 
+        # Import shared Lambda layer and role from Character stack
+        self.lambda_layer = self._import_lambda_layer()
+        self.lambda_role = self._import_lambda_role()
+        
+        # Attach DynamoDB policy to Lambda role if provided
+        if self.dynamodb_policy_arn and self.lambda_role_arn:
+            self._attach_dynamodb_policy()
+        
+        # Deploy cognito-player-new Lambda function
+        self.lambda_function = self._deploy_lambda_function()
+        
         # Create Cognito User Pool
         self.user_pool = self._create_user_pool()
 
         # Create User Pool Client
         self.app_client = self._create_app_client()
 
-        # Configure Lambda trigger if ARN provided
-        if self.lambda_function_arn:
-            self._configure_lambda_trigger()
+        # Configure Lambda trigger
+        self._configure_lambda_trigger()
 
         # Add outputs
         self._add_outputs()
@@ -96,22 +123,109 @@ class PlayerStack(Stack):
             refresh_token_validity=Duration.days(30),
         )
 
+    def _import_lambda_layer(self) -> lambda_.ILayerVersion:
+        """Import shared Lambda layer from Character stack."""
+        if self.lambda_layer_arn:
+            return lambda_.LayerVersion.from_layer_version_arn(
+                self, "ImportedLambdaLayer", self.lambda_layer_arn
+            )
+        else:
+            # Try to import from CloudFormation export
+            try:
+                layer_arn = cdk.Fn.import_value("eidolon-lambda-layer-arn")
+                return lambda_.LayerVersion.from_layer_version_arn(
+                    self, "ImportedLambdaLayer", layer_arn
+                )
+            except Exception as e:
+                print(f"  Warning: Failed to import Lambda layer from CloudFormation export: {e}")
+                raise ValueError("Lambda layer ARN not provided and CloudFormation export not found")
+    
+    def _import_lambda_role(self) -> iam.IRole:
+        """Import shared Lambda execution role from Character stack."""
+        if self.lambda_role_arn:
+            return iam.Role.from_role_arn(
+                self, "ImportedLambdaRole", self.lambda_role_arn
+            )
+        else:
+            # Try to import from CloudFormation export
+            try:
+                role_arn = cdk.Fn.import_value("eidolon-lambda-role-arn")
+                return iam.Role.from_role_arn(
+                    self, "ImportedLambdaRole", role_arn
+                )
+            except Exception as e:
+                print(f"  Warning: Failed to import Lambda role from CloudFormation export: {e}")
+                raise ValueError("Lambda role ARN not provided and CloudFormation export not found")
+    
+    def _attach_dynamodb_policy(self) -> None:
+        """Attach DynamoDB policy to Lambda execution role."""
+        print(f"  Attaching DynamoDB policy to Lambda role")
+        
+        # Import the Lambda role
+        lambda_role = iam.Role.from_role_arn(self, "ImportedRoleForPolicy", self.lambda_role_arn)
+        
+        # Import and attach the DynamoDB policy
+        dynamodb_policy = iam.ManagedPolicy.from_managed_policy_arn(
+            self, "ImportedDynamoDBPolicy", self.dynamodb_policy_arn
+        )
+        lambda_role.add_managed_policy(dynamodb_policy)
+    
+    def _deploy_lambda_function(self) -> lambda_.Function:
+        """Deploy cognito-player-new Lambda function."""
+        print("  Deploying Lambda function: cognito-player-new")
+        
+        bucket = s3.Bucket.from_bucket_name(self, "FunctionsBucket", self.s3_bucket_name)
+        
+        # Use client FQDN for CORS origin
+        cors_origin = f"https://{self.client_fqdn}" if self.client_fqdn else "*"
+        
+        env_vars = {
+            "APPLICATION_NAME": "eidolon-engine",
+            "LOG_LEVEL": "INFO",
+            "ALLOWED_ORIGINS": cors_origin,
+            "CORS_ALLOW_CREDENTIALS": "true",
+            "CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+            "CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS",
+            "CORS_MAX_AGE": "86400",
+        }
+        
+        # Add DynamoDB table names
+        table_mapping = {
+            "players_table": "players",
+            "characters_table": "characters",
+        }
+        
+        for env_key, table_key in table_mapping.items():
+            env_vars[env_key] = self.dynamodb_tables.get(table_key, table_key)
+        
+        return lambda_.Function(
+            self,
+            "CognitoPlayerNewFunction",
+            function_name="cognito-player-new",
+            runtime=lambda_.Runtime.PYTHON_3_12,
+            handler="cognito_player_new.lambda_handler",
+            code=lambda_.Code.from_bucket(bucket, "cognito-player-new.zip"),
+            layers=[self.lambda_layer],
+            role=self.lambda_role,
+            timeout=Duration.seconds(30),
+            memory_size=128,
+            environment=env_vars,
+            description="Eidolon Engine Cognito post-confirmation trigger",
+        )
+
     def _configure_lambda_trigger(self) -> None:
         """Configure Lambda trigger for user pool."""
         # Skip trigger configuration for imported pools
         if self.is_imported_pool:
             return
 
-        print("  Configuring PostConfirmation trigger with Lambda ARN")
-
-        # Import the Lambda function
-        lambda_function = lambda_.Function.from_function_arn(self, "CognitoPlayerNewFunction", self.lambda_function_arn)
+        print("  Configuring PostConfirmation trigger with Lambda function")
 
         # Add trigger to user pool (only works for created pools)
-        self.user_pool.add_trigger(cognito.UserPoolOperation.POST_CONFIRMATION, lambda_function)  # type: ignore
+        self.user_pool.add_trigger(cognito.UserPoolOperation.POST_CONFIRMATION, self.lambda_function)  # type: ignore
 
         # Grant Cognito permission to invoke the Lambda
-        lambda_function.add_permission(
+        self.lambda_function.add_permission(
             "CognitoInvokePermission",
             principal=iam.ServicePrincipal("cognito-idp.amazonaws.com"),  # type: ignore
             source_arn=self.user_pool.user_pool_arn,

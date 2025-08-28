@@ -86,12 +86,13 @@ def deploy_api_stack(params, state: CDKState) -> dict:
     print("  Discovering Lambda functions for API integration...")
     lambda_arns = get_lambda_function_arns(params.region)
     if not lambda_arns:
-        print("  [ERROR] No Lambda functions found")
-        return {"success": False, "outputs": {}}
-
-    print(f"  Found {len(lambda_arns)} Lambda functions to integrate:")
-    for func in lambda_arns:
-        print(f"    - {func}")
+        print("  [WARNING] No Lambda functions found yet")
+        print("  API Gateway will be created without Lambda integrations")
+        print("  Lambda functions will be integrated after they are deployed")
+    else:
+        print(f"  Found {len(lambda_arns)} Lambda functions to integrate:")
+        for func in lambda_arns:
+            print(f"    - {func}")
 
     # Build context arguments
     context_args = [

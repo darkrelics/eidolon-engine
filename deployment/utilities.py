@@ -188,6 +188,32 @@ def validate_policies(policy_names: list[str]) -> dict:
     return results
 
 
+def validate_s3_bucket(bucket_name: str, region: str) -> bool:
+    """Validate that S3 bucket exists and is accessible.
+
+    Args:
+        bucket_name: Name of the S3 bucket to validate
+        region: AWS region
+
+    Returns:
+        True if bucket exists and is accessible, False otherwise
+    """
+    try:
+        s3 = boto3.client("s3", region_name=region)
+        s3.head_bucket(Bucket=bucket_name)
+        print(f"  [OK] S3 bucket: {bucket_name}")
+        return True
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code == "404":
+            print(f"  [MISSING] S3 bucket: {bucket_name}")
+        elif error_code == "403":
+            print(f"  [FORBIDDEN] S3 bucket: {bucket_name} - insufficient permissions")
+        else:
+            print(f"  [ERROR] S3 bucket: {bucket_name} - {error_code}")
+        return False
+
+
 def run_cdk_deploy(stack_name: str, region: str, app_command: str, context_args=None) -> dict:
     """Run CDK deploy for a specific stack with context arguments.
 
