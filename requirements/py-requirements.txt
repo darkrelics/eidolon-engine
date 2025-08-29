@@ -1,7 +1,7 @@
 # Directly called packages.
 bandit==1.8.3
 pip-audit==2.9.0
-pylint==3.3.7
+pylint==3.3.8
 ruff==0.11.11
 vulture==2.14
 
@@ -26,7 +26,7 @@ mdurl==0.1.2
 msgpack==1.1.1 
 packageurl-python==0.17.5 
 packaging==25.0 
-pbr==6.1.1 
+pbr==7.0.1 
 pip==25.2 
 pip-api==0.0.34 
 pip-requirements-parser==32.0.1 

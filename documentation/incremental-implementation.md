@@ -173,7 +173,7 @@ The story start process uses sequential operations with eventual consistency. If
 The story start creates the active segment first, then updates the character state. Any orphaned segments from failures are handled by the background poller, avoiding complex rollback logic.
 
 ```python
-from uuid_extension import uuid7  # Repo-provided helper for UUIDv7-like IDs
+from uuid_extension import uuid7  # Repo-provided helper for UUIDv7 IDs
 
 def start_story(character_id, story_id, segment_data):
     # Generate UUIDv7 for the active segment
