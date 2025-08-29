@@ -56,8 +56,26 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     # Validate story is available
     validate_story_available(character, story_id)
 
-    # Get story and first segment
-    story, first_segment = get_story_and_first_segment(story_id)
+    # Get story and first segment - handle case where story no longer exists
+    try:
+        story, first_segment = get_story_and_first_segment(story_id)
+    except ValueError as err:
+        # Story doesn't exist in database - remove it from character's available stories
+        logger.warning(f"Story {story_id} not found in database, removing from character's available stories")
+        try:
+            available_stories = set(character.get("AvailableStories", []))
+            if story_id in available_stories:
+                available_stories.remove(story_id)
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    Key={"CharacterID": character_id},
+                    UpdateExpression="SET AvailableStories = :stories",
+                    ExpressionAttributeValues={":stories": list(available_stories)},
+                )
+                logger.info(f"Removed invalid story {story_id} from character {character_id}")
+        except Exception as cleanup_err:
+            logger.error(f"Failed to remove invalid story from character: {cleanup_err}")
+        raise ValueError("Story no longer exists") from err
 
     # Create story instance
     story_instance_id = create_story_history_entry(character_id, story_id, story)
