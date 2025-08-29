@@ -42,7 +42,7 @@ class CharacterStack(Stack):
         self.lambda_layer_arn = lambda_layer_arn
         self.lambda_role_arn = lambda_role_arn
         self.dynamodb_tables = dynamodb_tables or {}
-        
+
         super().__init__(scope, stack_id, **kwargs)
         # Apply system tag to all resources in this stack
         Tags.of(self).add("System", "Eidolon")
@@ -61,40 +61,32 @@ class CharacterStack(Stack):
     def _import_lambda_layer(self) -> lambda_.ILayerVersion:
         """Import shared Lambda layer from Lambda stack."""
         if self.lambda_layer_arn:
-            return lambda_.LayerVersion.from_layer_version_arn(
-                self, "ImportedLambdaLayer", self.lambda_layer_arn
-            )
+            return lambda_.LayerVersion.from_layer_version_arn(self, "ImportedLambdaLayer", self.lambda_layer_arn)
         else:
             # Try to import from CloudFormation export
             try:
                 layer_arn = cdk.Fn.import_value("eidolon-lambda-layer-arn")
-                return lambda_.LayerVersion.from_layer_version_arn(
-                    self, "ImportedLambdaLayer", layer_arn
-                )
+                return lambda_.LayerVersion.from_layer_version_arn(self, "ImportedLambdaLayer", layer_arn)
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda layer from CloudFormation export: {e}")
                 raise ValueError("Lambda layer ARN not provided and CloudFormation export not found")
-    
+
     def _import_lambda_role(self) -> iam.IRole:
         """Import shared Lambda execution role from Lambda stack."""
         if self.lambda_role_arn:
-            return iam.Role.from_role_arn(
-                self, "ImportedLambdaRole", self.lambda_role_arn
-            )
+            return iam.Role.from_role_arn(self, "ImportedLambdaRole", self.lambda_role_arn)
         else:
             # Try to import from CloudFormation export
             try:
                 role_arn = cdk.Fn.import_value("eidolon-lambda-role-arn")
-                return iam.Role.from_role_arn(
-                    self, "ImportedLambdaRole", role_arn
-                )
+                return iam.Role.from_role_arn(self, "ImportedLambdaRole", role_arn)
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda role from CloudFormation export: {e}")
                 raise ValueError("Lambda role ARN not provided and CloudFormation export not found")
 
     def _deploy_lambda_functions(self) -> None:
         """Deploy character-related Lambda functions."""
-        
+
         # Character API functions
         lambda_configs = [
             ("api-character-add", "api_character_add.lambda_handler"),
@@ -172,7 +164,7 @@ class CharacterStack(Stack):
 
     def _add_outputs(self) -> None:
         """Add stack outputs for other stacks to reference."""
-        
+
         # Export function ARNs for API Gateway
         for function_name, function in self.functions.items():
             CfnOutput(

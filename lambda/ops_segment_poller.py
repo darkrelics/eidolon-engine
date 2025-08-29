@@ -28,7 +28,7 @@ from eidolon.sqs import send_message_batch
 def poll_segments() -> None:
     """
     Poll for segments that need attention and route appropriately.
-    
+
     Two main tasks:
     1. Find segments approaching expiry -> advance or recover them
     2. Find stuck mechanical segments -> retry them
@@ -39,16 +39,16 @@ def poll_segments() -> None:
     segments_to_advance = 0
     segments_to_process = 0
     segments_marked_exceptional = 0
-    
+
     # 1. Handle segments approaching expiry (within 90 seconds)
     try:
         expiring_segments = get_segments_approaching_expiry(MAX_SEGMENTS_PER_POLL)
-        
+
         advancement_messages = []
         for segment in expiring_segments:
             active_segment_id = segment.get("ActiveSegmentID")
             processing_status = segment.get("ProcessingStatus")
-            
+
             if processing_status == "processed":
                 # Normal advancement - send just the ActiveSegmentID string
                 advancement_messages.append({"body": active_segment_id})
@@ -63,26 +63,26 @@ def poll_segments() -> None:
                     logger.warning(f"Marked unprocessed expiring segment as exceptional: {active_segment_id}")
                 except Exception as err:
                     logger.error(f"Failed to mark segment as exceptional: {active_segment_id} Error: {err}")
-        
+
         if advancement_messages:
             if not STORY_ADVANCEMENT_QUEUE_URL:
                 raise RuntimeError("STORY_ADVANCEMENT_QUEUE_URL environment variable not set")
-            
+
             result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
             segments_to_advance = result.get("successful", 0)
-            
+
     except Exception as err:
         logger.error(f"Failed to process expiring segments: {err}", exc_info=True)
-    
+
     # 2. Handle stuck mechanical segments (>5 minutes old with time to retry)
     try:
         stuck_segments = get_stuck_mechanical_segments(MAX_SEGMENTS_PER_POLL)
-        
+
         processing_messages = []
         for segment in stuck_segments:
             active_segment_id = segment.get("ActiveSegmentID")
             processing_status = segment.get("ProcessingStatus")
-            
+
             # Reset if stuck in processing
             if processing_status == "processing":
                 try:
@@ -91,22 +91,24 @@ def poll_segments() -> None:
                 except Exception as err:
                     logger.error(f"Failed to reset segment: {active_segment_id} Error: {err}")
                     continue
-            
+
             processing_messages.append({"body": active_segment_id})
-        
+
         if processing_messages:
             if not SEGMENT_QUEUE_URL:
                 logger.error("SEGMENT_QUEUE_URL not set, cannot retry stuck segments")
             else:
                 result = send_message_batch(SEGMENT_QUEUE_URL, processing_messages)
                 segments_to_process = result.get("successful", 0)
-                
+
     except Exception as err:
         logger.error(f"Failed to process stuck segments: {err}", exc_info=True)
-    
+
     # Log statistics
-    logger.info(f"Polling complete - Advanced: {segments_to_advance}, Retried: {segments_to_process}, Marked exceptional: {segments_marked_exceptional}")
-    
+    logger.info(
+        f"Polling complete - Advanced: {segments_to_advance}, Retried: {segments_to_process}, Marked exceptional: {segments_marked_exceptional}"
+    )
+
     # Handle polling state transitions
     if poller_state == "run":
         # Check if there are still active segments
@@ -117,7 +119,7 @@ def poll_segments() -> None:
     else:  # poller_state == "stop"
         # Parameter is "stop" - check for active segments
         has_active_segments = check_active_segments_exist()
-        
+
         if has_active_segments:
             # Found active segments - return to "run"
             update_polling_state("run")
@@ -152,11 +154,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         # Run polling logic
         poll_segments()
-        
-        return {
-            "statusCode": 200,
-            "body": {"Message": "Segment polling completed"}
-        }
+
+        return {"statusCode": 200, "body": {"Message": "Segment polling completed"}}
 
     except (ClientError, RuntimeError) as err:
         logger.error(f"Segment polling failed: {err}", exc_info=True)

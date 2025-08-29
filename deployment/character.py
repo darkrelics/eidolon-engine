@@ -17,14 +17,14 @@ def deploy_character_stack(params) -> dict:
     # Get state for Lambda stack resources
     state_path = Path(__file__).parent / ".cdk-state.json"
     state = CDKState.load(str(state_path))
-    
+
     # Safely get Lambda resources from state
     lambda_layer_arn = ""
     lambda_role_arn = ""
-    if hasattr(state, 'infrastructure') and state.infrastructure:
+    if hasattr(state, "infrastructure") and state.infrastructure:
         lambda_layer_arn = state.infrastructure.get("lambda_layer_arn", "")
         lambda_role_arn = state.infrastructure.get("lambda_role_arn", "")
-    
+
     # Validate Lambda resources exist
     if not lambda_layer_arn:
         print("\nError: Lambda layer ARN not found in state. Please deploy Lambda stack first.")
@@ -124,19 +124,19 @@ def deploy_character(params, config: Config, _state: CDKState, config_path: Path
     try:
         s3 = boto3.client("s3", region_name=params.region)
         s3.head_bucket(Bucket=params.s3_bucket)
-        
+
         # Check if Lambda artifacts exist
         print("\nChecking for Lambda artifacts...")
         artifacts_exist = validate_build_artifacts(params.s3_bucket, params.region)
-        
+
         if not artifacts_exist:
             print("\nLambda artifacts missing. Running CodeBuild to create them...")
             build_success = execute_lambda_builds(params.region)
-            
+
             if not build_success:
                 print("\nError: Failed to build Lambda artifacts")
                 return False
-            
+
             # Verify artifacts were created
             artifacts_exist = validate_build_artifacts(params.s3_bucket, params.region)
             if not artifacts_exist:

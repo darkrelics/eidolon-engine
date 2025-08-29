@@ -17,7 +17,7 @@ def deploy_lambda_stack(params) -> dict:
     state_path = Path(__file__).parent / ".cdk-state.json"
     state = CDKState.load(str(state_path))
     dynamodb_policy_arn = ""
-    if hasattr(state, 'infrastructure') and state.infrastructure:
+    if hasattr(state, "infrastructure") and state.infrastructure:
         dynamodb_policy_arn = state.infrastructure.get("dynamodb_policy_arn", "")
 
     # Pass parameters through context
@@ -84,58 +84,55 @@ def verify_lambda_deployment(params) -> dict:
 
 def attach_story_policy_to_lambda_role(params, state: CDKState) -> bool:
     """Attach Story policy to shared Lambda execution role using boto3.
-    
+
     This is done post-Story deployment because CDK cannot modify imported resources.
-    
+
     Args:
         params: Deployment parameters with region
         state: CDK state containing policy information
-        
+
     Returns:
         bool: True if policy was successfully attached
     """
     print("\nAttaching Story policy to Lambda execution role...")
-    
+
     # Get the Lambda role ARN from state
-    if not hasattr(state, 'infrastructure') or not state.infrastructure:
+    if not hasattr(state, "infrastructure") or not state.infrastructure:
         print("  [ERROR] State infrastructure not initialized")
         return False
-    
+
     lambda_role_arn = state.infrastructure.get("lambda_role_arn", "")
     if not lambda_role_arn:
         print("  [ERROR] Lambda role ARN not found in state")
         return False
-        
+
     # Extract role name from ARN
     role_name = lambda_role_arn.split("/")[-1]
-    
+
     try:
         iam_client = boto3.client("iam", region_name=params.region)
-        
+
         # Check if story policy exists
         try:
             iam_client.get_policy(PolicyArn=f"arn:aws:iam::{params.account_id}:policy/eidolon-story-policy")
         except ClientError:
             print("  [INFO] Story policy not yet created, skipping attachment")
             return True
-        
+
         # Get current attached policies
         response = iam_client.list_attached_role_policies(RoleName=role_name)
-        attached_policies = [p['PolicyArn'] for p in response.get('AttachedManagedPolicies', [])]
-        
+        attached_policies = [p["PolicyArn"] for p in response.get("AttachedManagedPolicies", [])]
+
         story_policy_arn = f"arn:aws:iam::{params.account_id}:policy/eidolon-story-policy"
         if story_policy_arn in attached_policies:
             print(f"  [OK] Story policy already attached to {role_name}")
             return True
-        
+
         # Attach the story policy to the role
-        iam_client.attach_role_policy(
-            RoleName=role_name,
-            PolicyArn=story_policy_arn
-        )
+        iam_client.attach_role_policy(RoleName=role_name, PolicyArn=story_policy_arn)
         print(f"  [OK] Attached eidolon-story-policy to {role_name}")
         return True
-        
+
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "")
         print(f"  [ERROR] Failed to attach policy: {error_code} - {err}")
@@ -156,7 +153,7 @@ def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, 
     try:
         s3 = boto3.client("s3", region_name=params.region)
         s3.head_bucket(Bucket=params.s3_bucket)
-        
+
         # Check if Lambda layer artifact exists
         print("\nChecking for Lambda layer artifact...")
         artifacts_exist = False
@@ -166,15 +163,15 @@ def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, 
             artifacts_exist = True
         except ClientError:
             print("Lambda layer artifact missing")
-        
+
         if not artifacts_exist:
             print("\nLambda layer artifact missing. Running CodeBuild to create it...")
             build_success = execute_lambda_builds(params.region)
-            
+
             if not build_success:
                 print("\nError: Failed to build Lambda artifacts")
                 return False
-            
+
             # Verify artifact was created
             try:
                 s3.head_object(Bucket=params.s3_bucket, Key="lambda-layer/lambda-layer.zip")
@@ -196,11 +193,11 @@ def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, 
 
     # Extract outputs for other stacks
     outputs = extract_stack_outputs("lambda", params.region)
-    
+
     # Store important outputs in state
     if outputs:
         # Ensure infrastructure dict exists
-        if not hasattr(state, 'infrastructure'):
+        if not hasattr(state, "infrastructure"):
             state.infrastructure = {}
         state.infrastructure["lambda_layer_arn"] = outputs.get("LambdaLayerArn", "")
         state.infrastructure["lambda_role_arn"] = outputs.get("LambdaRoleArn", "")

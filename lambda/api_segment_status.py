@@ -92,27 +92,27 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
         response["ChallengeResults"] = active_segment.get("ChallengeResults", [])
         response["Outcome"] = active_segment.get("Outcome")
         response["CombatState"] = active_segment.get("CombatState")
-        
+
         # If segment is processed/completed, include full narrative data
         if processing_status == "processed" or active_segment.get("Status") == "completed":
             try:
                 # Get segment definition for narrative text
                 segment_def = get_story_segment(story_id, segment_id)  # type: ignore
                 segment_def = normalize_segment_definition(segment_def)
-                
+
                 if segment_type == "mechanical":
                     outcome = active_segment.get("Outcome", "normal")
                     validated_result = validate_segment_outcome_results(segment_def, outcome)
                     response["Narrative"] = validated_result.get("Narrative", "")
                     response["Effects"] = validated_result.get("Effects", {})
-                    
+
                     # Get next segment based on outcome
                     results = segment_def.get("Results", {}) or {}
                     next_segment_id = None
                     if isinstance(results, dict):
                         outcome_map = {
                             "death": "Death",
-                            "failure": "Failure", 
+                            "failure": "Failure",
                             "minimal": "Minimal",
                             "normal": "Normal",
                             "exceptional": "Exceptional",
@@ -122,24 +122,24 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                             outcome_block = results.get(outcome_key, {})
                             if isinstance(outcome_block, dict) and "NextSegmentID" in outcome_block:
                                 next_segment_id = outcome_block.get("NextSegmentID")
-                    
+
                     if next_segment_id is None and "NextSegmentID" in segment_def:
                         next_segment_id = segment_def.get("NextSegmentID")
-                    
+
                     response["NextSegmentID"] = next_segment_id
-                    
+
                 elif segment_type == "rest":
                     response["Narrative"] = "You have rested and recovered."
                     response["Effects"] = {}
                     response["NextSegmentID"] = segment_def.get("NextSegmentID")
-                    
+
                 elif segment_type == "decision":
                     decision = active_segment.get("Decision")
                     decision_options = segment_def.get("DecisionOptions", {})
                     response["NextSegmentID"] = decision_options.get(decision) if decision else None
                     response["Narrative"] = ""
                     response["Effects"] = {}
-                    
+
             except Exception as err:
                 logger.warning(f"Failed to get narrative data: {err}")
                 # Continue without narrative - not critical
@@ -220,11 +220,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         error_msg = str(err)
         # Return the friendly message for no active story
         if "No active story" in error_msg and "Please select" in error_msg:
-            return lambda_response(200, {
-                "Message": error_msg,
-                "Status": "no_active_story",
-                "CharacterID": character_id
-            }, event)
+            return lambda_response(200, {"Message": error_msg, "Status": "no_active_story", "CharacterID": character_id}, event)
         elif "no active" in error_msg.lower():
             return lambda_response(404, {"Error": "No active segment found"}, event)
         elif "not found" in error_msg.lower():

@@ -38,7 +38,6 @@ def deploy_codebuild_stack(params) -> dict:
     return run_cdk_deploy("codebuild", params.region, app_command, context_args)
 
 
-
 def validate_codebuild_projects(project_names: list[str], region: str) -> dict:
     """Validate that CodeBuild projects were created.
 

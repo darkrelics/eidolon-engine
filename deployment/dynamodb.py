@@ -191,7 +191,7 @@ def deploy_dynamodb(params, config: Config, state: CDKState, config_path: Path, 
         # Store infrastructure resources needed by other stacks
         if "infrastructure" not in state.__dict__:
             state.infrastructure = {}
-        
+
         # Extract DynamoDB policy ARN from stack outputs
         dynamodb_policy_arn = result.get("outputs", {}).get("DynamoDBPolicyArn")
         if dynamodb_policy_arn:

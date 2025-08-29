@@ -33,7 +33,7 @@ def get_shared_resources(params, state: CDKState) -> dict:
         if state.infrastructure.get("lambda_layer_arn"):
             resources["lambda_layer_arn"] = state.infrastructure.get("lambda_layer_arn")  # type: ignore
             print("  Using Lambda layer ARN from state")
-            
+
         # Use stored role ARN if available
         if state.infrastructure.get("lambda_role_arn"):
             resources["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
@@ -43,12 +43,13 @@ def get_shared_resources(params, state: CDKState) -> dict:
     if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
         try:
             from utilities import extract_stack_outputs
+
             lambda_outputs = extract_stack_outputs("lambda", params.region)
-            
+
             if not resources["lambda_layer_arn"] and lambda_outputs.get("LambdaLayerArn"):
                 resources["lambda_layer_arn"] = lambda_outputs["LambdaLayerArn"]
                 print("  Using Lambda layer ARN from Lambda stack outputs")
-                
+
             if not resources["lambda_role_arn"] and lambda_outputs.get("LambdaRoleArn"):
                 resources["lambda_role_arn"] = lambda_outputs["LambdaRoleArn"]
                 print("  Using Lambda role ARN from Lambda stack outputs")
@@ -97,17 +98,17 @@ def deploy_player_stack(params, state: CDKState) -> dict:
 
     # Get shared resources from Character stack
     resources = get_shared_resources(params, state)
-    
+
     # Get config for DynamoDB tables
     config_path = Path(__file__).parent.parent / "config.yml"
     config = Config.load(str(config_path))
-    
+
     # Build client FQDN
     client_fqdn = f"{params.client_host}.{params.domain}"
-    
+
     # Convert DynamoDB tables to JSON for context passing
     tables_json = json.dumps(config.dynamodb_tables)
-    
+
     # Get DynamoDB policy ARN from state
     dynamodb_policy_arn = state.infrastructure.get("dynamodb_policy_arn", "")
 

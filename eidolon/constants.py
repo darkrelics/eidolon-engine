@@ -6,7 +6,7 @@ Centralizes magic numbers and configuration constants used throughout the game.
 
 # XP calculation constants
 BASE_XP = 0.25  # Base experience per action
-FAILURE_XP_PENALTY = 0.5  # Failed actions give 50% XP  
+FAILURE_XP_PENALTY = 0.5  # Failed actions give 50% XP
 ATTRIBUTE_XP_RATIO = 0.1  # Attributes gain 10% of skill XP
 
 # Sigma thresholds for challenge outcomes

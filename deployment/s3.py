@@ -30,7 +30,6 @@ def deploy_s3_stack(params) -> dict:
     return run_cdk_deploy("s3", params.region, app_command, context_args)
 
 
-
 def verify_s3_deployment(params) -> dict:
     """Verify the S3 deployment completed successfully."""
     print("\nVerifying S3 deployment...")

@@ -32,7 +32,7 @@ class LambdaStack(Stack):
         self.region_name = region_name
         self.s3_bucket_name = s3_bucket
         self.dynamodb_policy_arn = dynamodb_policy_arn
-        
+
         super().__init__(scope, stack_id, description="Shared Lambda layer and execution role for Eidolon Engine", **kwargs)
         # Apply system tag to all resources in this stack
         Tags.of(self).add("System", "Eidolon")
@@ -66,7 +66,7 @@ class LambdaStack(Stack):
     def _create_lambda_role(self) -> iam.Role:
         """Create shared IAM execution role for all Lambda functions."""
         role_name = "eidolon-lambda-execution-role"
-        
+
         print(f"  Creating Lambda execution role: {role_name}")
 
         role = iam.Role(
@@ -103,7 +103,7 @@ class LambdaStack(Stack):
 
     def _add_outputs(self) -> None:
         """Add stack outputs for other stacks to reference."""
-        
+
         # Export Lambda layer ARN for other stacks
         CfnOutput(
             self,

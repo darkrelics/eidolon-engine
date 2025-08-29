@@ -19,10 +19,10 @@ from eidolon.validation import validate_uuid
 def process_segment(active_segment: dict) -> None:
     """
     Orchestrate segment processing.
-    
+
     Args:
         active_segment: Active segment record
-        
+
     Raises:
         ValueError: If data validation fails
         RuntimeError: If processing fails
@@ -31,39 +31,30 @@ def process_segment(active_segment: dict) -> None:
     if active_segment.get("ProcessingStatus") == "processed":
         logger.info(f"Segment already processed: {active_segment.get('ActiveSegmentID')}")
         return
-    
+
     # Get segment definition
     try:
         segment_def = get_segment_definition(
             active_segment.get("StoryID"),  # type: ignore
-            active_segment.get("SegmentID")  # type: ignore
-        ) 
+            active_segment.get("SegmentID"),  # type: ignore
+        )
     except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
         raise
-    
+
     # Get character
     character = get_character(active_segment.get("CharacterID"))  # type: ignore
 
     # Process based on type
-    outcome, results = route_segment_processing(
-        segment_def,
-        character,
-        active_segment
-    )
-    
+    outcome, results = route_segment_processing(segment_def, character, active_segment)
+
     # Persist results
     try:
-        update_active_segment_outcome(
-            active_segment.get("ActiveSegmentID"),  # type: ignore
-            outcome,
-            results,
-            segment_def
-        )
+        update_active_segment_outcome(active_segment.get("ActiveSegmentID"), outcome, results, segment_def)  # type: ignore
     except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to update segment outcome for {active_segment.get('ActiveSegmentID')}: {err}", exc_info=True)
         raise
-    
+
     logger.info(f"Segment {active_segment.get('ActiveSegmentID')} processed with outcome: {outcome}")
 
 
@@ -94,16 +85,16 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         # Parse message body
         active_segment_id = record.get("body", "").strip()
-        
+
         if not active_segment_id:
             logger.warning(f"Empty message body for messageId={message_id}")
             continue
-        
+
         # Validate UUID format
         if not validate_uuid(active_segment_id):
             logger.warning(f"Invalid UUID format for messageId={message_id}: {active_segment_id}")
             continue
-        
+
         # Fetch the full active segment record from DynamoDB
         try:
             active_segment = get_active_segment(active_segment_id)
@@ -115,7 +106,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             logger.error(f"Database error fetching active segment {active_segment_id}: {err}")
             # Don't retry - DB errors need investigation
             continue
-        
+
         logger.info(f"Processing segment: {active_segment_id}")
 
         # Process the segment
@@ -124,6 +115,6 @@ def lambda_handler(event: dict, context: object) -> dict:
         except Exception as err:
             logger.error(f"Failed to process segment {active_segment_id}: {err}", exc_info=True)
             # Continue - poller will handle cleanup
-    
+
     # Return empty dict for successful SQS batch processing
     return {}

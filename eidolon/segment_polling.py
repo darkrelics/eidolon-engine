@@ -49,7 +49,7 @@ def get_segments_approaching_expiry(max_segments: int) -> list:
 def get_stuck_mechanical_segments(max_segments: int) -> list:
     """
     Get mechanical segments stuck in pending/processing that have time to retry.
-    
+
     Criteria:
     - StartTime > 5 minutes ago (stuck)
     - EndTime > 90 seconds from now (enough time to process)
@@ -77,18 +77,16 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
                 "EndTime > :min_time AND "
                 "ProcessingStatus IN (:pending, :processing)"
             ),
-            ExpressionAttributeNames={
-                "#status": "Status"
-            },
+            ExpressionAttributeNames={"#status": "Status"},
             ExpressionAttributeValues={
                 ":status": "active",
                 ":mechanical": "mechanical",
                 ":old_time": five_minutes_ago,
                 ":min_time": ninety_seconds_future,
                 ":pending": "pending",
-                ":processing": "processing"
+                ":processing": "processing",
             },
-            Limit=max_segments
+            Limit=max_segments,
         )
 
         segments = response.get("Items", [])  # type: ignore

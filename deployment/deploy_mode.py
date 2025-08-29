@@ -41,7 +41,7 @@ def get_deployment_order(mode: str) -> list:
     """Get the stack deployment order based on deployment mode.
 
     Stacks not in the returned list will not be deployed.
-    
+
     Dependencies:
     - Lambda provides shared Lambda layer and role
     - Character, Story and Player stacks use shared resources from Lambda

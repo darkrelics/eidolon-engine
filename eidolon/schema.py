@@ -201,5 +201,5 @@ def normalize_segment_definition(raw: dict) -> dict:
         seg["DefaultDecision"] = raw.get("DefaultDecision")
 
     # Note: NextSegmentID should only exist within Results for each outcome, not at top level
-    
+
     return seg

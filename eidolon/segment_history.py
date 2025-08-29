@@ -152,7 +152,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
     results = current_segment.get("Results", {})
     normal_result = results.get("normal", {})
     next_segment_id = normal_result.get("NextSegmentID") if isinstance(normal_result, dict) else None
-    
+
     if not next_segment_id:
         logger.warning(f"Cannot insert rest - current segment has no normal outcome NextSegmentID for {story_id}")
         raise ValueError("Cannot insert rest segment - current segment has no normal outcome continuation")

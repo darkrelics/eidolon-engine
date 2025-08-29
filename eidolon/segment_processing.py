@@ -17,18 +17,18 @@ from eidolon.segment_combat import process_combat_segment
 def route_segment_processing(segment_def: dict, character: dict, active_segment: dict) -> tuple:
     """
     Route segment to appropriate processor based on type.
-    
+
     Args:
         segment_def: Segment definition
         character: Character data
         active_segment: Active segment record
-        
+
     Returns:
         Tuple of (outcome, results)
-        
+
     """
     segment_type = active_segment.get("SegmentType")
-    
+
     if segment_type == "mechanical":
         return process_mechanical_segment(segment_def, character, active_segment)
     elif segment_type == "rest":
@@ -112,9 +112,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
             # Get the best attempt to calculate variance modifier
             attempts = challenge.get("attempts", [])
-            best_attempt = max((a for a in attempts if "sigma" in a), 
-                              key=lambda a: a["sigma"], 
-                              default=None)
+            best_attempt = max((a for a in attempts if "sigma" in a), key=lambda a: a["sigma"], default=None)
 
             if best_attempt and (skill or attribute):
                 effective_score = best_attempt.get("effectiveScore", 0)
@@ -242,14 +240,14 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
             next_segment_id = decision_options.get(decision)
             logger.info(f"Selected decision branch for {active_segment_id}: decision={decision}, next={next_segment_id}")
             return next_segment_id
-        
+
         # No decision made (timeout) - use default if specified
         default_decision = segment_def.get("DefaultDecision")
         if default_decision and default_decision in decision_options:
             next_segment_id = decision_options.get(default_decision)
             logger.info(f"Using default decision for {active_segment_id}: default={default_decision}, next={next_segment_id}")
             return next_segment_id
-        
+
         # No valid decision path found
         logger.warning(f"No decision made for {active_segment_id} and no default available - story ends")
         return None
@@ -273,24 +271,21 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         if not outcome_result:
             logger.warning(f"No result found for outcome '{outcome_key}' in {segment_id} - story ends")
             return None
-        
+
         if not isinstance(outcome_result, dict):
             logger.warning(f"Outcome result for '{outcome_key}' is not a dict in {segment_id} - story ends")
             return None
-        
+
         # Get NextSegmentID from outcome result
         next_segment_id = outcome_result.get("NextSegmentID")
-        
+
         if next_segment_id:
             logger.info(f"Using outcome-based next segment for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
         else:
             logger.info(f"No NextSegmentID for outcome '{outcome_key}' in {segment_id} - story ends")
-        
+
         return next_segment_id
 
     # Unknown segment type
     logger.error(f"Unknown segment type '{segment_type}' for {segment_id} - story ends")
     return None
-
-
-

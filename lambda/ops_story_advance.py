@@ -256,12 +256,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         try:
             # Message body should be just the ActiveSegmentID string
             active_segment_id = record.get("body", "").strip()
-            
+
             if not active_segment_id:
                 logger.error(f"Empty message body for messageId={message_id}")
                 invalid_count += 1
                 continue
-                
+
             if not validate_uuid(active_segment_id):
                 logger.error(f"Invalid UUID format for messageId={message_id}: {active_segment_id}")
                 invalid_count += 1

@@ -64,7 +64,7 @@ class StoryStack(Stack):
 
         # Create IAM Policy for Story operations
         self.story_policy = self._create_story_policy()
-        
+
         # Import shared Lambda layer and role from Character stack
         self.lambda_layer = self._import_lambda_layer()
         self.lambda_role = self._import_lambda_role()
@@ -164,41 +164,33 @@ class StoryStack(Stack):
     def _import_lambda_layer(self) -> lambda_.ILayerVersion:
         """Import shared Lambda layer from Character stack."""
         if self.lambda_layer_arn:
-            return lambda_.LayerVersion.from_layer_version_arn(
-                self, "ImportedLambdaLayer", self.lambda_layer_arn
-            )
+            return lambda_.LayerVersion.from_layer_version_arn(self, "ImportedLambdaLayer", self.lambda_layer_arn)
         else:
             # Try to import from CloudFormation export
             try:
                 layer_arn = cdk.Fn.import_value("eidolon-lambda-layer-arn")
-                return lambda_.LayerVersion.from_layer_version_arn(
-                    self, "ImportedLambdaLayer", layer_arn
-                )
+                return lambda_.LayerVersion.from_layer_version_arn(self, "ImportedLambdaLayer", layer_arn)
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda layer from CloudFormation export: {e}")
                 raise ValueError("Lambda layer ARN not provided and CloudFormation export not found")
-    
+
     def _import_lambda_role(self) -> iam.IRole:
         """Import shared Lambda execution role from Character stack."""
         if self.lambda_role_arn:
             # Use unique logical ID to avoid conflict with _attach_policy_to_role
-            return iam.Role.from_role_arn(
-                self, "ImportedLambdaRoleForFunctions", self.lambda_role_arn
-            )
+            return iam.Role.from_role_arn(self, "ImportedLambdaRoleForFunctions", self.lambda_role_arn)
         else:
             # Try to import from CloudFormation export
             try:
                 role_arn = cdk.Fn.import_value("eidolon-lambda-role-arn")
-                return iam.Role.from_role_arn(
-                    self, "ImportedLambdaRoleForFunctions", role_arn
-                )
+                return iam.Role.from_role_arn(self, "ImportedLambdaRoleForFunctions", role_arn)
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda role from CloudFormation export: {e}")
                 raise ValueError("Lambda role ARN not provided and CloudFormation export not found")
-    
+
     def _deploy_lambda_functions(self) -> None:
         """Deploy story-related Lambda functions."""
-        
+
         # Story Lambda functions
         lambda_configs = [
             # Story API functions
@@ -239,7 +231,7 @@ class StoryStack(Stack):
                 environment=env_vars,
                 description=f"Eidolon Engine {function_name} function",
             )
-    
+
     def _get_function_logical_id(self, function_name: str) -> str:
         """Get fixed logical ID for a Lambda function."""
         logical_id_map = {
@@ -254,7 +246,7 @@ class StoryStack(Stack):
             "ops-story-advance": "OpsStoryAdvanceFunction",
         }
         return logical_id_map.get(function_name, function_name.replace("-", "").title() + "Function")
-    
+
     def _get_environment_variables(self) -> dict:
         """Get environment variables for Lambda functions."""
         # Use client FQDN for CORS origin
@@ -288,7 +280,7 @@ class StoryStack(Stack):
             env_vars[env_key] = self.dynamodb_tables.get(table_key, table_key)
 
         return env_vars
-    
+
     def _configure_sqs_triggers(self) -> None:
         """Configure SQS triggers for Lambda functions."""
         # Configure processing queue trigger for ops-segment-process
@@ -296,23 +288,15 @@ class StoryStack(Stack):
             print("  Configuring SQS trigger for ops-segment-process")
             process_function = self.functions["ops-segment-process"]
             process_function.add_event_source(
-                lambda_event_sources.SqsEventSource(
-                    self.processing_queue,
-                    batch_size=10,
-                    max_batching_window=Duration.seconds(5)
-                )
+                lambda_event_sources.SqsEventSource(self.processing_queue, batch_size=10, max_batching_window=Duration.seconds(5))
             )
-        
+
         # Configure advancement queue trigger for ops-story-advance
         if "ops-story-advance" in self.functions:
             print("  Configuring SQS trigger for ops-story-advance")
             advance_function = self.functions["ops-story-advance"]
             advance_function.add_event_source(
-                lambda_event_sources.SqsEventSource(
-                    self.advancement_queue,
-                    batch_size=10,
-                    max_batching_window=Duration.seconds(5)
-                )
+                lambda_event_sources.SqsEventSource(self.advancement_queue, batch_size=10, max_batching_window=Duration.seconds(5))
             )
 
     def _create_polling_rule(self) -> events.Rule:
@@ -322,7 +306,7 @@ class StoryStack(Stack):
         # Get the poller Lambda function we created
         if "ops-segment-poller" not in self.functions:
             raise ValueError("ops-segment-poller function not found")
-        
+
         poller_function = self.functions["ops-segment-poller"]
 
         # Create the rule (starts disabled)
@@ -367,19 +351,19 @@ class StoryStack(Stack):
         )
 
         CfnOutput(
-            self, 
-            "ProcessingQueueUrl", 
-            value=self.processing_queue.queue_url, 
+            self,
+            "ProcessingQueueUrl",
+            value=self.processing_queue.queue_url,
             description="URL of the processing queue",
-            export_name="eidolon-processing-queue-url"
+            export_name="eidolon-processing-queue-url",
         )
 
         CfnOutput(
-            self, 
-            "AdvancementQueueUrl", 
-            value=self.advancement_queue.queue_url, 
+            self,
+            "AdvancementQueueUrl",
+            value=self.advancement_queue.queue_url,
             description="URL of the advancement queue",
-            export_name="eidolon-advancement-queue-url"
+            export_name="eidolon-advancement-queue-url",
         )
 
         CfnOutput(self, "ProcessingQueueArn", value=self.processing_queue.queue_arn, description="ARN of the processing queue")

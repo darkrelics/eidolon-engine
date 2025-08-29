@@ -219,24 +219,24 @@ def story_update_character(character_id: str, story_id: str, active_segment_id: 
 def rollback_story_start(character_id: str, active_segment_id: str, story_instance_id: str) -> None:
     """
     Rollback a failed story start by cleaning up all created records.
-    
+
     This is used when SQS queueing fails for mechanical segments.
     Removes:
     - Active segment record
-    - Story history record  
+    - Story history record
     - Character's ActiveStoryID, ActiveSegmentID, and reverts GameMode to None
-    
+
     Args:
         character_id: Character UUID
         active_segment_id: Active segment UUID to delete
         story_instance_id: Story instance UUID to delete from history
-        
+
     Note:
         Failures during rollback are logged but not raised to avoid masking
         the original error.
     """
     logger.info(f"Rolling back story start for character {character_id}")
-    
+
     # 1. Revert character state to None
     try:
         dynamo.update_item(
@@ -248,24 +248,18 @@ def rollback_story_start(character_id: str, active_segment_id: str, story_instan
         logger.info(f"Reverted character state for {character_id}")
     except ClientError as err:
         logger.error(f"Failed to revert character state during rollback for {character_id}: {err}")
-    
+
     # 2. Delete the active segment
     try:
-        dynamo.delete_item(
-            TableName.ACTIVE_SEGMENTS,
-            Key={"ActiveSegmentID": active_segment_id}
-        )
+        dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": active_segment_id})
         logger.info(f"Deleted active segment {active_segment_id}")
     except ClientError as err:
         logger.error(f"Failed to delete active segment during rollback for {active_segment_id}: {err}")
-    
+
     # 3. Delete the story history record
     if story_instance_id:
         try:
-            dynamo.delete_item(
-                TableName.STORY_HISTORY,
-                Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id}
-            )
+            dynamo.delete_item(TableName.STORY_HISTORY, Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id})
             logger.info(f"Deleted story history record {story_instance_id}")
         except ClientError as err:
             logger.error(f"Failed to delete story history during rollback for {story_instance_id}: {err}")

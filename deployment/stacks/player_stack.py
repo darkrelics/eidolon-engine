@@ -60,10 +60,10 @@ class PlayerStack(Stack):
         # Import shared Lambda layer and role from Character stack
         self.lambda_layer = self._import_lambda_layer()
         self.lambda_role = self._import_lambda_role()
-        
+
         # Deploy cognito-player-new Lambda function
         self.lambda_function = self._deploy_lambda_function()
-        
+
         # Create Cognito User Pool
         self.user_pool = self._create_user_pool()
 
@@ -122,46 +122,38 @@ class PlayerStack(Stack):
     def _import_lambda_layer(self) -> lambda_.ILayerVersion:
         """Import shared Lambda layer from Character stack."""
         if self.lambda_layer_arn:
-            return lambda_.LayerVersion.from_layer_version_arn(
-                self, "ImportedLambdaLayer", self.lambda_layer_arn
-            )
+            return lambda_.LayerVersion.from_layer_version_arn(self, "ImportedLambdaLayer", self.lambda_layer_arn)
         else:
             # Try to import from CloudFormation export
             try:
                 layer_arn = cdk.Fn.import_value("eidolon-lambda-layer-arn")
-                return lambda_.LayerVersion.from_layer_version_arn(
-                    self, "ImportedLambdaLayer", layer_arn
-                )
+                return lambda_.LayerVersion.from_layer_version_arn(self, "ImportedLambdaLayer", layer_arn)
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda layer from CloudFormation export: {e}")
                 raise ValueError("Lambda layer ARN not provided and CloudFormation export not found")
-    
+
     def _import_lambda_role(self) -> iam.IRole:
         """Import shared Lambda execution role from Character stack."""
         if self.lambda_role_arn:
-            return iam.Role.from_role_arn(
-                self, "ImportedLambdaRole", self.lambda_role_arn
-            )
+            return iam.Role.from_role_arn(self, "ImportedLambdaRole", self.lambda_role_arn)
         else:
             # Try to import from CloudFormation export
             try:
                 role_arn = cdk.Fn.import_value("eidolon-lambda-role-arn")
-                return iam.Role.from_role_arn(
-                    self, "ImportedLambdaRole", role_arn
-                )
+                return iam.Role.from_role_arn(self, "ImportedLambdaRole", role_arn)
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda role from CloudFormation export: {e}")
                 raise ValueError("Lambda role ARN not provided and CloudFormation export not found")
-    
+
     def _deploy_lambda_function(self) -> lambda_.Function:
         """Deploy cognito-player-new Lambda function."""
         print("  Deploying Lambda function: cognito-player-new")
-        
+
         bucket = s3.Bucket.from_bucket_name(self, "FunctionsBucket", self.s3_bucket_name)
-        
+
         # Use client FQDN for CORS origin
         cors_origin = f"https://{self.client_fqdn}" if self.client_fqdn else "*"
-        
+
         env_vars = {
             "APPLICATION_NAME": "eidolon-engine",
             "LOG_LEVEL": "INFO",
@@ -171,16 +163,16 @@ class PlayerStack(Stack):
             "CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS",
             "CORS_MAX_AGE": "86400",
         }
-        
+
         # Add DynamoDB table names
         table_mapping = {
             "players_table": "players",
             "characters_table": "characters",
         }
-        
+
         for env_key, table_key in table_mapping.items():
             env_vars[env_key] = self.dynamodb_tables.get(table_key, table_key)
-        
+
         return lambda_.Function(
             self,
             "CognitoPlayerNewFunction",

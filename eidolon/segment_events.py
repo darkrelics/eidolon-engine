@@ -139,5 +139,3 @@ def events_to_pascal(events: list) -> list:
         out.append(pascal_event)
 
     return out
-
-
