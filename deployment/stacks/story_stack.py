@@ -220,7 +220,6 @@ class StoryStack(Stack):
             ("api-story-abandon", "api_story_abandon.lambda_handler"),
             ("api-segment-decision", "api_segment_decision.lambda_handler"),
             ("api-segment-history", "api_segment_history.lambda_handler"),
-            ("api-segment-outcome", "api_segment_outcome.lambda_handler"),
             ("api-segment-rest", "api_segment_rest.lambda_handler"),
             ("api-segment-status", "api_segment_status.lambda_handler"),
             # Operations functions
@@ -262,7 +261,6 @@ class StoryStack(Stack):
             "api-story-abandon": "ApiStoryAbandonFunction",
             "api-segment-decision": "ApiSegmentDecisionFunction",
             "api-segment-history": "ApiSegmentHistoryFunction",
-            "api-segment-outcome": "ApiSegmentOutcomeFunction",
             "api-segment-rest": "ApiSegmentRestFunction",
             "api-segment-status": "ApiSegmentStatusFunction",
             "ops-segment-poller": "OpsSegmentPollerFunction",

@@ -25,7 +25,7 @@ from eidolon.sqs import send_message
 from eidolon.story_completion import complete_story
 from eidolon.story_history import update_story_history_xp
 from eidolon.story_rewards import apply_combat_rewards
-from eidolon.validation_messages import validate_advancement_message
+from eidolon.validation import validate_uuid
 
 
 def advance_story_business_logic(active_segment_id: str) -> dict:
@@ -135,7 +135,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     story_instance_id = active_segment.get("StoryInstanceID")
     skill_xp = character_updates.get("SkillXP", {})
     attribute_xp = character_updates.get("AttributeXP", {})
-    if skill_xp or attribute_xp and story_instance_id:
+    if (skill_xp or attribute_xp) and story_instance_id:
         update_story_history_xp(character_id, story_instance_id, skill_xp, attribute_xp)  # type: ignore
 
     # Get segment definition to determine next action
@@ -191,14 +191,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 try:
 
                     if SEGMENT_QUEUE_URL:
-                        message_body = {
-                            "ActiveSegmentID": next_active_segment_id,
-                            "CharacterID": character_id,
-                            "StoryID": story_id,
-                            "SegmentID": next_segment_id,
-                            "SegmentType": "mechanical",
-                        }
-                        send_message(SEGMENT_QUEUE_URL, message_body)
+                        # Send just the ActiveSegmentID string (what ops_segment_process expects)
+                        send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
                         logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
                 except Exception as err:
                     # Non-critical - segment will be picked up by poller
@@ -260,20 +254,18 @@ def lambda_handler(event: dict, context: object) -> dict:
         message_id = record.get("messageId", "unknown")
 
         try:
-            # Parse message body
-            message_body = json.loads(record.get("body", "{}"))
-
-            # Validate message schema
-            try:
-                validated_msg = validate_advancement_message(message_body)
-            except ValueError as validation_err:
-                # Invalid message - log and don't retry
-                logger.error(f"Invalid message schema for messageId={message_id}: {validation_err}")
+            # Message body should be just the ActiveSegmentID string
+            active_segment_id = record.get("body", "").strip()
+            
+            if not active_segment_id:
+                logger.error(f"Empty message body for messageId={message_id}")
                 invalid_count += 1
-                # Don't add to batch_item_failures - invalid messages should not be retried
                 continue
-
-            active_segment_id = validated_msg["ActiveSegmentID"]
+                
+            if not validate_uuid(active_segment_id):
+                logger.error(f"Invalid UUID format for messageId={message_id}: {active_segment_id}")
+                invalid_count += 1
+                continue
 
             logger.info(f"Processing segment advancement for {active_segment_id}")
 

@@ -361,7 +361,6 @@ def update_lambda_environments(params, processing_queue_url: str, advancement_qu
         ("api-story-abandon", story_env_vars),
         ("api-segment-decision", story_env_vars),
         ("api-segment-history", story_env_vars),
-        ("api-segment-outcome", story_env_vars),
         ("api-segment-rest", story_env_vars),
         ("api-segment-status", story_env_vars),
         # Operations functions

@@ -50,13 +50,14 @@ def poll_segments() -> None:
             processing_status = segment.get("ProcessingStatus")
             
             if processing_status == "processed":
-                # Normal advancement
+                # Normal advancement - send just the ActiveSegmentID string
                 advancement_messages.append({"body": active_segment_id})
                 logger.debug(f"Segment ready for advancement: {active_segment_id}")
             else:
                 # Not processed in time - mark exceptional to protect player
                 try:
                     mark_segment_as_completed_exceptional(active_segment_id)
+                    # Send just the ActiveSegmentID string
                     advancement_messages.append({"body": active_segment_id})
                     segments_marked_exceptional += 1
                     logger.warning(f"Marked unprocessed expiring segment as exceptional: {active_segment_id}")

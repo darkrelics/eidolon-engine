@@ -186,14 +186,8 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
             if next_segment_def.get("SegmentType") == "mechanical":
                 try:
                     if SEGMENT_QUEUE_URL:
-                        message_body = {
-                            "ActiveSegmentID": next_active_segment_id,
-                            "CharacterID": character_id,
-                            "StoryID": story_id,
-                            "SegmentID": next_segment_id,
-                            "SegmentType": "mechanical",
-                        }
-                        send_message(SEGMENT_QUEUE_URL, message_body)
+                        # Send just the ActiveSegmentID string (what ops_segment_process expects)
+                        send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
                         logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
                 except Exception as err:
                     logger.warning(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}")

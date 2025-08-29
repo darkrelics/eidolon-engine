@@ -273,7 +273,6 @@ def validate_build_artifacts(bucket_name: str, region: str) -> bool:
         # Story Lambda functions
         "api-segment-decision.zip",
         "api-segment-history.zip",
-        "api-segment-outcome.zip",
         "api-segment-rest.zip",
         "api-segment-status.zip",
         "api-story-abandon.zip",
