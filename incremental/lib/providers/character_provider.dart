@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/character.dart';
 import '../models/active_segment.dart';
-import '../models/segment_outcome.dart';
 import 'base_provider.dart';
 
 /// Provider for character state management
@@ -161,14 +160,6 @@ class CharacterProvider extends BaseProvider {
     }, showLoading: false);
   }
 
-  /// Apply outcome from server
-  Future<void> applySegmentOutcome(SegmentOutcome outcome) async {
-    // Update character with server-calculated values
-    await updateCharacter(outcome.updatedCharacter);
-
-    // Clear the active segment
-    await clearActiveSegment();
-  }
 
   /// Create new character (called after server creates it)
   Future<void> createCharacter(Character newCharacter) async {

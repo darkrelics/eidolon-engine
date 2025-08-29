@@ -129,43 +129,6 @@ def poll_segments() -> None:
             except Exception as err:
                 logger.warning(f"Failed to disable EventBridge rule: {err}")
 
-    # Handle polling state transitions based on your design
-    if poller_state == "run":
-        # Parameter is "run"
-        if not completed_segments:
-            # No segments to process - set parameter to "stop"
-            update_polling_state("stop")
-            logger.info("Parameter set to stop - no segments to process")
-    else:  # poller_state == "stop"
-        # Parameter is "stop" - check for active segments
-        has_active_segments = check_active_segments_exist()
-
-        if has_active_segments:
-            # Found active segments - return to "run"
-            update_polling_state("run")
-            logger.info("Active segments found - parameter set back to run")
-        else:
-            # No active segments - disable the EventBridge rule
-            try:
-                manage_eventbridge_rule(False)
-                logger.info("No active segments - EventBridge rule disabled")
-            except Exception as err:
-                logger.warning(f"Failed to disable EventBridge rule: {err}")
-
-    return {
-        "SegmentsFound": len(completed_segments),
-        "MechanicalCount": mechanical_count,
-        "SimpleCount": simple_count,
-        "SegmentsToAdvance": segments_to_advance,
-        "SegmentsToProcess": segments_to_process,
-        "SegmentsFailed": segments_failed,
-        "StuckCount": stuck_count,
-        "SegmentsCleaned": segments_cleaned,
-        "ExhaustedCount": exhausted_count,
-        "SegmentsMarkedExceptional": segments_marked_exceptional,
-        "PollerState": poller_state,
-    }
-
 
 def lambda_handler(event: dict, context: object) -> dict:
     """
@@ -191,7 +154,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         
         return {
             "statusCode": 200,
-            "body": {"message": "Segment polling completed"}
+            "body": {"Message": "Segment polling completed"}
         }
 
     except (ClientError, RuntimeError) as err:

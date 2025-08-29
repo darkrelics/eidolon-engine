@@ -212,35 +212,6 @@ class ApiService extends BaseApiService {
   /// 
   /// Fetches the results of a completed segment including
   /// rewards, XP gained, and character updates.
-  Future<Map<String, dynamic>> getSegmentOutcome({
-    required String characterId,
-    required String segmentId,
-  }) async {
-    debugPrint('ApiService: Getting segment outcome - characterId: $characterId, segmentId: $segmentId');
-    
-    try {
-      final json = await get<Map<String, dynamic>>(
-        '/segment/outcome',
-        queryParams: {
-          'CharacterID': characterId,
-          'SegmentID': segmentId,
-        },
-      );
-      
-      debugPrint('ApiService: Segment outcome retrieved successfully');
-      return json;
-    } catch (e) {
-      if (e is ApiException) {
-        if (e.statusCode == 404) {
-          throw Exception('Segment not found');
-        }
-        if (e.statusCode == 409) {
-          throw Exception('Segment not yet completed');
-        }
-      }
-      rethrow;
-    }
-  }
 
   /// Abandon current story run.
   /// 

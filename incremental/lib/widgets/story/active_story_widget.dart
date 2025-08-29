@@ -432,6 +432,26 @@ class _SimpleSegmentCard extends StatelessWidget {
               ],
             ],
             
+            // Show narrative for processed/completed segments
+            if (segment['Narrative'] != null && segment['Narrative'].toString().isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Text(
+                  segment['Narrative'],
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.justify,
+                ),
+              ),
+            ],
+            
             // Show outcome for completed segments
             if (outcome != null) ...[
               const SizedBox(height: 8),
@@ -451,6 +471,24 @@ class _SimpleSegmentCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ],
+            
+            // Show effects if present
+            if (segment['Effects'] != null && (segment['Effects'] as Map).isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Effects:',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 4),
+              ...(segment['Effects'] as Map).entries.map((entry) => 
+                Text(
+                  '• ${entry.key}: ${entry.value}',
+                  style: theme.textTheme.bodySmall,
+                ),
               ),
             ],
             

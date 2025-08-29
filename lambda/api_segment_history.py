@@ -115,7 +115,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
 
     response = SegmentHistoryResponse(CharacterID=character_id, StoryID=story_id, Segments=formatted_segments)
 
-    logger.info(f"Segment history retrieved for {character_id}")
+    logger.debug(f"Segment history retrieved for {character_id}")
 
     return response
 

@@ -44,7 +44,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
     can_create = limit_result.get("can_create", False)
     current_count = limit_result.get("current_count", 0)
 
-    logger.info(f"Character limit check for {player_id}")
+    logger.debug(f"Character limit check for {player_id}")
 
     if not can_create:
         raise ValueError(f"Character limit reached ({current_count})")

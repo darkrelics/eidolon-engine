@@ -28,6 +28,11 @@ class SegmentStatusResponse(BaseEidolonModel):
     decision: str | None = Field(default=None, alias="Decision")
     combat_state: CombatStateModel | dict | None = Field(default=None, alias="CombatState")
     healing_applied: bool | None = Field(default=None, alias="HealingApplied")
+    
+    # Narrative data (included when segment is processed/completed)
+    narrative: str | None = Field(default=None, alias="Narrative")
+    effects: dict | None = Field(default=None, alias="Effects")
+    next_segment_id: str | None = Field(default=None, alias="NextSegmentID")
 
 
 class SegmentHistoryItem(BaseEidolonModel):

@@ -113,7 +113,8 @@ def queue_segment_for_processing(active_segment_id: str) -> None:
         active_segment_id: Active segment UUID to process
 
     Raises:
-        RuntimeError: If SEGMENT_QUEUE_URL not configured
+        RuntimeError: If SEGMENT_QUEUE_URL not configured or SQS operation fails
+        ValueError: If active_segment_id is empty
     """
     if not SEGMENT_QUEUE_URL:
         logger.error("SEGMENT_QUEUE_URL not configured")
@@ -121,12 +122,9 @@ def queue_segment_for_processing(active_segment_id: str) -> None:
 
     if not active_segment_id:
         logger.error("ActiveSegmentID cannot be empty")
-        return
+        raise ValueError("ActiveSegmentID cannot be empty")
 
-    try:
-        # Send just the ActiveSegmentID as plain text
-        send_message(SEGMENT_QUEUE_URL, active_segment_id)
-        logger.info(f"Queued mechanical segment for processing for {active_segment_id}")
-    except RuntimeError as err:
-        # Non-critical - segment will be picked up by ops-segment-poller
-        logger.warning(f"Failed to queue segment for processing for {active_segment_id} Error: {err}")
+    # Let exceptions propagate - caller decides if critical
+    # send_message already raises RuntimeError on failure
+    send_message(SEGMENT_QUEUE_URL, active_segment_id)
+    logger.info(f"Queued mechanical segment for processing for {active_segment_id}")

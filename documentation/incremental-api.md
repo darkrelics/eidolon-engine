@@ -41,7 +41,6 @@ All API endpoints are implemented as individual Lambda functions:
 
 - `api-segment-decision` - POST /segment/decision
 - `api-segment-history` - GET /segment/history
-- `api-segment-outcome` - GET /segment/outcome
 - `api-segment-rest` - POST /segment/rest
 - `api-segment-status` - GET /segment/status
 - `api-story-abandon` - POST /story/abandon
@@ -816,47 +815,6 @@ Content-Type: application/json
 | `401`  | "Unauthorized"               | Invalid or missing JWT token |
 | `500`  | "Internal server error"      | Database or system failure   |
 
----
-
-### Get Segment Outcome
-
-Retrieves the outcome of a completed segment.
-
-**Endpoint:** `GET /segment/outcome`
-
-**Authentication:** Required
-
-**Query Parameters:**
-
-| Parameter     | Type   | Required | Description           |
-| ------------- | ------ | -------- | --------------------- |
-| `CharacterID` | String | Yes      | UUID of the character |
-| `SegmentID`   | String | Yes      | UUID of the segment   |
-
-**Request:**
-
-```http
-GET /segment/outcome?CharacterID=550e8400-e29b-41d4-a716-446655440000&SegmentID=segment_uuid HTTP/1.1
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-
-```json
-{
-  "Outcome": {
-    "Result": "success",
-    "Rewards": {
-      "gold": 50,
-      "experience": 100
-    },
-    "Consequences": {
-      "wounds": 1
-    },
-    "NextSegment": "segment_next_uuid"
-  }
-}
-```
 
 **Error Responses:**
 
@@ -871,7 +829,7 @@ Authorization: Bearer <jwt-token>
 
 ### Get Segment Status
 
-Gets the current status of an active segment, including timing information for client polling.
+Gets the current status of an active segment, including timing information and narrative data when the segment is processed/completed.
 
 **Endpoint:** `GET /segment/status`
 
@@ -890,7 +848,7 @@ GET /segment/status?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
 Authorization: Bearer <jwt-token>
 ```
 
-**Response:**
+**Response (Active Segment):**
 
 ```json
 {
@@ -909,11 +867,44 @@ Authorization: Bearer <jwt-token>
 }
 ```
 
+**Response (Processed/Completed Segment):**
+
+When a segment is processed or completed, additional narrative data is included:
+
+```json
+{
+  "ActiveSegmentID": "seg-uuid",
+  "StoryID": "story-uuid",
+  "SegmentID": "segment-def-uuid",
+  "Status": "active",
+  "IsComplete": true,
+  "TimeRemaining": 0,
+  "EndTime": "2025-01-15T14:30:00Z",
+  "ProcessingStatus": "processed",
+  "SegmentType": "mechanical",
+  "Outcome": "normal",
+  "Narrative": "You successfully navigate through the forest, finding a hidden path...",
+  "Effects": {
+    "Wounds": 0,
+    "Items": ["item_health_potion"]
+  },
+  "NextSegmentID": "next-segment-uuid",
+  "ChallengeResults": [...],
+  "CombatState": {...}
+}
+```
+
 **Timing Fields:**
 - `TimeRemaining`: Seconds until segment completes (0 if complete)
 - `EndTime`: ISO 8601 timestamp when segment will complete
 - `IsComplete`: True if EndTime has passed
-- `ProcessingStatus`: "pending" (mechanical awaiting processing), "processing" (mechanical in progress), or "processed" (ready for advancement, then deleted)
+- `ProcessingStatus`: "pending" (mechanical awaiting processing), "processing" (mechanical in progress), or "processed" (ready for advancement)
+
+**Narrative Fields (when processed/completed):**
+- `Narrative`: Story text describing the outcome
+- `Effects`: Changes to character state (wounds, items, etc.)
+- `NextSegmentID`: ID of the next segment in the story
+- `Outcome`: Result type ("normal", "exceptional", "minimal", "failure", "death")
 
 **Error Responses:**
 

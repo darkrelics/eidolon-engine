@@ -157,10 +157,6 @@ class ApiStack(Stack):
                 decision_resource = segment_resource.add_resource("decision")
                 self._add_lambda_integration(decision_resource, "POST", "api-segment-decision", authorizer)
 
-            if "api-segment-outcome" in self.lambda_arns:
-                outcome_resource = segment_resource.add_resource("outcome")
-                self._add_lambda_integration(outcome_resource, "GET", "api-segment-outcome", authorizer)
-
             if "api-segment-status" in self.lambda_arns:
                 status_resource = segment_resource.add_resource("status")
                 self._add_lambda_integration(status_resource, "GET", "api-segment-status", authorizer)
@@ -295,7 +291,6 @@ class ApiStack(Stack):
             "api-character-list": "ImportApiCharacterList",
             "api-segment-decision": "ImportApiSegmentDecision",
             "api-segment-history": "ImportApiSegmentHistory",
-            "api-segment-outcome": "ImportApiSegmentOutcome",
             "api-segment-rest": "ImportApiSegmentRest",
             "api-segment-status": "ImportApiSegmentStatus",
             "api-story-abandon": "ImportApiStoryAbandon",
