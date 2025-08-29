@@ -15,7 +15,7 @@ from eidolon.segment_events import challenge_results_to_pascal, combat_state_to_
 from eidolon.time_utils import future_unix, now_unix
 
 
-def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def: dict = None) -> None:
+def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def = None) -> None:
     """
     Update active segment with outcome but keep status as active until timer expires.
 

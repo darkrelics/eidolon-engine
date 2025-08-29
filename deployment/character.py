@@ -9,15 +9,29 @@ from codebuild import execute_lambda_builds, validate_build_artifacts
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
-from utilities import extract_stack_outputs, run_cdk_deploy
+from utilities import run_cdk_deploy
 
 
 def deploy_character_stack(params) -> dict:
     """Deploy the Character stack using CDK."""
-    # Get DynamoDB policy ARN from state
+    # Get state for Lambda stack resources
     state_path = Path(__file__).parent / ".cdk-state.json"
     state = CDKState.load(str(state_path))
-    dynamodb_policy_arn = state.infrastructure.get("dynamodb_policy_arn", "")
+    
+    # Safely get Lambda resources from state
+    lambda_layer_arn = ""
+    lambda_role_arn = ""
+    if hasattr(state, 'infrastructure') and state.infrastructure:
+        lambda_layer_arn = state.infrastructure.get("lambda_layer_arn", "")
+        lambda_role_arn = state.infrastructure.get("lambda_role_arn", "")
+    
+    # Validate Lambda resources exist
+    if not lambda_layer_arn:
+        print("\nError: Lambda layer ARN not found in state. Please deploy Lambda stack first.")
+        return {"success": False, "outputs": {}}
+    if not lambda_role_arn:
+        print("\nError: Lambda role ARN not found in state. Please deploy Lambda stack first.")
+        return {"success": False, "outputs": {}}
 
     # Get config for DynamoDB tables
     config_path = Path(__file__).parent.parent / "config.yml"
@@ -38,40 +52,15 @@ def deploy_character_stack(params) -> dict:
         "-c",
         f"client_fqdn={client_fqdn}",
         "-c",
-        f"dynamodb_policy_arn={dynamodb_policy_arn}",
+        f"lambda_layer_arn={lambda_layer_arn}",
+        "-c",
+        f"lambda_role_arn={lambda_role_arn}",
         "-c",
         f"dynamodb_tables={tables_json}",
     ]
 
     app_command = "python3 app_character.py"
     return run_cdk_deploy("character", params.region, app_command, context_args)
-
-
-def validate_lambda_layer(layer_name: str, region: str) -> bool:
-    """Validate that Lambda layer exists.
-
-    Args:
-        layer_name: Name of the Lambda layer
-        region: AWS region
-
-    Returns:
-        True if layer exists, False otherwise
-    """
-    try:
-        lambda_client = boto3.client("lambda", region_name=region)
-        response = lambda_client.list_layer_versions(LayerName=layer_name, MaxItems=1)
-        if response.get("LayerVersions"):
-            print(f"  [OK] Lambda layer: {layer_name}")
-            return True
-        print(f"  [MISSING] Lambda layer: {layer_name}")
-        return False
-    except ClientError as err:
-        error_code = err.response.get("Error", {}).get("Code", "")
-        if error_code == "ResourceNotFoundException":
-            print(f"  [MISSING] Lambda layer: {layer_name}")
-        else:
-            print(f"  [ERROR] Lambda layer {layer_name}: {error_code}")
-        return False
 
 
 def validate_character_functions(region: str) -> dict:
@@ -116,19 +105,6 @@ def verify_character_deployment(params) -> dict:
     print("\nVerifying Character Stack...")
     validation = {"success": True}
 
-    # Check Lambda layer
-    if not validate_lambda_layer("eidolon-dependencies", params.region):
-        validation["success"] = False
-
-    # Check Lambda execution role
-    try:
-        iam_client = boto3.client("iam", region_name=params.region)
-        iam_client.get_role(RoleName="eidolon-lambda-execution-role")
-        print(f"  [OK] Lambda execution role: eidolon-lambda-execution-role")
-    except ClientError:
-        print(f"  [MISSING] Lambda execution role: eidolon-lambda-execution-role")
-        validation["success"] = False
-
     # Check Lambda functions
     functions_validation = validate_character_functions(params.region)
     if not functions_validation["success"]:
@@ -137,7 +113,7 @@ def verify_character_deployment(params) -> dict:
     return validation
 
 
-def deploy_character(params, config: Config, state: CDKState, config_path: Path, state_path: Path) -> bool:
+def deploy_character(params, config: Config, _state: CDKState, config_path: Path, _state_path: Path) -> bool:
     """Deploy and verify Character stack."""
     phase = get_stack_phase_number("character", params.deployment_mode)
     print("\n" + "=" * 60)
@@ -179,15 +155,6 @@ def deploy_character(params, config: Config, state: CDKState, config_path: Path,
     if not result.get("success", False):
         print("\nCharacter deployment failed!")
         return False
-
-    # Extract outputs for other stacks
-    outputs = extract_stack_outputs("character", params.region)
-    
-    # Store important outputs in state
-    if outputs:
-        state.infrastructure["lambda_layer_arn"] = outputs.get("LambdaLayerArn", "")
-        state.infrastructure["lambda_role_arn"] = outputs.get("LambdaRoleArn", "")
-        state.save(str(state_path))
 
     # Verify deployment
     validation = verify_character_deployment(params)

@@ -97,7 +97,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
         if processing_status == "processed" or active_segment.get("Status") == "completed":
             try:
                 # Get segment definition for narrative text
-                segment_def = get_story_segment(story_id, segment_id)
+                segment_def = get_story_segment(story_id, segment_id)  # type: ignore
                 segment_def = normalize_segment_definition(segment_def)
                 
                 if segment_type == "mechanical":

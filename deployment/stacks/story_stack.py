@@ -64,10 +64,6 @@ class StoryStack(Stack):
 
         # Create IAM Policy for Story operations
         self.story_policy = self._create_story_policy()
-
-        # Attach policy to Lambda role if ARN provided
-        if self.lambda_role_arn:
-            self._attach_policy_to_role()
         
         # Import shared Lambda layer and role from Character stack
         self.lambda_layer = self._import_lambda_layer()
@@ -165,16 +161,6 @@ class StoryStack(Stack):
             ],
         )
 
-    def _attach_policy_to_role(self) -> None:
-        """Attach story policy to Lambda execution role."""
-        print("  Attaching story policy to Lambda role")
-
-        # Import the Lambda role
-        lambda_role = iam.Role.from_role_arn(self, "ImportedLambdaRole", self.lambda_role_arn)
-
-        # Attach the policy
-        lambda_role.add_managed_policy(self.story_policy)
-    
     def _import_lambda_layer(self) -> lambda_.ILayerVersion:
         """Import shared Lambda layer from Character stack."""
         if self.lambda_layer_arn:
@@ -313,7 +299,7 @@ class StoryStack(Stack):
                 lambda_event_sources.SqsEventSource(
                     self.processing_queue,
                     batch_size=10,
-                    max_batching_window_in_seconds=5
+                    max_batching_window=Duration.seconds(5)
                 )
             )
         
@@ -325,7 +311,7 @@ class StoryStack(Stack):
                 lambda_event_sources.SqsEventSource(
                     self.advancement_queue,
                     batch_size=10,
-                    max_batching_window_in_seconds=5
+                    max_batching_window=Duration.seconds(5)
                 )
             )
 

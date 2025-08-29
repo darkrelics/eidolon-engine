@@ -43,8 +43,8 @@ def get_deployment_order(mode: str) -> list:
     Stacks not in the returned list will not be deployed.
     
     Dependencies:
-    - Character provides shared Lambda layer and role
-    - Story and Player stacks use shared resources from Character
+    - Lambda provides shared Lambda layer and role
+    - Character, Story and Player stacks use shared resources from Lambda
     - API requires Lambda functions from all stacks
 
     Args:
@@ -54,14 +54,14 @@ def get_deployment_order(mode: str) -> list:
         List of stack names in deployment order
     """
     if mode == "mud":
-        # MUD: Character first (shared resources), no Story stack
-        return ["codebuild", "dynamodb", "character", "player", "s3", "cloudwatch", "api", "client"]
+        # MUD: Lambda first (shared resources), no Story stack
+        return ["codebuild", "dynamodb", "lambda", "player", "character", "s3", "cloudwatch", "api", "client"]
     elif mode == "incremental":
-        # Incremental: Character first, then Story and Player
-        return ["codebuild", "dynamodb", "character", "story", "player", "api", "client"]
+        # Incremental: Lambda first, then Player, Character, Story
+        return ["codebuild", "dynamodb", "lambda", "player", "character", "story", "api", "client"]
     else:  # hybrid
-        # Hybrid: Character first, then Story and Player
-        return ["codebuild", "dynamodb", "character", "story", "player", "s3", "cloudwatch", "api", "client"]
+        # Hybrid: Lambda first, then Player, Character, Story
+        return ["codebuild", "dynamodb", "lambda", "player", "character", "story", "s3", "cloudwatch", "api", "client"]
 
 
 def get_stack_phase_number(stack_name: str, mode: str) -> int:
@@ -93,8 +93,9 @@ def get_stack_description(stack_name: str) -> str:
     descriptions = {
         "codebuild": "2 projects, 1 S3 bucket, 1 role, 2 policies",
         "dynamodb": "14 tables, 1 IAM policy",
-        "character": "5 Lambda functions, shared layer, shared role",
-        "story": "10 Lambda functions, 2 SQS queues, EventBridge, SSM",
+        "lambda": "Shared Lambda layer, shared execution role, logs policy",
+        "character": "5 Lambda functions",
+        "story": "10 Lambda functions, 2 SQS queues, EventBridge, SSM, 1 policy",
         "player": "Cognito User Pool, client, 1 Lambda function",
         "s3": "1 bucket, 1 IAM policy, Lua scripts upload",
         "cloudwatch": "1 log group, metrics, 1 IAM policy",

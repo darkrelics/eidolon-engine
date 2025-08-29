@@ -35,16 +35,16 @@ def process_segment(active_segment: dict) -> None:
     # Get segment definition
     try:
         segment_def = get_segment_definition(
-            active_segment.get("StoryID"),
-            active_segment.get("SegmentID")
-        )
+            active_segment.get("StoryID"),  # type: ignore
+            active_segment.get("SegmentID")  # type: ignore
+        ) 
     except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
         raise
     
     # Get character
-    character = get_character(active_segment.get("CharacterID"))
-    
+    character = get_character(active_segment.get("CharacterID"))  # type: ignore
+
     # Process based on type
     outcome, results = route_segment_processing(
         segment_def,
@@ -55,7 +55,7 @@ def process_segment(active_segment: dict) -> None:
     # Persist results
     try:
         update_active_segment_outcome(
-            active_segment.get("ActiveSegmentID"),
+            active_segment.get("ActiveSegmentID"),  # type: ignore
             outcome,
             results,
             segment_def

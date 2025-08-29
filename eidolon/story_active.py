@@ -213,7 +213,7 @@ def story_update_character(character_id: str, story_id: str, active_segment_id: 
         logger.error(f"Failed to update character state for {character_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update character state: {err}") from err
 
-    return response
+    return response  # type: ignore
 
 
 def rollback_story_start(character_id: str, active_segment_id: str, story_instance_id: str) -> None:

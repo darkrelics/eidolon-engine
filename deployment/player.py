@@ -13,7 +13,7 @@ from utilities import run_cdk_deploy
 
 
 def get_shared_resources(params, state: CDKState) -> dict:
-    """Get shared Lambda resources from Character stack.
+    """Get shared Lambda resources from Lambda stack.
 
     Args:
         params: Deployment parameters with account_id and region
@@ -27,7 +27,7 @@ def get_shared_resources(params, state: CDKState) -> dict:
         "lambda_role_arn": "",
     }
 
-    # Check if ARNs are stored in state from Character stack deployment
+    # Get ARNs from state (stored by Lambda stack deployment)
     if hasattr(state, "infrastructure") and state.infrastructure:
         # Use stored layer ARN if available
         if state.infrastructure.get("lambda_layer_arn"):
@@ -39,21 +39,21 @@ def get_shared_resources(params, state: CDKState) -> dict:
             resources["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
             print("  Using Lambda role ARN from state")
 
-    # If not in state, try to get from CloudFormation stack outputs
+    # If not in state, try to get from Lambda stack CloudFormation outputs
     if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
         try:
             from utilities import extract_stack_outputs
-            character_outputs = extract_stack_outputs("character", params.region)
+            lambda_outputs = extract_stack_outputs("lambda", params.region)
             
-            if not resources["lambda_layer_arn"] and character_outputs.get("LambdaLayerArn"):
-                resources["lambda_layer_arn"] = character_outputs["LambdaLayerArn"]
-                print("  Using Lambda layer ARN from Character stack outputs")
+            if not resources["lambda_layer_arn"] and lambda_outputs.get("LambdaLayerArn"):
+                resources["lambda_layer_arn"] = lambda_outputs["LambdaLayerArn"]
+                print("  Using Lambda layer ARN from Lambda stack outputs")
                 
-            if not resources["lambda_role_arn"] and character_outputs.get("LambdaRoleArn"):
-                resources["lambda_role_arn"] = character_outputs["LambdaRoleArn"]
-                print("  Using Lambda role ARN from Character stack outputs")
+            if not resources["lambda_role_arn"] and lambda_outputs.get("LambdaRoleArn"):
+                resources["lambda_role_arn"] = lambda_outputs["LambdaRoleArn"]
+                print("  Using Lambda role ARN from Lambda stack outputs")
         except Exception as e:
-            print(f"  Warning: Could not get shared resources from Character stack: {e}")
+            print(f"  Warning: Could not get shared resources from Lambda stack: {e}")
 
     return resources
 

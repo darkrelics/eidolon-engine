@@ -91,7 +91,7 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
             Limit=max_segments
         )
 
-        segments = response.get("Items", [])
+        segments = response.get("Items", [])  # type: ignore
         logger.info(f"Found {len(segments)} stuck mechanical segments with time to retry")
         return segments
 

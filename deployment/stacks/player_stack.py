@@ -61,10 +61,6 @@ class PlayerStack(Stack):
         self.lambda_layer = self._import_lambda_layer()
         self.lambda_role = self._import_lambda_role()
         
-        # Attach DynamoDB policy to Lambda role if provided
-        if self.dynamodb_policy_arn and self.lambda_role_arn:
-            self._attach_dynamodb_policy()
-        
         # Deploy cognito-player-new Lambda function
         self.lambda_function = self._deploy_lambda_function()
         
@@ -156,19 +152,6 @@ class PlayerStack(Stack):
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda role from CloudFormation export: {e}")
                 raise ValueError("Lambda role ARN not provided and CloudFormation export not found")
-    
-    def _attach_dynamodb_policy(self) -> None:
-        """Attach DynamoDB policy to Lambda execution role."""
-        print(f"  Attaching DynamoDB policy to Lambda role")
-        
-        # Import the Lambda role
-        lambda_role = iam.Role.from_role_arn(self, "ImportedRoleForPolicy", self.lambda_role_arn)
-        
-        # Import and attach the DynamoDB policy
-        dynamodb_policy = iam.ManagedPolicy.from_managed_policy_arn(
-            self, "ImportedDynamoDBPolicy", self.dynamodb_policy_arn
-        )
-        lambda_role.add_managed_policy(dynamodb_policy)
     
     def _deploy_lambda_function(self) -> lambda_.Function:
         """Deploy cognito-player-new Lambda function."""

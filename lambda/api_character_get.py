@@ -129,7 +129,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
                     segment_id = active_segment.get("SegmentID")
                     
                     # Get segment definition for narrative
-                    segment_def = get_story_segment(story_id, segment_id)
+                    segment_def = get_story_segment(story_id, segment_id)  # type: ignore
                     segment_def = normalize_segment_definition(segment_def)
                     
                     if segment_type == "mechanical":
