@@ -472,3 +472,40 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
         except ClientError as err:
             logger.error(f"Failed to apply character updates for {character_id} Error: {err}", exc_info=True)
             raise RuntimeError(f"Failed to apply character updates: {err}") from err
+
+
+def character_clear_story(character_id: str) -> None:
+    """
+    Clear story-related fields from a character record.
+    
+    This function is used to release a character from a broken story chain
+    by clearing ActiveStoryID, ActiveSegmentID, and resetting GameMode to "None".
+    
+    Args:
+        character_id: Character UUID
+    """
+    try:
+        # Update the character to clear story fields and reset GameMode
+        update_expression = """
+            SET GameMode = :none, 
+                UpdatedAt = :updated_at
+            REMOVE ActiveStoryID, ActiveSegmentID
+        """
+        
+        expression_values = {
+            ":none": "None",
+            ":updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues=expression_values
+        )
+        
+        logger.info(f"Cleared story fields for character {character_id}")
+        
+    except ClientError as err:
+        logger.error(f"Failed to clear story for character {character_id} Error: {err}", exc_info=True)
+        # Don't raise - just log and return

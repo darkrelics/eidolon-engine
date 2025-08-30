@@ -8,8 +8,7 @@ Returns the full character data including active segments if any.
 """
 
 from eidolon.character_data import character_get
-from eidolon.character_segment import character_get_active_segment
-from eidolon.character_story import character_get_active_story, get_stories
+from eidolon.character_story import get_active_story_and_segment, get_stories
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float
@@ -17,10 +16,7 @@ from eidolon.items import get_inventory
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.schema import normalize_segment_definition
-from eidolon.segment_core import validate_segment_outcome_results
-from eidolon.story_retrieval import get_story_segment
-from eidolon.time_utils import from_unix
+from eidolon.story_retrieval import enrich_segment_with_narrative
 
 
 def get_character_logic(character_id: str, player_id: str) -> dict:
@@ -50,36 +46,14 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         logger.error(f"Failed to get character: {err}")
         return {"success": False, "error": "Failed to retrieve character data", "status_code": 500}
 
-    # Check for active segment
-    active_story: dict = {}
-    active_segment: dict = {}
-    try:
-        active_story = character_get_active_story(character)
-        if active_story:
-            logger.debug("Active story found for character")
-        else:
-            logger.debug("No active story found for character")
-            character["ActiveStoryID"] = None
-            character["ActiveSegmentID"] = None
-    except RuntimeError:
-        logger.error("Error retrieving active story")
+    # Get active story and segment, handling broken story chains
+    active_story, active_segment = get_active_story_and_segment(character)
 
-    if active_story:
+    if not active_story or not active_segment:
+        character["ActiveStoryID"] = None
+        character["ActiveSegmentID"] = None
+        character["GameMode"] = "None"
 
-        try:
-            active_segment = character_get_active_segment(character)
-            if active_segment:
-                logger.debug("Active segment found for character")
-        except RuntimeError:
-            logger.error("Error retrieving active segments")
-            # Continue without active segment data - not critical for response
-
-        if active_segment:
-            character["ActiveSegmentID"] = active_segment.get("ActiveSegmentID")
-        else:
-            character["ActiveStoryID"] = None
-            active_story = {}
-            character["ActiveSegmentID"] = None
     # Note: Attributes and skills maintain their original casing from the database
     # The Flutter client handles any casing differences flexibly
 
@@ -91,91 +65,16 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
     # Build response data with PascalCase keys
     response_data: dict = {"Character": decimal_to_float(character)}
 
-    # Add story if found
+    # Add story if found (already converted by get_active_story_and_segment)
     if active_story:
-        response_data["ActiveStory"] = decimal_to_float(active_story)
+        response_data["ActiveStory"] = active_story
+    
     if active_segment:
-        # Convert Unix timestamps to ISO 8601 for API response
-        segment_data = decimal_to_float(active_segment)
-        # Type assertion - decimal_to_float returns dict when given dict
-        if isinstance(segment_data, dict):
-
-            # Convert StartTime if present (check for None, not falsy)
-            if "StartTime" in segment_data and segment_data["StartTime"] is not None:
-                try:
-                    # Handle both int and float Unix timestamps
-                    unix_time = float(segment_data["StartTime"])
-                    segment_data["StartTime"] = from_unix(int(unix_time))
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Failed to convert StartTime: {e}")
-
-            # Convert EndTime if present (check for None, not falsy)
-            if "EndTime" in segment_data and segment_data["EndTime"] is not None:
-                try:
-                    # Handle both int and float Unix timestamps
-                    unix_time = float(segment_data["EndTime"])
-                    segment_data["EndTime"] = from_unix(int(unix_time))
-                except (ValueError, TypeError) as e:
-                    logger.warning(f"Failed to convert EndTime: {e}")
-
-            # Add narrative data if segment is processed/completed
-            processing_status = active_segment.get("ProcessingStatus", "")
-            segment_status = active_segment.get("Status", "")
-            segment_type = active_segment.get("SegmentType", "").lower()
-
-            if (processing_status == "processed" or segment_status == "completed") and segment_data:
-                try:
-                    story_id = active_segment.get("StoryID")
-                    segment_id = active_segment.get("SegmentID")
-
-                    # Get segment definition for narrative
-                    segment_def = get_story_segment(story_id, segment_id)  # type: ignore
-                    segment_def = normalize_segment_definition(segment_def)
-
-                    if segment_type == "mechanical":
-                        outcome = active_segment.get("Outcome", "normal")
-                        validated_result = validate_segment_outcome_results(segment_def, outcome)
-                        segment_data["Narrative"] = validated_result.get("Narrative", "")
-                        segment_data["Effects"] = validated_result.get("Effects", {})
-
-                        # Get next segment based on outcome
-                        results = segment_def.get("Results", {}) or {}
-                        next_segment_id = None
-                        if isinstance(results, dict):
-                            outcome_map = {
-                                "death": "Death",
-                                "failure": "Failure",
-                                "minimal": "Minimal",
-                                "normal": "Normal",
-                                "exceptional": "Exceptional",
-                            }
-                            outcome_key = outcome_map.get(str(outcome).lower())
-                            if outcome_key and isinstance(results.get(outcome_key), dict):
-                                outcome_block = results.get(outcome_key, {})
-                                if isinstance(outcome_block, dict) and "NextSegmentID" in outcome_block:
-                                    next_segment_id = outcome_block.get("NextSegmentID")
-
-                        if next_segment_id is None and "NextSegmentID" in segment_def:
-                            next_segment_id = segment_def.get("NextSegmentID")
-
-                        segment_data["NextSegmentID"] = next_segment_id
-
-                    elif segment_type == "rest":
-                        segment_data["Narrative"] = "You have rested and recovered."
-                        segment_data["Effects"] = {}
-                        segment_data["NextSegmentID"] = segment_def.get("NextSegmentID")
-
-                    elif segment_type == "decision":
-                        decision = active_segment.get("Decision")
-                        decision_options = segment_def.get("DecisionOptions", {})
-                        segment_data["NextSegmentID"] = decision_options.get(decision) if decision else None
-                        segment_data["Narrative"] = ""
-                        segment_data["Effects"] = {}
-
-                except Exception as err:
-                    logger.warning(f"Failed to get narrative data: {err}")
-                    # Continue without narrative - not critical
-
+        # active_segment already converted by get_active_story_and_segment
+        if isinstance(active_segment, dict):
+            segment_data = enrich_segment_with_narrative(active_segment, active_segment)
+        else:
+            segment_data = active_segment
         response_data["ActiveSegment"] = segment_data
 
     # If there isn't an active story the available stories will be provided.

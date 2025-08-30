@@ -8,10 +8,12 @@ from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.character_data import character_get
-from eidolon.dynamo import TableName, dynamo
+from eidolon.character_data import character_get, character_clear_story
+from eidolon.character_segment import character_get_active_segment
+from eidolon.dynamo import TableName, dynamo, decimal_to_float
 from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time
+from eidolon.validation import validate_uuid
 
 
 def get_story_history(character_id: str, story_id: str) -> dict:
@@ -340,3 +342,85 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
     except ClientError as err:
         logger.error(f"Failed to apply outcome effects for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply outcome effects: {err}") from err
+
+
+def get_active_story_and_segment(character: dict) -> tuple:
+    """
+    Retrieve active story and segment for a character, handling broken story chains.
+    
+    Logic:
+    - If GameMode is not "Incremental", return empty dicts immediately
+    - If GameMode is "Incremental":
+      - Validate both ActiveStoryID and ActiveSegmentID are valid UUIDs
+      - If both valid, fetch and return them
+      - If either is missing/invalid, clear story and return empty dicts
+    
+    Args:
+        character: Character dict to check
+        
+    Returns:
+        Tuple of (active_story, active_segment) dicts, either may be empty
+    """
+    # Get the character ID first
+    character_id = character.get("CharacterID")
+    if not character_id:
+        logger.error("Character missing CharacterID field")
+        return {}, {}
+    
+    # Short circuit if not in Incremental mode
+    game_mode = character.get("GameMode", "None")
+    if game_mode != "Incremental":
+        logger.debug(f"Character not in Incremental mode (GameMode: {game_mode})")
+        return {}, {}
+    
+    # Check if both story and segment IDs exist
+    if not character.get("ActiveStoryID") and not character.get("ActiveSegmentID"):
+        logger.warning(f"Character {character_id} has no active story or segment")
+        # Clear the story fields in the database
+        character_clear_story(character_id)
+        return {}, {}
+
+    active_story_id = character.get("ActiveStoryID")
+    active_segment_id = character.get("ActiveSegmentID")
+    
+    # Validate both IDs are present and valid UUIDs
+    story_valid = validate_uuid(active_story_id)
+    segment_valid = validate_uuid(active_segment_id)
+    
+    if not story_valid or not segment_valid:
+        # Invalid or missing IDs = broken story chain
+        logger.warning(
+            f"Broken story chain for character {character_id}: "
+            f"StoryID valid={story_valid}, SegmentID valid={segment_valid}"
+        )
+        
+        # Clear the story fields in the database
+        character_clear_story(character_id)
+        return {}, {}
+    
+    # Both IDs are valid UUIDs, fetch the actual data
+    active_story: dict = {}
+    active_segment: dict = {}
+    
+    try:
+        active_story = character_get_active_story(character)
+        if not active_story:
+            # Story ID was valid but story not found = broken chain
+            logger.warning(f"Story {active_story_id} not found for character {character_id}")
+            character_clear_story(character_id)
+            return {}, {}
+    except RuntimeError as err:
+        logger.error(f"Error retrieving active story: {err}")
+        # Database error - don't clear, just return empty
+        return {}, {}
+    
+    active_segment = character_get_active_segment(character)
+    if not active_segment:
+        # Segment ID was valid but segment not found = broken chain
+        logger.warning(f"Segment {active_segment_id} not found for character {character_id}")
+        character_clear_story(character_id)
+        return {}, {}
+
+    # Everything is valid - convert Decimal types to float for JSON serialization
+    logger.debug(f"Valid story and segment found for character {character_id}")
+    return decimal_to_float(active_story), decimal_to_float(active_segment)

@@ -84,9 +84,7 @@ class ApiService extends BaseApiService {
       
       final characterData = json['Character'] as Map<String, dynamic>;
       
-      // Pass through active story and segment IDs directly
-      characterData['ActiveStoryID'] = json['ActiveStoryID'];
-      characterData['ActiveSegmentID'] = json['ActiveSegmentID'];
+      // ActiveStoryID and ActiveSegmentID are already in characterData from the server
       
       // Check if there's an active story and segment
       final activeStory = json['ActiveStory'] as Map<String, dynamic>?;

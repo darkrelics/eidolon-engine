@@ -12,6 +12,8 @@ from eidolon.character_story import get_story_history
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.schema import normalize_segment_definition
+from eidolon.segment_core import validate_segment_outcome_results
+from eidolon.time_utils import from_unix
 
 
 def get_story_segment(story_id: str, segment_id: str) -> dict:
@@ -202,3 +204,96 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
     except Exception as err:
         logger.error(f"Error checking story cooldown Error: {err}")
         return 0
+
+
+def enrich_segment_with_narrative(segment_data: dict, active_segment: dict) -> dict:
+    """
+    Enrich segment data with narrative content, timestamps, and next segment information.
+    
+    Handles:
+    - Unix timestamp to ISO 8601 conversion
+    - Narrative content based on segment type and processing status
+    - Next segment ID calculation
+    - Effects from segment outcomes
+    
+    Args:
+        segment_data: Decimal-converted segment data dict
+        active_segment: Original segment with type and status information
+        
+    Returns:
+        Enriched segment_data dict with narrative and navigation data
+    """
+    # Convert Unix timestamps to ISO 8601
+    if "StartTime" in segment_data and segment_data["StartTime"] is not None:
+        try:
+            unix_time = float(segment_data["StartTime"])
+            segment_data["StartTime"] = from_unix(int(unix_time))
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Failed to convert StartTime: {e}")
+    
+    if "EndTime" in segment_data and segment_data["EndTime"] is not None:
+        try:
+            unix_time = float(segment_data["EndTime"])
+            segment_data["EndTime"] = from_unix(int(unix_time))
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Failed to convert EndTime: {e}")
+    
+    # Add narrative data if segment is processed/completed
+    processing_status = active_segment.get("ProcessingStatus", "")
+    segment_status = active_segment.get("Status", "")
+    segment_type = active_segment.get("SegmentType", "").lower()
+    
+    if processing_status == "processed" or segment_status == "completed":
+        try:
+            story_id = active_segment.get("StoryID")
+            segment_id = active_segment.get("SegmentID")
+            
+            # Get segment definition for narrative
+            segment_def = get_story_segment(story_id, segment_id)  # type: ignore
+            segment_def = normalize_segment_definition(segment_def)
+            
+            if segment_type == "mechanical":
+                outcome = active_segment.get("Outcome", "normal")
+                validated_result = validate_segment_outcome_results(segment_def, outcome)
+                segment_data["Narrative"] = validated_result.get("Narrative", "")
+                segment_data["Effects"] = validated_result.get("Effects", {})
+                
+                # Get next segment based on outcome
+                results = segment_def.get("Results", {}) or {}
+                next_segment_id = None
+                if isinstance(results, dict):
+                    outcome_map = {
+                        "death": "Death",
+                        "failure": "Failure",
+                        "minimal": "Minimal",
+                        "normal": "Normal",
+                        "exceptional": "Exceptional",
+                    }
+                    outcome_key = outcome_map.get(str(outcome).lower())
+                    if outcome_key and isinstance(results.get(outcome_key), dict):
+                        outcome_block = results.get(outcome_key, {})
+                        if isinstance(outcome_block, dict) and "NextSegmentID" in outcome_block:
+                            next_segment_id = outcome_block.get("NextSegmentID")
+                
+                if next_segment_id is None and "NextSegmentID" in segment_def:
+                    next_segment_id = segment_def.get("NextSegmentID")
+                
+                segment_data["NextSegmentID"] = next_segment_id
+            
+            elif segment_type == "rest":
+                segment_data["Narrative"] = "You have rested and recovered."
+                segment_data["Effects"] = {}
+                segment_data["NextSegmentID"] = segment_def.get("NextSegmentID")
+            
+            elif segment_type == "decision":
+                decision = active_segment.get("Decision")
+                decision_options = segment_def.get("DecisionOptions", {})
+                segment_data["NextSegmentID"] = decision_options.get(decision) if decision else None
+                segment_data["Narrative"] = ""
+                segment_data["Effects"] = {}
+                
+        except Exception as err:
+            logger.warning(f"Failed to get narrative data: {err}")
+            # Continue without narrative - not critical
+    
+    return segment_data
