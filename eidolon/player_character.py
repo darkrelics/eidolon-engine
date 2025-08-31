@@ -251,7 +251,6 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
         "character_removed_from_player": False,
         "items_deleted": 0,
         "active_segments_deleted": 0,
-        "history_deleted": 0,
         "errors": [],
     }
 
@@ -294,11 +293,6 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
     results["active_segments_deleted"] = segments_result["deleted_count"]
     results["errors"].extend(segments_result["errors"])
 
-    # Delete history records
-    history_result = delete_character_history(character_id)
-    results["history_deleted"] = history_result["deleted_count"]
-    results["errors"].extend(history_result["errors"])
-
     # Log deletion summary
     logger.info(f"Character deletion completed for {character_id}")
 
@@ -320,14 +314,12 @@ def delete_all_characters(player_id: str) -> dict:
             - characters_deleted: int - Number of characters deleted
             - items_deleted: int - Total items deleted across all characters
             - active_segments_deleted: int - Total segments deleted
-            - history_deleted: int - Total history records deleted
             - errors: list - List of error messages
     """
     results = {
         "characters_deleted": 0,
         "items_deleted": 0,
         "active_segments_deleted": 0,
-        "history_deleted": 0,
         "errors": [],
     }
 
@@ -351,7 +343,6 @@ def delete_all_characters(player_id: str) -> dict:
                         results["characters_deleted"] += 1
                     results["items_deleted"] += deletion_result.get("items_deleted", 0)
                     results["active_segments_deleted"] += deletion_result.get("active_segments_deleted", 0)
-                    results["history_deleted"] += deletion_result.get("history_deleted", 0)
 
                     if deletion_result.get("errors"):
                         results["errors"].extend(deletion_result.get("errors", []))

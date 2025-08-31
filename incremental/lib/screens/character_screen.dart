@@ -388,12 +388,11 @@ class _CharacterScreenState extends State<CharacterScreen> {
         final deletedName = deleteResult['CharacterName'] ?? character.name;
         final itemsDeleted = deleteResult['ItemsDeleted'] ?? 0;
         final segmentsDeleted = deleteResult['ActiveSegmentsDeleted'] ?? 0;
-        final historyDeleted = deleteResult['HistoryDeleted'] ?? 0;
         
         // Build detailed message
         String message = 'Deleted character: $deletedName';
-        if (itemsDeleted > 0 || segmentsDeleted > 0 || historyDeleted > 0) {
-          message += ' ($itemsDeleted items, $segmentsDeleted segments, $historyDeleted history records)';
+        if (itemsDeleted > 0 || segmentsDeleted > 0) {
+          message += ' ($itemsDeleted items, $segmentsDeleted segments)';
         }
         
         ScaffoldMessenger.of(context).showSnackBar(
