@@ -285,7 +285,7 @@ class _GameScreenState extends State<GameScreen> {
         _isLoading = true;
       });
 
-      await _rateLimiter.limiter.executeHumanDriven(
+      final response = await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.submitDecision,
         () => _apiService.submitDecision(
           characterId: _character!.id,
@@ -294,11 +294,26 @@ class _GameScreenState extends State<GameScreen> {
         throwOnRateLimit: true,
       );
 
-      // Reload character to get the next segment
-      await _loadCharacterData();
-      
-      // Set up polling for the new segment
-      _setupSegmentPolling();
+      // Use the next segment from response instead of reloading
+      if (response['NextSegment'] != null) {
+        final nextSegment = response['NextSegment'] as Map<String, dynamic>;
+        
+        setState(() {
+          // Update character's active segment locally
+          _character = _character!.copyWith(
+            activeSegmentId: nextSegment['ActiveSegmentID'] as String?,
+            storyState: {
+              'ActiveSegment': nextSegment,
+            },
+          );
+        });
+        
+        // Set up polling for the new segment
+        _setupSegmentPolling();
+      } else {
+        // No next segment means story completed - need to reload for available stories
+        await _loadCharacterData();
+      }
       
       if (mounted) {
         // Show notification for decision outcome

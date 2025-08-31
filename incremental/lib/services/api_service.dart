@@ -195,6 +195,9 @@ class ApiService extends BaseApiService {
       return json;
     } catch (e) {
       if (e is ApiException) {
+        if (e.statusCode == 403) {
+          throw Exception('Access denied');
+        }
         if (e.statusCode == 404) {
           throw Exception('Segment not found');
         }

@@ -797,7 +797,21 @@ Content-Type: application/json
 
 ```json
 {
-  "Message": "Decision submitted successfully"
+  "Accepted": true,
+  "NextSegmentTime": "2024-03-14T10:25:00Z",  // Optional, only if there's a next segment
+  "NextSegment": {  // Optional, only if there's a next segment
+    "ActiveSegmentID": "550e8400-e29b-41d4-a716-446655440001",
+    "SegmentType": "mechanical",
+    "ShortStatus": "Fighting the goblin",
+    "DefaultStatus": "You engage the goblin in combat",
+    "EndTime": "2024-03-14T10:25:00Z",
+    "DecisionText": "Choose your path",  // Only for decision segments
+    "DecisionOptions": {  // Only for decision segments
+      "fight": "segment-uuid-1",
+      "flee": "segment-uuid-2"
+    },
+    "DefaultDecision": "fight"  // Only for decision segments
+  }
 }
 ```
 
@@ -805,6 +819,7 @@ Content-Type: application/json
 
 | Status | Error Message                | Cause                        |
 | ------ | ---------------------------- | ---------------------------- |
+| `403`  | "Access denied"              | Character not owned by player|
 | `404`  | "Segment not found"          | No active segment found      |
 | `409`  | "Decision already submitted" | Decision was already made    |
 | `401`  | "Unauthorized"               | Invalid or missing JWT token |
