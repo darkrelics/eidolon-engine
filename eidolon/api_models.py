@@ -45,6 +45,9 @@ class SegmentHistoryItem(BaseEidolonModel):
     processing_status: str | None = Field(default=None, alias="ProcessingStatus")
     start_time: str | None = Field(default=None, alias="StartTime")
     end_time: str | None = Field(default=None, alias="EndTime")
+    completed_at: str | None = Field(default=None, alias="CompletedAt")
+    story_title: str | None = Field(default=None, alias="StoryTitle")
+    story_instance_id: str | None = Field(default=None, alias="StoryInstanceID")
 
     # Enriched data for clients
     outcome: str | None = Field(default=None, alias="Outcome")

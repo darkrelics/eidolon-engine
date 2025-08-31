@@ -961,9 +961,13 @@ Authorization: Bearer <jwt-token>
       "StartTime": "2025-01-15T14:25:00Z",
       "EndTime": "2025-01-15T14:30:00Z",
       "CompletedAt": "2025-01-15T14:30:00Z",
+      "StoryTitle": "The Goblin's Ambush",
+      "StoryInstanceID": "instance_uuid",
       "Outcome": "exceptional",
       "ClientEvents": [...],
       "CharacterUpdates": {...},
+      "SkillXPAwarded": {"Stealth": 5, "Combat": 10},
+      "AttributeXPAwarded": {"Agility": 2},
       "ChallengeResults": [...]
     },
     {
@@ -973,6 +977,8 @@ Authorization: Bearer <jwt-token>
       "StartTime": "2025-01-15T14:30:00Z",
       "EndTime": "2025-01-15T14:35:00Z",
       "CompletedAt": "2025-01-15T14:31:00Z",
+      "StoryTitle": "The Goblin's Ambush",
+      "StoryInstanceID": "instance_uuid",
       "Outcome": "normal",
       "Decision": "option_a",
       "ClientEvents": [...],
@@ -986,7 +992,8 @@ Authorization: Bearer <jwt-token>
 
 | Status | Error Message           | Cause                        |
 | ------ | ----------------------- | ---------------------------- |
-| `404`  | "No history found"      | No segment history exists    |
+| `403`  | "Access denied"         | Character not owned by player|
+| `404`  | "Character not found"   | Character doesn't exist      |
 | `401`  | "Unauthorized"          | Invalid or missing JWT token |
 | `500`  | "Internal server error" | Database or system failure   |
 
