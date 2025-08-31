@@ -54,15 +54,29 @@ def poll_segments() -> None:
                 advancement_messages.append({"body": active_segment_id})
                 logger.debug(f"Segment ready for advancement: {active_segment_id}")
             else:
-                # Not processed in time - mark exceptional to protect player
-                try:
-                    mark_segment_as_completed_exceptional(active_segment_id)
-                    # Send just the ActiveSegmentID string
+                # Not processed in time - check segment type before marking exceptional
+                segment_type = segment.get("SegmentType")
+                
+                if segment_type == "mechanical":
+                    # Only mechanical segments get exceptional outcome (system failure protection)
+                    try:
+                        mark_segment_as_completed_exceptional(active_segment_id)
+                        advancement_messages.append({"body": active_segment_id})
+                        segments_marked_exceptional += 1
+                        logger.warning(f"Marked unprocessed mechanical segment as exceptional: {active_segment_id}")
+                    except Exception as err:
+                        logger.error(f"Failed to mark mechanical segment as exceptional: {active_segment_id} Error: {err}")
+                else:
+                    # Decision and rest segments should flow through for normal processing
+                    # Decision: will apply DefaultDecision or failure
+                    # Rest: will advance normally
                     advancement_messages.append({"body": active_segment_id})
-                    segments_marked_exceptional += 1
-                    logger.warning(f"Marked unprocessed expiring segment as exceptional: {active_segment_id}")
-                except Exception as err:
-                    logger.error(f"Failed to mark segment as exceptional: {active_segment_id} Error: {err}")
+                    if segment_type == "decision":
+                        logger.info(f"Decision segment timed out, queuing for default/failure handling: {active_segment_id}")
+                    elif segment_type == "rest":
+                        logger.info(f"Rest segment timed out, queuing for normal advancement: {active_segment_id}")
+                    else:
+                        logger.warning(f"Unknown segment type '{segment_type}' timed out, queuing for advancement: {active_segment_id}")
 
         if advancement_messages:
             if not STORY_ADVANCEMENT_QUEUE_URL:

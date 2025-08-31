@@ -686,20 +686,15 @@ Content-Type: application/json
 
 ```json
 {
+  "Success": true,
   "Segment": {
     "ActiveSegmentID": "segment_uuid",
-    "SegmentID": "segment_def_uuid",
-    "SegmentType": "narrative",
-    "Status": "active",
-    "StartTime": 1704900000,
-    "EndTime": 1704900300,
-    "ClientEvents": [
-      {
-        "eventType": "narrative",
-        "title": "Story Begins",
-        "description": "Your journey starts here..."
-      }
-    ]
+    "SegmentType": "mechanical",
+    "StartTime": "2024-01-10T12:00:00Z",
+    "EndTime": "2024-01-10T12:05:00Z",
+    "ShortStatus": "Starting your adventure...",
+    "Duration": 300,
+    "ProcessingStatus": "pending"
   }
 }
 ```
