@@ -96,23 +96,45 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
         new_state = determine_character_state_from_wounds(max_health, wounds)
 
         if new_state != character.get("CharState", "standing"):
+            timestamp = datetime.now(timezone.utc).isoformat()
+            
             # Update character state
             update_expression = "SET CharState = :state, UpdatedAt = :timestamp"
-            expression_values = {":state": new_state, ":timestamp": datetime.now(timezone.utc).isoformat()}
+            expression_values = {":state": new_state, ":timestamp": timestamp}
 
             # If dead, also update location to death room
             if new_state == "dead":
                 update_expression += ", Room = :room"
                 expression_values[":room"] = "0"  # Death room
 
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_values,
-            )
-
-            logger.info(f"Updated character state due to death outcome for {character_id}")
+            try:
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    Key={"CharacterID": character_id},
+                    UpdateExpression=update_expression,
+                    ExpressionAttributeValues=expression_values,
+                )
+                logger.info(f"Updated character state to {new_state} for {character_id}")
+                
+                # If dead, also update the Dead flag in player's CharacterList
+                if new_state == "dead":
+                    player_id = character.get("PlayerID")
+                    character_name = character.get("CharacterName")
+                    if player_id and character_name:
+                        dynamo.update_item(
+                            TableName.PLAYERS,
+                            Key={"PlayerID": player_id},
+                            UpdateExpression="SET CharacterList.#name.Dead = :dead, UpdatedAt = :timestamp",
+                            ExpressionAttributeNames={"#name": character_name},
+                            ExpressionAttributeValues={":dead": True, ":timestamp": timestamp},
+                        )
+                        logger.info(f"Updated Dead flag in player's CharacterList for {character_name}")
+                    else:
+                        logger.warning(f"Cannot update CharacterList - missing PlayerID or CharacterName for {character_id}")
+                        
+            except ClientError as err:
+                logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
+                raise
 
         return new_state
 
