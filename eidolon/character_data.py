@@ -289,7 +289,7 @@ def build_character_record(
 
 def create_character_record(character_item: dict) -> bool:
     """
-    Create character record in database.
+    Create character record in database with atomic name check.
 
     Args:
         character_item: Complete character record to create
@@ -298,13 +298,23 @@ def create_character_record(character_item: dict) -> bool:
         True if created successfully
 
     Raises:
+        ValueError: If character name is already taken
         RuntimeError: If database operation fails
     """
     try:
-        dynamo.put_item(TableName.CHARACTERS, character_item)
+        # Use conditional put - only succeeds if name doesn't exist
+        dynamo.put_item(
+            TableName.CHARACTERS, 
+            character_item,
+            ConditionExpression="attribute_not_exists(CharacterName)"
+        )
         logger.info(f"Character record created successfully for {character_item.get('CharacterID')}")
         return True
     except ClientError as err:
+        if err.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            # Name already taken - convert to ValueError for proper HTTP status
+            logger.info(f"Character name '{character_item.get('CharacterName')}' already taken")
+            raise ValueError("Character name is already taken") from err
         logger.error(f"Failed to create character record for {character_item.get('CharacterName')} Error: {err}")
         raise RuntimeError(f"Failed to create character record: {err}") from err
 
@@ -347,10 +357,6 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
 
     logger.info(f"Creating new character for {character_name}")
 
-    # Check name availability
-    if not check_character_name_availability(character_name):
-        raise ValueError("Character name is already taken")
-
     # Process starting items
     inventory = {}
     starting_items = archetype_data.get("StartingItems", [])
@@ -373,8 +379,11 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     # Create character record
     try:
         create_character_record(character_item)
+    except ValueError as err:
+        # Name already taken - re-raise as-is for proper HTTP status
+        raise
     except RuntimeError as err:
-        # Re-raise as character creation failed
+        # Other database failures
         logger.error(f"Failed to create character record: {err}")
         raise RuntimeError(f"Failed to create character: {err}") from err
 
