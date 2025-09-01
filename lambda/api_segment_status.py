@@ -145,6 +145,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                     response["Narrative"] = ""
                     response["Effects"] = {}
 
+            except Exception as err:
                 logger.warning(f"Failed to get narrative data for segment_id={segment_id}, character_id={character_id}: {err.__class__.__name__}: {err}")
                 # Continue without narrative - not critical
     else:
