@@ -225,6 +225,7 @@ class _StoryPanelState extends State<StoryPanel> {
       onDecisionSelect: widget.onDecisionSelect,
       onAbandonStory: widget.onAbandonStory,
       onRestSegment: widget.onRestSegment,
+      onRefresh: widget.onRefresh,
     );
   }
 

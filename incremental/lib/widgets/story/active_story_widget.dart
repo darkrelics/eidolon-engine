@@ -10,6 +10,7 @@ class ActiveStoryWidget extends StatefulWidget {
   final VoidCallback? onAbandonStory;
   final VoidCallback? onRestSegment;
   final VoidCallback? onContinue;
+  final VoidCallback? onRefresh;
 
   const ActiveStoryWidget({
     super.key,
@@ -19,6 +20,7 @@ class ActiveStoryWidget extends StatefulWidget {
     this.onAbandonStory,
     this.onRestSegment,
     this.onContinue,
+    this.onRefresh,
   });
 
   @override
@@ -72,6 +74,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               segment: segmentData,
               isActive: true,
               onDecisionSelect: widget.onDecisionSelect,
+              onTimeout: widget.onRefresh,
             ),
             const SizedBox(height: 20),
           ],
@@ -332,11 +335,13 @@ class _SimpleSegmentCard extends StatelessWidget {
   final Map<String, dynamic> segment;
   final bool isActive;
   final Function(String)? onDecisionSelect;
+  final VoidCallback? onTimeout;
 
   const _SimpleSegmentCard({
     required this.segment,
     required this.isActive,
     this.onDecisionSelect,
+    this.onTimeout,
   });
 
   @override
@@ -420,6 +425,7 @@ class _SimpleSegmentCard extends StatelessWidget {
                 endTime: endTime,
                 startTime: segment['StartTime'],
                 duration: segment['SegmentDuration'] ?? segment['Duration'],
+                onTimeout: segmentType == 'decision' ? onTimeout : null,
               ),
               if (defaultStatus.isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -538,11 +544,13 @@ class _SegmentTimer extends StatefulWidget {
   final String endTime;
   final String? startTime;
   final dynamic duration;
+  final VoidCallback? onTimeout;
   
   const _SegmentTimer({
     required this.endTime,
     this.startTime,
     this.duration,
+    this.onTimeout,
   });
   
   @override
@@ -555,6 +563,7 @@ class _SegmentTimerState extends State<_SegmentTimer> {
   int _totalDuration = 60;
   DateTime? _endDateTime;
   DateTime? _startDateTime;
+  bool _hasTimedOut = false;
   
   @override
   void initState() {
@@ -602,6 +611,17 @@ class _SegmentTimerState extends State<_SegmentTimer> {
     
     setState(() {
       _remainingSeconds = difference.inSeconds > 0 ? difference.inSeconds : 0;
+      
+      // Trigger timeout callback when timer reaches zero
+      if (_remainingSeconds == 0 && !_hasTimedOut) {
+        _hasTimedOut = true;
+        if (widget.onTimeout != null) {
+          // Schedule callback after build completes
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            widget.onTimeout!();
+          });
+        }
+      }
     });
   }
   

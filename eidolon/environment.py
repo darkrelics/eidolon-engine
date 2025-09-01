@@ -34,6 +34,7 @@ PROCESS_SEGMENT_FUNCTION = os.environ.get("PROCESS_SEGMENT_FUNCTION", "process-s
 DEFAULT_HEALTH = int(os.environ.get("DEFAULT_HEALTH", "10"))
 DEFAULT_ESSENCE = int(os.environ.get("DEFAULT_ESSENCE", "3"))
 MAX_CHARACTERS_PER_PLAYER = int(os.environ.get("MAX_CHARACTERS_PER_PLAYER", "1"))
+REST_SEGMENT_DURATION = int(os.environ.get("REST_SEGMENT_DURATION", "900"))  # 15 minutes default
 
 
 # Logging Configuration
