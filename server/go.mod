@@ -3,7 +3,7 @@ module github.com/robinje/eidolon-engine
 go 1.24
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.38.2
+	github.com/aws/aws-sdk-go-v2 v1.38.3
 	github.com/aws/aws-sdk-go-v2/config v1.31.2
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.8
 	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.48.0
