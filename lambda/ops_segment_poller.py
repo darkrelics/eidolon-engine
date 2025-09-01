@@ -56,7 +56,7 @@ def poll_segments() -> None:
             else:
                 # Not processed in time - check segment type before marking exceptional
                 segment_type = segment.get("SegmentType")
-                
+
                 if segment_type == "mechanical":
                     # Only mechanical segments get exceptional outcome (system failure protection)
                     try:
@@ -76,7 +76,9 @@ def poll_segments() -> None:
                     elif segment_type == "rest":
                         logger.info(f"Rest segment timed out, queuing for normal advancement: {active_segment_id}")
                     else:
-                        logger.warning(f"Unknown segment type '{segment_type}' timed out, queuing for advancement: {active_segment_id}")
+                        logger.warning(
+                            f"Unknown segment type '{segment_type}' timed out, queuing for advancement: {active_segment_id}"
+                        )
 
         if advancement_messages:
             if not STORY_ADVANCEMENT_QUEUE_URL:

@@ -68,12 +68,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         body = parse_event_body(event)
         character_id = body.get("CharacterID")
         decision_id = body.get("Decision")
-        
+
         if not character_id:
             return lambda_response(400, {"Error": "Missing CharacterID"}, event)
         if not decision_id:
             return lambda_response(400, {"Error": "Missing Decision"}, event)
-            
+
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:

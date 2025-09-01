@@ -68,7 +68,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
     # Add story if found (already converted by get_active_story_and_segment)
     if active_story:
         response_data["ActiveStory"] = active_story
-    
+
     if active_segment:
         # active_segment already converted by get_active_story_and_segment
         if isinstance(active_segment, dict):

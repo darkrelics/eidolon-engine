@@ -97,7 +97,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
 
         if new_state != character.get("CharState", "standing"):
             timestamp = datetime.now(timezone.utc).isoformat()
-            
+
             # Update character state
             update_expression = "SET CharState = :state, UpdatedAt = :timestamp"
             expression_values = {":state": new_state, ":timestamp": timestamp}
@@ -115,7 +115,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
                     ExpressionAttributeValues=expression_values,
                 )
                 logger.info(f"Updated character state to {new_state} for {character_id}")
-                
+
                 # If dead, also update the Dead flag in player's CharacterList
                 if new_state == "dead":
                     player_id = character.get("PlayerID")
@@ -131,7 +131,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
                         logger.info(f"Updated Dead flag in player's CharacterList for {character_name}")
                     else:
                         logger.warning(f"Cannot update CharacterList - missing PlayerID or CharacterName for {character_id}")
-                        
+
             except ClientError as err:
                 logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
                 raise

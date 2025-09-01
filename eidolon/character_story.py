@@ -347,17 +347,17 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
 def get_active_story_and_segment(character: dict) -> tuple:
     """
     Retrieve active story and segment for a character, handling broken story chains.
-    
+
     Logic:
     - If GameMode is not "Incremental", return empty dicts immediately
     - If GameMode is "Incremental":
       - Validate both ActiveStoryID and ActiveSegmentID are valid UUIDs
       - If both valid, fetch and return them
       - If either is missing/invalid, clear story and return empty dicts
-    
+
     Args:
         character: Character dict to check
-        
+
     Returns:
         Tuple of (active_story, active_segment) dicts, either may be empty
     """
@@ -366,13 +366,13 @@ def get_active_story_and_segment(character: dict) -> tuple:
     if not character_id:
         logger.error("Character missing CharacterID field")
         return {}, {}
-    
+
     # Short circuit if not in Incremental mode
     game_mode = character.get("GameMode", "None")
     if game_mode != "Incremental":
         logger.debug(f"Character not in Incremental mode (GameMode: {game_mode})")
         return {}, {}
-    
+
     # Check if both story and segment IDs exist
     if not character.get("ActiveStoryID") and not character.get("ActiveSegmentID"):
         logger.warning(f"Character {character_id} has no active story or segment")
@@ -382,26 +382,25 @@ def get_active_story_and_segment(character: dict) -> tuple:
 
     active_story_id = character.get("ActiveStoryID")
     active_segment_id = character.get("ActiveSegmentID")
-    
+
     # Validate both IDs are present and valid UUIDs
     story_valid = validate_uuid(active_story_id)
     segment_valid = validate_uuid(active_segment_id)
-    
+
     if not story_valid or not segment_valid:
         # Invalid or missing IDs = broken story chain
         logger.warning(
-            f"Broken story chain for character {character_id}: "
-            f"StoryID valid={story_valid}, SegmentID valid={segment_valid}"
+            f"Broken story chain for character {character_id}: " f"StoryID valid={story_valid}, SegmentID valid={segment_valid}"
         )
-        
+
         # Clear the story fields in the database
         character_clear_story(character_id)
         return {}, {}
-    
+
     # Both IDs are valid UUIDs, fetch the actual data
     active_story: dict = {}
     active_segment: dict = {}
-    
+
     try:
         active_story = character_get_active_story(character)
         if not active_story:
@@ -413,7 +412,7 @@ def get_active_story_and_segment(character: dict) -> tuple:
         logger.error(f"Error retrieving active story: {err}")
         # Database error - don't clear, just return empty
         return {}, {}
-    
+
     active_segment = character_get_active_segment(character)
     if not active_segment:
         # Segment ID was valid but segment not found = broken chain

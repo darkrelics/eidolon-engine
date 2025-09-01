@@ -204,8 +204,25 @@ class ClientStack(Stack):
             build_spec=codebuild.BuildSpec.from_source_filename(buildspec_file),
         )
 
-        # Grant permissions
-        self.portal_bucket.grant_read_write(project)
+        # Grant S3 permissions via IAM role (not bucket policy)
+        # This ensures CodeBuild permissions aren't affected by bucket policy changes
+        project.add_to_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:ListBucket",
+                    "s3:GetBucketLocation",
+                    "s3:PutObjectAcl",
+                ],
+                resources=[
+                    self.portal_bucket.bucket_arn,
+                    f"{self.portal_bucket.bucket_arn}/*",
+                ],
+            )
+        )
 
         project.add_to_role_policy(
             iam.PolicyStatement(

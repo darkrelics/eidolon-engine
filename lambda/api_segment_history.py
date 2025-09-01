@@ -66,7 +66,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
     active_segment = active_segments[0]
     story_id = active_segment.get("StoryID")
     story_instance_id = active_segment.get("StoryInstanceID")
-    
+
     # Get story title from stories table for Flutter client
     story_title = "Unknown Story"
     if story_id:
@@ -86,12 +86,12 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
             ":cid": character_id,
             ":sid": story_id,
         }
-        
+
         # If we have StoryInstanceID, use it for precise filtering
         if story_instance_id:
             filter_expr += " AND StoryInstanceID = :siid"
             expr_values[":siid"] = story_instance_id
-            
+
         segments = dynamo.query(
             TableName.SEGMENT_HISTORY,
             KeyConditionExpression="CharacterID = :cid",
@@ -132,7 +132,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
 
         if segment.get("CharacterUpdates"):
             formatted_segment_dict["CharacterUpdates"] = segment.get("CharacterUpdates")
-            
+
             # Extract XP awards from CharacterUpdates for Flutter
             char_updates = segment.get("CharacterUpdates", {})
             if "SkillsAwarded" in char_updates:
@@ -148,7 +148,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
 
         if segment.get("CombatState"):
             formatted_segment_dict["CombatState"] = segment.get("CombatState")
-            
+
         # Add StoryInstanceID if available
         if segment.get("StoryInstanceID"):
             formatted_segment_dict["StoryInstanceID"] = segment.get("StoryInstanceID")

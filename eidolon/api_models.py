@@ -21,7 +21,7 @@ class SegmentStatusResponse(BaseEidolonModel):
     is_complete: bool = Field(..., alias="IsComplete")
     time_remaining: int = Field(..., alias="TimeRemaining")
     end_time: str = Field(..., alias="EndTime")
-    
+
     # Processing and type information
     processing_status: str | None = Field(default=None, alias="ProcessingStatus")
     segment_type: str | None = Field(default=None, alias="SegmentType")

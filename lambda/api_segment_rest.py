@@ -59,7 +59,7 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
         current_segment_id = active_segment.get("SegmentID")
         if not current_segment_id:
             raise ValueError("Active segment missing SegmentID")
-        
+
         # Check if current segment is a decision segment
         segment_type = active_segment.get("SegmentType")
         if segment_type == "decision":

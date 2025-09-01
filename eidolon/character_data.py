@@ -303,15 +303,11 @@ def create_character_record(character_item: dict) -> bool:
     """
     try:
         # Use conditional put - only succeeds if name doesn't exist
-        dynamo.put_item(
-            TableName.CHARACTERS, 
-            character_item,
-            ConditionExpression="attribute_not_exists(CharacterName)"
-        )
+        dynamo.put_item(TableName.CHARACTERS, character_item, ConditionExpression="attribute_not_exists(CharacterName)")
         logger.info(f"Character record created successfully for {character_item.get('CharacterID')}")
         return True
     except ClientError as err:
-        if err.response['Error']['Code'] == 'ConditionalCheckFailedException':
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             # Name already taken - convert to ValueError for proper HTTP status
             logger.info(f"Character name '{character_item.get('CharacterName')}' already taken")
             raise ValueError("Character name is already taken") from err
@@ -486,10 +482,10 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
 def character_clear_story(character_id: str) -> None:
     """
     Clear story-related fields from a character record.
-    
+
     This function is used to release a character from a broken story chain
     by clearing ActiveStoryID, ActiveSegmentID, and resetting GameMode to "None".
-    
+
     Args:
         character_id: Character UUID
     """
@@ -500,21 +496,18 @@ def character_clear_story(character_id: str) -> None:
                 UpdatedAt = :updated_at
             REMOVE ActiveStoryID, ActiveSegmentID
         """
-        
-        expression_values = {
-            ":none": "None",
-            ":updated_at": datetime.now(timezone.utc).isoformat()
-        }
-        
+
+        expression_values = {":none": "None", ":updated_at": datetime.now(timezone.utc).isoformat()}
+
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
             UpdateExpression=update_expression,
-            ExpressionAttributeValues=expression_values
+            ExpressionAttributeValues=expression_values,
         )
-        
+
         logger.info(f"Cleared story fields for character {character_id}")
-        
+
     except ClientError as err:
         logger.error(f"Failed to clear story for character {character_id} Error: {err}", exc_info=True)
         # Don't raise - just log and return
