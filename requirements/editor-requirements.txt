@@ -10,7 +10,7 @@ voila==0.5.8
 #Dependancies
 anyio==4.9.0
 argon2-cffi==25.1.0
-argon2-cffi-bindings==21.2.0
+argon2-cffi-bindings==25.1.0
 arrow==1.3.0
 asttokens==3.0.0
 async-lru==2.0.5
