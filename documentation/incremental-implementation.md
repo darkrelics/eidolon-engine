@@ -178,14 +178,14 @@ from uuid_extension import uuid7  # Repo-provided helper for UUIDv7 IDs
 def start_story(character_id, story_id, segment_data):
     # Generate UUIDv7 for the active segment
     segment_data['ActiveSegmentID'] = str(uuid7())
-    
+
     # 1. Create active segment first
     dynamodb.put_item(
         TableName=ACTIVE_SEGMENTS_TABLE,
         Item=segment_data,
         ConditionExpression='attribute_not_exists(ActiveSegmentID)'
     )
-    
+
     # 2. Update character state
     # If this fails, ops-segment-poller will clean up the orphaned segment
     dynamodb.update_item(
@@ -203,7 +203,7 @@ def start_story(character_id, story_id, segment_data):
             ':incremental': {'S': 'Incremental'}
         }
     )
-    
+
     # 3. Queue mechanical segments (send only ActiveSegmentID)
     if segment_data['SegmentType'] == 'mechanical':
         sqs.send_message(
@@ -766,14 +766,14 @@ def segment_poller_handler(event, context):
     # Phase 1: Find ALL segments approaching expiry (within 90 seconds)
     # These need advancement (if processed) or recovery (if not processed)
     expiring_segments = get_segments_approaching_expiry(current_time + next_poll_buffer)
-    
+
     advancement_messages = []
     segments_marked_exceptional = 0
-    
+
     for segment in expiring_segments:
         active_segment_id = segment['ActiveSegmentID']
         processing_status = segment.get('ProcessingStatus', 'pending')
-        
+
         if processing_status == 'processed':
             # Normal advancement - segment completed processing
             advancement_messages.append({'body': active_segment_id})
@@ -784,25 +784,25 @@ def segment_poller_handler(event, context):
             segments_marked_exceptional += 1
 
     # Phase 2: Find stuck mechanical segments with time to retry
-    # Criteria: StartTime > 5 minutes ago, EndTime > 90 seconds from now, 
+    # Criteria: StartTime > 5 minutes ago, EndTime > 90 seconds from now,
     # ProcessingStatus in (pending, processing), SegmentType = mechanical
     stuck_segments = get_stuck_mechanical_segments(current_time)
-    
+
     processing_messages = []
     for segment in stuck_segments:
         active_segment_id = segment['ActiveSegmentID']
         processing_status = segment.get('ProcessingStatus', 'pending')
-        
+
         # Reset if stuck in processing
         if processing_status == 'processing':
             reset_segment_processing_status(active_segment_id)
-        
+
         processing_messages.append({'body': active_segment_id})
 
     # Send messages to appropriate queues
     if advancement_messages:
         send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
-    
+
     if processing_messages:
         send_message_batch(SEGMENT_QUEUE_URL, processing_messages)
 
@@ -820,7 +820,7 @@ def segment_poller_handler(event, context):
 
 def get_segments_approaching_expiry(threshold_time):
     """Get ALL segments that will expire before next poll (90 seconds).
-    
+
     These segments need advancement (if processed) or recovery (if not processed).
     NO ProcessingStatus filter - we need to handle all expiring segments.
     """
@@ -839,7 +839,7 @@ def get_segments_approaching_expiry(threshold_time):
 
 def get_stuck_mechanical_segments(current_time):
     """Get mechanical segments stuck in pending/processing with time to retry.
-    
+
     Criteria:
     - StartTime > 5 minutes ago (stuck threshold)
     - EndTime > 90 seconds from now (enough time to process)
@@ -848,7 +848,7 @@ def get_stuck_mechanical_segments(current_time):
     """
     five_minutes_ago = current_time - 300
     ninety_seconds_future = current_time + 90
-    
+
     # Use scan since we need to filter on StartTime which isn't indexed
     response = dynamodb.scan(
         TableName=ACTIVE_SEGMENTS_TABLE,
@@ -957,22 +957,22 @@ class GameScreen extends StatefulWidget {
 class _GameScreenState extends State<GameScreen> {
   Character? _character;
   bool _isPolling = false;
-  
+
   // Segment history for UI display only
   final List<Map<String, dynamic>> _segmentHistory = [];
-  
+
   /// Simple polling loop following the server cadence
   Future<void> _runStoryPolling() async {
     if (_character?.activeSegmentID == null) {
       _isPolling = false;
       return;
     }
-    
+
     debugPrint('Starting story polling loop');
-    
+
     // Wait 60 seconds for initial processing
     await Future.delayed(const Duration(seconds: 60));
-    
+
     while (_isPolling && _character?.activeSegmentID != null) {
       try {
         // Get segment status
@@ -981,21 +981,21 @@ class _GameScreenState extends State<GameScreen> {
             characterId: _character!.id,
           ),
         );
-        
+
         // Add to display history if processed
         if (status['ProcessingStatus'] == 'processed') {
           _addSegmentToHistory(status);
         }
-        
+
         // Wait for segment to complete
         final timeRemaining = status['TimeRemaining'] as int? ?? 0;
         if (timeRemaining > 0) {
           await Future.delayed(Duration(seconds: timeRemaining));
         }
-        
+
         // Get updated character
         await _loadCharacterData();
-        
+
         // If story continues, wait for next segment processing
         if (_character?.activeSegmentID != null) {
           await Future.delayed(const Duration(seconds: 60));
@@ -1006,11 +1006,11 @@ class _GameScreenState extends State<GameScreen> {
         await Future.delayed(const Duration(seconds: 5));
       }
     }
-    
+
     debugPrint('Story polling loop ended');
     _isPolling = false;
   }
-  
+
   /// Retry helper with exponential backoff
   Future<T> retryWithBackoff<T>(Future<T> Function() operation) async {
     for (int i = 0; i < 3; i++) {
@@ -1094,11 +1094,11 @@ class Character {
   final String? activeSegmentID;  // Currently active segment ID
   Map<String, dynamic>? storyState; // Detailed segment data for display
   // ... other fields
-  
+
   /// Story completion is determined by server state
   bool get hasActiveStory => activeStoryID != null;
   bool get isStoryComplete => activeStoryID != null && activeSegmentID == null;
-  
+
   factory Character.fromJson(Map<String, dynamic> json) {
     return Character(
       id: json['CharacterID'],
@@ -1113,6 +1113,7 @@ class Character {
 ```
 
 **Key Changes:**
+
 - Added `activeStoryID` and `activeSegmentID` as direct properties
 - Story completion detected via `activeSegmentID == null`
 - Server provides these IDs directly in character response

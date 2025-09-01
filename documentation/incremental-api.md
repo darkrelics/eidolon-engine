@@ -798,33 +798,34 @@ Content-Type: application/json
 ```json
 {
   "Accepted": true,
-  "NextSegmentTime": "2024-03-14T10:25:00Z",  // Optional, only if there's a next segment
-  "NextSegment": {  // Optional, only if there's a next segment
+  "NextSegmentTime": "2024-03-14T10:25:00Z", // Optional, only if there's a next segment
+  "NextSegment": {
+    // Optional, only if there's a next segment
     "ActiveSegmentID": "550e8400-e29b-41d4-a716-446655440001",
     "SegmentType": "mechanical",
     "ShortStatus": "Fighting the goblin",
     "DefaultStatus": "You engage the goblin in combat",
     "EndTime": "2024-03-14T10:25:00Z",
-    "DecisionText": "Choose your path",  // Only for decision segments
-    "DecisionOptions": {  // Only for decision segments
+    "DecisionText": "Choose your path", // Only for decision segments
+    "DecisionOptions": {
+      // Only for decision segments
       "fight": "segment-uuid-1",
       "flee": "segment-uuid-2"
     },
-    "DefaultDecision": "fight"  // Only for decision segments
+    "DefaultDecision": "fight" // Only for decision segments
   }
 }
 ```
 
 **Error Responses:**
 
-| Status | Error Message                | Cause                        |
-| ------ | ---------------------------- | ---------------------------- |
-| `403`  | "Access denied"              | Character not owned by player|
-| `404`  | "Segment not found"          | No active segment found      |
-| `409`  | "Decision already submitted" | Decision was already made    |
-| `401`  | "Unauthorized"               | Invalid or missing JWT token |
-| `500`  | "Internal server error"      | Database or system failure   |
-
+| Status | Error Message                | Cause                         |
+| ------ | ---------------------------- | ----------------------------- |
+| `403`  | "Access denied"              | Character not owned by player |
+| `404`  | "Segment not found"          | No active segment found       |
+| `409`  | "Decision already submitted" | Decision was already made     |
+| `401`  | "Unauthorized"               | Invalid or missing JWT token  |
+| `500`  | "Internal server error"      | Database or system failure    |
 
 **Error Responses:**
 
@@ -905,12 +906,14 @@ When a segment is processed or completed, additional narrative data is included:
 ```
 
 **Timing Fields:**
+
 - `TimeRemaining`: Seconds until segment completes (0 if complete)
 - `EndTime`: ISO 8601 timestamp when segment will complete
 - `IsComplete`: True if EndTime has passed
 - `ProcessingStatus`: "pending" (mechanical awaiting processing), "processing" (mechanical in progress), or "processed" (ready for advancement)
 
 **Narrative Fields (when processed/completed):**
+
 - `Narrative`: Story text describing the outcome
 - `Effects`: Changes to character state (wounds, items, etc.)
 - `NextSegmentID`: ID of the next segment in the story
@@ -990,12 +993,12 @@ Authorization: Bearer <jwt-token>
 
 **Error Responses:**
 
-| Status | Error Message           | Cause                        |
-| ------ | ----------------------- | ---------------------------- |
-| `403`  | "Access denied"         | Character not owned by player|
-| `404`  | "Character not found"   | Character doesn't exist      |
-| `401`  | "Unauthorized"          | Invalid or missing JWT token |
-| `500`  | "Internal server error" | Database or system failure   |
+| Status | Error Message           | Cause                         |
+| ------ | ----------------------- | ----------------------------- |
+| `403`  | "Access denied"         | Character not owned by player |
+| `404`  | "Character not found"   | Character doesn't exist       |
+| `401`  | "Unauthorized"          | Invalid or missing JWT token  |
+| `500`  | "Internal server error" | Database or system failure    |
 
 ---
 
