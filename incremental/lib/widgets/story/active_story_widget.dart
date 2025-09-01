@@ -419,7 +419,7 @@ class _SimpleSegmentCard extends StatelessWidget {
             ),
             
             // Show timer and DefaultStatus for active segments
-            if (isActive && endTime != null) ...[
+            if (isActive && endTime != null && endTime.isNotEmpty) ...[
               const SizedBox(height: 12),
               _SegmentTimer(
                 endTime: endTime,
