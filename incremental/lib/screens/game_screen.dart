@@ -35,7 +35,7 @@ class _GameScreenState extends State<GameScreen> {
   bool _isPolling = false; // Track if polling is active
   
   // Segment history for the current story display
-  final List<Map<String, dynamic>> _segmentHistory = [];
+  List<Map<String, dynamic>> _segmentHistory = [];
   
   // Panel visibility for mobile/tablet
   int _selectedPanelIndex = 1; // 0: Character, 1: Story, 2: Inventory
@@ -86,7 +86,7 @@ class _GameScreenState extends State<GameScreen> {
           'GameScreen: Got CharacterInfo - name: ${args.name}, id: ${args.id}',
         );
         _characterInfo = args;
-        _loadCharacterData();
+        _loadCharacterData().then((_) => _loadSegmentHistory());
       } else {
         debugPrint('GameScreen: didChangeDependencies called but same CharacterInfo - skipping update');
       }
@@ -171,9 +171,14 @@ class _GameScreenState extends State<GameScreen> {
           ),
         );
         
-        // Add segment to history for display if not already there
-        if (status['ProcessingStatus'] == 'processed') {
-          _addSegmentToHistory(status);
+        // Update character's active segment with the status data
+        if (mounted && status['ActiveSegmentID'] != null) {
+          setState(() {
+            if (_character != null && _character!.storyState != null) {
+              // Update the active segment with fresh status data
+              _character!.storyState!['ActiveSegment'] = status;
+            }
+          });
         }
         
         // Wait for segment to complete
@@ -182,8 +187,15 @@ class _GameScreenState extends State<GameScreen> {
           await Future.delayed(Duration(seconds: timeRemaining));
         }
         
-        // Get updated character
-        await _loadCharacterData();
+        // Only reload character if segment is complete or story ended
+        final isComplete = status['IsComplete'] as bool? ?? false;
+        if (isComplete) {
+          // Load fresh character data and segment history
+          await Future.wait([
+            _loadCharacterData(),
+            _loadSegmentHistory(),
+          ]);
+        }
         
         // If story continues, wait for next segment processing
         if (_character?.activeSegmentID != null) {
@@ -219,7 +231,7 @@ class _GameScreenState extends State<GameScreen> {
       setState(() {
         _isLoading = true;
         // Clear segment history when starting a new story
-        _segmentHistory.clear();
+        _segmentHistory = [];
       });
 
       await _rateLimiter.limiter.executeHumanDriven(
@@ -231,8 +243,11 @@ class _GameScreenState extends State<GameScreen> {
         throwOnRateLimit: true,
       );
 
-      // Reload character to get the new story state
-      await _loadCharacterData();
+      // Reload character to get the new story state and history
+      await Future.wait([
+        _loadCharacterData(),
+        _loadSegmentHistory(),
+      ]);
       
       // Set up segment polling (60 seconds for processing, then at completion)
       _setupSegmentPolling();
@@ -262,20 +277,29 @@ class _GameScreenState extends State<GameScreen> {
   
   
   
-  void _addSegmentToHistory(Map<String, dynamic>? segment) {
-    if (segment == null) return;
-    
-    // Add to history if not already present
-    final segmentId = segment['ActiveSegmentID'] ?? segment['SegmentID'];
-    final alreadyInHistory = _segmentHistory.any((s) => 
-      (s['ActiveSegmentID'] ?? s['SegmentID']) == segmentId
-    );
-    
-    if (!alreadyInHistory) {
+  Future<void> _loadSegmentHistory() async {
+    if (_character == null || _character!.activeStoryID == null) {
+      // No active story, clear history
       setState(() {
-        _segmentHistory.add(Map<String, dynamic>.from(segment));
+        _segmentHistory = [];
       });
-      debugPrint('GameScreen: Added segment to history, total: ${_segmentHistory.length}');
+      return;
+    }
+    
+    try {
+      final history = await _apiService.getSegmentHistory(
+        characterId: _character!.id,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _segmentHistory = history;
+        });
+        debugPrint('GameScreen: Loaded ${history.length} segments from history');
+      }
+    } catch (e) {
+      debugPrint('GameScreen: Failed to load segment history: $e');
+      // Keep existing history on error
     }
   }
 
@@ -312,7 +336,10 @@ class _GameScreenState extends State<GameScreen> {
         _setupSegmentPolling();
       } else {
         // No next segment means story completed - need to reload for available stories
-        await _loadCharacterData();
+        await Future.wait([
+          _loadCharacterData(),
+          _loadSegmentHistory(),
+        ]);
       }
       
       if (mounted) {
@@ -371,8 +398,11 @@ class _GameScreenState extends State<GameScreen> {
         throwOnRateLimit: true,
       );
       
-      // Reload character data
-      await _loadCharacterData();
+      // Reload character data and history
+      await Future.wait([
+        _loadCharacterData(),
+        _loadSegmentHistory(),
+      ]);
       
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -405,7 +435,10 @@ class _GameScreenState extends State<GameScreen> {
     });
     
     // Reload character to get available stories
-    await _loadCharacterData();
+    await Future.wait([
+      _loadCharacterData(),
+      _loadSegmentHistory(),
+    ]);
   }
 
   Future<void> _handleAbandonStory() async {
@@ -443,8 +476,11 @@ class _GameScreenState extends State<GameScreen> {
         throwOnRateLimit: true,
       );
 
-      // Reload character to clear story state
-      await _loadCharacterData();
+      // Reload character to clear story state and history
+      await Future.wait([
+        _loadCharacterData(),
+        _loadSegmentHistory(),
+      ]);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

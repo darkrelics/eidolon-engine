@@ -10,12 +10,11 @@ Returns segment completion status and any available results.
 import time
 
 from eidolon.api_models import SegmentStatusResponse
-from eidolon.character_data import character_get
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import validate_player, verify_character_ownership
-from eidolon.requests import get_query_parameter_flexible
+from eidolon.player import verify_character_ownership
+from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.schema import normalize_segment_definition
 from eidolon.segment_core import validate_segment_outcome_results
@@ -59,8 +58,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     end_time = from_unix(end_time_unix) if end_time_unix else ""
 
     # Calculate status using Unix timestamps
-    import time
-
     now = time.time()
     is_complete = end_time_unix <= now if end_time_unix else False
     time_remaining = max(0, int(end_time_unix - now)) if end_time_unix else 0
@@ -129,9 +126,17 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                     response["NextSegmentID"] = next_segment_id
 
                 elif segment_type == "rest":
-                    response["Narrative"] = "You have rested and recovered."
-                    response["Effects"] = {}
-                    response["NextSegmentID"] = segment_def.get("NextSegmentID")
+                    # Get rest segment results
+                    rest_results = segment_def.get("Results", {})
+                    if isinstance(rest_results, dict) and "normal" in rest_results:
+                        normal_result = rest_results["normal"]
+                        response["Narrative"] = normal_result.get("Narrative", "")
+                        response["Effects"] = normal_result.get("Effects", {})
+                        response["NextSegmentID"] = normal_result.get("NextSegmentID")
+                    else:
+                        response["Narrative"] = ""
+                        response["Effects"] = {}
+                        response["NextSegmentID"] = segment_def.get("NextSegmentID")
 
                 elif segment_type == "decision":
                     decision = active_segment.get("Decision")
@@ -141,7 +146,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                     response["Effects"] = {}
 
             except Exception as err:
-                logger.warning(f"Failed to get narrative data: {err}")
+                logger.warning(f"Failed to get narrative data for {segment_id}: {err.__class__.__name__}: {err}")
                 # Continue without narrative - not critical
     else:
         # Segment is still processing - just return basic status
@@ -195,19 +200,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Validate player exists
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player not found in database for {player_id}", exc_info=True)
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
-    # Get character ID from query parameters (flexible: CharacterID or characterId)
-    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
+    # Get character ID from query parameters
+    character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 
@@ -218,10 +212,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     except ValueError as err:
         logger.warning(f"Invalid request or not found for {character_id} Error: {err}")
         error_msg = str(err)
-        # Return the friendly message for no active story
-        if "No active story" in error_msg and "Please select" in error_msg:
-            return lambda_response(200, {"Message": error_msg, "Status": "no_active_story", "CharacterID": character_id}, event)
-        elif "no active" in error_msg.lower():
+        # Return consistent 404 for no active segment/story
+        if "no active" in error_msg.lower() or "Please select" in error_msg:
             return lambda_response(404, {"Error": "No active segment found"}, event)
         elif "not found" in error_msg.lower():
             return lambda_response(404, {"Error": "Character not found"}, event)

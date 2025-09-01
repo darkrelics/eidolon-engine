@@ -14,8 +14,7 @@ from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import validate_player
-from eidolon.requests import get_query_parameter_flexible
+from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_history import record_abandoned_segment_history
 from eidolon.story_active import get_active_story_segment, mark_segment_as_abandoned
@@ -41,7 +40,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
 
     if character.get("GameMode", "None") != "Incremental":
         logger.warning(f"Character not in Incremental mode for {character_id}")
-        raise ValueError("Character not in a story")
+        raise ValueError("Character not in Incremental mode")
 
     active_segment = get_active_story_segment(character_id)
     active_segment_id = active_segment.get("ActiveSegmentID")
@@ -59,31 +58,20 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}")
         # Continue anyway since we still want to update character state
 
-    # Update character: add to AbandonedStories, clear GameMode and ActiveStoryID/ActiveSegmentID
-    # The story cannot be resumed - if repeatable, player must start fresh
+    # Update character: add story to AbandonedStories (using ADD for set semantics), clear story state
     try:
-        # Get current character data to check AbandonedStories list
-        character_data: dict = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})  # type: ignore
-        abandoned_stories = character_data.get("AbandonedStories", [])
-
-        if story_id not in abandoned_stories:
-            # Add to abandoned list if not already there
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression="SET AbandonedStories = list_append(if_not_exists(AbandonedStories, :empty_list), :story)",
-                ExpressionAttributeValues={":empty_list": [], ":story": [story_id]},
-            )
-            logger.info(f"Added story {story_id} to abandoned list for {character_id}")
-
-        # Clear GameMode, ActiveStoryID and ActiveSegmentID - character exits story completely
+        # Use ADD to prevent duplicates (DynamoDB treats it as a set operation for SS type)
+        # Also clear GameMode, ActiveStoryID and ActiveSegmentID in single update
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
-            UpdateExpression="SET GameMode = :none REMOVE ActiveSegmentID, ActiveStoryID",
-            ExpressionAttributeValues={":none": "None"},
+            UpdateExpression="ADD AbandonedStories :story SET GameMode = :none REMOVE ActiveSegmentID, ActiveStoryID",
+            ExpressionAttributeValues={
+                ":story": {story_id},  # Set containing story_id
+                ":none": "None",
+            },
         )
-        logger.info(f"Reset character {character_id} to GameMode=None, story abandoned")
+        logger.info(f"Added story {story_id} to abandoned list and reset character {character_id} to GameMode=None")
 
     except ClientError as err:
         logger.error(f"Failed to update character abandoned state for {character_id} Error: {err}")
@@ -145,19 +133,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Validate player exists
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player not found in database for {player_id}")
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
-    # Get character ID from query parameters (flexible: CharacterID or characterId)
-    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
+    # Get character ID from query parameters
+    character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 

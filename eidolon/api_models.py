@@ -21,13 +21,20 @@ class SegmentStatusResponse(BaseEidolonModel):
     is_complete: bool = Field(..., alias="IsComplete")
     time_remaining: int = Field(..., alias="TimeRemaining")
     end_time: str = Field(..., alias="EndTime")
+    
+    # Processing and type information
+    processing_status: str | None = Field(default=None, alias="ProcessingStatus")
+    segment_type: str | None = Field(default=None, alias="SegmentType")
+    default_status: str | None = Field(default=None, alias="DefaultStatus")
 
     # Optional details when complete
     challenge_results: list[ChallengeResultModel | dict] | None = Field(default=None, alias="ChallengeResults")
     outcome: str | None = Field(default=None, alias="Outcome")
     decision: str | None = Field(default=None, alias="Decision")
+    decision_options: dict | None = Field(default=None, alias="DecisionOptions")
     combat_state: CombatStateModel | dict | None = Field(default=None, alias="CombatState")
     healing_applied: bool | None = Field(default=None, alias="HealingApplied")
+    client_events: list | None = Field(default=None, alias="ClientEvents")
 
     # Narrative data (included when segment is processed/completed)
     narrative: str | None = Field(default=None, alias="Narrative")
