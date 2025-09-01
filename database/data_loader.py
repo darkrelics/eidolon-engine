@@ -21,9 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import dynamo  # noqa: E402
-from eidolon.dynamo import TableName
-from eidolon.validation import validate_character_name  # noqa: E402
+from eidolon.dynamo import TableName, dynamo
+from eidolon.validation import validate_character_name
 
 
 def load_json(file_path):
@@ -411,13 +410,30 @@ def store_story(story_data):
     """
     Stores story and segments data into DynamoDB tables.
 
+    Expects format with "Stories" array containing story objects.
+
     Args:
-        story_data (dict): The story data containing story definition and segments.
+        story_data (dict): The story data containing multiple stories and their segments.
     """
     try:
-        # Store the main story
-        story = story_data.get("Story", {})
-        if story:
+        # Process each story in the Stories array
+        stories = story_data.get("Stories", [])
+        if not stories:
+            logging.warning("No stories found in the data")
+            return
+
+        total_stories = 0
+        total_segments = 0
+
+        for story_obj in stories:
+            story = story_obj.get("Story", {})
+            segments = story_obj.get("Segments", [])
+
+            if not story:
+                logging.warning("Story object missing 'Story' field, skipping")
+                continue
+
+            # Store the main story
             story_item = {
                 "StoryID": story["StoryID"],
                 "Title": story["Title"],
@@ -453,55 +469,57 @@ def store_story(story_data):
                 ExpressionAttributeValues=expression_attribute_values,
             )
             logging.info(f"Successfully stored story '{story['Title']}' (ID: {story['StoryID']}) in DynamoDB")
+            total_stories += 1
 
-        # Store all segments
-        segments = story_data.get("Segments", [])
-        for segment in segments:
-            segment_item = {
-                "StoryID": segment["StoryID"],
-                "SegmentID": segment["SegmentID"],
-                "SegmentType": segment["SegmentType"],
-                "ShortStatus": segment["ShortStatus"],
-                "DefaultStatus": segment.get("DefaultStatus", ""),
-                "SegmentDuration": segment["SegmentDuration"],
-            }
+            # Store all segments for this story
+            for segment in segments:
+                segment_item = {
+                    "StoryID": segment["StoryID"],
+                    "SegmentID": segment["SegmentID"],
+                    "SegmentType": segment["SegmentType"],
+                    "ShortStatus": segment["ShortStatus"],
+                    "DefaultStatus": segment.get("DefaultStatus", ""),
+                    "SegmentDuration": segment["SegmentDuration"],
+                }
 
-            # Add optional fields based on segment type
-            if segment["SegmentType"] == "decision":
-                segment_item["DecisionText"] = segment.get("DecisionText", "")
-                segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
-                segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
-            elif segment["SegmentType"] == "mechanical":
-                # NextSegmentID is now handled per-result in Results
-                segment_item["Challenges"] = segment.get("Challenges", [])
-                segment_item["Combat"] = segment.get("Combat", {})
-                segment_item["Results"] = segment.get("Results", {})
-            elif segment["SegmentType"] == "rest":
-                segment_item["NextSegmentID"] = segment.get("NextSegmentID")
-                segment_item["RestBenefit"] = segment.get("RestBenefit", {})
-            else:
-                print(f"Unknown segment type: {segment['SegmentType']}")
+                # Add optional fields based on segment type
+                if segment["SegmentType"] == "decision":
+                    segment_item["DecisionText"] = segment.get("DecisionText", "")
+                    segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
+                    segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
+                elif segment["SegmentType"] == "mechanical":
+                    # NextSegmentID is now handled per-result in Results
+                    segment_item["Challenges"] = segment.get("Challenges", [])
+                    segment_item["Combat"] = segment.get("Combat", {})
+                    segment_item["Results"] = segment.get("Results", {})
+                elif segment["SegmentType"] == "rest":
+                    segment_item["NextSegmentID"] = segment.get("NextSegmentID")
+                    segment_item["RestBenefit"] = segment.get("RestBenefit", {})
+                else:
+                    print(f"Unknown segment type: {segment['SegmentType']}")
 
-            # Build update expression
-            update_expression = "SET "
-            expression_attribute_values = {}
-            expression_parts = []
+                # Build update expression
+                update_expression = "SET "
+                expression_attribute_values = {}
+                expression_parts = []
 
-            for key, value in segment_item.items():
-                if key not in ["StoryID", "SegmentID"]:  # Skip the keys
-                    expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = value
+                for key, value in segment_item.items():
+                    if key not in ["StoryID", "SegmentID"]:  # Skip the keys
+                        expression_parts.append(f"{key} = :{key.lower()}")
+                        expression_attribute_values[f":{key.lower()}"] = value
 
-            update_expression += ", ".join(expression_parts)
+                update_expression += ", ".join(expression_parts)
 
-            dynamo.update_item(
-                TableName.SEGMENTS,
-                Key={"StoryID": segment["StoryID"], "SegmentID": segment["SegmentID"]},
-                UpdateExpression=update_expression,
-                ExpressionAttributeValues=expression_attribute_values,
-            )
+                dynamo.update_item(
+                    TableName.SEGMENTS,
+                    Key={"StoryID": segment["StoryID"], "SegmentID": segment["SegmentID"]},
+                    UpdateExpression=update_expression,
+                    ExpressionAttributeValues=expression_attribute_values,
+                )
 
-        logging.info(f"Successfully stored {len(segments)} segments for story '{story.get('Title', 'Unknown')}' in DynamoDB")
+            total_segments += len(segments)
+
+        logging.info(f"Successfully stored {total_stories} stories with {total_segments} total segments in DynamoDB")
 
     except ClientError as err:
         logging.error(f"Failed to store story in DynamoDB: {err}")

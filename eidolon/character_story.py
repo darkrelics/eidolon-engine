@@ -8,22 +8,27 @@ from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.character_data import character_get
-from eidolon.dynamo import TableName, dynamo
+from eidolon.character_data import character_clear_story, character_get
+from eidolon.character_segment import character_get_active_segment
+from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time
+from eidolon.validation import validate_uuid
 
 
 def get_story_history(character_id: str, story_id: str) -> dict:
     """
-    Get story history for a character.
+    Get most recent story history for a character and story.
+
+    Since a character can have multiple instances of the same story,
+    this returns the most recent completed or abandoned instance.
 
     Args:
         character_id: Character UUID
         story_id: Story UUID
 
     Returns:
-        History record dict or empty dict if not found
+        Most recent history record dict or empty dict if not found
 
     Raises:
         RuntimeError: If database query fails
@@ -34,8 +39,25 @@ def get_story_history(character_id: str, story_id: str) -> dict:
         raise ValueError("Story ID cannot be empty")
 
     try:
-        history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryID": story_id})
-        return history or {}
+        # Query all story instances for this character
+        items: list = dynamo.query(
+            TableName.STORY_HISTORY,
+            KeyConditionExpression="CharacterID = :character_id",
+            ExpressionAttributeValues={":character_id": character_id},
+            ScanIndexForward=False,  # Most recent first (UUIDv7 sorts by time)
+        )  # type: ignore
+
+        # Filter for the specific story and find the most recent finished instance
+        for item in items:
+            if item.get("StoryID") == story_id and item.get("FinishedAt"):
+                return item
+
+        # No finished instance found, check for in-progress
+        for item in items:
+            if item.get("StoryID") == story_id:
+                return item
+
+        return {}  # No history found for this story
     except ClientError as err:
         logger.error(f"Failed to get story history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get story history: {err}") from err
@@ -320,3 +342,84 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
     except ClientError as err:
         logger.error(f"Failed to apply outcome effects for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply outcome effects: {err}") from err
+
+
+def get_active_story_and_segment(character: dict) -> tuple:
+    """
+    Retrieve active story and segment for a character, handling broken story chains.
+
+    Logic:
+    - If GameMode is not "Incremental", return empty dicts immediately
+    - If GameMode is "Incremental":
+      - Validate both ActiveStoryID and ActiveSegmentID are valid UUIDs
+      - If both valid, fetch and return them
+      - If either is missing/invalid, clear story and return empty dicts
+
+    Args:
+        character: Character dict to check
+
+    Returns:
+        Tuple of (active_story, active_segment) dicts, either may be empty
+    """
+    # Get the character ID first
+    character_id = character.get("CharacterID")
+    if not character_id:
+        logger.error("Character missing CharacterID field")
+        return {}, {}
+
+    # Short circuit if not in Incremental mode
+    game_mode = character.get("GameMode", "None")
+    if game_mode != "Incremental":
+        logger.debug(f"Character not in Incremental mode (GameMode: {game_mode})")
+        return {}, {}
+
+    # Check if both story and segment IDs exist
+    if not character.get("ActiveStoryID") and not character.get("ActiveSegmentID"):
+        logger.warning(f"Character {character_id} has no active story or segment")
+        # Clear the story fields in the database
+        character_clear_story(character_id)
+        return {}, {}
+
+    active_story_id = character.get("ActiveStoryID")
+    active_segment_id = character.get("ActiveSegmentID")
+
+    # Validate both IDs are present and valid UUIDs
+    story_valid = validate_uuid(active_story_id)
+    segment_valid = validate_uuid(active_segment_id)
+
+    if not story_valid or not segment_valid:
+        # Invalid or missing IDs = broken story chain
+        logger.warning(
+            f"Broken story chain for character {character_id}: " f"StoryID valid={story_valid}, SegmentID valid={segment_valid}"
+        )
+
+        # Clear the story fields in the database
+        character_clear_story(character_id)
+        return {}, {}
+
+    # Both IDs are valid UUIDs, fetch the actual data
+    active_story: dict = {}
+    active_segment: dict = {}
+
+    try:
+        active_story = character_get_active_story(character)
+        if not active_story:
+            # Story ID was valid but story not found = broken chain
+            logger.warning(f"Story {active_story_id} not found for character {character_id}")
+            character_clear_story(character_id)
+            return {}, {}
+    except RuntimeError as err:
+        logger.error(f"Error retrieving active story: {err}")
+        # Database error - don't clear, just return empty
+        return {}, {}
+
+    active_segment = character_get_active_segment(character)
+    if not active_segment:
+        # Segment ID was valid but segment not found = broken chain
+        logger.warning(f"Segment {active_segment_id} not found for character {character_id}")
+        character_clear_story(character_id)
+        return {}, {}
+
+    # Everything is valid - convert Decimal types to float for JSON serialization
+    logger.debug(f"Valid story and segment found for character {character_id}")
+    return decimal_to_float(active_story), decimal_to_float(active_segment)

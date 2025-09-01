@@ -8,255 +8,167 @@ Triggered by EventBridge to check active segments that have reached their end ti
 Handles different segment types appropriately and manages polling state.
 """
 
-import time
-
 from botocore.exceptions import ClientError
 
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.polling import disable_polling_infrastructure, enable_polling_infrastructure, get_polling_state
-from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment import (
-    check_active_segments_exist,
-    get_completed_segments,
-    is_mechanical_segment,
-    mark_segment_as_completed_exceptional,
-    reset_segment_processing_status,
-)
+from eidolon.polling import get_polling_state, manage_eventbridge_rule, update_polling_state
+from eidolon.segment_polling import check_active_segments_exist, get_segments_approaching_expiry, get_stuck_mechanical_segments
+from eidolon.segment_state import mark_segment_as_completed_exceptional, reset_segment_processing_status
 from eidolon.sqs import send_message_batch
 
 
-def poll_and_process_segments_business_logic() -> dict:
+def poll_segments() -> None:
     """
-    Business logic to poll for and process completed segments.
+    Poll for segments that need attention and route appropriately.
 
-    Sends all completed segments to the story advancement queue for processing.
-    No longer processes any segments directly in the poller.
-
-    Returns:
-        Dict with processing statistics
-
-    Raises:
-        RuntimeError: If database or SQS operations fail
+    Two main tasks:
+    1. Find segments approaching expiry -> advance or recover them
+    2. Find stuck mechanical segments -> retry them
     """
     # First check SSM parameter state
     poller_state = get_polling_state()
 
-    # Calculate time window for segment polling
-    current_time = int(time.time())
+    segments_to_advance = 0
+    segments_to_process = 0
+    segments_marked_exceptional = 0
 
-    # Get completed segments (including stuck segments 15+ minutes past EndTime)
-    completed_segments = get_completed_segments(MAX_SEGMENTS_PER_POLL)
+    # 1. Handle segments approaching expiry (within 90 seconds)
+    try:
+        expiring_segments = get_segments_approaching_expiry(MAX_SEGMENTS_PER_POLL)
 
-    # Categorize segments by their processing needs
-    segments_for_advancement = []  # Recently completed (within 30 seconds)
-    stuck_mechanical_segments = []  # Mechanical segments stuck >15 minutes
-    exhausted_segments = []  # Segments past their time window
+        advancement_messages = []
+        for segment in expiring_segments:
+            active_segment_id = segment.get("ActiveSegmentID")
+            processing_status = segment.get("ProcessingStatus")
 
-    mechanical_count = 0
-    simple_count = 0
-    stuck_count = 0
-    exhausted_count = 0
+            if processing_status == "processed":
+                # Normal advancement - send just the ActiveSegmentID string
+                advancement_messages.append({"body": active_segment_id})
+                logger.debug(f"Segment ready for advancement: {active_segment_id}")
+            else:
+                # Not processed in time - check segment type before marking exceptional
+                segment_type = segment.get("SegmentType")
 
-    for segment in completed_segments:
-        segment_type = segment.get("SegmentType", "").lower()
-        end_time = int(segment.get("EndTime", 0))
-        start_time = int(segment.get("StartTime", 0))
-        time_since_end = current_time - end_time
-        processing_status = segment.get("ProcessingStatus", "")
+                if segment_type == "mechanical":
+                    # Only mechanical segments get exceptional outcome (system failure protection)
+                    try:
+                        mark_segment_as_completed_exceptional(active_segment_id)
+                        advancement_messages.append({"body": active_segment_id})
+                        segments_marked_exceptional += 1
+                        logger.warning(f"Marked unprocessed mechanical segment as exceptional: {active_segment_id}")
+                    except Exception as err:
+                        logger.error(f"Failed to mark mechanical segment as exceptional: {active_segment_id} Error: {err}")
+                else:
+                    # Decision and rest segments should flow through for normal processing
+                    # Decision: will apply DefaultDecision or failure
+                    # Rest: will advance normally
+                    advancement_messages.append({"body": active_segment_id})
+                    if segment_type == "decision":
+                        logger.info(f"Decision segment timed out, queuing for default/failure handling: {active_segment_id}")
+                    elif segment_type == "rest":
+                        logger.info(f"Rest segment timed out, queuing for normal advancement: {active_segment_id}")
+                    else:
+                        logger.warning(
+                            f"Unknown segment type '{segment_type}' timed out, queuing for advancement: {active_segment_id}"
+                        )
 
-        # Skip segments already processed - they're waiting for advancement
-        if processing_status == "processed":
-            segments_for_advancement.append(segment)
-            logger.debug(f"Segment already processed, sending to advancement for {segment.get('ActiveSegmentID')}")
-        # Check if mechanical segment is stuck (>15 minutes in processing state)
-        # Only retry if there's at least 15 minutes remaining before end time
-        elif is_mechanical_segment(segment_type) and processing_status == "processing":
-            # Calculate how long it's been processing
-            time_in_processing = current_time - start_time
-            time_remaining = end_time - current_time
+        if advancement_messages:
+            if not STORY_ADVANCEMENT_QUEUE_URL:
+                raise RuntimeError("STORY_ADVANCEMENT_QUEUE_URL environment variable not set")
 
-            if time_in_processing > 900 and time_remaining > 900:
-                # Been processing >15 min AND >15 min remaining - retry it
-                stuck_mechanical_segments.append(segment)
-                stuck_count += 1
-                logger.warning(f"Found stuck mechanical segment with time to retry for {segment.get('ActiveSegmentID')}")
-            elif time_since_end > 0:
-                # Past end time while still processing - mark as exceptional
-                exhausted_segments.append(segment)
-                exhausted_count += 1
-                logger.warning(f"Found stuck segment past end time - marking as exceptional for {segment.get('ActiveSegmentID')}")
-            # Otherwise, it's still processing within normal timeframe - let it continue
-        # Any segment past its end time that isn't processed or completed should be marked exceptional
-        # But NOT if it's already processed - those are just waiting for advancement
-        elif time_since_end > 0 and processing_status not in ["processed", "completed"]:
-            exhausted_segments.append(segment)
-            exhausted_count += 1
-            logger.warning(
-                f"Found exhausted segment - marking as exceptional to protect player from system failure for {segment.get('ActiveSegmentID')}"
-            )
-        # Normal segments within their time window
-        else:
-            segments_for_advancement.append(segment)
+            result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
+            segments_to_advance = result.get("successful", 0)
 
-        if is_mechanical_segment(segment_type):
-            mechanical_count += 1
-        else:
-            simple_count += 1
+    except Exception as err:
+        logger.error(f"Failed to process expiring segments: {err}", exc_info=True)
 
-    # Process each category
-    segments_queued = 0
-    segments_failed = 0
-    segments_cleaned = 0
-    segments_marked_done = 0
+    # 2. Handle stuck mechanical segments (>5 minutes old with time to retry)
+    try:
+        stuck_segments = get_stuck_mechanical_segments(MAX_SEGMENTS_PER_POLL)
 
-    # 1. Send recently completed segments to advancement queue
-    if segments_for_advancement:
-        messages = []
-        for segment in segments_for_advancement:
-            messages.append(
-                {
-                    "body": {
-                        "ActiveSegmentID": segment.get("ActiveSegmentID"),
-                        "CharacterID": segment.get("CharacterID"),
-                        "StoryID": segment.get("StoryID"),
-                        "SegmentID": segment.get("SegmentID"),
-                        "SegmentType": segment.get("SegmentType"),
-                    }
-                }
-            )
+        processing_messages = []
+        for segment in stuck_segments:
+            active_segment_id = segment.get("ActiveSegmentID")
+            processing_status = segment.get("ProcessingStatus")
 
-        if not STORY_ADVANCEMENT_QUEUE_URL:
-            raise RuntimeError("STORY_ADVANCEMENT_QUEUE_URL environment variable not set")
-
-        result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, messages)
-        segments_queued += result.get("successful", 0)
-        segments_failed += result.get("failed", 0)
-
-    # 2. Clean and retry stuck mechanical segments
-    if stuck_mechanical_segments:
-        if not SEGMENT_QUEUE_URL:
-            logger.error("SEGMENT_QUEUE_URL not set, cannot retry stuck segments")
-        else:
-            messages = []
-            for segment in stuck_mechanical_segments:
-                # Clear processing flag by updating segment
+            # Reset if stuck in processing
+            if processing_status == "processing":
                 try:
-                    reset_segment_processing_status(segment.get("ActiveSegmentID"))
-                    segments_cleaned += 1
-
-                    # Queue for reprocessing
-                    messages.append(
-                        {
-                            "body": {
-                                "ActiveSegmentID": segment.get("ActiveSegmentID"),
-                                "CharacterID": segment.get("CharacterID"),
-                                "StoryID": segment.get("StoryID"),
-                                "SegmentID": segment.get("SegmentID"),
-                                "SegmentType": segment.get("SegmentType"),
-                            }
-                        }
-                    )
+                    reset_segment_processing_status(active_segment_id)
+                    logger.info(f"Reset stuck processing segment: {active_segment_id}")
                 except Exception as err:
-                    logger.error(f"Failed to clean stuck segment for {segment.get('ActiveSegmentID')} Error: {err}")
+                    logger.error(f"Failed to reset segment: {active_segment_id} Error: {err}")
+                    continue
 
-            if messages:
-                result = send_message_batch(SEGMENT_QUEUE_URL, messages)
+            processing_messages.append({"body": active_segment_id})
 
-    # 3. Mark exhausted segments as done and send to advancement
-    if exhausted_segments:
-        messages = []
-        for segment in exhausted_segments:
+        if processing_messages:
+            if not SEGMENT_QUEUE_URL:
+                logger.error("SEGMENT_QUEUE_URL not set, cannot retry stuck segments")
+            else:
+                result = send_message_batch(SEGMENT_QUEUE_URL, processing_messages)
+                segments_to_process = result.get("successful", 0)
+
+    except Exception as err:
+        logger.error(f"Failed to process stuck segments: {err}", exc_info=True)
+
+    # Log statistics
+    logger.info(
+        f"Polling complete - Advanced: {segments_to_advance}, Retried: {segments_to_process}, Marked exceptional: {segments_marked_exceptional}"
+    )
+
+    # Handle polling state transitions
+    if poller_state == "run":
+        # Check if there are still active segments
+        if not check_active_segments_exist():
+            # No segments to process - set parameter to "stop"
+            update_polling_state("stop")
+            logger.info("No active segments - parameter set to stop")
+    else:  # poller_state == "stop"
+        # Parameter is "stop" - check for active segments
+        has_active_segments = check_active_segments_exist()
+
+        if has_active_segments:
+            # Found active segments - return to "run"
+            update_polling_state("run")
+            logger.info("Active segments found - parameter set back to run")
+        else:
+            # No active segments - disable the EventBridge rule
             try:
-                # Mark as completed with exceptional outcome to protect player from system failures
-                # If our processing failed repeatedly, give the player the best possible outcome
-                mark_segment_as_completed_exceptional(segment.get("ActiveSegmentID"))
-                segments_marked_done += 1
-
-                # Queue for advancement to complete the story flow
-                messages.append(
-                    {
-                        "body": {
-                            "ActiveSegmentID": segment.get("ActiveSegmentID"),
-                            "CharacterID": segment.get("CharacterID"),
-                            "StoryID": segment.get("StoryID"),
-                            "SegmentID": segment.get("SegmentID"),
-                            "SegmentType": segment.get("SegmentType"),
-                        }
-                    }
-                )
+                manage_eventbridge_rule(False)
+                logger.info("No active segments - EventBridge rule disabled")
             except Exception as err:
-                logger.error(f"Failed to mark exhausted segment as done for {segment.get('ActiveSegmentID')} Error: {err}")
-
-        if messages:
-            result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, messages)
-            segments_queued += result.get("successful", 0)
-            segments_failed += result.get("failed", 0)
-
-    # Update SSM parameter and EventBridge rule based on state
-    if poller_state == "stop":
-        if completed_segments:
-            # Found segments while stopped, switch to run
-            enable_polling_infrastructure()
-            logger.info("Poller state changed from stop to run due to found segments")
-    else:  # poller_state == "run"
-        if not completed_segments:
-            # No segments found, check if table is empty
-            has_active_segments = check_active_segments_exist()
-
-            if not has_active_segments:
-                # No active segments at all, switch to stop
-                disable_polling_infrastructure()
-                logger.info("Poller state changed from run to stop - no active segments")
-
-    return {
-        "SegmentsFound": len(completed_segments),
-        "MechanicalCount": mechanical_count,
-        "SimpleCount": simple_count,
-        "SegmentsQueued": segments_queued,
-        "SegmentsFailed": segments_failed,
-        "StuckCount": stuck_count,
-        "SegmentsCleaned": segments_cleaned,
-        "ExhaustedCount": exhausted_count,
-        "SegmentsMarkedDone": segments_marked_done,
-        "PollerState": poller_state,
-    }
+                logger.warning(f"Failed to disable EventBridge rule: {err}")
 
 
 def lambda_handler(event: dict, context: object) -> dict:
     """
-    Lambda handler to poll for completed segments.
+    Lambda handler to poll for segments needing attention.
 
-    Triggered by EventBridge every minute to find segments ready for processing.
-    Handles different segment types appropriately and manages polling state.
+    Triggered by EventBridge every minute to:
+    1. Find segments approaching expiry and advance/recover them
+    2. Find stuck mechanical segments and retry them
 
     Args:
         event: EventBridge event (scheduled)
         context: Lambda context
 
     Returns:
-        Response with processing summary
+        Success response
     """
     # Log invocation
     log_lambda_statistics(event, context)
 
     try:
         # Run polling logic
-        result = poll_and_process_segments_business_logic()
+        poll_segments()
 
-        # Build response with PascalCase fields
-        response_data = {
-            "Message": "Segment polling completed",
-            **result,
-        }
+        return {"statusCode": 200, "body": {"Message": "Segment polling completed"}}
 
-        return lambda_response(200, response_data, event)
-
-    except ClientError as err:
-        logger.error(f"AWS service error during segment polling Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to poll segments Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
+    except (ClientError, RuntimeError) as err:
+        logger.error(f"Segment polling failed: {err}", exc_info=True)
+        raise
     except Exception as err:
-        return lambda_error(event, err)
+        logger.error(f"Unexpected error during segment polling: {err}", exc_info=True)
+        raise

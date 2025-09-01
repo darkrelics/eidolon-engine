@@ -8,13 +8,13 @@ from botocore.exceptions import ClientError
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
-from utilities import run_cdk_deploy, validate_policies
+from stacks.stack_utilities import check_s3_bucket_exists
+from utilities import run_cdk_deploy, validate_policies, validate_s3_bucket
 
 
 def deploy_codebuild_stack(params) -> dict:
     """Deploy the CodeBuild stack using CDK."""
     # Check if S3 bucket already exists
-    from stacks.stack_utilities import check_s3_bucket_exists
 
     bucket_exists = check_s3_bucket_exists(params.s3_bucket, params.region)
 
@@ -36,32 +36,6 @@ def deploy_codebuild_stack(params) -> dict:
 
     app_command = "python3 app_codebuild.py"
     return run_cdk_deploy("codebuild", params.region, app_command, context_args)
-
-
-def validate_s3_bucket(bucket_name: str, region: str) -> bool:
-    """Validate that S3 bucket exists and is accessible.
-
-    Args:
-        bucket_name: Name of the S3 bucket to validate
-        region: AWS region
-
-    Returns:
-        True if bucket exists and is accessible, False otherwise
-    """
-    try:
-        s3 = boto3.client("s3", region_name=region)
-        s3.head_bucket(Bucket=bucket_name)
-        print(f"  [OK] S3 bucket: {bucket_name}")
-        return True
-    except ClientError as err:
-        error_code = err.response.get("Error", {}).get("Code", "")
-        if error_code == "404":
-            print(f"  [MISSING] S3 bucket: {bucket_name}")
-        elif error_code == "403":
-            print(f"  [FORBIDDEN] S3 bucket: {bucket_name} - insufficient permissions")
-        else:
-            print(f"  [ERROR] S3 bucket: {bucket_name} - {error_code}")
-        return False
 
 
 def validate_codebuild_projects(project_names: list[str], region: str) -> dict:
@@ -298,7 +272,6 @@ def validate_build_artifacts(bucket_name: str, region: str) -> bool:
         # Story Lambda functions
         "api-segment-decision.zip",
         "api-segment-history.zip",
-        "api-segment-outcome.zip",
         "api-segment-rest.zip",
         "api-segment-status.zip",
         "api-story-abandon.zip",

@@ -1,6 +1,6 @@
 """CodeBuild stack for Eidolon Engine Lambda builds."""
 
-from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_codebuild as codebuild
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_s3 as s3
@@ -41,6 +41,8 @@ class CodeBuildStack(Stack):
         self.github_repo = github_repo
         self.github_branch = github_branch
         super().__init__(scope, stack_id, **kwargs)
+        # Apply system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Import existing bucket or create new one with fixed logical ID
         if bucket_exists:
@@ -140,13 +142,6 @@ class CodeBuildStack(Stack):
                 "AWS_DEFAULT_REGION": codebuild.BuildEnvironmentVariable(value=self.region_name),
             },
             build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-layer.yml"),
-            artifacts=codebuild.Artifacts.s3(
-                bucket=self.artifacts_bucket,
-                include_build_id=False,
-                package_zip=False,
-                path="lambda-layer",
-                name="lambda-layer.zip",
-            ),
         )
 
         # Set removal policy
@@ -182,12 +177,6 @@ class CodeBuildStack(Stack):
                 "AWS_DEFAULT_REGION": codebuild.BuildEnvironmentVariable(value=self.region_name),
             },
             build_spec=codebuild.BuildSpec.from_source_filename("buildspec/lambda-functions.yml"),
-            artifacts=codebuild.Artifacts.s3(
-                bucket=self.artifacts_bucket,
-                include_build_id=False,
-                package_zip=False,
-                path="lambda-functions",
-            ),
         )
 
         # Set removal policy

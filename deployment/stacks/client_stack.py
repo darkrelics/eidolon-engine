@@ -1,6 +1,6 @@
 """Client stack for portal deployment with CloudFront and CodeBuild."""
 
-from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
@@ -74,6 +74,9 @@ class ClientStack(Stack):
         self.bucket_exists = bucket_exists
 
         super().__init__(scope, stack_id, description="Portal S3 bucket, CloudFront CDN, and CodeBuild deployment", **kwargs)
+
+        # Add system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Create portal S3 bucket
         self.portal_bucket = self._create_portal_bucket()
@@ -201,8 +204,25 @@ class ClientStack(Stack):
             build_spec=codebuild.BuildSpec.from_source_filename(buildspec_file),
         )
 
-        # Grant permissions
-        self.portal_bucket.grant_read_write(project)
+        # Grant S3 permissions via IAM role (not bucket policy)
+        # This ensures CodeBuild permissions aren't affected by bucket policy changes
+        project.add_to_role_policy(
+            iam.PolicyStatement(
+                effect=iam.Effect.ALLOW,
+                actions=[
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:ListBucket",
+                    "s3:GetBucketLocation",
+                    "s3:PutObjectAcl",
+                ],
+                resources=[
+                    self.portal_bucket.bucket_arn,
+                    f"{self.portal_bucket.bucket_arn}/*",
+                ],
+            )
+        )
 
         project.add_to_role_policy(
             iam.PolicyStatement(

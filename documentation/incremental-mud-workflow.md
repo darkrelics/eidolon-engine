@@ -245,7 +245,7 @@ The wound healing system operates continuously across both game modes:
 - Mode transitions require validation of game state
 - API Gateway at `api.{domain}` with Cognito authorizer
 - CORS validation at Lambda level using environment variables
-- RunningFlag prevents concurrent segment processing
+- ProcessingStatus state transitions prevent concurrent segment processing
 - Conditional updates prevent race conditions
 - Fixed logical IDs prevent resource recreation on stack updates
 

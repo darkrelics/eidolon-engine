@@ -2,10 +2,12 @@
 
 import json
 import sys
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
 from api import deploy_api
+from character import deploy_character
 from client import deploy_client
 from cloudwatch import deploy_cloudwatch
 from codebuild import deploy_codebuild
@@ -249,7 +251,13 @@ def main():
     try:
         params = collect_deployment_params(config)
     except ValueError as err:
+        print(f"\nError during parameter collection: {err}")
+        return 1
+    except Exception as err:
+        print("\nUnexpected error during parameter collection")
         print(f"Error: {err}")
+        print("\nFull stack trace:")
+        print(traceback.format_exc())
         return 1
 
     # Check CDK bootstrap
@@ -291,6 +299,7 @@ def main():
         "codebuild": deploy_codebuild,
         "dynamodb": deploy_dynamodb,
         "lambda": deploy_lambda,
+        "character": deploy_character,
         "player": deploy_player,
         "story": deploy_story,
         "s3": deploy_s3,
@@ -311,7 +320,13 @@ def main():
                 if not success:
                     print(f"WARNING: {stack_name} deployment had issues")
             except Exception as e:
-                print(f"ERROR deploying {stack_name}: {e}")
+                print(f"\n{'='*60}")
+                print(f"ERROR deploying {stack_name} stack")
+                print(f"{'='*60}")
+                print(f"Error: {e}")
+                print("\nFull stack trace:")
+                print(traceback.format_exc())
+                print(f"{'='*60}")
                 deployment_results[stack_name] = False
         else:
             print(f"\nSkipping {stack_name} stack (not yet implemented)")

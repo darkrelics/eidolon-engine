@@ -206,9 +206,10 @@ abstract class BaseApiService {
     );
   }
 
-  void dispose() {
-    // Don't dispose the http client if it was provided externally
-  }
+  // NOTE: The http.Client is NOT disposed here intentionally.
+  // If the client was provided externally (dependency injection), the caller is responsible for disposal.
+  // If we created the client internally, it will be garbage collected when this service is released.
+  // This follows the principle of "who creates it, disposes it" for resource management.
 }
 
 /// Custom exception classes

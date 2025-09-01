@@ -103,7 +103,6 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "CharacterName": result.get("character_name", "Unknown"),
                 "ItemsDeleted": result.get("deletion_result", {}).get("items_deleted", 0),
                 "ActiveSegmentsDeleted": result.get("deletion_result", {}).get("active_segments_deleted", 0),
-                "HistoryDeleted": result.get("deletion_result", {}).get("history_deleted", 0),
             },
             event,
         )

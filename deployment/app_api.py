@@ -20,6 +20,7 @@ if not domain:
     raise ValueError("domain is required but not provided")
 
 api_host = app.node.try_get_context("api_host") or "api"
+client_host = app.node.try_get_context("client_host") or "portal"
 deployment_mode = app.node.try_get_context("deployment_mode") or "hybrid"
 
 # Get Lambda function ARNs if provided
@@ -40,6 +41,7 @@ api_stack = ApiStack(
     hosted_zone_id=hosted_zone_id,
     domain=domain,
     api_host=api_host,
+    client_host=client_host,
     deployment_mode=deployment_mode,
     lambda_arns=lambda_arns,
     cognito_user_pool_id=cognito_user_pool_id,

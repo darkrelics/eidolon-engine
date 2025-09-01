@@ -60,7 +60,7 @@ TABLE_CONFIGS = [
     {
         "name": "story_history",
         "partition_key": {"name": "CharacterID", "type": "S"},
-        "sort_key": {"name": "StoryID", "type": "S"},
+        "sort_key": {"name": "StoryInstanceID", "type": "S"},
     },
     {
         "name": "segment_history",

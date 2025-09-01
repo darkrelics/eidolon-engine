@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 
 /// Widget showing progress for mechanical segments
 class MechanicalSegmentProgress extends StatefulWidget {
@@ -21,46 +20,37 @@ class MechanicalSegmentProgress extends StatefulWidget {
   State<MechanicalSegmentProgress> createState() => _MechanicalSegmentProgressState();
 }
 
-class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _progressAnimation;
+class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
   Timer? _timer;
   int _elapsedSeconds = 0;
+  double _progress = 0.0;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: widget.estimatedDuration,
-    );
-    _progressAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    ));
-
     if (widget.processingStatus == 'processing') {
       _startProgress();
     }
   }
 
   void _startProgress() {
-    _controller.forward();
+    // Update progress every second (1 FPS for progress bar)
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (mounted) {
         setState(() {
           _elapsedSeconds++;
+          // Calculate progress based on elapsed time vs estimated duration
+          final durationSeconds = widget.estimatedDuration.inSeconds;
+          _progress = durationSeconds > 0 
+              ? (_elapsedSeconds / durationSeconds).clamp(0.0, 1.0)
+              : 1.0;
+          
+          // Call onComplete when duration is reached
+          if (durationSeconds > 0 && _elapsedSeconds >= durationSeconds) {
+            timer.cancel();
+            widget.onComplete?.call();
+          }
         });
-      }
-    });
-
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
-        widget.onComplete?.call();
       }
     });
   }
@@ -70,14 +60,13 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
     super.didUpdateWidget(oldWidget);
     if (widget.processingStatus == 'processed' && 
         oldWidget.processingStatus == 'processing') {
-      _controller.stop();
       _timer?.cancel();
+      _progress = 1.0;
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
     _timer?.cancel();
     super.dispose();
   }
@@ -130,9 +119,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                   color: Colors.orange,
                   size: 24,
                 ),
-              ).animate(
-                onPlay: isProcessing ? (controller) => controller.repeat() : null,
-              ).rotate(duration: 2000.ms),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -165,13 +152,10 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      SizedBox(
-                        width: 12,
-                        height: 12,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                        ),
+                      Icon(
+                        Icons.hourglass_bottom,
+                        size: 12,
+                        color: Colors.orange,
                       ),
                       const SizedBox(width: 6),
                       Text(
@@ -185,53 +169,46 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                       ),
                     ],
                   ),
-                ).animate()
-                  .fadeIn()
-                  .scale(delay: 100.ms),
+                ),
             ],
           ),
 
           const SizedBox(height: 20),
 
-          // Progress Bar
-          AnimatedBuilder(
-            animation: _progressAnimation,
-            builder: (context, child) {
-              return Column(
+          // Progress Bar (updates at 1 FPS)
+          Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Progress',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
-                        ),
-                      ),
-                      Text(
-                        '${(_progressAnimation.value * 100).toInt()}%',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    'Progress',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                    ),
                   ),
-                  const SizedBox(height: 8),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: isProcessing ? _progressAnimation.value : 1.0,
-                      minHeight: 12,
-                      backgroundColor: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        isProcessing ? Colors.orange : Colors.green,
-                      ),
+                  Text(
+                    '${(_progress * 100).toInt()}%',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onPrimaryContainer,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
-              );
-            },
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: isProcessing ? _progress : 1.0,
+                  minHeight: 12,
+                  backgroundColor: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isProcessing ? Colors.orange : Colors.green,
+                  ),
+                ),
+              ),
+            ],
           ),
 
           const SizedBox(height: 16),
@@ -265,9 +242,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                     ),
                   ],
                 ),
-              ).animate()
-                .fadeIn(delay: 200.ms)
-                .slideX(begin: -0.1, end: 0),
+              ),
 
               // Status Message
               if (widget.processingStatus == 'processed')
@@ -298,54 +273,13 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress>
                       ),
                     ],
                   ),
-                ).animate()
-                  .fadeIn()
-                  .scale()
-                  .shake(delay: 100.ms),
+                ),
             ],
           ),
 
-          // Animated Gears
-          if (isProcessing) ...[
-            const SizedBox(height: 20),
-            _AnimatedGears().animate()
-              .fadeIn(delay: 300.ms),
-          ],
+          // Processing indicator removed for performance
         ],
       ),
-    );
-  }
-}
-
-class _AnimatedGears extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.settings,
-          size: 20,
-          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.3),
-        ).animate(onPlay: (controller) => controller.repeat())
-          .rotate(duration: 3000.ms, curve: Curves.linear),
-        const SizedBox(width: 8),
-        Icon(
-          Icons.settings,
-          size: 28,
-          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.4),
-        ).animate(onPlay: (controller) => controller.repeat())
-          .rotate(duration: 2000.ms, curve: Curves.linear, begin: 0.5),
-        const SizedBox(width: 8),
-        Icon(
-          Icons.settings,
-          size: 20,
-          color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.3),
-        ).animate(onPlay: (controller) => controller.repeat())
-          .rotate(duration: 3000.ms, curve: Curves.linear),
-      ],
     );
   }
 }

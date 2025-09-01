@@ -161,6 +161,8 @@ Resources:
       AttributeDefinitions:
         - AttributeName: ActiveSegmentID
           AttributeType: S
+        - AttributeName: Status
+          AttributeType: S
         - AttributeName: EndTime
           AttributeType: N
         - AttributeName: CharacterID
@@ -171,8 +173,10 @@ Resources:
       GlobalSecondaryIndexes:
         - IndexName: EndTimeIndex
           KeySchema:
-            - AttributeName: EndTime
+            - AttributeName: Status
               KeyType: HASH
+            - AttributeName: EndTime
+              KeyType: RANGE
           Projection:
             ProjectionType: ALL
         - IndexName: CharacterID-index
@@ -224,12 +228,12 @@ Resources:
       AttributeDefinitions:
         - AttributeName: CharacterID
           AttributeType: S
-        - AttributeName: StoryID
+        - AttributeName: StoryInstanceID
           AttributeType: S
       KeySchema:
         - AttributeName: CharacterID
           KeyType: HASH
-        - AttributeName: StoryID
+        - AttributeName: StoryInstanceID
           KeyType: RANGE
       BillingMode: PAY_PER_REQUEST
       DeletionProtectionEnabled: true

@@ -8,8 +8,7 @@ Returns the full character data including active segments if any.
 """
 
 from eidolon.character_data import character_get
-from eidolon.character_segment import character_get_active_segment
-from eidolon.character_story import character_get_active_story, get_stories
+from eidolon.character_story import get_active_story_and_segment, get_stories
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float
@@ -17,6 +16,7 @@ from eidolon.items import get_inventory
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import validate_player
 from eidolon.responses import lambda_error, lambda_response
+from eidolon.story_retrieval import enrich_segment_with_narrative
 
 
 def get_character_logic(character_id: str, player_id: str) -> dict:
@@ -46,36 +46,14 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         logger.error(f"Failed to get character: {err}")
         return {"success": False, "error": "Failed to retrieve character data", "status_code": 500}
 
-    # Check for active segment
-    active_story: dict = {}
-    active_segment: dict = {}
-    try:
-        active_story = character_get_active_story(character)
-        if active_story:
-            logger.info("Active story found for character")
-        else:
-            logger.info("No active story found for character")
-            character["ActiveStoryID"] = None
-            character["ActiveSegmentID"] = None
-    except RuntimeError:
-        logger.error("Error retrieving active story")
+    # Get active story and segment, handling broken story chains
+    active_story, active_segment = get_active_story_and_segment(character)
 
-    if active_story:
+    if not active_story or not active_segment:
+        character["ActiveStoryID"] = None
+        character["ActiveSegmentID"] = None
+        character["GameMode"] = "None"
 
-        try:
-            active_segment = character_get_active_segment(character)
-            if active_segment:
-                logger.info("Active segment found for character")
-        except RuntimeError:
-            logger.error("Error retrieving active segments")
-            # Continue without active segment data - not critical for response
-
-        if active_segment:
-            character["ActiveSegmentID"] = active_segment.get("ActiveSegmentID")
-        else:
-            character["ActiveStoryID"] = None
-            active_story = {}
-            character["ActiveSegmentID"] = None
     # Note: Attributes and skills maintain their original casing from the database
     # The Flutter client handles any casing differences flexibly
 
@@ -87,11 +65,17 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
     # Build response data with PascalCase keys
     response_data: dict = {"Character": decimal_to_float(character)}
 
-    # Add story if found
+    # Add story if found (already converted by get_active_story_and_segment)
     if active_story:
-        response_data["ActiveStory"] = decimal_to_float(active_story)
+        response_data["ActiveStory"] = active_story
+
     if active_segment:
-        response_data["ActiveSegment"] = decimal_to_float(active_segment)
+        # active_segment already converted by get_active_story_and_segment
+        if isinstance(active_segment, dict):
+            segment_data = enrich_segment_with_narrative(active_segment, active_segment)
+        else:
+            segment_data = active_segment
+        response_data["ActiveSegment"] = segment_data
 
     # If there isn't an active story the available stories will be provided.
     if not active_story:
@@ -105,7 +89,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         # Sort stories by availability and title
         stories.sort(key=lambda s: (not s["Available"], s["Title"]))
 
-        logger.info(f"Stories retrieved successfully for {character_id}")
+        logger.debug(f"Stories retrieved successfully for {character_id}")
 
         response_data["AvailableStories"] = stories
 

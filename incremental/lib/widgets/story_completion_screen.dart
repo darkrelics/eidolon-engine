@@ -142,7 +142,7 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
                             shape: BoxShape.circle,
                           ),
                           child: Icon(
-                            Icons.emoji_events,
+                            Icons.workspace_premium,
                             size: 48,
                             color: theme.colorScheme.primary,
                           ),

@@ -53,7 +53,7 @@ def get_lambda_function_arns(region: str) -> dict:
 
     # List of Lambda functions needed for API
     api_functions = [
-        "api-archetype-get",
+        "api-archetype-list",
         "api-character-add",
         "api-character-get",
         "api-character-delete",
@@ -61,10 +61,9 @@ def get_lambda_function_arns(region: str) -> dict:
         "api-story-start",
         "api-story-abandon",
         "api-segment-decision",
-        "api-segment-outcome",
         "api-segment-status",
         "api-segment-history",
-        "api-character-rest",
+        "api-segment-rest",
     ]
 
     for function_name in api_functions:
@@ -86,12 +85,13 @@ def deploy_api_stack(params, state: CDKState) -> dict:
     print("  Discovering Lambda functions for API integration...")
     lambda_arns = get_lambda_function_arns(params.region)
     if not lambda_arns:
-        print("  [ERROR] No Lambda functions found")
-        return {"success": False, "outputs": {}}
-
-    print(f"  Found {len(lambda_arns)} Lambda functions to integrate:")
-    for func in lambda_arns:
-        print(f"    - {func}")
+        print("  [WARNING] No Lambda functions found yet")
+        print("  API Gateway will be created without Lambda integrations")
+        print("  Lambda functions will be integrated after they are deployed")
+    else:
+        print(f"  Found {len(lambda_arns)} Lambda functions to integrate:")
+        for func in lambda_arns:
+            print(f"    - {func}")
 
     # Build context arguments
     context_args = [
@@ -103,6 +103,8 @@ def deploy_api_stack(params, state: CDKState) -> dict:
         f"domain={params.domain}",
         "-c",
         f"api_host={params.api_host}",
+        "-c",
+        f"client_host={params.client_host}",
         "-c",
         f"deployment_mode={params.deployment_mode}",
     ]

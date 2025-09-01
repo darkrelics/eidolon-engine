@@ -1,6 +1,7 @@
 """Utility functions for deployment scripts."""
 
 import subprocess
+import traceback
 from functools import cache
 from pathlib import Path
 
@@ -19,8 +20,13 @@ def get_aws_account_id() -> str:
         sts = boto3.client("sts")
         identity = sts.get_caller_identity()
         return identity.get("Account", "")
+    except ClientError as err:
+        print(f"Error: AWS API error while getting account ID - {err}")
+        return ""
     except Exception as err:
-        print(f"Error: Unable to get AWS account ID - {err}")
+        print(f"Error: Unexpected error getting AWS account ID - {err}")
+        print("Stack trace:")
+        print(traceback.format_exc())
         return ""
 
 
@@ -37,8 +43,13 @@ def verify_aws_credentials() -> bool:
         print(f"AWS Account: {account_id}")
         print(f"AWS User/Role: {identity.get('Arn', '')}")
         return True
+    except ClientError as err:
+        print(f"Error: AWS API error during credential verification - {err}")
+        return False
     except Exception as err:
-        print(f"Error: Unable to access AWS - {err}")
+        print(f"Error: Unexpected error accessing AWS - {err}")
+        print("Stack trace:")
+        print(traceback.format_exc())
         return False
 
 
@@ -62,21 +73,22 @@ def verify_cdk_installed() -> bool:
 def verify_cdk_bootstrap(region: str) -> bool:
     """Check if CDK is bootstrapped in the target region."""
     # Validate region before attempting to check bootstrap
-    if not validate_region(region):
+    validated_region = validate_region(region)
+    if not validated_region:
         return False
 
-    cfn = boto3.client("cloudformation", region_name=region)
+    cfn = boto3.client("cloudformation", region_name=validated_region)
 
     try:
         # CDK bootstrap creates a stack named CDKToolkit
         response = cfn.describe_stacks(StackName="CDKToolkit")
         if response.get("Stacks"):
-            print(f"CDK Bootstrap: Found in {region}")
+            print(f"CDK Bootstrap: Found in {validated_region}")
             return True
     except ClientError as err:
         if "does not exist" in str(err):
-            print(f"Warning: CDK not bootstrapped in {region}")
-            print(f"Run: cdk bootstrap aws://{get_aws_account_id()}/{region}")
+            print(f"Warning: CDK not bootstrapped in {validated_region}")
+            print(f"Run: cdk bootstrap aws://{get_aws_account_id()}/{validated_region}")
             return False
         else:
             # Other errors - might be permissions
@@ -174,6 +186,32 @@ def validate_policies(policy_names: list[str]) -> dict:
             results[policy_name] = False
 
     return results
+
+
+def validate_s3_bucket(bucket_name: str, region: str) -> bool:
+    """Validate that S3 bucket exists and is accessible.
+
+    Args:
+        bucket_name: Name of the S3 bucket to validate
+        region: AWS region
+
+    Returns:
+        True if bucket exists and is accessible, False otherwise
+    """
+    try:
+        s3 = boto3.client("s3", region_name=region)
+        s3.head_bucket(Bucket=bucket_name)
+        print(f"  [OK] S3 bucket: {bucket_name}")
+        return True
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code == "404":
+            print(f"  [MISSING] S3 bucket: {bucket_name}")
+        elif error_code == "403":
+            print(f"  [FORBIDDEN] S3 bucket: {bucket_name} - insufficient permissions")
+        else:
+            print(f"  [ERROR] S3 bucket: {bucket_name} - {error_code}")
+        return False
 
 
 def run_cdk_deploy(stack_name: str, region: str, app_command: str, context_args=None) -> dict:

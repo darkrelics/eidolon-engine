@@ -103,7 +103,7 @@ class CharacterPanel extends StatelessWidget {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _StatRow(
                       label: _formatStatName(entry.key),
-                      value: entry.value.toStringAsFixed(0),
+                      value: entry.value.toStringAsFixed(1),
                       icon: _getAttributeIcon(entry.key),
                     ),
                   )),
@@ -117,7 +117,7 @@ class CharacterPanel extends StatelessWidget {
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _StatRow(
                         label: _formatStatName(entry.key),
-                        value: entry.value.toStringAsFixed(0),
+                        value: entry.value.toStringAsFixed(1),
                         icon: _getSkillIcon(entry.key),
                       ),
                     )),

@@ -18,6 +18,8 @@ class Character {
   final Map<String, dynamic> inventoryDetails; // Enriched inventory data with item details
   final Map<String, dynamic> progress; // Story progress flags
   Map<String, dynamic>? storyState; // Current story position
+  final String? activeStoryID; // Currently active story ID
+  final String? activeSegmentID; // Currently active segment ID
   final String gameMode; // "MUD" or "Incremental"
   final DateTime lastUpdated;
   final List<String> availableStories;
@@ -41,6 +43,8 @@ class Character {
     this.inventoryDetails = const {},
     required this.progress,
     this.storyState,
+    this.activeStoryID,
+    this.activeSegmentID,
     required this.gameMode,
     required this.lastUpdated,
     this.availableStories = const [],
@@ -49,24 +53,67 @@ class Character {
     this.availableStoriesDetails,
   });
 
-  /// Parse a map of dynamic values to doubles
+  /// Safely parse a map of dynamic values to doubles.
+  /// 
+  /// This method handles various input types gracefully:
+  /// - If value is already a double, it's used as-is
+  /// - If value is an int or other num type, it's converted to double
+  /// - If value is null, it defaults to 0.0
+  /// - If value is not a number, it logs a warning and defaults to 0.0
+  /// 
+  /// This prevents runtime crashes from unexpected server data formats.
   static Map<String, double> parseMapToDouble(Map<String, dynamic> rawMap) {
-    return rawMap.map((key, value) => MapEntry(key, (value as num).toDouble()));
+    return rawMap.map((key, value) {
+      // Handle null values explicitly - skills/attributes might not exist yet
+      if (value == null) {
+        return MapEntry(key, 0.0);
+      }
+      
+      // Try to convert to double safely
+      if (value is num) {
+        return MapEntry(key, value.toDouble());
+      }
+      
+      // Log warning for unexpected types and provide safe default
+      // This could happen if server data format changes unexpectedly
+      debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0.0');
+      return MapEntry(key, 0.0);
+    });
   }
 
-  /// Parse a map of dynamic values to integers
+  /// Safely parse a map of dynamic values to integers.
+  /// 
+  /// Similar to parseMapToDouble but for integer values:
+  /// - Handles null by defaulting to 0
+  /// - Converts any numeric type to int safely
+  /// - Logs warnings for unexpected types
   static Map<String, int> parseMapToInt(Map<String, dynamic> rawMap) {
-    return rawMap.map((key, value) => MapEntry(key, (value as num).toInt()));
+    return rawMap.map((key, value) {
+      // Handle null values explicitly - resources might not exist yet
+      if (value == null) {
+        return MapEntry(key, 0);
+      }
+      
+      // Try to convert to int safely
+      if (value is num) {
+        // Use round() instead of toInt() to handle floating point values gracefully
+        return MapEntry(key, value.round());
+      }
+      
+      // Log warning for unexpected types and provide safe default
+      debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0');
+      return MapEntry(key, 0);
+    });
   }
 
   /// Create character from server response
   factory Character.fromJson(Map<String, dynamic> json) {
-    // Debug logging
-    debugPrint('Character.fromJson - Raw JSON keys: ${json.keys.toList()}');
-    debugPrint('Character.fromJson - Attributes: ${json['Attributes']}');
-    debugPrint('Character.fromJson - Skills: ${json['Skills']}');
-    debugPrint('Character.fromJson - Inventory: ${json['Inventory']}');
-    debugPrint('Character.fromJson - InventoryDetails: ${json['InventoryDetails']}');
+    // Debug logging (commented out to reduce verbosity)
+    // debugPrint('Character.fromJson - Raw JSON keys: ${json.keys.toList()}');
+    // debugPrint('Character.fromJson - Attributes: ${json['Attributes']}');
+    // debugPrint('Character.fromJson - Skills: ${json['Skills']}');
+    // debugPrint('Character.fromJson - Inventory: ${json['Inventory']}');
+    // debugPrint('Character.fromJson - InventoryDetails: ${json['InventoryDetails']}');
     
     // Parse attributes and skills, converting numbers to doubles
     final Map<String, double> parsedAttributes = parseMapToDouble(
@@ -79,9 +126,9 @@ class Character {
       json['Resources'] ?? {},
     );
 
-    // Debug parsed data
-    debugPrint('Character.fromJson - Parsed attributes: $parsedAttributes');
-    debugPrint('Character.fromJson - Parsed skills: $parsedSkills');
+    // Debug parsed data (commented out to reduce verbosity)
+    // debugPrint('Character.fromJson - Parsed attributes: $parsedAttributes');
+    // debugPrint('Character.fromJson - Parsed skills: $parsedSkills');
 
     // The archetype from server is just a string name, not an object with ID
     final archetypeName = json['Archetype'] as String? ?? 'default';
@@ -91,10 +138,12 @@ class Character {
       name: json['CharacterName'] as String,
       archetypeId: archetypeName, // Use archetype name as ID for now
       archetypeName: archetypeName,
-      health: (json['Health'] as num).toDouble(),
-      maxHealth: (json['MaxHealth'] as num).toDouble(),
-      essence: (json['Essence'] as num).toDouble(),
-      maxEssence: (json['MaxEssence'] as num).toDouble(),
+      // Safely handle health and essence values with defaults
+      // These are critical values that must always have valid numbers
+      health: (json['Health'] as num?)?.toDouble() ?? 10.0,
+      maxHealth: (json['MaxHealth'] as num?)?.toDouble() ?? 10.0,
+      essence: (json['Essence'] as num?)?.toDouble() ?? 0.0,
+      maxEssence: (json['MaxEssence'] as num?)?.toDouble() ?? 3.0,
       attributes: parsedAttributes,
       skills: parsedSkills,
       resources: parsedResources,
@@ -102,6 +151,8 @@ class Character {
       inventoryDetails: Map<String, dynamic>.from(json['InventoryDetails'] ?? {}),
       progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
       storyState: json['StoryState'] as Map<String, dynamic>?,
+      activeStoryID: json['ActiveStoryID'] as String?,
+      activeSegmentID: json['ActiveSegmentID'] as String?,
       gameMode: json['GameMode'] as String? ?? 'Incremental',
       lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
       availableStories: (json['AvailableStories'] as List? ?? [])
@@ -159,6 +210,7 @@ class Character {
     Map<String, dynamic>? inventoryDetails,
     Map<String, dynamic>? progress,
     Map<String, dynamic>? storyState,
+    String? activeSegmentId,
     DateTime? lastUpdated,
     List<String>? availableStories,
     List<String>? abandonedStories,
@@ -181,6 +233,7 @@ class Character {
       inventoryDetails: inventoryDetails ?? this.inventoryDetails,
       progress: progress ?? this.progress,
       storyState: storyState ?? this.storyState,
+      activeSegmentID: activeSegmentId ?? activeSegmentID,
       gameMode: gameMode,
       lastUpdated: lastUpdated ?? this.lastUpdated,
       availableStories: availableStories ?? this.availableStories,

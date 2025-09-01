@@ -29,19 +29,3 @@ def extract_player_id(event: dict) -> str:
         raise ValueError("No player ID found in authorization claims")
 
     return player_id
-
-
-def require_auth(event: dict) -> str:
-    """
-    Validate authentication and return player_id.
-
-    Args:
-        event: API Gateway Lambda event
-
-    Returns:
-        Player ID string
-
-    Raises:
-        ValueError: If not authenticated
-    """
-    return extract_player_id(event)

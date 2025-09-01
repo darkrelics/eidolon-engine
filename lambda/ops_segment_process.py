@@ -3,275 +3,118 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2025 Jason E. Robinson
 
-Lambda function to process completed mechanical segments.
-Triggered by SQS to process mechanical segments only.
-Rest and Decision segments are handled directly by the poller.
+Lambda function to process segments.
+Triggered by SQS with ActiveSegmentID messages.
 """
 
-import json
-
+from eidolon.character_data import get_character
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.polling import disable_polling_infrastructure
-from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment import check_active_segments_exist, is_mechanical_segment, process_segment_completely
-from eidolon.validation_messages import validate_processing_message
+from eidolon.responses import lambda_response
+from eidolon.segment_core import get_active_segment, get_segment_definition
+from eidolon.segment_processing import route_segment_processing
+from eidolon.segment_state import update_active_segment_outcome
+from eidolon.validation import validate_uuid
 
 
-def validate_segment_for_processing(segment_type: str) -> bool:
+def process_segment(active_segment: dict) -> None:
     """
-    Validate that the segment type should be processed by this handler.
+    Orchestrate segment processing.
 
     Args:
-        segment_type: Type of segment
-
-    Returns:
-        True if segment should be processed, False otherwise
-    """
-    # Only mechanical segments should be processed by this handler
-    # Rest and Decision segments are handled directly by the poller
-    return is_mechanical_segment(segment_type)
-
-
-def process_segment_business_logic(
-    active_segment_id: str,
-    character_id: str,
-    story_id: str,
-    segment_id: str,
-    segment_type: str,
-) -> dict:
-    """
-    Business logic for processing a completed mechanical segment.
-
-    Args:
-        active_segment_id: Active segment UUID
-        character_id: Character UUID
-        story_id: Story UUID
-        segment_id: Segment UUID
-        segment_type: Type of segment
-
-    Returns:
-        Dict with outcome and next segment ID
+        active_segment: Active segment record
 
     Raises:
-        ValueError: If required data not found or invalid segment type
-        RuntimeError: If database operations fail
+        ValueError: If data validation fails
+        RuntimeError: If processing fails
     """
-    # Validate segment type
-    if not validate_segment_for_processing(segment_type):
-        logger.warning(f"Invalid segment type for mechanical processing for {active_segment_id}")
-        raise ValueError(f"Segment type '{segment_type}' should not be processed by this handler")
+    # Check idempotency
+    if active_segment.get("ProcessingStatus") == "processed":
+        logger.info(f"Segment already processed: {active_segment.get('ActiveSegmentID')}")
+        return
 
-    # Log processing details
-    logger.info(f"Processing mechanical segment for {active_segment_id}")
+    # Get segment definition
+    try:
+        segment_def = get_segment_definition(
+            active_segment.get("StoryID"),  # type: ignore
+            active_segment.get("SegmentID"),  # type: ignore
+        )
+    except (ValueError, RuntimeError) as err:
+        logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
+        raise
 
-    # Use the eidolon library to process the segment
-    return process_segment_completely(active_segment_id, character_id, story_id, segment_id, segment_type)
+    # Get character
+    character = get_character(active_segment.get("CharacterID"))  # type: ignore
 
+    # Process based on type
+    outcome, results = route_segment_processing(segment_def, character, active_segment)
 
-def process_segments_batch(segments: list) -> dict:
-    """
-    Process multiple segments in a single invocation.
+    # Persist results
+    try:
+        update_active_segment_outcome(active_segment.get("ActiveSegmentID"), outcome, results, segment_def)  # type: ignore
+    except (ValueError, RuntimeError) as err:
+        logger.error(f"Failed to update segment outcome for {active_segment.get('ActiveSegmentID')}: {err}", exc_info=True)
+        raise
 
-    Args:
-        segments: List of segment data dictionaries
-
-    Returns:
-        Dict with batch processing results
-    """
-    results = []
-    success_count = 0
-    failure_count = 0
-
-    logger.info(f"Processing segment batch for {len(segments)}")
-
-    for segment_data in segments:
-        try:
-            active_segment_id = segment_data.get("ActiveSegmentID")
-            character_id = segment_data.get("CharacterID")
-            story_id = segment_data.get("StoryID")
-            segment_id = segment_data.get("SegmentID")
-            segment_type = segment_data.get("SegmentType")
-
-            logger.info(f"Processing segment in batch for {active_segment_id}")
-
-            result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)
-
-            results.append(
-                {
-                    "SegmentID": active_segment_id,
-                    "Success": True,
-                    "Outcome": result.get("outcome"),
-                    "NextSegment": result.get("nextSegment"),
-                }
-            )
-            success_count += 1
-
-        except Exception as err:
-            logger.error(
-                f"Failed to process segment in batch for {segment_data.get('ActiveSegmentID')} Error: {err}",
-                exc_info=True,
-            )
-            results.append(
-                {
-                    "SegmentID": segment_data.get("ActiveSegmentID"),
-                    "Success": False,
-                    "Error": str(err),
-                }
-            )
-            failure_count += 1
-
-    logger.info(f"Batch processing completed for {len(segments)}")
-
-    return {
-        "Message": "Batch processing completed",
-        "BatchSize": len(segments),
-        "SuccessCount": success_count,
-        "FailureCount": failure_count,
-        "Results": results,
-    }
+    logger.info(f"Segment {active_segment.get('ActiveSegmentID')} processed with outcome: {outcome}")
 
 
 def lambda_handler(event: dict, context: object) -> dict:
     """
-    Lambda handler to process completed mechanical segments.
+    Lambda handler to process segments.
 
-    Triggered by SQS to handle mechanical segments only.
-    Rest and Decision segments are processed directly by the poller.
+    Triggered by SQS with ActiveSegmentID messages.
+    Processes all segment types (mechanical, rest, decision).
 
     Args:
-        event: SQS event with segment data or direct invocation event
+        event: SQS event with ActiveSegmentID messages
         context: Lambda context
 
     Returns:
-        For SQS: batchItemFailures response
-        For direct: Processing result with outcome
+        Lambda response with processing status
     """
     # Log invocation
     log_lambda_statistics(event, context)
 
     # Check if this is an SQS event
-    if "Records" in event:
-        # SQS batch event
-        success_count = 0
-        failure_count = 0
-        invalid_count = 0
-        batch_item_failures = []
+    if "Records" not in event:
+        # Not an SQS event
+        return lambda_response(400, {"Error": "Invalid event format"}, event)
 
-        for record in event.get("Records", []):
-            message_id = record.get("messageId", "unknown")
+    for record in event.get("Records", []):
+        message_id = record.get("messageId", "unknown")
 
-            try:
-                # Parse message body
-                message_body = json.loads(record.get("body", "{}"))
+        # Parse message body
+        active_segment_id = record.get("body", "").strip()
 
-                # Validate message schema
-                try:
-                    validated_msg = validate_processing_message(message_body)
-                except ValueError as validation_err:
-                    # Invalid message - log and don't retry
-                    logger.error(f"Invalid message schema for messageId={message_id}: {validation_err}")
-                    invalid_count += 1
-                    # Don't add to batch_item_failures - invalid messages should not be retried
-                    continue
+        if not active_segment_id:
+            logger.warning(f"Empty message body for messageId={message_id}")
+            continue
 
-                # Extract validated segment data
-                active_segment_id = validated_msg["ActiveSegmentID"]
-                character_id = validated_msg["CharacterID"]
-                story_id = validated_msg["StoryID"]
-                segment_id = validated_msg["SegmentID"]
-                segment_type = validated_msg["SegmentType"]
+        # Validate UUID format
+        if not validate_uuid(active_segment_id):
+            logger.warning(f"Invalid UUID format for messageId={message_id}: {active_segment_id}")
+            continue
 
-                # Check if segment type should be processed by this handler
-                if not validate_segment_for_processing(segment_type):
-                    logger.info(f"Skipping non-mechanical segment from SQS for {active_segment_id}: type={segment_type}")
-                    # Don't fail the message, just skip it
-                    success_count += 1
-                    continue
-
-                logger.info(f"Processing SQS message for {active_segment_id}")
-
-                # Process the segment
-                result = process_segment_business_logic(
-                    active_segment_id=active_segment_id,
-                    character_id=character_id,
-                    story_id=story_id,
-                    segment_id=segment_id,
-                    segment_type=segment_type,
-                )
-
-                success_count += 1
-
-                # If no next segment (story complete), check if we should disable polling
-                if not result.get("nextSegment"):
-                    # Check if any active segments remain
-                    has_active_segments = check_active_segments_exist()
-
-                    if not has_active_segments:
-                        # No more active segments, disable polling infrastructure
-                        disable_polling_infrastructure()
-
-            except Exception as err:
-                logger.error(
-                    f"Failed to process SQS message Error: {err}",
-                    exc_info=True,
-                )
-                failure_count += 1
-                # Add to batch item failures for SQS retry
-                batch_item_failures.append({"itemIdentifier": message_id})
-
-        # Log summary
-        if invalid_count > 0:
-            logger.warning(f"Batch processing summary: Success={success_count}, Failed={failure_count}, Invalid={invalid_count}")
-        else:
-            logger.info(f"Batch processing summary: Success={success_count}, Failed={failure_count}")
-
-        return {"batchItemFailures": batch_item_failures}
-
-    # Legacy direct invocation support (for testing)
-    else:
+        # Fetch the full active segment record from DynamoDB
         try:
-            # Extract segment information from event
-            active_segment_id: str = event.get("ActiveSegmentID", "")
-            character_id = event.get("CharacterID")
-            story_id = event.get("StoryID")
-            segment_id = event.get("SegmentID")
-            segment_type = event.get("SegmentType")
-
-            if not active_segment_id:
-                raise ValueError("ActiveSegmentID is required")
-            if not character_id:
-                raise ValueError("CharacterID is required")
-            if not story_id:
-                raise ValueError("StoryID is required")
-            if not segment_id:
-                raise ValueError("SegmentID is required")
-            if not segment_type:
-                raise ValueError("SegmentType is required")
-
-            logger.info(f"Processing single segment (direct invocation) for {active_segment_id}")
-
-            # Call business logic
-            result = process_segment_business_logic(active_segment_id, character_id, story_id, segment_id, segment_type)
-
-            response_data = {
-                "Message": "Segment processed successfully",
-                "Outcome": result.get("outcome"),
-                "NextSegment": result.get("nextSegment"),
-            }
-
-            return lambda_response(200, response_data, event)
-
+            active_segment = get_active_segment(active_segment_id)
         except ValueError as err:
-            logger.error(
-                f"Invalid request Error: {err}",
-                exc_info=True,
-            )
-            return lambda_response(400, {"Error": str(err)}, event)
+            logger.warning(f"Active segment {active_segment_id} not found: {err}")
+            # Don't retry - segment doesn't exist
+            continue
         except RuntimeError as err:
-            logger.error(
-                f"Failed to process segment Error: {err}",
-                exc_info=True,
-            )
-            return lambda_response(500, {"Error": "Internal server error"}, event)
+            logger.error(f"Database error fetching active segment {active_segment_id}: {err}")
+            # Don't retry - DB errors need investigation
+            continue
+
+        logger.info(f"Processing segment: {active_segment_id}")
+
+        # Process the segment
+        try:
+            process_segment(active_segment)
         except Exception as err:
-            return lambda_error(event, err)
+            logger.error(f"Failed to process segment {active_segment_id}: {err}", exc_info=True)
+            # Continue - poller will handle cleanup
+
+    # Return empty dict for successful SQS batch processing
+    return {}

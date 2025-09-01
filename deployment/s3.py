@@ -7,14 +7,13 @@ from botocore.exceptions import ClientError
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
-from utilities import run_cdk_deploy, validate_policies
+from stacks.stack_utilities import check_s3_bucket_exists
+from utilities import run_cdk_deploy, validate_policies, validate_s3_bucket
 
 
 def deploy_s3_stack(params) -> dict:
     """Deploy the S3 stack using CDK."""
     # Check if S3 bucket already exists
-    from stacks.stack_utilities import check_s3_bucket_exists
-
     bucket_exists = check_s3_bucket_exists(params.scripts_bucket, params.region)
 
     # Pass parameters through context
@@ -29,32 +28,6 @@ def deploy_s3_stack(params) -> dict:
 
     app_command = "python3 app_s3.py"
     return run_cdk_deploy("s3", params.region, app_command, context_args)
-
-
-def validate_s3_bucket(bucket_name: str, region: str) -> bool:
-    """Validate that S3 bucket exists and is accessible.
-
-    Args:
-        bucket_name: Name of the S3 bucket to validate
-        region: AWS region
-
-    Returns:
-        True if bucket exists and is accessible, False otherwise
-    """
-    try:
-        s3 = boto3.client("s3", region_name=region)
-        s3.head_bucket(Bucket=bucket_name)
-        print(f"  [OK] S3 bucket: {bucket_name}")
-        return True
-    except ClientError as err:
-        error_code = err.response.get("Error", {}).get("Code", "")
-        if error_code == "404":
-            print(f"  [MISSING] S3 bucket: {bucket_name}")
-        elif error_code == "403":
-            print(f"  [FORBIDDEN] S3 bucket: {bucket_name} - insufficient permissions")
-        else:
-            print(f"  [ERROR] S3 bucket: {bucket_name} - {error_code}")
-        return False
 
 
 def verify_s3_deployment(params) -> dict:

@@ -20,14 +20,26 @@ class SegmentStatusResponse(BaseEidolonModel):
     status: str = Field(..., alias="Status")
     is_complete: bool = Field(..., alias="IsComplete")
     time_remaining: int = Field(..., alias="TimeRemaining")
-    end_time: int = Field(..., alias="EndTime")
+    end_time: str = Field(..., alias="EndTime")
+
+    # Processing and type information
+    processing_status: str | None = Field(default=None, alias="ProcessingStatus")
+    segment_type: str | None = Field(default=None, alias="SegmentType")
+    default_status: str | None = Field(default=None, alias="DefaultStatus")
 
     # Optional details when complete
     challenge_results: list[ChallengeResultModel | dict] | None = Field(default=None, alias="ChallengeResults")
     outcome: str | None = Field(default=None, alias="Outcome")
     decision: str | None = Field(default=None, alias="Decision")
+    decision_options: dict | None = Field(default=None, alias="DecisionOptions")
     combat_state: CombatStateModel | dict | None = Field(default=None, alias="CombatState")
     healing_applied: bool | None = Field(default=None, alias="HealingApplied")
+    client_events: list | None = Field(default=None, alias="ClientEvents")
+
+    # Narrative data (included when segment is processed/completed)
+    narrative: str | None = Field(default=None, alias="Narrative")
+    effects: dict | None = Field(default=None, alias="Effects")
+    next_segment_id: str | None = Field(default=None, alias="NextSegmentID")
 
 
 class SegmentHistoryItem(BaseEidolonModel):
@@ -38,8 +50,11 @@ class SegmentHistoryItem(BaseEidolonModel):
     segment_type: str | None = Field(default=None, alias="SegmentType")
     status: str | None = Field(default=None, alias="Status")
     processing_status: str | None = Field(default=None, alias="ProcessingStatus")
-    start_time: int | None = Field(default=None, alias="StartTime")
-    end_time: int | None = Field(default=None, alias="EndTime")
+    start_time: str | None = Field(default=None, alias="StartTime")
+    end_time: str | None = Field(default=None, alias="EndTime")
+    completed_at: str | None = Field(default=None, alias="CompletedAt")
+    story_title: str | None = Field(default=None, alias="StoryTitle")
+    story_instance_id: str | None = Field(default=None, alias="StoryInstanceID")
 
     # Enriched data for clients
     outcome: str | None = Field(default=None, alias="Outcome")

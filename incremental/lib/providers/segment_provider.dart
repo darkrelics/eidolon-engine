@@ -84,8 +84,8 @@ class SegmentProvider extends ChangeNotifier {
     const maxPollingDuration = Duration(minutes: 5);
     final startTime = DateTime.now();
     
-    // Poll every 2 seconds for processed status
-    _pollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+    // Poll every 60 seconds for processed status (API rate limit requirement)
+    _pollingTimer = Timer.periodic(const Duration(seconds: 60), (timer) async {
       try {
         // Check if we've exceeded max polling duration
         if (DateTime.now().difference(startTime) > maxPollingDuration) {

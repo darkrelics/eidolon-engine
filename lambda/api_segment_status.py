@@ -13,10 +13,14 @@ from eidolon.api_models import SegmentStatusResponse
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import validate_player, verify_character_ownership
-from eidolon.requests import get_query_parameter_flexible
+from eidolon.player import verify_character_ownership
+from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.story import get_active_story_segment_with_player_check
+from eidolon.schema import normalize_segment_definition
+from eidolon.segment_core import validate_segment_outcome_results
+from eidolon.story_active import get_active_story_segment_with_player_check
+from eidolon.story_retrieval import get_story_segment
+from eidolon.time_utils import from_unix
 
 
 def get_segment_status_business_logic(character_id: str, player_id: str) -> SegmentStatusResponse:
@@ -38,14 +42,27 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     if not verify_character_ownership(character_id, player_id):
         raise ValueError("Character not owned by player")
 
-    # Get active segment
-    active_segment = get_active_story_segment_with_player_check(character_id, player_id)
+    # Try to get active segment
+    try:
+        active_segment = get_active_story_segment_with_player_check(character_id, player_id)
+    except ValueError as err:
+        if "No active story found" in str(err):
+            # Return a friendly response when no active segment exists
+            # This can happen after a rollback or when no story is active
+            logger.info(f"No active segment for character {character_id} - likely rolled back or not started")
+            raise ValueError("No active story. Please select a story to begin your adventure.") from err
+        raise
 
-    # Calculate status
-    current_time = int(time.time())
-    end_time = int(active_segment.get("EndTime", 0))
-    is_complete = current_time >= end_time
-    time_remaining = max(0, end_time - current_time)
+    # Convert Unix timestamps to ISO 8601 for API response
+    end_time_unix = active_segment.get("EndTime", 0)
+    end_time = from_unix(end_time_unix) if end_time_unix else ""
+
+    # Calculate status using Unix timestamps
+    now = time.time()
+    is_complete = end_time_unix <= now if end_time_unix else False
+    time_remaining = max(0, int(end_time_unix - now)) if end_time_unix else 0
+
+    processing_status = active_segment.get("ProcessingStatus", "")
 
     response = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
@@ -55,17 +72,98 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
         "IsComplete": is_complete,
         "TimeRemaining": time_remaining,
         "EndTime": end_time,
+        "ProcessingStatus": processing_status,
+        "SegmentType": active_segment.get("SegmentType"),
     }
 
-    # Include results if segment is complete
-    if is_complete:
+    # Only include narrative data if segment is processed or if it's not a mechanical segment
+    # Mechanical segments need processing before narrative is available
+    segment_type = active_segment.get("SegmentType", "").lower()
+    story_id = active_segment.get("StoryID")
+    segment_id = active_segment.get("SegmentID")
+
+    if segment_type != "mechanical" or processing_status == "processed":
+        # Include narrative and events for display
+        response["DefaultStatus"] = active_segment.get("DefaultStatus")
+        response["ClientEvents"] = active_segment.get("ClientEvents", [])
         response["ChallengeResults"] = active_segment.get("ChallengeResults", [])
         response["Outcome"] = active_segment.get("Outcome")
-        response["Decision"] = active_segment.get("Decision")
         response["CombatState"] = active_segment.get("CombatState")
+
+        # If segment is processed/completed, include full narrative data
+        if processing_status == "processed" or active_segment.get("Status") == "completed":
+            try:
+                # Get segment definition for narrative text
+                segment_def = get_story_segment(story_id, segment_id)  # type: ignore
+                segment_def = normalize_segment_definition(segment_def)
+
+                if segment_type == "mechanical":
+                    outcome = active_segment.get("Outcome", "normal")
+                    validated_result = validate_segment_outcome_results(segment_def, outcome)
+                    response["Narrative"] = validated_result.get("Narrative", "")
+                    response["Effects"] = validated_result.get("Effects", {})
+
+                    # Get next segment based on outcome
+                    results = segment_def.get("Results", {}) or {}
+                    next_segment_id = None
+                    if isinstance(results, dict):
+                        outcome_map = {
+                            "death": "Death",
+                            "failure": "Failure",
+                            "minimal": "Minimal",
+                            "normal": "Normal",
+                            "exceptional": "Exceptional",
+                        }
+                        outcome_key = outcome_map.get(str(outcome).lower())
+                        if outcome_key and isinstance(results.get(outcome_key), dict):
+                            outcome_block = results.get(outcome_key, {})
+                            if isinstance(outcome_block, dict) and "NextSegmentID" in outcome_block:
+                                next_segment_id = outcome_block.get("NextSegmentID")
+
+                    if next_segment_id is None and "NextSegmentID" in segment_def:
+                        next_segment_id = segment_def.get("NextSegmentID")
+
+                    response["NextSegmentID"] = next_segment_id
+
+                elif segment_type == "rest":
+                    # Get rest segment results
+                    rest_results = segment_def.get("Results", {})
+                    if isinstance(rest_results, dict) and "normal" in rest_results:
+                        normal_result = rest_results["normal"]
+                        response["Narrative"] = normal_result.get("Narrative", "")
+                        response["Effects"] = normal_result.get("Effects", {})
+                        response["NextSegmentID"] = normal_result.get("NextSegmentID")
+                    else:
+                        response["Narrative"] = ""
+                        response["Effects"] = {}
+                        response["NextSegmentID"] = segment_def.get("NextSegmentID")
+
+                elif segment_type == "decision":
+                    decision = active_segment.get("Decision")
+                    decision_options = segment_def.get("DecisionOptions", {})
+                    response["NextSegmentID"] = decision_options.get(decision) if decision else None
+                    response["Narrative"] = ""
+                    response["Effects"] = {}
+
+            except Exception as err:
+                logger.warning(
+                    f"Failed to get narrative data for segment_id={segment_id}, character_id={character_id}: {err.__class__.__name__}: {err}"
+                )
+                # Continue without narrative - not critical
+    else:
+        # Segment is still processing - just return basic status
+        response["DefaultStatus"] = "Processing..."
+
+    # Include decision-specific data
+    if segment_type == "decision":
+        response["Decision"] = active_segment.get("Decision")
+        response["DecisionOptions"] = active_segment.get("DecisionOptions")
+
+    # Include healing data for rest segments
+    if segment_type == "rest":
         response["HealingApplied"] = active_segment.get("HealingApplied")
 
-    logger.info(f"Segment status retrieved for {character_id}")
+    logger.debug(f"Segment status retrieved for {character_id}")
 
     return SegmentStatusResponse.model_validate(response)
 
@@ -104,19 +202,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Validate player exists
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player not found in database for {player_id}", exc_info=True)
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
-    # Get character ID from query parameters (flexible: CharacterID or characterId)
-    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
+    # Get character ID from query parameters
+    character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 
@@ -126,10 +213,11 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(200, response_data.model_dump(by_alias=True), event)
     except ValueError as err:
         logger.warning(f"Invalid request or not found for {character_id} Error: {err}")
-        error_msg = str(err).lower()
-        if "no active" in error_msg:
+        error_msg = str(err)
+        # Return consistent 404 for no active segment/story
+        if "no active" in error_msg.lower() or "Please select" in error_msg:
             return lambda_response(404, {"Error": "No active segment found"}, event)
-        elif "not found" in error_msg:
+        elif "not found" in error_msg.lower():
             return lambda_response(404, {"Error": "Character not found"}, event)
         return lambda_response(400, {"Error": str(err)}, event)
     except RuntimeError as err:

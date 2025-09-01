@@ -1,5 +1,6 @@
 """Story stack deployment functions."""
 
+import json
 from pathlib import Path
 
 import boto3
@@ -7,96 +8,91 @@ from botocore.exceptions import ClientError
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
+from lambda_functions import attach_story_policy_to_lambda_role
 from utilities import run_cdk_deploy, validate_policies
 
 
-def get_lambda_arns(params, state: CDKState) -> dict:
-    """Get Lambda function ARNs for story processing.
+def get_shared_resources(params, state: CDKState) -> dict:
+    """Get shared Lambda resources from Lambda stack.
 
     Args:
         params: Deployment parameters with account_id and region
         state: CDK state containing infrastructure details
 
     Returns:
-        Dict with Lambda ARNs
+        Dict with Lambda layer and role ARNs
     """
-    # Construct expected ARNs using known patterns
-    arns = {
-        "lambda_role_arn": f"arn:aws:iam::{params.account_id}:role/eidolon-lambda-execution-role",
-        "poller_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-segment-poller",
-        "processor_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-segment-process",
-        "advance_arn": f"arn:aws:lambda:{params.region}:{params.account_id}:function:ops-story-advance",
+    resources = {
+        "lambda_layer_arn": "",
+        "lambda_role_arn": "",
     }
 
-    # Check if ARNs are stored in state from Lambda stack deployment
+    # Get ARNs from state (stored by Lambda stack deployment)
     if hasattr(state, "infrastructure") and state.infrastructure:
+        # Use stored layer ARN if available
+        if state.infrastructure.get("lambda_layer_arn"):
+            resources["lambda_layer_arn"] = state.infrastructure.get("lambda_layer_arn")  # type: ignore
+            print("  Using Lambda layer ARN from state")
+
         # Use stored role ARN if available
         if state.infrastructure.get("lambda_role_arn"):
-            arns["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
+            resources["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
             print("  Using Lambda role ARN from state")
 
-        # Check for function ARNs in state (if stored)
-        lambda_arns = state.infrastructure.get("lambda_arns", {})
-        if lambda_arns.get("ops-segment-poller"):
-            arns["poller_arn"] = lambda_arns.get("ops-segment-poller")
-            print("  Using ops-segment-poller ARN from state")
-        if lambda_arns.get("ops-segment-process"):
-            arns["processor_arn"] = lambda_arns.get("ops-segment-process")
-            print("  Using ops-segment-process ARN from state")
-        if lambda_arns.get("ops-story-advance"):
-            arns["advance_arn"] = lambda_arns.get("ops-story-advance")
-            print("  Using ops-story-advance ARN from state")
-
-    # Verify resources actually exist (optional - for logging only)
-    try:
-        # Check Lambda role exists
-        iam_client = boto3.client("iam", region_name=params.region)
+    # If not in state, try to get from Lambda stack CloudFormation outputs
+    if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
         try:
-            iam_client.get_role(RoleName="eidolon-lambda-execution-role")
-            print("  Verified Lambda execution role exists")
-        except ClientError:
-            print("  Warning: Lambda execution role not found - using constructed ARN")
+            from utilities import extract_stack_outputs
 
-        # Check Lambda functions exist
-        lambda_client = boto3.client("lambda", region_name=params.region)
+            lambda_outputs = extract_stack_outputs("lambda", params.region)
 
-        functions = [
-            ("ops-segment-poller", "poller_arn"),
-            ("ops-segment-process", "processor_arn"),
-            ("ops-story-advance", "advance_arn"),
-        ]
+            if not resources["lambda_layer_arn"] and lambda_outputs.get("LambdaLayerArn"):
+                resources["lambda_layer_arn"] = lambda_outputs["LambdaLayerArn"]
+                print("  Using Lambda layer ARN from Lambda stack outputs")
 
-        for function_name, arn_key in functions:
-            try:
-                lambda_client.get_function(FunctionName=function_name)
-                print(f"  Verified Lambda function exists: {function_name}")
-            except ClientError:
-                print(f"  Warning: Lambda function {function_name} not found - using constructed ARN")
+            if not resources["lambda_role_arn"] and lambda_outputs.get("LambdaRoleArn"):
+                resources["lambda_role_arn"] = lambda_outputs["LambdaRoleArn"]
+                print("  Using Lambda role ARN from Lambda stack outputs")
+        except Exception as e:
+            print(f"  Warning: Could not get shared resources from Lambda stack: {e}")
 
-    except Exception as err:
-        print(f"  Error verifying Lambda resources: {err}")
-        print("  Using constructed ARN patterns")
-
-    return arns
+    return resources
 
 
 def deploy_story_stack(params, state: CDKState) -> dict:
     """Deploy the Story stack using CDK."""
-    # Get Lambda ARNs from state or construct them
-    arns = get_lambda_arns(params, state)
+    # Get shared resources from Character stack
+    resources = get_shared_resources(params, state)
+
+    # Get config for DynamoDB tables
+    config_path = Path(__file__).parent.parent / "config.yml"
+    config = Config.load(str(config_path))
+
+    # Build client FQDN
+    client_fqdn = f"{params.client_host}.{params.domain}"
+
+    # Convert DynamoDB tables to JSON for context passing
+    tables_json = json.dumps(config.dynamodb_tables)
+
+    # Get DynamoDB policy ARN from state
+    dynamodb_policy_arn = state.infrastructure.get("dynamodb_policy_arn", "")
 
     # Pass all parameters through context - each -c and key=value must be separate
     context_args = [
         "-c",
         f"region={params.region}",
         "-c",
-        f"lambda_role_arn={arns['lambda_role_arn']}",
+        f"s3_bucket={params.s3_bucket}",
         "-c",
-        f"poller_lambda_arn={arns['poller_arn']}",
+        f"client_fqdn={client_fqdn}",
         "-c",
-        f"processor_lambda_arn={arns['processor_arn']}",
+        f"dynamodb_policy_arn={dynamodb_policy_arn}",
         "-c",
-        f"advance_lambda_arn={arns['advance_arn']}",
+        f"dynamodb_tables={tables_json}",
+        "-c",
+        f"lambda_layer_arn={resources['lambda_layer_arn']}",
+        "-c",
+        f"lambda_role_arn={resources['lambda_role_arn']}",
     ]
 
     # App command is just the Python script, context goes to CDK
@@ -193,6 +189,150 @@ def validate_eventbridge_rule(rule_name: str, region: str) -> bool:
         return False
 
 
+def fix_eventbridge_lambda_permission(params) -> bool:
+    """Fix EventBridge permission to invoke ops-segment-poller Lambda.
+
+    This addresses the issue where CDK's add_permission() doesn't work
+    when importing Lambda functions from ARNs.
+
+    Args:
+        params: Deployment parameters with region
+
+    Returns:
+        bool: True if permission was successfully added or already exists
+    """
+    print("\nFixing EventBridge Lambda invocation permission...")
+
+    lambda_client = boto3.client("lambda", region_name=params.region)
+    events_client = boto3.client("events", region_name=params.region)
+
+    function_name = "ops-segment-poller"
+    rule_name = "eidolon-story-poller"
+    statement_id = "EventBridgeInvokePermission"
+
+    try:
+        # First check if the permission already exists
+        try:
+            response = lambda_client.get_policy(FunctionName=function_name)
+            policy = json.loads(response["Policy"])
+
+            # Check if EventBridge permission already exists
+            for stmt in policy.get("Statement", []):
+                if stmt.get("Sid") == statement_id:
+                    print(f"  [OK] Permission '{statement_id}' already exists")
+
+                    # Verify the target is configured
+                    targets_response = events_client.list_targets_by_rule(Rule=rule_name)
+                    targets = targets_response.get("Targets", [])
+                    if targets:
+                        print(f"  [OK] EventBridge rule has {len(targets)} target(s)")
+                        return True
+                    else:
+                        print("  [WARNING] EventBridge rule has no targets")
+                        # Continue to add the target
+                        break
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
+                raise
+            # No policy exists yet, continue to add permission
+
+        # Get the rule ARN
+        rule_response = events_client.describe_rule(Name=rule_name)
+        rule_arn = rule_response["Arn"]
+
+        # Remove any existing permission with the same statement ID
+        try:
+            lambda_client.remove_permission(FunctionName=function_name, StatementId=statement_id)
+            print(f"  Removed existing permission '{statement_id}'")
+        except ClientError as e:
+            if e.response["Error"]["Code"] != "ResourceNotFoundException":
+                raise
+
+        # Add the permission
+        lambda_client.add_permission(
+            FunctionName=function_name,
+            StatementId=statement_id,
+            Action="lambda:InvokeFunction",
+            Principal="events.amazonaws.com",
+            SourceArn=rule_arn,
+        )
+        print(f"  [OK] Added permission for EventBridge to invoke {function_name}")
+
+        # Always update/ensure the target is properly configured
+        # Get the Lambda function ARN
+        function_response = lambda_client.get_function(FunctionName=function_name)
+        function_arn = function_response["Configuration"]["FunctionArn"]
+
+        # Check existing targets
+        targets_response = events_client.list_targets_by_rule(Rule=rule_name)
+        existing_targets = targets_response.get("Targets", [])
+
+        # Remove any existing targets (to ensure clean configuration)
+        if existing_targets:
+            target_ids = [t["Id"] for t in existing_targets]
+            events_client.remove_targets(Rule=rule_name, Ids=target_ids)
+            print(f"  Removed {len(target_ids)} existing target(s)")
+
+        # Add the target with proper configuration
+        # Note: EventBridge uses the Lambda resource-based policy for permissions,
+        # not an execution role
+        events_client.put_targets(
+            Rule=rule_name,
+            Targets=[
+                {
+                    "Id": "1",
+                    "Arn": function_arn,
+                    # EventBridge will use the resource-based policy we added above
+                    # No RoleArn needed for Lambda targets
+                }
+            ],
+        )
+        print("  [OK] Configured Lambda target for EventBridge rule")
+
+        # Final verification
+        print("  Verifying configuration...")
+
+        # Check the permission is set
+        response = lambda_client.get_policy(FunctionName=function_name)
+        policy = json.loads(response["Policy"])
+        has_permission = any(
+            stmt.get("Sid") == statement_id and stmt.get("Principal", {}).get("Service") == "events.amazonaws.com"
+            for stmt in policy.get("Statement", [])
+        )
+
+        # Check the target is set
+        targets_response = events_client.list_targets_by_rule(Rule=rule_name)
+        has_target = len(targets_response.get("Targets", [])) > 0
+
+        # Check the rule state
+        rule_response = events_client.describe_rule(Name=rule_name)
+        rule_state = rule_response.get("State", "UNKNOWN")
+
+        print(f"    Permission configured: {has_permission}")
+        print(f"    Target configured: {has_target}")
+        print(f"    Rule state: {rule_state}")
+
+        if has_permission and has_target:
+            print("  [OK] EventBridge->Lambda integration fully configured")
+            if rule_state == "DISABLED":
+                print("  [INFO] Rule is currently DISABLED (will be enabled when a story starts)")
+            return True
+        else:
+            print("  [ERROR] EventBridge->Lambda integration not properly configured")
+            return False
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "Unknown")
+        if error_code == "ResourceNotFoundException":
+            print(f"  [ERROR] Lambda function '{function_name}' or rule '{rule_name}' not found")
+        else:
+            print(f"  [ERROR] Failed to fix EventBridge permission: {error_code} - {err}")
+        return False
+    except Exception as err:
+        print(f"  [ERROR] Unexpected error fixing EventBridge permission: {err}")
+        return False
+
+
 def update_lambda_environments(params, processing_queue_url: str, advancement_queue_url: str) -> bool:
     """Update Lambda function environment variables with Story stack resources.
 
@@ -223,7 +363,6 @@ def update_lambda_environments(params, processing_queue_url: str, advancement_qu
         ("api-story-abandon", story_env_vars),
         ("api-segment-decision", story_env_vars),
         ("api-segment-history", story_env_vars),
-        ("api-segment-outcome", story_env_vars),
         ("api-segment-rest", story_env_vars),
         ("api-segment-status", story_env_vars),
         # Operations functions
@@ -300,6 +439,11 @@ def deploy_story(params, config: Config, state: CDKState, config_path: Path, sta
         print("\nStory deployment failed!")
         return False
 
+    # Attach Story policy to Lambda execution role (CDK can't do this with imported roles)
+    if not attach_story_policy_to_lambda_role(params, state):
+        print("\nError: Failed to attach Story policy to Lambda role")
+        return False
+
     # Verify deployment
     validation = verify_story_deployment(params)
 
@@ -319,6 +463,10 @@ def deploy_story(params, config: Config, state: CDKState, config_path: Path, sta
     # Update Lambda function environment variables if queues were created
     if validation.get("processing_queue_url") and validation.get("advancement_queue_url"):
         update_lambda_environments(params, validation.get("processing_queue_url", ""), validation.get("advancement_queue_url", ""))
+
+    # Fix EventBridge Lambda permission (CDK doesn't set this correctly when importing Lambda ARNs)
+    if validation.get("eventbridge", False):
+        fix_eventbridge_lambda_permission(params)
 
     # Update configuration with queue URLs if available
     if validation.get("processing_queue_url"):

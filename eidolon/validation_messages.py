@@ -8,36 +8,6 @@ and story advancement queues to ensure required fields are present.
 from eidolon.logger import logger
 
 
-def validate_processing_message(msg: dict) -> dict:
-    """
-    Validate a message for the segment processing queue.
-
-    Ensures all required fields are present for mechanical segment processing.
-
-    Args:
-        msg: Message dictionary from SQS
-
-    Returns:
-        The validated message dictionary
-
-    Raises:
-        ValueError: If required fields are missing or invalid
-    """
-    # Check for required fields
-    required = ["ActiveSegmentID", "CharacterID", "StoryID", "SegmentID", "SegmentType"]
-    missing = [k for k in required if not msg.get(k)]
-
-    if missing:
-        raise ValueError(f"Missing required fields: {', '.join(missing)}")
-
-    # Validate SegmentType is one of the expected values
-    segment_type = str(msg.get("SegmentType", "")).lower()
-    if segment_type not in ["mechanical", "decision", "rest"]:
-        raise ValueError(f"Invalid SegmentType '{msg.get('SegmentType')}': must be one of mechanical, decision, or rest")
-
-    return msg
-
-
 def validate_advancement_message(msg: dict) -> dict:
     """
     Validate a message for the story advancement queue.

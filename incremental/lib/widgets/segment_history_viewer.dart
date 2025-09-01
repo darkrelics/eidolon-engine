@@ -151,7 +151,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
     final outcome = segment['Outcome'] as String?;
     final decision = segment['Decision'] as String?;
     final clientEvents = segment['ClientEvents'] as List<dynamic>?;
-    final completedTime = segment['CompletedTime'] as int?;
+    final completedAt = segment['CompletedAt'] as String?;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -178,9 +178,9 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
                   _formatSegmentType(segmentType),
                   style: theme.textTheme.bodySmall,
                 ),
-                if (completedTime != null)
+                if (completedAt != null)
                   Text(
-                    _formatCompletedTime(completedTime),
+                    _formatCompletedTime(completedAt),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -379,8 +379,8 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
     return outcome[0].toUpperCase() + outcome.substring(1);
   }
 
-  String _formatCompletedTime(int timestamp) {
-    final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+  String _formatCompletedTime(String isoString) {
+    final date = DateTime.parse(isoString);
     final now = DateTime.now();
     final difference = now.difference(date);
 

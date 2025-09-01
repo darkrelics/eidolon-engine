@@ -4,17 +4,6 @@
 
 This document defines the functional and non-functional requirements for the Incremental Game component of the Eidolon Engine. The system provides timer-based story progression that allows players to experience narrative gameplay through automated mechanics while maintaining character compatibility with the MUD.
 
-### Production Status
-
-The incremental game system has been **successfully deployed to production** as part of the 9-stack CDK deployment architecture:
-
-- **16 Lambda Functions**: All operational with fixed logical IDs
-- **14 DynamoDB Tables**: Created with RemovalPolicy.RETAIN
-- **3 Deployment Modes**: MUD, Incremental, and Hybrid (default)
-- **Story Stack Components**: SQS queues, EventBridge polling, SSM parameters
-- **Automated Deployment**: End-to-end from infrastructure to portal
-- **Module Compliance**: 94% under 300 lines, 100% under 1000 lines
-
 ## 2. Functional Requirements
 
 ### 2.1 Story Management
@@ -23,7 +12,7 @@ The incremental game system has been **successfully deployed to production** as 
 
 - One-time: Playable once per character lifetime
 - Daily: Resets availability at midnight UTC
-- Repeatable: No cooldown restrictions
+- Repeatable: Can be played multiple times
 
 **FR-002**: Stories SHALL have prerequisites based on:
 
@@ -156,7 +145,7 @@ The incremental game system has been **successfully deployed to production** as 
 **NFR-009**: Failed segment processing SHALL automatically retry.
 
 - **Implementation**: SQS retry logic, DLQ for failed messages
-- **Status**: RunningFlag prevents duplicate processing
+- **Status**: ProcessingStatus state transitions prevent duplicate processing
 
 **NFR-010**: Character state SHALL remain consistent during failures.
 
@@ -250,82 +239,13 @@ The incremental game system has been **successfully deployed to production** as 
 - **Complete**: Meet all response time requirements (sub-500ms average)
 - **Complete**: Achieve 99.9% availability over 30 days (AWS SLA guarantees)
 
-## 6. Implementation Details
+## 6. Implementation References
 
-### 6.1 Lambda Functions (16 Total)
+For detailed implementation information, see:
 
-**Character Management:**
-
-- `api-archetype-list`: List available archetypes
-- `api-character-add`: Create new character
-- `api-character-delete`: Delete character
-- `api-character-get`: Get character details
-- `api-character-list`: List player's characters
-
-**Story Operations:**
-
-- `api-story-start`: Begin a new story
-- `api-story-abandon`: Exit current story
-- `api-segment-decision`: Submit player choice
-- `api-segment-rest`: Initiate rest segment
-- `api-segment-status`: Check segment readiness
-- `api-segment-outcome`: Get segment results
-- `api-segment-history`: Retrieve past segments
-
-**Processing Functions:**
-
-- `ops-segment-poller`: EventBridge-triggered polling
-- `ops-segment-process`: SQS mechanical processing
-- `ops-story-advance`: SQS story advancement
-- `cognito-player-new`: PostConfirmation trigger
-
-### 6.2 DynamoDB Tables (14 Total)
-
-**Core Tables:**
-
-- `players`: User accounts with CharacterList
-- `characters`: Character data with GameMode
-- `archetypes`: Character classes
-- `items`, `prototypes`: Item definitions
-- `rooms`, `exits`: World structure
-- `motd`: Message of the day
-
-**Story Tables:**
-
-- `story`: Story definitions
-- `segments`: Segment templates
-- `active_segments`: Runtime instances
-- `story_history`: Completed stories
-- `segment_history`: Completed segments
-- `opponents`: Combat opponents
-
-### 6.3 Infrastructure Components
-
-**Story Stack (Incremental/Hybrid):**
-
-- SQS Queue: `eidolon-processing-queue`
-- SQS Queue: `eidolon-advancement-queue`
-- EventBridge Rule: `eidolon-story-poller`
-- SSM Parameter: `/eidolon/story/config`
-
-### 6.4 Deployment Architecture
-
-**Stack Order (Incremental Mode):**
-
-1. CodeBuild Stack: Build infrastructure
-2. DynamoDB Stack: Tables and policies
-3. Lambda Stack: Functions and layer
-4. Player Stack: Cognito configuration
-5. Story Stack: SQS/EventBridge setup
-6. API Stack: API Gateway integration
-7. Client Stack: CloudFront and portal
-
-### 6.5 Cost Optimization
-
-For 10,000 concurrent users (monthly):
-
-- Lambda: ~$80-120 (reduced with polling optimization)
-- DynamoDB: ~$150-200 (on-demand pricing)
-- EventBridge: <$1 (single rule)
-- SQS: ~$5-10 (message volume)
-- **Total: ~$235-335/month**
+- **API Endpoints**: [API Documentation](incremental-api.md) - REST API specification and Lambda functions
+- **Database Schema**: [Schema Documentation](schema.md) - Table structures and relationships
+- **Technical Architecture**: [Design Documentation](incremental-design.md) - System design and architecture
+- **Implementation Guide**: [Implementation Documentation](incremental-implementation.md) - Code examples and patterns
+- **Story System**: [Story Documentation](incremental-story.md) - State machines and processing logic
+- **Mode Transitions**: [MUD Workflow Documentation](incremental-mud-workflow.md) - Character mode switching

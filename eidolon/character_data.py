@@ -144,21 +144,22 @@ def character_get(character_id: str, player_id: str) -> dict:
         wounds: list = character.get("Wounds", [])
         current_time: datetime = datetime.now(timezone.utc)
 
-        remainging_wounds: list = []
+        remaining_wounds: list = []
 
         for wound in wounds:
             heal_at: str = wound.get("HealedAt")
 
             try:
                 if datetime.fromisoformat(heal_at.replace("Z", "+00:00")) > current_time:
-                    remainging_wounds.append(wound)
-            except AttributeError:
+                    remaining_wounds.append(wound)
+            except AttributeError as err:
+                logger.warning(f"Malformed wound heal time for character {character_id}: {heal_at}, Error: {err}")
                 continue
 
-        if len(remainging_wounds) < len(wounds):
-            character["Wounds"] = remainging_wounds
+        if len(remaining_wounds) < len(wounds):
+            character["Wounds"] = remaining_wounds
 
-            logger.info("It's a mircical!")
+            logger.info("It's a miracle!")
 
             # Update character with healed wounds
             if character.get("CharState", "standing") == "unconscious":
@@ -167,7 +168,7 @@ def character_get(character_id: str, player_id: str) -> dict:
             # Update the character's wounds in the database
             update_expression = "SET Wounds = :wounds, CharState = :state, UpdatedAt = :timestamp"
             expression_values: dict = {
-                ":wounds": remainging_wounds,
+                ":wounds": remaining_wounds,
                 ":state": character.get("CharState", "standing"),
                 ":timestamp": datetime.now(timezone.utc).isoformat(),
             }
@@ -278,7 +279,7 @@ def build_character_record(
         "ActiveStoryID": None,
         "ActiveSegmentID": None,
         "Hidden": False,
-        "CharState": "Standing",
+        "CharState": "standing",
         "GameMode": "None",
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,
@@ -288,7 +289,7 @@ def build_character_record(
 
 def create_character_record(character_item: dict) -> bool:
     """
-    Create character record in database.
+    Create character record in database with atomic name check.
 
     Args:
         character_item: Complete character record to create
@@ -297,13 +298,19 @@ def create_character_record(character_item: dict) -> bool:
         True if created successfully
 
     Raises:
+        ValueError: If character name is already taken
         RuntimeError: If database operation fails
     """
     try:
-        dynamo.put_item(TableName.CHARACTERS, character_item)
+        # Use conditional put - only succeeds if name doesn't exist
+        dynamo.put_item(TableName.CHARACTERS, character_item, ConditionExpression="attribute_not_exists(CharacterName)")
         logger.info(f"Character record created successfully for {character_item.get('CharacterID')}")
         return True
     except ClientError as err:
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            # Name already taken - convert to ValueError for proper HTTP status
+            logger.info(f"Character name '{character_item.get('CharacterName')}' already taken")
+            raise ValueError("Character name is already taken") from err
         logger.error(f"Failed to create character record for {character_item.get('CharacterName')} Error: {err}")
         raise RuntimeError(f"Failed to create character record: {err}") from err
 
@@ -346,10 +353,6 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
 
     logger.info(f"Creating new character for {character_name}")
 
-    # Check name availability
-    if not check_character_name_availability(character_name):
-        raise ValueError("Character name is already taken")
-
     # Process starting items
     inventory = {}
     starting_items = archetype_data.get("StartingItems", [])
@@ -372,8 +375,11 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     # Create character record
     try:
         create_character_record(character_item)
+    except ValueError:
+        # Name already taken - re-raise as-is for proper HTTP status
+        raise
     except RuntimeError as err:
-        # Re-raise as character creation failed
+        # Other database failures
         logger.error(f"Failed to create character record: {err}")
         raise RuntimeError(f"Failed to create character: {err}") from err
 
@@ -471,3 +477,37 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
         except ClientError as err:
             logger.error(f"Failed to apply character updates for {character_id} Error: {err}", exc_info=True)
             raise RuntimeError(f"Failed to apply character updates: {err}") from err
+
+
+def character_clear_story(character_id: str) -> None:
+    """
+    Clear story-related fields from a character record.
+
+    This function is used to release a character from a broken story chain
+    by clearing ActiveStoryID, ActiveSegmentID, and resetting GameMode to "None".
+
+    Args:
+        character_id: Character UUID
+    """
+    try:
+        # Update the character to clear story fields and reset GameMode
+        update_expression = """
+            SET GameMode = :none, 
+                UpdatedAt = :updated_at
+            REMOVE ActiveStoryID, ActiveSegmentID
+        """
+
+        expression_values = {":none": "None", ":updated_at": datetime.now(timezone.utc).isoformat()}
+
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression=update_expression,
+            ExpressionAttributeValues=expression_values,
+        )
+
+        logger.info(f"Cleared story fields for character {character_id}")
+
+    except ClientError as err:
+        logger.error(f"Failed to clear story for character {character_id} Error: {err}", exc_info=True)
+        # Don't raise - just log and return

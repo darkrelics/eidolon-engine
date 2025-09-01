@@ -324,33 +324,30 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 
 ## ActiveSegments Table
 
-| Field              | Type      | Key      | Description                                                                |
-| ------------------ | --------- | -------- | -------------------------------------------------------------------------- |
-| `ActiveSegmentID`  | `STRING`  | **HASH** | UUID for this active segment instance.                                     |
-| `CharacterID`      | `STRING`  | **GSI**  | UUID of the character (for processing context).                            |
-| `PlayerID`         | `STRING`  |          | UUID of the player who owns the character.                                 |
-| `StoryID`          | `STRING`  |          | UUID of the story being played.                                            |
-| `StoryTitle`       | `STRING`  |          | Cached title of the story for quick access.                                |
-| `SegmentID`        | `STRING`  |          | UUID of the current segment definition.                                    |
-| `SegmentType`      | `STRING`  |          | Type of segment: decision, mechanical, or rest.                            |
-| `DefaultStatus`    | `STRING`  |          | Cached status message shown between events.                                |
-| `Status`           | `STRING`  |          | Segment status: active, completed, or abandoned.                           |
-| `StartTime`        | `NUMBER`  |          | Unix timestamp when segment started.                                       |
-| `EndTime`          | `NUMBER`  | **GSI**  | Unix timestamp when segment will complete.                                 |
-| `ProcessedAt`      | `NUMBER`  |          | Unix timestamp when outcomes were calculated (immediately after creation). |
-| `ProcessingStatus` | `STRING`  |          | Status: pending, processed, failed, or awaiting_decision.                  |
-| `ProcessingError`  | `STRING`  |          | Error details if processing failed.                                        |
-| `NextSegmentID`    | `STRING`  |          | Pre-calculated next segment ID based on outcome.                           |
-| `ClientEvents`     | `LIST`    |          | Complete event sequence for client to display over time.                   |
-| `CharacterUpdates` | `MAP`     |          | All character changes to apply when segment completes.                     |
-| `Decision`         | `STRING`  |          | For decision segments: choice made by player.                              |
-| `DecisionMadeAt`   | `NUMBER`  |          | Unix timestamp when player made decision.                                  |
-| `ChallengeResults` | `LIST`    |          | For mechanical segments: results of each challenge roll.                   |
-| `CombatState`      | `MAP`     |          | For mechanical segments: final combat state (if applicable).               |
-| `Outcome`          | `STRING`  |          | Final outcome (death/failure/minimal/normal/exceptional).                  |
-| `Transmitted`      | `BOOLEAN` |          | Set when segment has been sent to SQS for processing.                      |
-| `TransmittedAt`    | `NUMBER`  |          | Unix timestamp when sent to SQS.                                           |
-| `RunningFlag`      | `STRING`  |          | Request ID of Lambda currently processing this segment.                    |
+| Field              | Type     | Key      | Description                                                                 |
+| ------------------ | -------- | -------- | --------------------------------------------------------------------------- |
+| `ActiveSegmentID`  | `STRING` | **HASH** | UUID for this active segment instance.                                      |
+| `CharacterID`      | `STRING` | **GSI**  | UUID of the character (for processing context).                             |
+| `PlayerID`         | `STRING` |          | UUID of the player who owns the character.                                  |
+| `StoryID`          | `STRING` |          | UUID of the story being played.                                             |
+| `StoryInstanceID`  | `STRING` |          | UUIDv7 of the story instance for history tracking.                          |
+| `SegmentID`        | `STRING` |          | UUID of the current segment definition.                                     |
+| `SegmentType`      | `STRING` |          | Type of segment: decision, mechanical, or rest.                             |
+| `DefaultStatus`    | `STRING` |          | Cached status message shown between events.                                 |
+| `Status`           | `STRING` |          | Segment status: active, completed, or abandoned.                            |
+| `StartTime`        | `NUMBER` |          | Unix timestamp when segment started.                                        |
+| `EndTime`          | `NUMBER` | **GSI**  | Unix timestamp when segment will complete.                                  |
+| `ProcessedAt`      | `NUMBER` |          | Unix timestamp when outcomes were calculated by ops-segment-process.        |
+| `ProcessingStatus` | `STRING` |          | Status: pending (awaiting), processing (in progress), or processed (ready). |
+| `NextSegmentID`    | `STRING` |          | Pre-calculated next segment ID based on outcome.                            |
+| `ClientEvents`     | `LIST`   |          | Complete event sequence for client to display over time.                    |
+| `CharacterUpdates` | `MAP`    |          | All character changes to apply when segment completes.                      |
+| `Decision`         | `STRING` |          | For decision segments: choice made by player.                               |
+| `DecisionMadeAt`   | `NUMBER` |          | Unix timestamp when player made decision.                                   |
+| `DecisionOptions`  | `MAP`    |          | For decision segments: available choices and their next segments.           |
+| `ChallengeResults` | `LIST`   |          | For mechanical segments: results of each challenge roll.                    |
+| `CombatState`      | `MAP`    |          | For mechanical segments: final combat state (if applicable).                |
+| `Outcome`          | `STRING` |          | Final outcome (death/failure/minimal/normal/exceptional).                   |
 
 **Primary Key:** ActiveSegmentID (HASH)
 
@@ -363,62 +360,102 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 
 ## StoryHistory Table
 
-| Field                | Type      | Key       | Description                                                 |
-| -------------------- | --------- | --------- | ----------------------------------------------------------- |
-| `CharacterID`        | `STRING`  | **HASH**  | UUID of the character.                                      |
-| `StoryID`            | `STRING`  | **RANGE** | UUID of the story.                                          |
-| `AttemptNumber`      | `NUMBER`  | **RANGE** | Increments for each attempt of this story.                  |
-| `StoryTitle`         | `STRING`  |           | Cached title for display without additional lookup.         |
-| `StoryType`          | `STRING`  |           | Type: one-time, daily, or repeatable.                       |
-| `StartedAt`          | `NUMBER`  |           | Unix timestamp when story started.                          |
-| `CompletedAt`        | `NUMBER`  |           | Unix timestamp when completed or abandoned.                 |
-| `Abandoned`          | `BOOLEAN` |           | True if story was abandoned.                                |
-| `FinalOutcome`       | `STRING`  |           | death, failure, minimal, normal, exceptional, or abandoned. |
-| `TotalDuration`      | `NUMBER`  |           | Total seconds from start to finish.                         |
-| `SegmentCount`       | `NUMBER`  |           | Number of segments completed.                               |
-| `SkillXPAwarded`     | `MAP`     |           | Total skill XP earned: {skill_name: amount}.                |
-| `AttributeXPAwarded` | `MAP`     |           | Total attribute XP earned: {attribute_name: amount}.        |
-| `ItemsGained`        | `LIST`    |           | Item IDs acquired during story.                             |
-| `ItemsLost`          | `LIST`    |           | Item IDs lost during story.                                 |
-| `RoomsVisited`       | `LIST`    |           | Room IDs character moved to.                                |
-| `DecisionsMade`      | `MAP`     |           | Map of segment_id to decision_choice.                       |
+| Field                | Type     | Key       | Description                                                                      |
+| -------------------- | -------- | --------- | -------------------------------------------------------------------------------- |
+| `CharacterID`        | `STRING` | **HASH**  | UUID of the character.                                                           |
+| `StoryInstanceID`    | `STRING` | **RANGE** | UUIDv7 for this story instance (unique per execution).                           |
+| `StoryID`            | `STRING` |           | UUID of the story.                                                               |
+| `StoryTitle`         | `STRING` |           | Cached title for display without additional lookup.                              |
+| `StoryType`          | `STRING` |           | Type: one-time, daily, or repeatable.                                            |
+| `StartedAt`          | `STRING` |           | ISO 8601 timestamp when story started.                                           |
+| `FinishedAt`         | `STRING` |           | ISO 8601 timestamp when completed or abandoned.                                  |
+| `FinalOutcome`       | `STRING` |           | Completed: death/failure/minimal/normal/exceptional, or abandoned (player quit). |
+| `TotalDuration`      | `NUMBER` |           | Total seconds from start to finish.                                              |
+| `SegmentHistory`     | `LIST`   |           | List of ActiveSegmentIDs in chronological order.                                 |
+| `SkillXPAwarded`     | `MAP`    |           | Total skill XP earned: {skill_name: amount}.                                     |
+| `AttributeXPAwarded` | `MAP`    |           | Total attribute XP earned: {attribute_name: amount}.                             |
+| `ItemsGained`        | `LIST`   |           | Item IDs acquired during story.                                                  |
+| `ItemsLost`          | `LIST`   |           | Item IDs lost during story.                                                      |
+| `RoomsVisited`       | `LIST`   |           | Room IDs character moved to.                                                     |
+| `DecisionsMade`      | `MAP`    |           | Map of segment_id to decision_choice.                                            |
 
-**Primary Key:** CharacterID (HASH), StoryID (RANGE)
+**Primary Key:** CharacterID (HASH), StoryInstanceID (RANGE)
+
+**Implementation Notes:**
+
+- The `StoryInstanceID` is a UUIDv7 generated when the story starts (in `api-story-start`)
+- This allows characters to play the same story multiple times with each execution tracked separately
+- The `SegmentHistory` list contains ActiveSegmentIDs that reference records in the SegmentHistory table
+- Each ActiveSegmentID is added to this list when a segment is created (in `create_active_segment`)
+- The actual segment data is stored in the SegmentHistory table
+- Since CharacterID is the HASH key, querying all stories for a character is straightforward
+
+**Lifecycle:**
+
+1. **Creation**: Record created when story starts via `create_story_history_entry()`
+   - Generates UUIDv7 StoryInstanceID for time-ordered unique identification
+   - Sets StartedAt timestamp
+   - Initializes empty SegmentHistory list and XP maps
+
+2. **During Play**:
+   - ActiveSegmentIDs added to SegmentHistory list as segments are created (not just completed)
+   - XP accumulates in SkillXPAwarded/AttributeXPAwarded maps via `update_story_history_xp()`
+   - Creates complete audit trail of all segments attempted
+
+3. **Completion (Success or Failure)**: When story reaches its conclusion via `complete_story()`
+   - Sets FinishedAt timestamp and FinalOutcome (death/failure/minimal/normal/exceptional)
+   - Death and failure outcomes are still considered "completed" attempts, not abandonments
+   - Story added to character's CompletedStories list (regardless of outcome)
+   - Calculates TotalDuration in seconds
+   - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
+
+4. **Abandonment (Player-Initiated)**: When player voluntarily quits via `api_story_abandon`
+   - Sets FinishedAt timestamp and FinalOutcome to "abandoned"
+   - Story added to character's AbandonedStories list (not CompletedStories)
+   - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
+   - **Cannot be resumed** - must start fresh if repeatable
+   - Distinct from death/failure - represents player choice to quit, not story outcome
+
+5. **Multiple Executions**:
+   - Repeatable stories create new record with new StoryInstanceID each time
+   - All instances preserved for complete history
+   - Most recent instance used for cooldown checks
 
 ## SegmentHistory Table
 
-Records the complete history of each segment played by a character. This table serves as an audit trail and enables player progress tracking, analytics, and debugging. All fields from the ActiveSegments table should be copied here when a segment completes.
+Records the complete history of each segment played by a character. This table serves as an audit trail and enables player progress tracking, analytics, and debugging. Records are created when segments are created (not just when completed).
 
-| Field                | Type     | Key       | Required | Description                                                |
-| -------------------- | -------- | --------- | -------- | ---------------------------------------------------------- |
-| `CharacterID`        | `STRING` | **HASH**  | **Yes**  | UUID of the character.                                     |
-| `ActiveSegmentID`    | `STRING` | **RANGE** | **Yes**  | UUID matching the ActiveSegments record.                   |
-| `PlayerID`           | `STRING` |           | **Yes**  | UUID of the player for ownership verification.             |
-| `StoryID`            | `STRING` |           | **Yes**  | UUID of the parent story.                                  |
-| `SegmentID`          | `STRING` |           | **Yes**  | UUID of the segment definition.                            |
-| `SegmentType`        | `STRING` |           | **Yes**  | Type: mechanical, decision, or rest.                       |
-| `StartTime`          | `NUMBER` |           | **Yes**  | Unix timestamp when segment started (from ActiveSegments). |
-| `EndTime`            | `NUMBER` |           | **Yes**  | Unix timestamp when segment ended (from ActiveSegments).   |
-| `ProcessedAt`        | `NUMBER` |           | No       | Unix timestamp when outcomes were calculated.              |
-| `CompletedAt`        | `NUMBER` |           | **Yes**  | Unix timestamp when segment was advanced.                  |
-| `Outcome`            | `STRING` |           | **Yes**  | death, failure, minimal, normal, or exceptional.           |
-| `Decision`           | `STRING` |           | No       | For decision segments: choice made by player.              |
-| `DecisionMadeAt`     | `NUMBER` |           | No       | Unix timestamp when player made decision.                  |
-| `ClientEvents`       | `LIST`   |           | No       | Complete event array sent to client.                       |
-| `CharacterUpdates`   | `MAP`    |           | **Yes**  | All character changes applied (contains XP data).          |
-| `ChallengeResults`   | `LIST`   |           | No       | Detailed skill check results (mechanical segments).        |
-| `CombatState`        | `MAP`    |           | No       | Final combat results if applicable.                        |
-| `SkillXPAwarded`     | `MAP`    |           | **Yes**  | Skill XP from this segment: {skill_name: amount}.          |
-| `AttributeXPAwarded` | `MAP`    |           | **Yes**  | Attribute XP from this segment: {attribute_name: amount}.  |
+| Field              | Type     | Key       | Required | Description                                                       |
+| ------------------ | -------- | --------- | -------- | ----------------------------------------------------------------- |
+| `CharacterID`      | `STRING` | **HASH**  | **Yes**  | UUID of the character.                                            |
+| `ActiveSegmentID`  | `STRING` | **RANGE** | **Yes**  | UUID matching the ActiveSegments record.                          |
+| `StoryInstanceID`  | `STRING` |           | **Yes**  | UUIDv7 of the story instance from StoryHistory.                   |
+| `StoryID`          | `STRING` |           | **Yes**  | UUID of the parent story.                                         |
+| `SegmentID`        | `STRING` |           | **Yes**  | UUID of the segment definition.                                   |
+| `SegmentType`      | `STRING` |           | **Yes**  | Type: mechanical, decision, or rest.                              |
+| `StartTime`        | `NUMBER` |           | **Yes**  | Unix timestamp when segment started.                              |
+| `EndTime`          | `NUMBER` |           | **Yes**  | Unix timestamp when segment will end.                             |
+| `ProcessedAt`      | `NUMBER` |           | No       | Unix timestamp when outcomes were calculated.                     |
+| `CompletedAt`      | `NUMBER` |           | No       | Unix timestamp when segment was actually completed.               |
+| `Outcome`          | `STRING` |           | No       | death, failure, minimal, normal, or exceptional.                  |
+| `Decision`         | `STRING` |           | No       | For decision segments: choice made by player.                     |
+| `DecisionMadeAt`   | `NUMBER` |           | No       | Unix timestamp when player made decision.                         |
+| `ClientEvents`     | `LIST`   |           | No       | Complete event array sent to client.                              |
+| `CharacterUpdates` | `MAP`    |           | No       | All character changes applied (contains SkillXP and AttributeXP). |
+| `ChallengeResults` | `LIST`   |           | No       | Detailed skill check results (mechanical segments).               |
+| `CombatState`      | `MAP`    |           | No       | Final combat results if applicable.                               |
 
 **Primary Key:** CharacterID (HASH), ActiveSegmentID (RANGE)
 
 **Implementation Notes:**
 
-- The `SkillXPAwarded` and `AttributeXPAwarded` fields must be extracted from the `CharacterUpdates.SkillXP` and `CharacterUpdates.AttributeXP` maps respectively
+- Records are created when segments start (in `create_active_segment`), not when they complete
+- The `StoryInstanceID` links this segment to a specific story execution in the StoryHistory table
+- Initial record has StartTime, EndTime, and basic fields; Outcome and CharacterUpdates are added when the segment completes
+- The ActiveSegmentID is added to the StoryHistory.SegmentHistory list when the segment is created
+- XP data is stored within `CharacterUpdates.SkillXP` and `CharacterUpdates.AttributeXP` maps
 - All timestamp fields should be copied directly from the ActiveSegments record
-- The `PlayerID` must be included to maintain security and ownership verification
-- For segments with no XP awards, the XP fields should be empty maps `{}` rather than null
+- For segments with no XP awards, the SkillXP and AttributeXP maps within CharacterUpdates should be empty `{}` rather than null
 
 ---
 

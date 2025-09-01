@@ -34,6 +34,7 @@ PROCESS_SEGMENT_FUNCTION = os.environ.get("PROCESS_SEGMENT_FUNCTION", "process-s
 DEFAULT_HEALTH = int(os.environ.get("DEFAULT_HEALTH", "10"))
 DEFAULT_ESSENCE = int(os.environ.get("DEFAULT_ESSENCE", "3"))
 MAX_CHARACTERS_PER_PLAYER = int(os.environ.get("MAX_CHARACTERS_PER_PLAYER", "1"))
+REST_SEGMENT_DURATION = int(os.environ.get("REST_SEGMENT_DURATION", "900"))  # 15 minutes default
 
 
 # Logging Configuration
@@ -83,11 +84,11 @@ ENABLE_BATCH_PROCESSING = os.environ.get("ENABLE_BATCH_PROCESSING", "true").lowe
 MAX_SEGMENTS_PER_POLL = int(os.environ.get("MAX_SEGMENTS_PER_POLL", "50"))
 
 # SSM Parameters
-SSM_POLLER_STATE_PARAMETER = os.environ.get("SSM_POLLER_STATE_PARAMETER", "/eidolon/segment-poller-state")
+SSM_POLLER_STATE_PARAMETER = os.environ.get("SSM_POLLER_STATE_PARAMETER", "/eidolon/story/config")
 
 # SQS Configuration
 SEGMENT_QUEUE_URL = os.environ.get("SEGMENT_QUEUE_URL", "")
 STORY_ADVANCEMENT_QUEUE_URL = os.environ.get("STORY_ADVANCEMENT_QUEUE_URL", "")
 
 # EventBridge Configuration
-EVENTBRIDGE_RULE_NAME = os.environ.get("EVENTBRIDGE_RULE_NAME", "eidolon-segment-poller")
+EVENTBRIDGE_RULE_NAME = os.environ.get("EVENTBRIDGE_RULE_NAME", "eidolon-story-poller")

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../models/character.dart';
 import '../../models/story.dart';
 import '../story/active_story_widget.dart';
@@ -9,6 +8,7 @@ import '../story/story_history_widget.dart';
 /// Center panel that displays story content dynamically
 class StoryPanel extends StatefulWidget {
   final Character character;
+  final List<Map<String, dynamic>> segmentHistory;
   final bool isLoading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -16,10 +16,12 @@ class StoryPanel extends StatefulWidget {
   final Function(String)? onDecisionSelect;
   final VoidCallback? onAbandonStory;
   final VoidCallback? onRestSegment;
+  final VoidCallback? onReturnToStories;
 
   const StoryPanel({
     super.key,
     required this.character,
+    this.segmentHistory = const [],
     this.isLoading = false,
     this.error,
     this.onRefresh,
@@ -27,49 +29,25 @@ class StoryPanel extends StatefulWidget {
     this.onDecisionSelect,
     this.onAbandonStory,
     this.onRestSegment,
+    this.onReturnToStories,
   });
 
   @override
   State<StoryPanel> createState() => _StoryPanelState();
 }
 
-class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateMixin {
+class _StoryPanelState extends State<StoryPanel> {
   bool _showHistory = false;
-  late AnimationController _animationController;
-  late Animation<double> _fadeAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    );
-    _animationController.forward();
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  void didUpdateWidget(StoryPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // Trigger animation when story state changes
-    if (_hasActiveStory() != _hasActiveStory(oldWidget.character)) {
-      _animationController.forward(from: 0);
-    }
-  }
 
   bool _hasActiveStory([Character? character]) {
     final char = character ?? widget.character;
-    return char.storyState != null && char.storyState!.isNotEmpty;
+    return char.activeStoryID != null;
+  }
+
+  bool _isStoryComplete() {
+    // Story is complete if we have an active story but no active segment
+    final char = widget.character;
+    return char.activeStoryID != null && char.activeSegmentID == null;
   }
 
   @override
@@ -110,18 +88,13 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
                 // History toggle button
                 if (!_hasActiveStory() && widget.character.completedStories.isNotEmpty)
                   IconButton(
-                    icon: AnimatedRotation(
-                      turns: _showHistory ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      child: Icon(
-                        _showHistory ? Icons.library_books : Icons.history,
-                        color: colorScheme.onPrimaryContainer,
-                      ),
+                    icon: Icon(
+                      _showHistory ? Icons.library_books : Icons.history,
+                      color: colorScheme.onPrimaryContainer,
                     ),
                     onPressed: () {
                       setState(() {
                         _showHistory = !_showHistory;
-                        _animationController.forward(from: 0);
                       });
                     },
                     tooltip: _showHistory ? 'Show Available Stories' : 'Show History',
@@ -137,16 +110,11 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
                   ),
               ],
             ),
-          ).animate()
-            .fadeIn(duration: 200.ms)
-            .slideY(begin: -0.1, end: 0),
+          ),
           
           // Content
           Expanded(
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: _buildContent(),
-            ),
+            child: _buildContent(),
           ),
         ],
       ),
@@ -154,9 +122,10 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
   }
 
   String _getHeaderTitle() {
-    if (_hasActiveStory()) {
-      final storyTitle = widget.character.storyState?['Story']?['Title'];
-      return storyTitle ?? 'Active Story';
+    if (_isStoryComplete()) {
+      return 'Story Complete';
+    } else if (_hasActiveStory()) {
+      return 'Story';
     } else if (_showHistory) {
       return 'Story History';
     } else {
@@ -181,14 +150,16 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
               ),
             ),
           ],
-        ).animate()
-          .fadeIn(duration: 300.ms)
-          .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
+        ),
       );
     }
 
     if (widget.error != null) {
       return _buildErrorWidget();
+    }
+
+    if (_isStoryComplete()) {
+      return _buildStoryCompleteWidget();
     }
 
     if (_hasActiveStory()) {
@@ -216,9 +187,7 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
               Icons.error_outline,
               size: 64,
               color: colorScheme.error,
-            ).animate()
-              .shake(duration: 500.ms)
-              .scale(delay: 100.ms),
+            ),
             const SizedBox(height: 16),
             Text(
               'Error Loading Stories',
@@ -240,9 +209,7 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
                 onPressed: widget.onRefresh,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
-              ).animate()
-                .fadeIn(delay: 200.ms)
-                .slideY(begin: 0.2, end: 0),
+              ),
             ],
           ],
         ),
@@ -251,38 +218,187 @@ class _StoryPanelState extends State<StoryPanel> with SingleTickerProviderStateM
   }
 
   Widget _buildActiveStoryWidget() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: ActiveStoryWidget(
-        key: ValueKey('active_story_${widget.character.storyState?.hashCode}'),
-        character: widget.character,
-        onDecisionSelect: widget.onDecisionSelect,
-        onAbandonStory: widget.onAbandonStory,
-        onRestSegment: widget.onRestSegment,
-      ),
+    return ActiveStoryWidget(
+      key: ValueKey('active_story_${widget.character.storyState?.hashCode}'),
+      character: widget.character,
+      segmentHistory: widget.segmentHistory,
+      onDecisionSelect: widget.onDecisionSelect,
+      onAbandonStory: widget.onAbandonStory,
+      onRestSegment: widget.onRestSegment,
+      onRefresh: widget.onRefresh,
     );
   }
 
   Widget _buildAvailableStoriesWidget() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: AvailableStoriesWidget(
-        key: const ValueKey('available_stories'),
-        character: widget.character,
-        onStorySelect: widget.onStorySelect,
-        isLoading: widget.isLoading,
-      ),
+    return AvailableStoriesWidget(
+      key: const ValueKey('available_stories'),
+      character: widget.character,
+      onStorySelect: widget.onStorySelect,
+      isLoading: widget.isLoading,
     );
   }
 
   Widget _buildHistoryWidget() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      switchInCurve: Curves.easeInOut,
-      switchOutCurve: Curves.easeInOut,
-      child: StoryHistoryWidget(
-        key: const ValueKey('story_history'),
-        character: widget.character,
+    return StoryHistoryWidget(
+      key: const ValueKey('story_history'),
+      character: widget.character,
+    );
+  }
+
+  Widget _buildStoryCompleteWidget() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    // Get story data and completed segments
+    final storyData = widget.character.storyState?['Story'] as Map<String, dynamic>?;
+    final completedSegments = widget.character.storyState?['CompletedSegments'] as List<dynamic>?;
+    
+    if (completedSegments == null || completedSegments.isEmpty) {
+      // Fallback to simple completion screen
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle, size: 80, color: colorScheme.primary),
+            const SizedBox(height: 16),
+            Text('Story Complete', style: theme.textTheme.headlineMedium),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: widget.onReturnToStories,
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('Return to Stories'),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Get the last segment to determine overall outcome
+    final lastSegment = completedSegments.last as Map<String, dynamic>;
+    final lastOutcome = lastSegment['Outcome'] ?? 'normal';
+    
+    // Check if story ended in death or complete failure
+    final storyFailed = lastOutcome == 'death' || lastOutcome == 'failure';
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Story Card at the top
+          if (storyData != null) ...[
+            Card(
+              elevation: 2,
+              color: storyFailed ? Colors.red.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Icon(
+                      storyFailed ? Icons.dangerous : Icons.check_circle,
+                      size: 64,
+                      color: storyFailed ? Colors.red : Colors.green,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      storyData['Title'] ?? 'Story',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      storyFailed ? 'FAILED' : 'COMPLETED',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: storyFailed ? Colors.red : Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          
+          // Segment History - Reverse order (newest first)
+          Text(
+            'Story Segments',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          
+          // Display segments in reverse order
+          ...completedSegments.reversed.map((segment) {
+            final segmentMap = segment as Map<String, dynamic>;
+            final outcome = segmentMap['Outcome'] ?? 'normal';
+            final segmentType = segmentMap['SegmentType'] ?? 'mechanical';
+            final shortStatus = segmentMap['ShortStatus'] ?? 'Segment';
+            
+            // Determine color based on outcome
+            Color segmentColor;
+            Color backgroundColor;
+            IconData icon;
+            
+            if (outcome == 'death') {
+              segmentColor = Colors.black;
+              backgroundColor = Colors.black.withValues(alpha: 0.1);
+              icon = Icons.dangerous;
+            } else if (outcome == 'failure' || outcome == 'failed') {
+              segmentColor = Colors.red;
+              backgroundColor = Colors.red.withValues(alpha: 0.1);
+              icon = Icons.cancel;
+            } else {
+              // Success (exceptional, normal, minimal, etc.)
+              segmentColor = Colors.green;
+              backgroundColor = Colors.green.withValues(alpha: 0.1);
+              icon = Icons.check_circle;
+            }
+            
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Card(
+                color: backgroundColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: segmentColor.withValues(alpha: 0.3), width: 1),
+                ),
+                child: ListTile(
+                  leading: Icon(icon, color: segmentColor),
+                  title: Text(
+                    shortStatus,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: segmentColor,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Type: $segmentType | Outcome: $outcome',
+                    style: TextStyle(
+                      color: segmentColor.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+          
+          const SizedBox(height: 24),
+          
+          // Return button
+          Center(
+            child: FilledButton.icon(
+              onPressed: widget.onReturnToStories,
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('Return to Stories'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

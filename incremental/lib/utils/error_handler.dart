@@ -43,6 +43,35 @@ class ErrorHandler {
       return 'The requested resource was not found.';
     }
 
+    // Story-specific errors
+    if (errorString.toLowerCase().contains('story not available')) {
+      return 'This story is not available. It may be on cooldown or require certain prerequisites.';
+    }
+
+    if (errorString.toLowerCase().contains('already in a story')) {
+      return 'Your character is already in an active story. Complete or abandon it first.';
+    }
+
+    if (errorString.toLowerCase().contains('segment not found')) {
+      return 'Unable to find the current segment. Please refresh.';
+    }
+
+    if (errorString.toLowerCase().contains('decision already')) {
+      return 'You have already made a decision for this segment.';
+    }
+
+    if (errorString.toLowerCase().contains('not authenticated')) {
+      return 'Your session has expired. Please log in again.';
+    }
+
+    if (errorString.toLowerCase().contains('character is dead')) {
+      return 'Your character has died. You must resurrect before continuing.';
+    }
+
+    if (errorString.toLowerCase().contains('overloaded')) {
+      return 'The server is busy. Please wait a moment and try again.';
+    }
+
     // Return a generic user-friendly message for unknown errors
     return 'An error occurred. Please try again later.';
   }

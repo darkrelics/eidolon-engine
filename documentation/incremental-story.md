@@ -55,8 +55,7 @@ The ActiveSegments table tracks currently running segment instances:
 
 - **ActiveSegmentID** (HASH): Instance UUID
 - **CharacterID** (GSI): Character UUID for querying
-- **ProcessingStatus**: pending → processing → processed → completed
-- **RunningFlag**: Claim flag to prevent concurrent processing
+- **ProcessingStatus**: pending → processing → processed (then segment deleted)
 - **StartTime/EndTime**: Unix timestamps defining the segment window
 - **ClientEvents**: Pre-calculated event sequence for display
 - **CharacterUpdates**: Changes to apply on completion
@@ -64,13 +63,16 @@ The ActiveSegments table tracks currently running segment instances:
 
 ### StoryHistory Table
 
-Records completed story attempts:
+Records completed story attempts (one per character-story combination):
 
 - **CharacterID** (HASH): Character UUID
-- **StoryID** (RANGE): Story UUID
-- **AttemptNumber** (RANGE): Increments per attempt
-- **FinalOutcome**: Overall story result
-- **XPEarned**: Total XP from all segments
+- **StoryInstanceID** (RANGE): UUIDv7 for this story instance (unique per execution)
+- **StoryID**: UUID of the story
+- **FinalOutcome**: Overall story result (death/failure/minimal/normal/exceptional/abandoned)
+- **SegmentHistory**: List of ActiveSegmentIDs in chronological order
+- **SkillXPAwarded/AttributeXPAwarded**: Total XP earned from all segments
+
+Note: Each story attempt creates a new StoryInstanceID. The system does not track attempt numbers.
 
 ### SegmentHistory Table
 
@@ -78,8 +80,10 @@ Archives completed segment instances:
 
 - **CharacterID** (HASH): Character UUID
 - **ActiveSegmentID** (RANGE): Instance UUID from ActiveSegments
-- **All fields from ActiveSegments** are copied here
-- **SkillXPAwarded/AttributeXPAwarded**: XP breakdown for analytics
+- **StoryInstanceID**: UUIDv7 of the story instance from StoryHistory
+- **CharacterUpdates**: All character changes applied (contains SkillXP and AttributeXP)
+- **Outcome**: Final outcome of the segment
+- **ProcessedAt**: Unix timestamp when outcomes were calculated
 
 ## Story State Machine
 
@@ -106,26 +110,28 @@ Available → Active
     - Enable polling infrastructure
     - Create StoryHistory entry
 
-Active → Completed
-  Trigger: Final segment completes with non-terminal outcome
+Active → Completed (Success or Failure)
+  Trigger: Final segment completes (any outcome including death/failure)
   Lambda: ops-story-advance
   Actions:
     - Apply final character updates and rewards
-    - Move StoryID to CompletedStories
+    - Move StoryID to CompletedStories (even for death/failure)
     - Clear ActiveStoryID and ActiveSegmentID
     - Set GameMode = "None"
-    - Update StoryHistory with completion data
+    - Update StoryHistory with FinalOutcome (death/failure/minimal/normal/exceptional)
     - Delete ActiveSegment record
+  Note: Death/failure are completed attempts with negative outcomes, not abandonments
 
 Active → Abandoned
-  Trigger: POST /stories/abandon OR death/failure outcome
-  Lambda: api-story-abandon OR ops-story-advance
+  Trigger: POST /stories/abandon (player-initiated quit)
+  Lambda: api-story-abandon
   Actions:
     - Move StoryID to AbandonedStories
     - Clear ActiveStoryID and ActiveSegmentID
     - Set GameMode = "None"
-    - Update StoryHistory as abandoned
+    - Update StoryHistory with FinalOutcome = "abandoned"
     - Delete ActiveSegment record
+  Note: Only player-initiated quits count as abandoned, not story failures
 ```
 
 ### Story Lifecycle
@@ -156,37 +162,44 @@ Active → Abandoned
 
 ### Processing Status States
 
-Segments progress through these ProcessingStatus values:
+Segments use ProcessingStatus to track their processing state:
 
-1. **pending**: Initial state, awaiting processing
-2. **processing**: Being processed by Lambda function
-3. **processed**: Processing complete, awaiting timer expiry
-4. **completed**: Timer expired, ready for advancement
+1. **pending**: Mechanical segments awaiting processing
+2. **processing**: Mechanical segments currently being processed
+3. **processed**: Segment ready for advancement when timer expires
 
-### RunningFlag States
+**Note**: There is no "completed" ProcessingStatus. When a segment advances (timer expires),
+it is deleted from ActiveSegments and archived to SegmentHistory. The segment lifecycle ends
+at "processed" status.
 
-The RunningFlag provides concurrency control:
+### ProcessingStatus Concurrency Control
 
-- **false**: Segment available for processing
-- **true**: Segment claimed by a Lambda instance
+The ProcessingStatus field provides atomic state transitions to prevent duplicate processing:
+
+- **false** (or absent): Segment available for processing
+- **true**: Segment claimed by a Lambda instance for exclusive processing
+
+This is implemented as a DynamoDB conditional update to ensure atomicity. Despite documentation
+suggesting it would store a request ID, the implementation uses a simple boolean for efficiency.
 
 ### Complete State Transitions
 
+#### Mechanical Segments
+
 ```
-Created → pending/false
+Created → pending/false + IMMEDIATE QUEUE
   Trigger: Story start or previous segment advancement
   Lambda: api-story-start OR ops-story-advance
   Actions:
-    - Create ActiveSegment record
-    - Calculate all outcomes immediately
-    - Generate ClientEvents array
+    - Create ActiveSegment with ProcessingStatus="pending"
     - Set timers (StartTime, EndTime)
+    - IMMEDIATELY queue to SEGMENT_QUEUE_URL for processing
 
-pending/false → processing/true (Mechanical only)
-  Trigger: ops-segment-poller finds segment ready
+pending/false → processing/true
+  Trigger: SQS message received from immediate queueing
   Lambda: ops-segment-process (via SQS)
   Actions:
-    - Claim segment with RunningFlag
+    - Atomically transition ProcessingStatus from pending to processing
     - Process challenges and combat
     - Apply XP and wounds immediately
     - Store results in segment
@@ -196,22 +209,66 @@ processing/true → processed/false
   Lambda: ops-segment-process
   Actions:
     - Update segment with results
-    - Clear RunningFlag
-    - Mark as processed
+    - ProcessingStatus set to processed
+    - Mark ProcessingStatus as "processed"
 
-processed/false → completed/false
-  Trigger: EndTime reached
-  Lambda: ops-segment-poller
-  Actions:
-    - Send to advancement queue
-    - No state change needed
-
-completed/false → [deleted]
-  Trigger: Story advancement
-  Lambda: ops-story-advance
+processed/false → [deleted]
+  Trigger: EndTime reached (within 30 seconds)
+  Lambda: ops-segment-poller → ops-story-advance
   Actions:
     - Apply CharacterUpdates
     - Create next segment or complete story
+    - Copy to SegmentHistory
+    - Delete from ActiveSegments
+```
+
+#### Rest Segments
+
+```
+Created → processed/false
+  Trigger: Story advancement or player-initiated rest
+  Lambda: ops-story-advance OR api-segment-rest
+  Actions:
+    - Create ActiveSegment with ProcessingStatus="processed"
+    - Set Outcome="normal"
+    - Set NextSegmentID based on story flow
+    - Set timers (StartTime, EndTime)
+
+processed/false → [deleted]
+  Trigger: EndTime reached (within 30 seconds)
+  Lambda: ops-segment-poller → ops-story-advance
+  Actions:
+    - Create next segment or complete story
+    - Copy to SegmentHistory
+    - Delete from ActiveSegments
+```
+
+#### Decision Segments
+
+```
+Created → processed/false
+  Trigger: Story advancement
+  Lambda: ops-story-advance
+  Actions:
+    - Create ActiveSegment with ProcessingStatus="processed"
+    - Set Decision to DefaultDecision
+    - Set NextSegmentID based on default choice
+    - Set timers (StartTime, EndTime)
+
+processed/false (decision updated)
+  Trigger: Player makes decision
+  Lambda: api-segment-decision
+  Actions:
+    - Update Decision field
+    - Update NextSegmentID based on new choice
+    - ProcessingStatus remains "processed"
+
+processed/false → [deleted]
+  Trigger: EndTime reached (within 30 seconds)
+  Lambda: ops-segment-poller → ops-story-advance
+  Actions:
+    - Use Decision field to determine path
+    - Create next segment based on NextSegmentID
     - Copy to SegmentHistory
     - Delete from ActiveSegments
 ```
@@ -221,6 +278,7 @@ completed/false → [deleted]
 #### Mechanical Segments
 
 - Contain skill challenges and/or combat
+- Queued IMMEDIATELY at creation to SEGMENT_QUEUE_URL
 - Processed by ops-segment-process via SQS
 - XP and wounds applied during processing
 - Outcomes: death/failure/minimal/normal/exceptional
@@ -228,22 +286,110 @@ completed/false → [deleted]
 #### Decision Segments
 
 - Present choices to player
-- No processing needed (outcome predetermined)
-- Player submits via api-segment-decision
-- Timeout uses DefaultDecision if specified
+- Created with ProcessingStatus="processed" and default decision pre-applied
+- Player can override decision via api-segment-decision before timer expires
+- NextSegmentID is always set (either default or player's choice)
+- Timer expiry uses whatever Decision is currently set
 
 #### Rest Segments
 
-Rest segments are special healing segments that allow characters to recover from wounds between story adventures. Unlike regular story segments, rest segments:
+Rest segments are special 15-minute rest periods that allow characters to take a break between story adventures. Rest segments:
 
-- Are initiated by the player via POST /segments/rest endpoint (handled by **api-segment-rest**)
-- Provide healing over time based on wound severity
-- Heal wounds based on type (bashing: 15min, lethal: 6hr, aggravated: 7d)
-- Always have "normal" outcome with no decision points
-- No special processing required - healing is automatic
-- Can be initiated when character is not in an active story
-- Create a temporary ActiveSegment that manages the healing process
+- Created with ProcessingStatus="processed" immediately (no processing needed)
+- Can be story-driven or player-initiated via POST /segments/rest endpoint
+- Provide a 15-minute rest period (REST_SEGMENT_DURATION = 900 seconds)
+- Do NOT automatically heal wounds - wounds heal independently based on their HealAt timestamps
+- During the 15-minute rest, any bashing wounds that are 15+ minutes old will naturally heal
+- Lethal (6 hours) and aggravated (7 days) wounds are unlikely to heal during the short rest period
+- Always have Outcome="normal" with no decision points
+- Pre-populated with narrative text and NextSegmentID
 - Character remains in "rest" mode until segment completion
+
+Note: Wound healing is time-based and independent of rest segments. Wounds heal based on their type:
+
+- Bashing wounds: heal after 15 minutes from infliction
+- Lethal wounds: heal after 6 hours from infliction
+- Aggravated wounds: heal after 7 days from infliction
+
+### Flexible Branching Design
+
+#### Outcome-Based Branching
+
+The story system supports flexible narrative branching where any outcome can lead to different paths. Each segment's Results block maps outcomes to their consequences:
+
+```json
+"Results": {
+  "death": {
+    "Narrative": "Your journey ends here...",
+    "NextSegmentID": null  // Story ends
+  },
+  "failure": {
+    "Narrative": "You are captured by guards...",
+    "NextSegmentID": "prison-escape-segment"  // Continue in prison
+  },
+  "minimal": {
+    "Narrative": "You barely succeed...",
+    "NextSegmentID": "next-segment-wounded"  // Different path
+  },
+  "normal": {
+    "Narrative": "You succeed as expected...",
+    "NextSegmentID": "next-segment-standard"  // Standard path
+  },
+  "exceptional": {
+    "Narrative": "Your exceptional performance is noted...",
+    "NextSegmentID": "next-segment-bonus"  // Bonus path
+  }
+}
+```
+
+#### Non-Traditional Death Handling
+
+Death outcomes don't always end the story. The system supports:
+
+- **Ghost Stories**: Death leads to afterlife segments
+- **Divine Intervention**: Death triggers resurrection paths
+- **Underworld Journeys**: Death begins a new quest
+- **Reincarnation**: Death leads to rebirth scenarios
+
+Example:
+
+```json
+"death": {
+  "Narrative": "As darkness takes you, you feel your spirit rise...",
+  "NextSegmentID": "ghost-revenge-segment-1",
+  "Effects": {
+    "State": "ghost"  // Character becomes a ghost
+  }
+}
+```
+
+#### Failure as Opportunity
+
+Failure outcomes can open entirely new storylines:
+
+- **Capture and Escape**: Failure leads to prison break stories
+- **Redemption Arcs**: Failure triggers second chance narratives
+- **Alternative Solutions**: Failure reveals hidden paths
+- **Training Montages**: Failure leads to improvement segments
+
+Example:
+
+```json
+"failure": {
+  "Narrative": "The master shakes his head. 'You need more training.'",
+  "NextSegmentID": "training-montage-segment",
+  "Effects": {
+    "Room": 15  // Training grounds
+  }
+}
+```
+
+#### Branching Principles
+
+1. **No Hardcoded Assumptions**: The system doesn't assume death or failure ends stories
+2. **Narrative Freedom**: Designers control all branching through data
+3. **Outcome Equality**: Any outcome can lead to any result
+4. **Conditional Progression**: Different outcomes create different player experiences
 
 ### Segment Lifecycle
 
@@ -294,10 +440,10 @@ All Lambda functions are deployed with:
 **api-story-start** (Logical ID: `ApiStoryStartFunction`):
 
 - Validates prerequisites and character state
-- Creates first ActiveSegment
-- Updates character to active game mode
+- Creates first ActiveSegment with pre-calculated outcomes
+- Updates character to active game mode (GameMode="Incremental")
 - Queues mechanical segments to `eidolon-processing-queue`
-- Enables polling infrastructure via SSM parameter
+- **Polling Management**: Sets SSM parameter to "run" AND enables EventBridge rule
 - Environment: `SEGMENT_QUEUE_URL` for SQS integration
 
 **api-segment-decision** (Logical ID: `ApiSegmentDecisionFunction`):
@@ -331,29 +477,37 @@ All Lambda functions are deployed with:
 
 **ops-segment-poller** (Logical ID: `OpsSegmentPollerFunction`):
 
-- **Trigger**: EventBridge rule `eidolon-story-poller` (1-minute schedule)
-- Reads SSM parameter `/eidolon/story/config` for run/stop state
-- Queries EndTimeIndex GSI for segments with EndTime <= now
+- **Trigger**: EventBridge rule `eidolon-segment-poller` (1-minute schedule)
+- Reads SSM parameter `/eidolon/segment-poller-state` for "run"/"stop" state
+- Queries for segments with EndTime <= now
 - Sends ALL completed segments to `eidolon-advancement-queue`
-- Auto-disables polling when no active segments exist
+- **Polling State Management**:
+  - If parameter="run" and no segments found: Sets parameter to "stop"
+  - If parameter="stop": Checks for active segments
+    - If active segments exist: Sets parameter back to "run"
+    - If no active segments: Disables EventBridge rule
 - Environment: `SSM_POLLER_STATE_PARAMETER`, queue URLs
 
 **ops-segment-process** (Logical ID: `OpsSegmentProcessFunction`):
 
 - **Trigger**: SQS `eidolon-processing-queue`
-- Claims segment with RunningFlag (prevents duplicates)
-- Processes mechanical challenges using MUD mechanics
-- Uses ResolveStaticCheckWithXP and ResolveOpposedCheckWithXP
-- Generates ClientEvents array for display
+- Claims segment by transitioning ProcessingStatus to processing (prevents duplicates)
+- Processes mechanical challenges and combat
+- Applies XP and wounds immediately to character
+- Updates segment with outcome and results
+- **No polling management** - focused solely on segment processing
 - Environment: `SEGMENT_BATCH_SIZE` for processing limits
 
 **ops-story-advance** (Logical ID: `OpsStoryAdvanceFunction`):
 
 - **Trigger**: SQS `eidolon-advancement-queue`
-- Claims segment with RunningFlag for idempotency
-- Processes simple segments (rest/decision) if needed
-- Applies CharacterUpdates (XP, wounds, room changes)
-- Creates next segment with UUIDv7 for ordering
+- Claims segment by checking ProcessingStatus for idempotency
+- Processes simple segments (rest/decision) if not already processed
+- Applies deferred CharacterUpdates (combat rewards, story effects)
+- Creates next segment or completes story
+- **Polling Management**: When story completes (next_segment_id is None):
+  - Checks if any active segments remain
+  - If none: Sets SSM parameter to "stop" (does NOT touch EventBridge)
 - Resets GameMode="None" when story completes
 - Writes to story_history and segment_history tables
 
@@ -381,20 +535,77 @@ All Lambda functions are deployed with:
 
 ### Polling Infrastructure
 
-**SSM Parameter** (`/eidolon/story/config`):
+**IMPORTANT: The Poller's Role**
+
+The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **two-query approach** for different segment scenarios:
+
+**Query 1 - Segments Approaching Expiry** (within 90 seconds):
+
+- Finds ALL segments that will expire before the next poll (90-second buffer)
+- For processed segments: Queues them to STORY_ADVANCEMENT_QUEUE for normal advancement
+- For unprocessed segments: Marks them as "exceptional" (protecting players from failures), then queues for advancement
+
+**Query 2 - Stuck Mechanical Segments**:
+
+- Finds mechanical segments where:
+  - StartTime > 5 minutes ago (stuck threshold)
+  - EndTime > 90 seconds from now (enough time to retry)
+  - ProcessingStatus is "pending" or "processing"
+- Resets stuck "processing" segments to "pending"
+- Re-queues them to SEGMENT_QUEUE_URL for retry
+
+**The poller does NOT**:
+
+- Initially queue mechanical segments (that happens immediately at creation)
+- Process segments directly (all processing goes through SQS queues)
+- Create segments (only api-story-start and ops-story-advance create segments)
+
+**SSM Parameter** (`/eidolon/segment-poller-state`):
 
 - Stores polling state: "run" or "stop"
 - Checked by poller each invocation
-- Updated based on active segment presence
-- Managed by Story Stack in CDK
+- **State Transitions**:
+  - Set to "run" by: api-story-start, ops-segment-poller (when finding active segments)
+  - Set to "stop" by: ops-story-advance (when completing last story), ops-segment-poller (when no segments to process)
 
-**EventBridge Rule** (`eidolon-story-poller`):
+**EventBridge Rule** (`eidolon-segment-poller`):
 
 - Schedule: rate(1 minute)
 - Target: ops-segment-poller Lambda
 - State: DISABLED by default
-- Auto-enabled when stories start
-- Auto-disabled when no active stories
+- **Enable/Disable Authority**:
+  - ONLY api-story-start can enable the rule
+  - ONLY ops-segment-poller can disable the rule (when parameter="stop" and no active segments)
+- Race condition window: <100ms between final check and disable (acceptable)
+
+### Polling State Flow
+
+The polling system follows this state machine:
+
+```
+1. INITIAL STATE: Parameter="stop", Rule=DISABLED
+   └─> Player starts story (api-story-start)
+       └─> Sets Parameter="run", Enables Rule → POLLING ACTIVE
+
+2. POLLING ACTIVE: Parameter="run", Rule=ENABLED
+   ├─> Poller finds no segments (ops-segment-poller)
+   │   └─> Sets Parameter="stop" → POLLING STOPPED
+   └─> Story completes with no other active segments (ops-story-advance)
+       └─> Sets Parameter="stop" → POLLING STOPPED
+
+3. POLLING STOPPED: Parameter="stop", Rule=ENABLED
+   ├─> Poller finds active segments (ops-segment-poller)
+   │   └─> Sets Parameter="run" → POLLING ACTIVE
+   └─> Poller finds no active segments (ops-segment-poller)
+       └─> Disables Rule → INITIAL STATE
+```
+
+**Key Design Principles**:
+
+- Separation of concerns: SSM parameter controls polling behavior, EventBridge rule controls execution
+- Single responsibility: Each Lambda has specific polling authority
+- Graceful degradation: System continues even if polling management fails
+- Cost optimization: Automatic shutdown when no stories active
 
 ## Error Recovery and Edge Cases
 
@@ -407,12 +618,12 @@ All Lambda functions are deployed with:
 ### Stuck Segment Recovery
 
 - Mechanical segments stuck >15 minutes get retried
-- RunningFlag reset to allow reprocessing
+- ProcessingStatus reset to pending to allow reprocessing
 - Maximum 3 retry attempts
 
 ### Concurrent Processing Prevention
 
-- RunningFlag prevents duplicate processing
+- ProcessingStatus state machine prevents duplicate processing
 - Atomic DynamoDB operations ensure consistency
 - SQS provides at-least-once delivery
 
@@ -432,7 +643,7 @@ All Lambda functions are deployed with:
 
 **Lambda Timeout**:
 
-- RunningFlag remains set
+- ProcessingStatus remains in processing state
 - Poller detects stuck segment
 - Automatic retry after 15 minutes
 

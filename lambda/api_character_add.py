@@ -1,14 +1,12 @@
 """Lambda function to add a new character for the incremental game."""
 
-import json
-
 from eidolon.archetypes import get_archetype
 from eidolon.bloom import character_name_filter
 from eidolon.character_data import check_character_limit, create_character
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import validate_player
+from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_character_name
 
@@ -45,7 +43,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
     can_create = limit_result.get("can_create", False)
     current_count = limit_result.get("current_count", 0)
 
-    logger.info(f"Character limit check for {player_id}")
+    logger.debug(f"Character limit check for {player_id}")
 
     if not can_create:
         raise ValueError(f"Character limit reached ({current_count})")
@@ -100,27 +98,12 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Validate player exists
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player not found in database: {player_id}")
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
     # Parse request body
     try:
-        body: dict = event.get("body", {})
-        if isinstance(body, str):
-            body = json.loads(body)
-    except json.JSONDecodeError:
-        logger.error(f"Failed to parse request body as JSON: Body: {event.get('body')}", exc_info=False)
-        return lambda_response(400, {"Error": "Invalid JSON format"}, event)
-    except ValueError:
-        return lambda_response(400, {"Error": "Unable Parse Payload"}, event)
+        body = parse_event_body(event)
+    except ValueError as err:
+        logger.error(f"Failed to parse request body: {err}", exc_info=False)
+        return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
         logger.error(f"Failed to parse request body: {err}", exc_info=True)
         return lambda_error(event, err)

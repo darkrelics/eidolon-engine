@@ -9,7 +9,6 @@ from botocore.exceptions import ClientError
 
 from eidolon.logger import logger
 
-# Initialize SSM client
 ssm_client = boto3.client("ssm")
 
 

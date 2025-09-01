@@ -1,3 +1,5 @@
+import '../utils/time_utils.dart';
+
 /// Active segment data from API
 class ActiveSegment {
   final String activeSegmentID;
@@ -7,8 +9,8 @@ class ActiveSegment {
   final String segmentType;
   final String status;
   final String? defaultStatus;
-  final int startTime;
-  final int endTime;
+  final String startTime;
+  final String endTime;
   final List<dynamic>? challengeResults;
   final String? outcome;
   final String? decision;
@@ -47,10 +49,10 @@ class ActiveSegment {
       segmentType: json['SegmentType'] as String,
       status: json['Status'] as String,
       defaultStatus: json['DefaultStatus'] as String?,
-      startTime: json['StartTime'] as int,
-      endTime: json['EndTime'] as int,
+      startTime: json['StartTime'] as String,
+      endTime: json['EndTime'] as String,
       challengeResults: json['ChallengeResults'] as List<dynamic>?,
-      outcome: json['Outcome'] as String?,
+      outcome: json['Outcome'] is Map ? (json['Outcome']['Type'] as String?) : json['Outcome'] as String?,
       decision: json['Decision'] as String?,
       decisionOptions: json['DecisionOptions'] as Map<String, dynamic>?,
       combatState: json['CombatState'] as Map<String, dynamic>?,
@@ -84,11 +86,9 @@ class ActiveSegment {
 
   /// Calculate remaining time in seconds
   int get remainingSeconds {
-    final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final remaining = endTime - currentTime;
-    return remaining > 0 ? remaining : 0;
+    return TimeUtils.secondsUntil(endTime);
   }
 
   /// Check if segment timer has expired
-  bool get isExpired => remainingSeconds <= 0;
+  bool get isExpired => TimeUtils.isPast(endTime);
 }

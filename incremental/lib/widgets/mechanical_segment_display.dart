@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../models/active_segment.dart';
+import '../utils/time_utils.dart';
 
 /// Widget to display mechanical segment events progressively
 class MechanicalSegmentDisplay extends StatefulWidget {
@@ -57,13 +58,12 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
   }
 
   void _calculateTimeRemaining() {
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final endTime = widget.segment.endTime;
+    final remainingSeconds = TimeUtils.secondsUntil(widget.segment.endTime);
     
-    if (now >= endTime) {
+    if (remainingSeconds <= 0) {
       _timeRemaining = Duration.zero;
     } else {
-      _timeRemaining = Duration(seconds: endTime - now);
+      _timeRemaining = Duration(seconds: remainingSeconds);
     }
   }
 
@@ -92,21 +92,21 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
     }
     
     final totalDuration = Duration(
-      seconds: widget.segment.endTime - widget.segment.startTime,
+      seconds: TimeUtils.durationBetween(widget.segment.startTime, widget.segment.endTime),
     );
     
     // Create a timeline of narrative changes
     final narrativeTimeline = _buildNarrativeTimeline(events, totalDuration);
     
-    // Schedule narrative changes
-    int timelineIndex = 0;
-    _eventTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      final elapsed = totalDuration - _timeRemaining;
+    // Schedule narrative changes using precise timers instead of polling
+    // This reduces CPU usage from 600 checks/minute to actual event count
+    for (int i = 0; i < narrativeTimeline.length; i++) {
+      final point = narrativeTimeline[i];
+      final delay = point['time'] as Duration;
       
-      // Check if we should advance to the next narrative point
-      while (timelineIndex < narrativeTimeline.length &&
-             elapsed.inMilliseconds >= (narrativeTimeline[timelineIndex]['time'] as Duration).inMilliseconds) {
-        final point = narrativeTimeline[timelineIndex];
+      // Schedule a timer for each narrative change
+      Timer(delay, () {
+        if (!mounted) return;
         
         setState(() {
           _currentNarrative = point['narrative'] as String;
@@ -118,15 +118,12 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
           }
         });
         
-        timelineIndex++;
-      }
-      
-      // Check if we're done
-      if (timelineIndex >= narrativeTimeline.length) {
-        _allEventsShown = true;
-        timer.cancel();
-      }
-    });
+        // Check if this was the last event
+        if (i == narrativeTimeline.length - 1) {
+          _allEventsShown = true;
+        }
+      });
+    }
   }
   
   List<Map<String, dynamic>> _buildNarrativeTimeline(
@@ -254,7 +251,7 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
         iconColor = Colors.red;
         break;
       case 'combatVictory':
-        icon = Icons.emoji_events;
+        icon = Icons.workspace_premium;
         iconColor = Colors.amber;
         break;
       case 'combatDefeat':
@@ -481,7 +478,7 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: widget.onComplete,
-            icon: const Icon(Icons.arrow_forward),
+            icon: const Icon(Icons.chevron_right),
             label: const Text('Continue'),
           ),
         ],

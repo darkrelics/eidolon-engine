@@ -1,9 +1,10 @@
 """API stack for API Gateway and related resources."""
 
-from aws_cdk import CfnOutput, Stack
+from aws_cdk import CfnOutput, Stack, Tags
 from aws_cdk import aws_apigateway as apigateway
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cognito as cognito
+from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
@@ -23,6 +24,7 @@ class ApiStack(Stack):
         hosted_zone_id: str,
         domain: str,
         api_host: str = "api",
+        client_host: str = "portal",
         deployment_mode: str = "hybrid",
         lambda_arns=None,
         cognito_user_pool_id: str = "",
@@ -39,6 +41,7 @@ class ApiStack(Stack):
             hosted_zone_id: Route53 Hosted Zone ID
             domain: Base domain name
             api_host: Subdomain for API (default: api)
+            client_host: Subdomain for client (default: portal)
             deployment_mode: Deployment mode (mud/incremental/hybrid)
             lambda_arns: Dictionary of Lambda function ARNs
             cognito_user_pool_id: Cognito User Pool ID
@@ -50,6 +53,7 @@ class ApiStack(Stack):
         self.hosted_zone_id = hosted_zone_id
         self.domain = domain
         self.api_host = api_host
+        self.client_host = client_host
         self.deployment_mode = deployment_mode
         self.lambda_arns = lambda_arns or {}
         self.cognito_user_pool_id = cognito_user_pool_id
@@ -57,6 +61,9 @@ class ApiStack(Stack):
         self.cognito_user_pool_arn = cognito_user_pool_arn
 
         super().__init__(scope, stack_id, description="API Gateway with custom domain and Lambda integrations", **kwargs)
+
+        # Add system tag to all resources in this stack
+        Tags.of(self).add("System", "Eidolon")
 
         # Create API Gateway
         self.api = self._create_api_gateway()
@@ -68,6 +75,9 @@ class ApiStack(Stack):
         """Create API Gateway with Lambda integrations."""
         print("  Creating API Gateway")
 
+        # Build client origin URL
+        client_origin = f"https://{self.client_host}.{self.domain}"
+
         # Create API
         api = apigateway.RestApi(
             self,
@@ -75,7 +85,7 @@ class ApiStack(Stack):
             rest_api_name="eidolon-api",
             description="Eidolon Engine API",
             default_cors_preflight_options=apigateway.CorsOptions(
-                allow_origins=["*"],
+                allow_origins=[client_origin],
                 allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
                 allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
                 allow_credentials=True,
@@ -97,6 +107,9 @@ class ApiStack(Stack):
         # Add Lambda integrations for available functions
         self._add_api_endpoints(api, authorizer)  # type: ignore
 
+        # Configure CORS for error responses
+        self._configure_gateway_responses(api, client_origin)
+
         # Configure custom domain
         self._configure_api_domain(api)
 
@@ -105,9 +118,9 @@ class ApiStack(Stack):
     def _add_api_endpoints(self, api: apigateway.RestApi, authorizer: apigateway.CognitoUserPoolsAuthorizer) -> None:
         """Add API endpoints with Lambda integrations."""
         # Archetype endpoints
-        if "api-archetype-get" in self.lambda_arns:
+        if "api-archetype-list" in self.lambda_arns:
             archetype_resource = api.root.add_resource("archetype")
-            self._add_lambda_integration(archetype_resource, "GET", "api-archetype-get", authorizer)
+            self._add_lambda_integration(archetype_resource, "GET", "api-archetype-list", authorizer)
 
         # Character endpoints
         character_resource = api.root.add_resource("character")
@@ -144,10 +157,6 @@ class ApiStack(Stack):
                 decision_resource = segment_resource.add_resource("decision")
                 self._add_lambda_integration(decision_resource, "POST", "api-segment-decision", authorizer)
 
-            if "api-segment-outcome" in self.lambda_arns:
-                outcome_resource = segment_resource.add_resource("outcome")
-                self._add_lambda_integration(outcome_resource, "GET", "api-segment-outcome", authorizer)
-
             if "api-segment-status" in self.lambda_arns:
                 status_resource = segment_resource.add_resource("status")
                 self._add_lambda_integration(status_resource, "GET", "api-segment-status", authorizer)
@@ -156,9 +165,9 @@ class ApiStack(Stack):
                 history_resource = segment_resource.add_resource("history")
                 self._add_lambda_integration(history_resource, "GET", "api-segment-history", authorizer)
 
-            if "api-character-rest" in self.lambda_arns:
+            if "api-segment-rest" in self.lambda_arns:
                 rest_resource = segment_resource.add_resource("rest")
-                self._add_lambda_integration(rest_resource, "POST", "api-character-rest", authorizer)
+                self._add_lambda_integration(rest_resource, "POST", "api-segment-rest", authorizer)
 
     def _add_lambda_integration(
         self, resource: apigateway.Resource, method: str, function_name: str, authorizer: apigateway.CognitoUserPoolsAuthorizer
@@ -169,11 +178,58 @@ class ApiStack(Stack):
             logical_id = self._get_lambda_import_logical_id(function_name)
             lambda_function = lambda_.Function.from_function_arn(self, logical_id, self.lambda_arns[function_name])
 
+            # Create integration
+            integration = apigateway.LambdaIntegration(lambda_function)
+
+            # Add method
             resource.add_method(
                 method,
-                apigateway.LambdaIntegration(lambda_function),
+                integration,
                 authorizer=authorizer,
                 authorization_type=apigateway.AuthorizationType.COGNITO if authorizer else None,
+            )
+
+            # Grant API Gateway permission to invoke the Lambda
+            lambda_function.grant_invoke(iam.ServicePrincipal("apigateway.amazonaws.com"))
+
+    def _configure_gateway_responses(self, api: apigateway.RestApi, client_origin: str) -> None:
+        """Configure CORS headers for gateway error responses."""
+        # CORS headers to add to all error responses
+        cors_headers = {
+            "gatewayresponse.header.Access-Control-Allow-Origin": f"'{client_origin}'",
+            "gatewayresponse.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'",
+            "gatewayresponse.header.Access-Control-Allow-Methods": "'GET,POST,PUT,DELETE,OPTIONS'",
+            "gatewayresponse.header.Access-Control-Allow-Credentials": "'true'",
+        }
+
+        # Add gateway responses with CORS headers for common error types
+        # Note: DEFAULT_4_XX and DEFAULT_5_XX handle all 4xx and 5xx responses
+        api.add_gateway_response(
+            "GatewayResponseDefault4XX",
+            type=apigateway.ResponseType.DEFAULT_4_XX,  # type: ignore
+            response_headers=cors_headers,
+        )
+
+        api.add_gateway_response(
+            "GatewayResponseDefault5XX",
+            type=apigateway.ResponseType.DEFAULT_5_XX,  # type: ignore
+            response_headers=cors_headers,
+        )
+
+        # Add specific error responses that might need special handling
+        specific_errors = [
+            (apigateway.ResponseType.UNAUTHORIZED, "Unauthorized"),
+            (apigateway.ResponseType.ACCESS_DENIED, "AccessDenied"),
+            (apigateway.ResponseType.EXPIRED_TOKEN, "ExpiredToken"),
+            (apigateway.ResponseType.INVALID_API_KEY, "InvalidApiKey"),
+            (apigateway.ResponseType.MISSING_AUTHENTICATION_TOKEN, "MissingAuthToken"),
+        ]
+
+        for response_type, name in specific_errors:
+            api.add_gateway_response(
+                f"GatewayResponse{name}",
+                type=response_type,
+                response_headers=cors_headers,
             )
 
     def _configure_api_domain(self, api: apigateway.RestApi) -> None:
@@ -235,7 +291,6 @@ class ApiStack(Stack):
             "api-character-list": "ImportApiCharacterList",
             "api-segment-decision": "ImportApiSegmentDecision",
             "api-segment-history": "ImportApiSegmentHistory",
-            "api-segment-outcome": "ImportApiSegmentOutcome",
             "api-segment-rest": "ImportApiSegmentRest",
             "api-segment-status": "ImportApiSegmentStatus",
             "api-story-abandon": "ImportApiStoryAbandon",

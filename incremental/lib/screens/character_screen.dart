@@ -92,27 +92,41 @@ class _CharacterScreenState extends State<CharacterScreen> {
       appBar: AppBar(
         title: const Text('Select Character'),
         actions: [
-          IconButton(icon: const Icon(Icons.add), onPressed: _showAddCharacterDialog),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadCharacters,
+            tooltip: 'Refresh',
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
               Navigator.pushNamed(context, '/account-settings');
             },
+            tooltip: 'Settings',
           ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              final authProvider = Provider.of<AuthProvider>(context, listen: false);
+              final authProvider = context.read<AuthProvider>();
               final navigator = Navigator.of(context);
               await authProvider.signOut();
-              if (mounted) {
-                navigator.pushReplacementNamed('/login');
-              }
+              navigator.pushReplacementNamed('/login');
             },
+            tooltip: 'Sign Out',
           ),
         ],
       ),
       body: SafeArea(child: _buildBody()),
+      floatingActionButton: _characters != null && _characters!.isNotEmpty
+          ? FloatingActionButton.extended(
+              onPressed: _showAddCharacterDialog,
+              label: const Text('Add Character'),
+              icon: const Icon(Icons.add),
+              backgroundColor: colorScheme.primaryContainer,
+              foregroundColor: colorScheme.onPrimaryContainer,
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 
@@ -374,12 +388,11 @@ class _CharacterScreenState extends State<CharacterScreen> {
         final deletedName = deleteResult['CharacterName'] ?? character.name;
         final itemsDeleted = deleteResult['ItemsDeleted'] ?? 0;
         final segmentsDeleted = deleteResult['ActiveSegmentsDeleted'] ?? 0;
-        final historyDeleted = deleteResult['HistoryDeleted'] ?? 0;
         
         // Build detailed message
         String message = 'Deleted character: $deletedName';
-        if (itemsDeleted > 0 || segmentsDeleted > 0 || historyDeleted > 0) {
-          message += ' ($itemsDeleted items, $segmentsDeleted segments, $historyDeleted history records)';
+        if (itemsDeleted > 0 || segmentsDeleted > 0) {
+          message += ' ($itemsDeleted items, $segmentsDeleted segments)';
         }
         
         ScaffoldMessenger.of(context).showSnackBar(
@@ -513,7 +526,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(icon: const Icon(Icons.delete), onPressed: () => _showDeleteCharacterDialog(character)),
-                          const Icon(Icons.arrow_forward_ios),
+                          const Icon(Icons.chevron_right),
                         ],
                       ),
                       enabled: !character.dead,

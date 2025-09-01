@@ -10,7 +10,7 @@ Returns only character names and death status from the player table.
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import get_character_list, validate_player
+from eidolon.player import get_character_list
 from eidolon.responses import lambda_error, lambda_response
 
 
@@ -31,7 +31,7 @@ def list_characters(player_id: str) -> dict:
     # Get formatted character list from eidolon library
     characters: list = get_character_list(player_id)
 
-    logger.debug(f"Characters retreived: {characters}")
+    logger.debug(f"Characters retrieved: {characters}")
 
     return {"Characters": characters}
 
@@ -65,17 +65,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     except ValueError as err:
         logger.error(f"Authentication failed Error: {err}", exc_info=True)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
-    # Validate player exists
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player not found in database for {player_id}")
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
 

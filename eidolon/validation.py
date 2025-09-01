@@ -5,11 +5,15 @@ Provides common validation functions for user input.
 """
 
 import re
+from functools import cache
 
 # Character name validation constants
 NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")
 MIN_NAME_LENGTH: int = 4
 MAX_NAME_LENGTH: int = 20
+
+# UUID validation pattern
+UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 
 
 def validate_character_name(name: str) -> None:
@@ -78,6 +82,7 @@ def validate_character_name(name: str) -> None:
         raise ValueError("Name is reserved")
 
 
+@cache
 def validate_uuid(uuid_value: str) -> bool:
     """
     Validate UUID format.
@@ -88,5 +93,4 @@ def validate_uuid(uuid_value: str) -> bool:
     Returns:
         True if valid UUID format, False otherwise
     """
-    pattern = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-    return bool(pattern.match(uuid_value.lower()))
+    return bool(UUID_PATTERN.match(uuid_value.lower()))

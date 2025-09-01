@@ -41,7 +41,6 @@ This complete example shows how segment processing results are stored, including
   "EndTime": 1737003900,
   "ProcessedAt": 1737000305,
   "ProcessingStatus": "processed",
-  "ProcessingError": null,
   "NextSegmentID": "seg-forest-003",
   "Outcome": "minimal",
   "ClientEvents": [
@@ -165,47 +164,52 @@ CharacterNameIndex:
   Purpose: Ensure character name uniqueness
 ```
 
-### 1.3 DynamoDB Transaction Examples
+### 1.3 DynamoDB Update Examples
 
-DynamoDB transactions ensure atomic updates across multiple tables when starting a story. This prevents partial state where a character might be locked in Incremental mode without an active segment, maintaining data consistency even if failures occur.
+The story start process uses sequential operations with eventual consistency. If a failure occurs after creating the active segment but before updating the character, the ops-segment-poller will detect and clean up orphaned segments.
 
-#### Story Start Transaction
+#### Story Start Process
 
-This transaction atomically updates the character's game mode and creates the active segment record, ensuring data consistency even if failures occur during the story start process.
+The story start creates the active segment first, then updates the character state. Any orphaned segments from failures are handled by the background poller, avoiding complex rollback logic.
 
 ```python
 from uuid_extension import uuid7  # Repo-provided helper for UUIDv7 IDs
 
-def start_story_transaction(character_id, story_id, segment_data):
+def start_story(character_id, story_id, segment_data):
     # Generate UUIDv7 for the active segment
     segment_data['ActiveSegmentID'] = str(uuid7())
 
-    return {
-        'TransactItems': [
-            {
-                'Update': {
-                    'TableName': CHARACTER_TABLE,
-                    'Key': {'CharacterID': {'S': character_id}},
-                    'UpdateExpression': 'SET GameMode = :mode, ActiveStoryID = :story, ActiveSegmentID = :segment, AvailableStories = :updated_list',
-                    'ExpressionAttributeValues': {
-                        ':mode': {'S': 'Incremental'},
-                        ':story': {'S': story_id},
-                        ':segment': {'S': segment_data['ActiveSegmentID']},
-                        ':updated_list': {'L': updated_stories}
-                    },
-                    'ConditionExpression': 'GameMode = :none',
-                    'ExpressionAttributeValues': {':none': {'S': 'None'}}
-                }
-            },
-            {
-                'Put': {
-                    'TableName': ACTIVE_SEGMENTS_TABLE,
-                    'Item': segment_data,
-                    'ConditionExpression': 'attribute_not_exists(ActiveSegmentID)'
-                }
-            }
-        ]
-    }
+    # 1. Create active segment first
+    dynamodb.put_item(
+        TableName=ACTIVE_SEGMENTS_TABLE,
+        Item=segment_data,
+        ConditionExpression='attribute_not_exists(ActiveSegmentID)'
+    )
+
+    # 2. Update character state
+    # If this fails, ops-segment-poller will clean up the orphaned segment
+    dynamodb.update_item(
+        TableName=CHARACTER_TABLE,
+        Key={'CharacterID': {'S': character_id}},
+        UpdateExpression='SET GameMode = :mode, ActiveStoryID = :story, ActiveSegmentID = :segment',
+        ExpressionAttributeValues={
+            ':mode': {'S': 'Incremental'},
+            ':story': {'S': story_id},
+            ':segment': {'S': segment_data['ActiveSegmentID']}
+        },
+        ConditionExpression='GameMode = :none OR (GameMode = :incremental AND attribute_not_exists(ActiveStoryID))',
+        ExpressionAttributeValues={
+            ':none': {'S': 'None'},
+            ':incremental': {'S': 'Incremental'}
+        }
+    )
+
+    # 3. Queue mechanical segments (send only ActiveSegmentID)
+    if segment_data['SegmentType'] == 'mechanical':
+        sqs.send_message(
+            QueueUrl=SEGMENT_QUEUE_URL,
+            MessageBody=segment_data['ActiveSegmentID']  # Plain string, not JSON
+        )
 ```
 
 ## 2. Lambda Function Implementation
@@ -757,45 +761,111 @@ def segment_poller_handler(event, context):
     state = param['Parameter']['Value']
 
     current_time = int(time.time())
-    buffer_time = 15  # Half the polling interval
+    next_poll_buffer = 90  # 60 seconds to next poll + 30 second buffer
 
-    # Phase 1: Find ready segments
-    ready_segments = query_ready_segments(current_time + buffer_time)
+    # Phase 1: Find ALL segments approaching expiry (within 90 seconds)
+    # These need advancement (if processed) or recovery (if not processed)
+    expiring_segments = get_segments_approaching_expiry(current_time + next_poll_buffer)
 
-    # Phase 2: Find stuck segments
-    stuck_segments = query_stuck_segments(current_time - 900)  # 15 minutes
+    advancement_messages = []
+    segments_marked_exceptional = 0
 
-    all_segments = ready_segments + stuck_segments
+    for segment in expiring_segments:
+        active_segment_id = segment['ActiveSegmentID']
+        processing_status = segment.get('ProcessingStatus', 'pending')
 
-    if all_segments:
-        # Process segments
-        process_discovered_segments(all_segments)
+        if processing_status == 'processed':
+            # Normal advancement - segment completed processing
+            advancement_messages.append({'body': active_segment_id})
+        else:
+            # Not processed in time - mark exceptional to protect player
+            mark_segment_as_completed_exceptional(active_segment_id)
+            advancement_messages.append({'body': active_segment_id})
+            segments_marked_exceptional += 1
 
-        # Update state if needed
-        if state == 'stop':
+    # Phase 2: Find stuck mechanical segments with time to retry
+    # Criteria: StartTime > 5 minutes ago, EndTime > 90 seconds from now,
+    # ProcessingStatus in (pending, processing), SegmentType = mechanical
+    stuck_segments = get_stuck_mechanical_segments(current_time)
+
+    processing_messages = []
+    for segment in stuck_segments:
+        active_segment_id = segment['ActiveSegmentID']
+        processing_status = segment.get('ProcessingStatus', 'pending')
+
+        # Reset if stuck in processing
+        if processing_status == 'processing':
+            reset_segment_processing_status(active_segment_id)
+
+        processing_messages.append({'body': active_segment_id})
+
+    # Send messages to appropriate queues
+    if advancement_messages:
+        send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
+
+    if processing_messages:
+        send_message_batch(SEGMENT_QUEUE_URL, processing_messages)
+
+    # Manage polling state transitions
+    if state == 'run':
+        # Check if there are still active segments
+        if not check_active_segments_exist():
+            update_polling_state('stop', enable_rule=False)
+    else:  # state == 'stop'
+        # Check for active segments
+        if check_active_segments_exist():
             update_polling_state('run', enable_rule=True)
 
-    elif state == 'run':
-        # Check if table is empty
-        if is_active_segments_empty():
-            update_polling_state('stop', enable_rule=False)
+    return {'statusCode': 200}
 
-    return {
-        'statusCode': 200,
-        'processed': len(all_segments),
-        'state': state
-    }
+def get_segments_approaching_expiry(threshold_time):
+    """Get ALL segments that will expire before next poll (90 seconds).
 
-def query_ready_segments(end_time_threshold):
-    """Query segments ready for processing."""
+    These segments need advancement (if processed) or recovery (if not processed).
+    NO ProcessingStatus filter - we need to handle all expiring segments.
+    """
     response = dynamodb.query(
         TableName=ACTIVE_SEGMENTS_TABLE,
         IndexName='EndTimeIndex',
-        KeyConditionExpression='EndTime <= :threshold',
+        KeyConditionExpression='#status = :status AND EndTime < :threshold',
+        ExpressionAttributeNames={'#status': 'Status'},
         ExpressionAttributeValues={
-            ':threshold': {'N': str(end_time_threshold)}
-        },
-        FilterExpression='attribute_not_exists(Transmitted) AND attribute_not_exists(RunningFlag)'
+            ':status': {'S': 'active'},
+            ':threshold': {'N': str(threshold_time)}
+        }
+        # NO FilterExpression - get ALL segments approaching expiry
+    )
+    return response.get('Items', [])
+
+def get_stuck_mechanical_segments(current_time):
+    """Get mechanical segments stuck in pending/processing with time to retry.
+
+    Criteria:
+    - StartTime > 5 minutes ago (stuck threshold)
+    - EndTime > 90 seconds from now (enough time to process)
+    - ProcessingStatus in (pending, processing)
+    - SegmentType = mechanical
+    """
+    five_minutes_ago = current_time - 300
+    ninety_seconds_future = current_time + 90
+
+    # Use scan since we need to filter on StartTime which isn't indexed
+    response = dynamodb.scan(
+        TableName=ACTIVE_SEGMENTS_TABLE,
+        FilterExpression='#status = :status AND '
+                        'SegmentType = :mechanical AND '
+                        'StartTime < :old_time AND '
+                        'EndTime > :min_time AND '
+                        'ProcessingStatus IN (:pending, :processing)',
+        ExpressionAttributeNames={'#status': 'Status'},
+        ExpressionAttributeValues={
+            ':status': {'S': 'active'},
+            ':mechanical': {'S': 'mechanical'},
+            ':old_time': {'N': str(five_minutes_ago)},
+            ':min_time': {'N': str(ninety_seconds_future)},
+            ':pending': {'S': 'pending'},
+            ':processing': {'S': 'processing'}
+        }
     )
     return response.get('Items', [])
 ```
@@ -817,9 +887,8 @@ def advance_story_handler(event, context):
 
     for record in event['Records']:
         try:
-            # Parse message
-            message = json.loads(record['body'])
-            active_segment_id = message['ActiveSegmentID']
+            # Parse message - now just the ActiveSegmentID as a plain string
+            active_segment_id = record['body'].strip()
 
             # Claim segment
             if not claim_segment_for_processing(active_segment_id):
@@ -846,16 +915,17 @@ def advance_story_handler(event, context):
     return {'statusCode': 200}
 
 def claim_segment_for_processing(active_segment_id):
-    """Atomically claim a segment for processing."""
+    """Atomically claim a segment for processing using ProcessingStatus state transition."""
     try:
         dynamodb.update_item(
             TableName=ACTIVE_SEGMENTS_TABLE,
             Key={'ActiveSegmentID': {'S': active_segment_id}},
-            UpdateExpression='SET RunningFlag = :request_id',
+            UpdateExpression='SET ProcessingStatus = :processing',
             ExpressionAttributeValues={
-                ':request_id': {'S': context.request_id}
+                ':processing': {'S': 'processing'},
+                ':pending': {'S': 'pending'}
             },
-            ConditionExpression='attribute_not_exists(RunningFlag)'
+            ConditionExpression='attribute_exists(ActiveSegmentID) AND ProcessingStatus = :pending'
         )
         return True
     except ClientError as e:
@@ -866,80 +936,97 @@ def claim_segment_for_processing(active_segment_id):
 
 ## 6. Client Implementation
 
-### 6.1 Flutter State Management
+### 6.1 Server-Authoritative Design
 
-The Flutter provider manages active segment state with dynamic polling intervals that increase frequency as segments near completion, ensuring responsive UI updates while minimizing unnecessary API calls.
+The Flutter client follows a server-authoritative design where all state determination happens on the server. The client maintains a simple polling loop and displays what the server provides without making any state decisions.
+
+#### Key Principles
+
+1. **Server Authority**: The server determines all state transitions. Clients never modify story state.
+2. **Simple Polling**: Fixed cadence polling rather than dynamic intervals.
+3. **Display-Only History**: Local segment history is maintained purely for UI display.
+4. **Completion Detection**: Story completion is detected by checking `activeSegmentID == null`.
+
+### 6.2 Polling Implementation
 
 ```dart
-class IncrementalProvider extends ChangeNotifier {
-  ActiveSegment? _activeSegment;
-  Timer? _pollingTimer;
-  Timer? _countdownTimer;
+class GameScreen extends StatefulWidget {
+  // ... widget code
+}
 
-  Duration _timeRemaining = Duration.zero;
+class _GameScreenState extends State<GameScreen> {
+  Character? _character;
+  bool _isPolling = false;
 
-  void startSegment(SegmentData segmentData) {
-    _activeSegment = ActiveSegment.fromJson(segmentData);
-    _startCountdown();
-    _schedulePolling();
-    notifyListeners();
-  }
+  // Segment history for UI display only
+  final List<Map<String, dynamic>> _segmentHistory = [];
 
-  void _startCountdown() {
-    _countdownTimer?.cancel();
-
-    _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-      final endTime = _activeSegment?.endTime ?? 0;
-
-      if (now >= endTime) {
-        _timeRemaining = Duration.zero;
-        timer.cancel();
-      } else {
-        _timeRemaining = Duration(seconds: endTime - now);
-      }
-
-      notifyListeners();
-    });
-  }
-
-  void _schedulePolling() {
-    _pollingTimer?.cancel();
-
-    // Calculate polling interval based on time remaining
-    Duration interval;
-    if (_timeRemaining.inSeconds <= 30) {
-      interval = Duration(seconds: 1);
-    } else if (_timeRemaining.inSeconds <= 300) {
-      interval = Duration(seconds: 10);
-    } else {
-      interval = Duration(seconds: 30);
+  /// Simple polling loop following the server cadence
+  Future<void> _runStoryPolling() async {
+    if (_character?.activeSegmentID == null) {
+      _isPolling = false;
+      return;
     }
 
-    _pollingTimer = Timer(interval, () async {
-      await _checkSegmentStatus();
-      _schedulePolling(); // Reschedule
-    });
+    debugPrint('Starting story polling loop');
+
+    // Wait 60 seconds for initial processing
+    await Future.delayed(const Duration(seconds: 60));
+
+    while (_isPolling && _character?.activeSegmentID != null) {
+      try {
+        // Get segment status
+        final status = await retryWithBackoff(
+          () => _apiService.getSegmentStatus(
+            characterId: _character!.id,
+          ),
+        );
+
+        // Add to display history if processed
+        if (status['ProcessingStatus'] == 'processed') {
+          _addSegmentToHistory(status);
+        }
+
+        // Wait for segment to complete
+        final timeRemaining = status['TimeRemaining'] as int? ?? 0;
+        if (timeRemaining > 0) {
+          await Future.delayed(Duration(seconds: timeRemaining));
+        }
+
+        // Get updated character
+        await _loadCharacterData();
+
+        // If story continues, wait for next segment processing
+        if (_character?.activeSegmentID != null) {
+          await Future.delayed(const Duration(seconds: 60));
+        }
+      } catch (e) {
+        debugPrint('Error in polling loop: $e');
+        // Continue polling after a delay
+        await Future.delayed(const Duration(seconds: 5));
+      }
+    }
+
+    debugPrint('Story polling loop ended');
+    _isPolling = false;
   }
 
-  Future<void> _checkSegmentStatus() async {
-    try {
-      final response = await IncrementalService.getSegmentStatus(
-        characterId: _activeSegment!.characterId,
-      );
-
-      if (response['segmentReady'] == true) {
-        // Fetch full results
-        await _loadSegmentResults();
+  /// Retry helper with exponential backoff
+  Future<T> retryWithBackoff<T>(Future<T> Function() operation) async {
+    for (int i = 0; i < 3; i++) {
+      try {
+        return await operation();
+      } catch (e) {
+        if (i == 2) rethrow;
+        await Future.delayed(Duration(seconds: math.pow(2, i).toInt()));
       }
-    } catch (e) {
-      print('Polling error: $e');
     }
+    throw Exception('Unreachable');
   }
 }
 ```
 
-### 6.2 Progressive Event Display
+### 6.3 Progressive Event Display
 
 This widget progressively reveals story events over the segment duration, creating an engaging narrative experience by timing event display to match the segment's progress rather than showing all events immediately.
 
@@ -994,6 +1081,43 @@ class _StoryEventDisplayState extends State<StoryEventDisplay> {
   }
 }
 ```
+
+### 6.4 Character Model Updates
+
+The Flutter Character model now includes direct properties for story state, eliminating the need for complex state determination logic:
+
+```dart
+class Character {
+  final String id;
+  final String name;
+  final String? activeStoryID;    // Currently active story ID
+  final String? activeSegmentID;  // Currently active segment ID
+  Map<String, dynamic>? storyState; // Detailed segment data for display
+  // ... other fields
+
+  /// Story completion is determined by server state
+  bool get hasActiveStory => activeStoryID != null;
+  bool get isStoryComplete => activeStoryID != null && activeSegmentID == null;
+
+  factory Character.fromJson(Map<String, dynamic> json) {
+    return Character(
+      id: json['CharacterID'],
+      name: json['CharacterName'],
+      activeStoryID: json['ActiveStoryID'] as String?,
+      activeSegmentID: json['ActiveSegmentID'] as String?,
+      storyState: json['StoryState'] as Map<String, dynamic>?,
+      // ... parse other fields
+    );
+  }
+}
+```
+
+**Key Changes:**
+
+- Added `activeStoryID` and `activeSegmentID` as direct properties
+- Story completion detected via `activeSegmentID == null`
+- Server provides these IDs directly in character response
+- Client never modifies these values
 
 ## 7. Infrastructure Configuration
 
@@ -1269,9 +1393,9 @@ class TestSegmentPolling:
             },
             {
                 'ActiveSegmentID': 'stuck-001',
-                'EndTime': current_time - 1800,  # 30 min ago
-                'Transmitted': True,
-                'TransmittedAt': current_time - 1200  # 20 min ago
+                'EndTime': current_time + 600,  # Still has 10 min to go
+                'ProcessingStatus': 'processing',  # Stuck in processing
+                'StartTime': current_time - 400  # Started >5 min ago (stuck threshold)
             },
             {
                 'ActiveSegmentID': 'future-001',

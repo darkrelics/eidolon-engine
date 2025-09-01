@@ -5,13 +5,12 @@ import time
 from eidolon.character_data import character_get
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
+from eidolon.environment import REST_SEGMENT_DURATION
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import validate_player
+from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment import get_active_segment_info, insert_rest_segment
-
-# Rest segment configuration
-REST_SEGMENT_DURATION = 900  # 15 minutes (time to heal a bashing wound)
+from eidolon.segment_history import insert_rest_segment
+from eidolon.segment_polling import get_active_segment_info
 
 
 def handle_character_rest(player_id: str, character_id: str) -> dict:
@@ -30,6 +29,11 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
     """
     # Get and validate character ownership
     character = character_get(character_id, player_id)
+
+    # Check if character is dead
+    if character.get("Dead") or character.get("CharState") == "dead":
+        logger.warning(f"Dead character attempted to rest: {character_id}")
+        raise ValueError("Dead characters cannot rest")
 
     # Check game mode
     game_mode = character.get("GameMode", "None")
@@ -55,6 +59,12 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
         current_segment_id = active_segment.get("SegmentID")
         if not current_segment_id:
             raise ValueError("Active segment missing SegmentID")
+
+        # Check if current segment is a decision segment
+        segment_type = active_segment.get("SegmentType")
+        if segment_type == "decision":
+            logger.warning(f"Cannot rest during decision segment: {active_segment_id}")
+            raise ValueError("Cannot rest during a decision segment")
     except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to get active segment info for {active_segment_id} Error: {err}", exc_info=True)
         raise
@@ -102,37 +112,24 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Validate player exists
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player not found in database for {player_id}")
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
     # Parse request body
     try:
-        body: dict = event.get("body", {})
+        body = parse_event_body(event)
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
         return lambda_error(event, err)
 
     # Extract and validate required fields
-    try:
-        character_id: str = body.get("character_id") or body.get("CharacterID")  # type: ignore
-
-    except ValueError as err:
-        return lambda_response(400, {"Error": str(err)}, event)
+    character_id = body.get("CharacterID")
+    if not character_id:
+        return lambda_response(400, {"Error": "CharacterID required"}, event)
 
     logger.info(f"Character rest request received for {character_id}")
 
     # Call business logic
     try:
-        result = handle_character_rest(player_id, character_id)  # type: ignore
+        result = handle_character_rest(player_id, character_id)
         logger.info("Lambda response for status 200")
         return lambda_response(
             200,

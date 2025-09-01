@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/active_segment.dart';
+import '../utils/time_utils.dart';
 
 class ActiveStoryDisplay extends StatelessWidget {
   final Map<String, dynamic> story;
@@ -111,8 +112,8 @@ class ActiveStoryDisplay extends StatelessWidget {
   }
 
   Widget _buildCurrentSegmentCard(ThemeData theme) {
-    // Calculate duration from start and end times
-    final duration = currentSegment.endTime - currentSegment.startTime;
+    // Calculate duration from start and end times using ISO 8601 timestamps
+    final duration = TimeUtils.durationBetween(currentSegment.startTime, currentSegment.endTime);
     final progress = duration > 0 
         ? 1.0 - (timeRemaining / duration)
         : 0.0;
@@ -202,7 +203,7 @@ class ActiveStoryDisplay extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: FilledButton.tonal(
-                        onPressed: timeRemaining == 0 ? () {
+                        onPressed: timeRemaining > 0 ? () {
                           // Handle decision selection
                           if (onDecision != null) onDecision!();
                         } : null,
@@ -210,6 +211,14 @@ class ActiveStoryDisplay extends StatelessWidget {
                       ),
                     ),
                   ),
+                  if (timeRemaining == 0)
+                    Text(
+                      'Time expired - default choice will be made',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
                 ] else ...[
                   Text(
                     currentSegment.defaultStatus ?? '',

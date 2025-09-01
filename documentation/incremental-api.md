@@ -41,7 +41,6 @@ All API endpoints are implemented as individual Lambda functions:
 
 - `api-segment-decision` - POST /segment/decision
 - `api-segment-history` - GET /segment/history
-- `api-segment-outcome` - GET /segment/outcome
 - `api-segment-rest` - POST /segment/rest
 - `api-segment-status` - GET /segment/status
 - `api-story-abandon` - POST /story/abandon
@@ -75,6 +74,35 @@ Common HTTP status codes:
 - `401` - Unauthorized (invalid or missing JWT token)
 - `404` - Resource not found
 - `500` - Internal server error
+
+---
+
+## Client Polling Cadence
+
+The client should follow a specific polling cadence to track story progression efficiently while minimizing API calls:
+
+### Recommended Polling Flow
+
+1. **Start Story** - Call `POST /story/start`
+2. **Wait 60 seconds** - Allow time for server-side processing
+3. **Poll Segment Status** - Call `GET /segment/status`
+   - Check `ProcessingStatus` field
+   - If "processed", segment narrative is available
+   - Calculate segment end time from `TimeRemaining` or `EndTime`
+4. **Wait for Segment Completion** - Wait until `TimeRemaining` reaches 0
+5. **Get Updated Character** - Call `GET /character`
+   - Check `ActiveSegmentID` field
+   - If null, story is complete
+   - If not null, new segment has started
+6. **Repeat** - If story continues, wait 60 seconds for processing and go to step 3
+
+### Important Notes
+
+- **Server Authority**: The server determines all state transitions. Clients should never modify story state locally.
+- **Segment Timing**: Clients can calculate segment end time from `StartTime + Duration` or use the provided `EndTime` field.
+- **Completion Detection**: Story completion is indicated by `ActiveSegmentID == null` in the character response.
+- **Local Display**: Clients may maintain a local segment history for UI display, but this should never be used for state determination.
+- **Error Handling**: Implement exponential backoff (1s, 2s, 4s) for failed requests with a maximum of 3 retries.
 
 ---
 
@@ -555,7 +583,7 @@ Maps inventory slot numbers to detailed item information:
    - **Without active story:** Does NOT include `ActiveStory` or `ActiveSegment`, but includes `AvailableStories` array if any stories are available
    - Fields are completely omitted from the response rather than being set to null
 
-4. **Available Stories:** When the character doesn't have an active story, the `AvailableStories` field is automatically populated with story details including availability status, cooldown information, prerequisites, and metadata. This eliminates the need for a separate API call to get available stories.
+4. **Available Stories:** When the character doesn't have an active story, the `AvailableStories` field is automatically populated with story details including availability status, prerequisites, and metadata. This eliminates the need for a separate API call to get available stories.
 
 5. **Inventory Enrichment:** The `InventoryDetails` field provides full item information for UI display without requiring additional API calls. If item lookups fail, the character is still returned without enrichment.
 
@@ -658,20 +686,15 @@ Content-Type: application/json
 
 ```json
 {
+  "Success": true,
   "Segment": {
     "ActiveSegmentID": "segment_uuid",
-    "SegmentID": "segment_def_uuid",
-    "SegmentType": "narrative",
-    "Status": "active",
-    "StartTime": 1704900000,
-    "EndTime": 1704900300,
-    "ClientEvents": [
-      {
-        "eventType": "narrative",
-        "title": "Story Begins",
-        "description": "Your journey starts here..."
-      }
-    ]
+    "SegmentType": "mechanical",
+    "StartTime": "2024-01-10T12:00:00Z",
+    "EndTime": "2024-01-10T12:05:00Z",
+    "ShortStatus": "Starting your adventure...",
+    "Duration": 300,
+    "ProcessingStatus": "pending"
   }
 }
 ```
@@ -702,7 +725,7 @@ Content-Type: application/json
 
 ### Abandon Story
 
-Abandons the current active story for a character.
+Abandons the current active story for a character. The story cannot be resumed and must be restarted if repeatable.
 
 **Endpoint:** `POST /story/abandon`
 
@@ -725,6 +748,9 @@ Authorization: Bearer <jwt-token>
 
 ```json
 {
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "StoryID": "story_uuid",
+  "Abandoned": true,
   "Message": "Story abandoned successfully"
 }
 ```
@@ -771,60 +797,35 @@ Content-Type: application/json
 
 ```json
 {
-  "Message": "Decision submitted successfully"
+  "Accepted": true,
+  "NextSegmentTime": "2024-03-14T10:25:00Z", // Optional, only if there's a next segment
+  "NextSegment": {
+    // Optional, only if there's a next segment
+    "ActiveSegmentID": "550e8400-e29b-41d4-a716-446655440001",
+    "SegmentType": "mechanical",
+    "ShortStatus": "Fighting the goblin",
+    "DefaultStatus": "You engage the goblin in combat",
+    "EndTime": "2024-03-14T10:25:00Z",
+    "DecisionText": "Choose your path", // Only for decision segments
+    "DecisionOptions": {
+      // Only for decision segments
+      "fight": "segment-uuid-1",
+      "flee": "segment-uuid-2"
+    },
+    "DefaultDecision": "fight" // Only for decision segments
+  }
 }
 ```
 
 **Error Responses:**
 
-| Status | Error Message                | Cause                        |
-| ------ | ---------------------------- | ---------------------------- |
-| `404`  | "Segment not found"          | No active segment found      |
-| `409`  | "Decision already submitted" | Decision was already made    |
-| `401`  | "Unauthorized"               | Invalid or missing JWT token |
-| `500`  | "Internal server error"      | Database or system failure   |
-
----
-
-### Get Segment Outcome
-
-Retrieves the outcome of a completed segment.
-
-**Endpoint:** `GET /segment/outcome`
-
-**Authentication:** Required
-
-**Query Parameters:**
-
-| Parameter     | Type   | Required | Description           |
-| ------------- | ------ | -------- | --------------------- |
-| `CharacterID` | String | Yes      | UUID of the character |
-| `SegmentID`   | String | Yes      | UUID of the segment   |
-
-**Request:**
-
-```http
-GET /segment/outcome?CharacterID=550e8400-e29b-41d4-a716-446655440000&SegmentID=segment_uuid HTTP/1.1
-Authorization: Bearer <jwt-token>
-```
-
-**Response:**
-
-```json
-{
-  "Outcome": {
-    "Result": "success",
-    "Rewards": {
-      "gold": 50,
-      "experience": 100
-    },
-    "Consequences": {
-      "wounds": 1
-    },
-    "NextSegment": "segment_next_uuid"
-  }
-}
-```
+| Status | Error Message                | Cause                         |
+| ------ | ---------------------------- | ----------------------------- |
+| `403`  | "Access denied"              | Character not owned by player |
+| `404`  | "Segment not found"          | No active segment found       |
+| `409`  | "Decision already submitted" | Decision was already made     |
+| `401`  | "Unauthorized"               | Invalid or missing JWT token  |
+| `500`  | "Internal server error"      | Database or system failure    |
 
 **Error Responses:**
 
@@ -839,7 +840,7 @@ Authorization: Bearer <jwt-token>
 
 ### Get Segment Status
 
-Gets the current status of an active segment.
+Gets the current status of an active segment, including timing information and narrative data when the segment is processed/completed.
 
 **Endpoint:** `GET /segment/status`
 
@@ -858,15 +859,65 @@ GET /segment/status?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
 Authorization: Bearer <jwt-token>
 ```
 
-**Response:**
+**Response (Active Segment):**
 
 ```json
 {
+  "ActiveSegmentID": "seg-uuid",
+  "StoryID": "story-uuid",
+  "SegmentID": "segment-def-uuid",
   "Status": "active",
+  "IsComplete": false,
   "TimeRemaining": 120,
-  "DecisionSubmitted": false
+  "EndTime": "2025-01-15T14:30:00Z",
+  "ProcessingStatus": "processed",
+  "SegmentType": "mechanical",
+  "DefaultStatus": "Walking through the forest",
+  "ClientEvents": [...],
+  "ChallengeResults": [...]
 }
 ```
+
+**Response (Processed/Completed Segment):**
+
+When a segment is processed or completed, additional narrative data is included:
+
+```json
+{
+  "ActiveSegmentID": "seg-uuid",
+  "StoryID": "story-uuid",
+  "SegmentID": "segment-def-uuid",
+  "Status": "active",
+  "IsComplete": true,
+  "TimeRemaining": 0,
+  "EndTime": "2025-01-15T14:30:00Z",
+  "ProcessingStatus": "processed",
+  "SegmentType": "mechanical",
+  "Outcome": "normal",
+  "Narrative": "You successfully navigate through the forest, finding a hidden path...",
+  "Effects": {
+    "Wounds": 0,
+    "Items": ["item_health_potion"]
+  },
+  "NextSegmentID": "next-segment-uuid",
+  "ChallengeResults": [...],
+  "CombatState": {...}
+}
+```
+
+**Timing Fields:**
+
+- `TimeRemaining`: Seconds until segment completes (0 if complete)
+- `EndTime`: ISO 8601 timestamp when segment will complete
+- `IsComplete`: True if EndTime has passed
+- `ProcessingStatus`: "pending" (mechanical awaiting processing), "processing" (mechanical in progress), or "processed" (ready for advancement)
+
+**Narrative Fields (when processed/completed):**
+
+- `Narrative`: Story text describing the outcome
+- `Effects`: Changes to character state (wounds, items, etc.)
+- `NextSegmentID`: ID of the next segment in the story
+- `Outcome`: Result type ("normal", "exceptional", "minimal", "failure", "death")
 
 **Error Responses:**
 
@@ -880,7 +931,7 @@ Authorization: Bearer <jwt-token>
 
 ### Get Segment History
 
-Retrieves historical segment data for a character.
+Retrieves historical segment data for a character from the segment_history table.
 
 **Endpoint:** `GET /segment/history`
 
@@ -903,18 +954,38 @@ Authorization: Bearer <jwt-token>
 
 ```json
 {
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "StoryID": "story_uuid",
   "Segments": [
     {
-      "SegmentID": "segment_uuid_1",
+      "ActiveSegmentID": "segment_uuid_1",
+      "SegmentID": "segment_def_uuid_1",
+      "SegmentType": "mechanical",
+      "StartTime": "2025-01-15T14:25:00Z",
+      "EndTime": "2025-01-15T14:30:00Z",
       "CompletedAt": "2025-01-15T14:30:00Z",
-      "Outcome": "success",
-      "StoryID": "story_uuid"
+      "StoryTitle": "The Goblin's Ambush",
+      "StoryInstanceID": "instance_uuid",
+      "Outcome": "exceptional",
+      "ClientEvents": [...],
+      "CharacterUpdates": {...},
+      "SkillXPAwarded": {"Stealth": 5, "Combat": 10},
+      "AttributeXPAwarded": {"Agility": 2},
+      "ChallengeResults": [...]
     },
     {
-      "SegmentID": "segment_uuid_2",
-      "CompletedAt": "2025-01-15T14:35:00Z",
-      "Outcome": "failure",
-      "StoryID": "story_uuid"
+      "ActiveSegmentID": "segment_uuid_2",
+      "SegmentID": "segment_def_uuid_2",
+      "SegmentType": "decision",
+      "StartTime": "2025-01-15T14:30:00Z",
+      "EndTime": "2025-01-15T14:35:00Z",
+      "CompletedAt": "2025-01-15T14:31:00Z",
+      "StoryTitle": "The Goblin's Ambush",
+      "StoryInstanceID": "instance_uuid",
+      "Outcome": "normal",
+      "Decision": "option_a",
+      "ClientEvents": [...],
+      "CharacterUpdates": {...}
     }
   ]
 }
@@ -922,11 +993,12 @@ Authorization: Bearer <jwt-token>
 
 **Error Responses:**
 
-| Status | Error Message           | Cause                        |
-| ------ | ----------------------- | ---------------------------- |
-| `404`  | "No history found"      | No segment history exists    |
-| `401`  | "Unauthorized"          | Invalid or missing JWT token |
-| `500`  | "Internal server error" | Database or system failure   |
+| Status | Error Message           | Cause                         |
+| ------ | ----------------------- | ----------------------------- |
+| `403`  | "Access denied"         | Character not owned by player |
+| `404`  | "Character not found"   | Character doesn't exist       |
+| `401`  | "Unauthorized"          | Invalid or missing JWT token  |
+| `500`  | "Internal server error" | Database or system failure    |
 
 ---
 

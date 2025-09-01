@@ -1,5 +1,6 @@
 """Player stack deployment functions."""
 
+import json
 from pathlib import Path
 
 import boto3
@@ -7,7 +8,55 @@ from botocore.exceptions import ClientError
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
+from stacks import stack_utilities as utils
 from utilities import run_cdk_deploy
+
+
+def get_shared_resources(params, state: CDKState) -> dict:
+    """Get shared Lambda resources from Lambda stack.
+
+    Args:
+        params: Deployment parameters with account_id and region
+        state: CDK state containing infrastructure details
+
+    Returns:
+        Dict with Lambda layer and role ARNs
+    """
+    resources = {
+        "lambda_layer_arn": "",
+        "lambda_role_arn": "",
+    }
+
+    # Get ARNs from state (stored by Lambda stack deployment)
+    if hasattr(state, "infrastructure") and state.infrastructure:
+        # Use stored layer ARN if available
+        if state.infrastructure.get("lambda_layer_arn"):
+            resources["lambda_layer_arn"] = state.infrastructure.get("lambda_layer_arn")  # type: ignore
+            print("  Using Lambda layer ARN from state")
+
+        # Use stored role ARN if available
+        if state.infrastructure.get("lambda_role_arn"):
+            resources["lambda_role_arn"] = state.infrastructure.get("lambda_role_arn")  # type: ignore
+            print("  Using Lambda role ARN from state")
+
+    # If not in state, try to get from Lambda stack CloudFormation outputs
+    if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
+        try:
+            from utilities import extract_stack_outputs
+
+            lambda_outputs = extract_stack_outputs("lambda", params.region)
+
+            if not resources["lambda_layer_arn"] and lambda_outputs.get("LambdaLayerArn"):
+                resources["lambda_layer_arn"] = lambda_outputs["LambdaLayerArn"]
+                print("  Using Lambda layer ARN from Lambda stack outputs")
+
+            if not resources["lambda_role_arn"] and lambda_outputs.get("LambdaRoleArn"):
+                resources["lambda_role_arn"] = lambda_outputs["LambdaRoleArn"]
+                print("  Using Lambda role ARN from Lambda stack outputs")
+        except Exception as e:
+            print(f"  Warning: Could not get shared resources from Lambda stack: {e}")
+
+    return resources
 
 
 def get_cognito_player_new_arn(region: str) -> str:
@@ -20,16 +69,13 @@ def get_cognito_player_new_arn(region: str) -> str:
         Lambda function ARN or empty string
     """
     try:
-        print(f"  [DEBUG] Looking for cognito-player-new in region {region}")
         lambda_client = boto3.client("lambda", region_name=region)
         response = lambda_client.get_function(FunctionName="cognito-player-new")
         arn = response["Configuration"]["FunctionArn"]
-        print(f"  [DEBUG] Found Lambda ARN: {arn}")
         return arn
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "")
         if error_code == "ResourceNotFoundException":
-            print("  [DEBUG] Lambda function cognito-player-new not found")
             return ""
         print(f"  [ERROR] Failed to get Lambda ARN: {err}")
         return ""
@@ -37,8 +83,6 @@ def get_cognito_player_new_arn(region: str) -> str:
 
 def check_existing_user_pool(region: str) -> tuple[bool, str]:
     """Check if the Cognito User Pool already exists."""
-    from stacks import stack_utilities as utils
-
     user_pool_name = "eidolon-users"
     exists, pool_id = utils.check_cognito_user_pool_exists(user_pool_name, region)
     if exists:
@@ -47,25 +91,50 @@ def check_existing_user_pool(region: str) -> tuple[bool, str]:
     return False, ""
 
 
-def deploy_player_stack(params) -> dict:
+def deploy_player_stack(params, state: CDKState) -> dict:
     """Deploy the Player stack using CDK."""
     print("\nChecking for existing Cognito resources...")
     exists, user_pool_id = check_existing_user_pool(params.region)
 
+    # Get shared resources from Character stack
+    resources = get_shared_resources(params, state)
+
+    # Get config for DynamoDB tables
+    config_path = Path(__file__).parent.parent / "config.yml"
+    config = Config.load(str(config_path))
+
+    # Build client FQDN
+    client_fqdn = f"{params.client_host}.{params.domain}"
+
+    # Convert DynamoDB tables to JSON for context passing
+    tables_json = json.dumps(config.dynamodb_tables)
+
+    # Get DynamoDB policy ARN from state
+    dynamodb_policy_arn = state.infrastructure.get("dynamodb_policy_arn", "")
+
     # Pass all parameters through context - each -c and key=value must be separate
-    context_args = ["-c", f"region={params.region}", "-c", f"reply_email={params.reply_email}"]
+    context_args = [
+        "-c",
+        f"region={params.region}",
+        "-c",
+        f"s3_bucket={params.s3_bucket}",
+        "-c",
+        f"client_fqdn={client_fqdn}",
+        "-c",
+        f"dynamodb_policy_arn={dynamodb_policy_arn}",
+        "-c",
+        f"dynamodb_tables={tables_json}",
+        "-c",
+        f"lambda_layer_arn={resources['lambda_layer_arn']}",
+        "-c",
+        f"lambda_role_arn={resources['lambda_role_arn']}",
+        "-c",
+        f"reply_email={params.reply_email}",
+    ]
 
     # Add existing user pool ID to context if found
     if exists and user_pool_id:
         context_args.extend(["-c", f"existing_user_pool_id={user_pool_id}"])
-
-    # Get Lambda ARN if available
-    lambda_arn = get_cognito_player_new_arn(params.region)
-    if lambda_arn:
-        context_args.extend(["-c", f"lambda_function_arn={lambda_arn}"])
-    else:
-        print("Warning: cognito-player-new Lambda not found")
-        print("PostConfirmation trigger will not be configured")
 
     app_command = "python3 app_player.py"
     return run_cdk_deploy("player", params.region, app_command, context_args)
@@ -138,10 +207,6 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
     Returns:
         True if trigger is configured (already was or newly configured)
     """
-    print("  [DEBUG] configure_user_pool_trigger called with:")
-    print(f"    user_pool_id: {user_pool_id}")
-    print(f"    lambda_arn: {lambda_arn}")
-    print(f"    region: {region}")
 
     try:
         cognito = boto3.client("cognito-idp", region_name=region)
@@ -159,24 +224,20 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
 
         if current_trigger == lambda_arn:
             print("  [OK] PostConfirmation trigger already configured correctly")
-            print(f"  [DEBUG] Current trigger matches expected: {current_trigger}")
         elif current_trigger:
             print(f"  [WARNING] Different trigger configured: {current_trigger}")
             print(f"  [INFO] Will update to: {lambda_arn}")
             trigger_needs_update = True
         else:
             print("  [INFO] No PostConfirmation trigger currently configured")
-            print(f"  [DEBUG] Lambda config: {lambda_config}")
             trigger_needs_update = True
 
         # STEP 2: APPLY - Update the Lambda configuration if needed
         if trigger_needs_update:
             print("  Applying PostConfirmation trigger configuration...")
             lambda_config["PostConfirmation"] = lambda_arn
-            print(f"  [DEBUG] New lambda_config: {lambda_config}")
 
             # Update the user pool with the new trigger
-            print(f"  [DEBUG] Calling update_user_pool with UserPoolId={user_pool_id}")
             cognito.update_user_pool(UserPoolId=user_pool_id, LambdaConfig=lambda_config)
 
             print("  [OK] PostConfirmation trigger configured successfully")
@@ -198,11 +259,6 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
                 pass  # Permission doesn't exist, which is fine
 
             # Now add the correct permission
-            print("  [DEBUG] Adding Lambda permission with:")
-            print("    FunctionName: cognito-player-new")
-            print("    StatementId: CognitoInvokePermission")
-            print(f"    SourceArn: arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id}")
-
             lambda_client.add_permission(
                 FunctionName="cognito-player-new",
                 StatementId="CognitoInvokePermission",
@@ -211,11 +267,9 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
                 SourceArn=f"arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id}",
             )
             print("  [OK] Lambda invoke permission granted to Cognito")
-            print(f"       Source ARN: arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id}")
         except ClientError as err:
             error_code = err.response.get("Error", {}).get("Code", "")
             print(f"  [ERROR] Could not add Lambda permission: {err}")
-            print(f"  [DEBUG] Error code: {error_code}")
             if error_code == "ResourceConflictException":
                 print("  [INFO] Permission may already exist with a different configuration")
 
@@ -256,7 +310,7 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
     print("=" * 60)
 
     # Deploy stack
-    result = deploy_player_stack(params)
+    result = deploy_player_stack(params, state)
 
     if not result.get("success", False):
         print("\nPlayer deployment failed!")
@@ -274,18 +328,14 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
 
     # Configure Lambda trigger for existing User Pool (CDK can't do this for imported pools)
     if validation.get("user_pool_id"):
-        print("\n[DEBUG] Checking for Lambda trigger configuration...")
-        print(f"  User Pool ID: {validation.get('user_pool_id')}")
         lambda_arn = get_cognito_player_new_arn(params.region)
         if lambda_arn:
-            print(f"  Lambda ARN: {lambda_arn}")
-            print("  Configuring PostConfirmation trigger for User Pool...")
+            print("\nConfiguring PostConfirmation trigger for User Pool...")
             trigger_configured = configure_user_pool_trigger(validation["user_pool_id"], lambda_arn, params.region)
             if not trigger_configured:
                 print("  [ERROR] Failed to configure trigger")
         else:
-            print("  [WARNING] cognito-player-new Lambda not found")
-            print("  [INFO] This is unexpected - Lambda stack should deploy before Player stack")
+            print("  [WARNING] cognito-player-new Lambda not found - trigger not configured")
 
     # Update configuration with Cognito settings
     if validation.get("user_pool", False) and validation.get("user_pool_id"):

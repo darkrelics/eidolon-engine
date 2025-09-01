@@ -7,8 +7,6 @@ Lambda function to advance stories after segment completion.
 Triggered by SQS to apply character updates and progress stories.
 """
 
-import json
-
 from eidolon.character_data import get_character
 from eidolon.character_segment import update_character_active_segment
 from eidolon.character_story import apply_story_outcome_effects
@@ -16,24 +14,16 @@ from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome
 from eidolon.polling import update_polling_state
-from eidolon.segment import (
-    check_active_segments_exist,
-    claim_segment_for_processing,
-    create_next_active_segment,
-    delete_active_segment,
-    determine_next_segment,
-    get_active_segment,
-    get_segment_definition,
-    insert_rest_segment,
-    is_simple_segment,
-    process_decision_segment,
-    process_rest_segment,
-    record_segment_history,
-    update_segment_processing_status,
-)
+from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
+from eidolon.segment_history import insert_rest_segment, record_segment_history
+from eidolon.segment_polling import check_active_segments_exist, claim_segment_for_processing, delete_active_segment
+from eidolon.segment_processing import determine_next_segment, process_decision_segment
+from eidolon.segment_state import create_next_active_segment, update_segment_processing_status
 from eidolon.sqs import send_message
-from eidolon.story import apply_combat_rewards, complete_story, ensure_story_history_exists, update_story_history_xp
-from eidolon.validation_messages import validate_advancement_message
+from eidolon.story_completion import complete_story
+from eidolon.story_history import update_story_history_xp
+from eidolon.story_rewards import apply_combat_rewards
+from eidolon.validation import validate_uuid
 
 
 def advance_story_business_logic(active_segment_id: str) -> dict:
@@ -50,12 +40,17 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         ValueError: If segment not found or invalid state
         RuntimeError: If processing fails
     """
+    # Get active segment first to check its status
+    active_segment = get_active_segment(active_segment_id)
+
+    # Check if segment is already completed (e.g., marked as exceptional by poller)
+    if active_segment.get("Status") == "completed":
+        logger.info(f"Segment already completed, skipping advancement for {active_segment_id}")
+        return {"success": True, "skipped": True, "reason": "Segment already completed"}
+
     # Claim segment for processing
     if not claim_segment_for_processing(active_segment_id):
         return {"success": True, "skipped": True, "reason": "Already being processed"}
-
-    # Get active segment
-    active_segment = get_active_segment(active_segment_id)
 
     # Extract key data
     character_id = active_segment.get("CharacterID")
@@ -66,9 +61,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     logger.info(f"Advancing story for {character_id}")
 
-    # Ensure story history exists
-    story_title = active_segment.get("StoryTitle", "Unknown Story")
-    ensure_story_history_exists(character_id, story_id, story_title)  # type: ignore
+    # Story history should already exist (created when story started)
 
     # Process simple segments if not already processed
     processing_status = active_segment.get("ProcessingStatus")
@@ -83,7 +76,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
         # Process based on type
         if segment_type == "rest":
-            outcome, _ = process_rest_segment(segment_def, character)
+            outcome, _ = "normal", {}
             character_updates = {}
         elif segment_type == "decision":
             outcome = process_decision_segment(active_segment, segment_def)
@@ -137,13 +130,18 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
 
     # Update story history with accumulated XP
+    story_instance_id = active_segment.get("StoryInstanceID")
     skill_xp = character_updates.get("SkillXP", {})
     attribute_xp = character_updates.get("AttributeXP", {})
-    if skill_xp or attribute_xp:
-        update_story_history_xp(character_id, story_id, skill_xp, attribute_xp)  # type: ignore
+    if (skill_xp or attribute_xp) and story_instance_id:
+        update_story_history_xp(character_id, story_instance_id, skill_xp, attribute_xp)  # type: ignore
 
     # Get segment definition to determine next action
     segment_def = get_segment_definition(story_id, segment_id)  # type: ignore
+    logger.debug(f"Retrieved segment_def for {segment_id}")
+    logger.info(f"  SegmentType: {segment_def.get('SegmentType')}")
+    logger.info(f"  Results keys: {list(segment_def.get('Results', {}).keys())}")
+    logger.info(f"  Has top-level NextSegmentID: {segment_def.get('NextSegmentID') is not None}")
 
     # Check if we need to insert a rest segment for unconscious character
     if new_character_state == "unconscious":
@@ -178,7 +176,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 active_segment.get("PlayerID"),  # type: ignore
                 story_id,  # type: ignore
                 next_segment_def,
-                active_segment.get("StoryTitle"),  # type: ignore
+                story_instance_id,  # Pass instance ID for history tracking
             )
 
             # Update character with new active segment
@@ -191,14 +189,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 try:
 
                     if SEGMENT_QUEUE_URL:
-                        message_body = {
-                            "ActiveSegmentID": next_active_segment_id,
-                            "CharacterID": character_id,
-                            "StoryID": story_id,
-                            "SegmentID": next_segment_id,
-                            "SegmentType": "mechanical",
-                        }
-                        send_message(SEGMENT_QUEUE_URL, message_body)
+                        # Send just the ActiveSegmentID string (what ops_segment_process expects)
+                        send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
                         logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
                 except Exception as err:
                     # Non-critical - segment will be picked up by poller
@@ -208,7 +200,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         # Story complete
-        complete_story(character_id, story_id, outcome)  # type: ignore
+        complete_story(character_id, story_id, story_instance_id, outcome)  # type: ignore
 
     # Delete processed segment
     delete_active_segment(active_segment_id)
@@ -260,20 +252,18 @@ def lambda_handler(event: dict, context: object) -> dict:
         message_id = record.get("messageId", "unknown")
 
         try:
-            # Parse message body
-            message_body = json.loads(record.get("body", "{}"))
+            # Message body should be just the ActiveSegmentID string
+            active_segment_id = record.get("body", "").strip()
 
-            # Validate message schema
-            try:
-                validated_msg = validate_advancement_message(message_body)
-            except ValueError as validation_err:
-                # Invalid message - log and don't retry
-                logger.error(f"Invalid message schema for messageId={message_id}: {validation_err}")
+            if not active_segment_id:
+                logger.error(f"Empty message body for messageId={message_id}")
                 invalid_count += 1
-                # Don't add to batch_item_failures - invalid messages should not be retried
                 continue
 
-            active_segment_id = validated_msg["ActiveSegmentID"]
+            if not validate_uuid(active_segment_id):
+                logger.error(f"Invalid UUID format for messageId={message_id}: {active_segment_id}")
+                invalid_count += 1
+                continue
 
             logger.info(f"Processing segment advancement for {active_segment_id}")
 
