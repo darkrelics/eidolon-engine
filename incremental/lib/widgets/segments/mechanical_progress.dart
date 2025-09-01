@@ -40,11 +40,13 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
         setState(() {
           _elapsedSeconds++;
           // Calculate progress based on elapsed time vs estimated duration
-          _progress = (_elapsedSeconds / widget.estimatedDuration.inSeconds)
-              .clamp(0.0, 1.0);
+          final durationSeconds = widget.estimatedDuration.inSeconds;
+          _progress = durationSeconds > 0 
+              ? (_elapsedSeconds / durationSeconds).clamp(0.0, 1.0)
+              : 1.0;
           
           // Call onComplete when duration is reached
-          if (_elapsedSeconds >= widget.estimatedDuration.inSeconds) {
+          if (durationSeconds > 0 && _elapsedSeconds >= durationSeconds) {
             timer.cancel();
             widget.onComplete?.call();
           }

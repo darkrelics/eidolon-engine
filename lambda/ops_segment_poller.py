@@ -8,19 +8,12 @@ Triggered by EventBridge to check active segments that have reached their end ti
 Handles different segment types appropriately and manages polling state.
 """
 
-from time import time
-
 from botocore.exceptions import ClientError
 
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import get_polling_state, manage_eventbridge_rule, update_polling_state
-from eidolon.responses import lambda_error, lambda_response
-from eidolon.segment_polling import (
-    check_active_segments_exist,
-    get_segments_approaching_expiry,
-    get_stuck_mechanical_segments,
-)
+from eidolon.segment_polling import check_active_segments_exist, get_segments_approaching_expiry, get_stuck_mechanical_segments
 from eidolon.segment_state import mark_segment_as_completed_exceptional, reset_segment_processing_status
 from eidolon.sqs import send_message_batch
 

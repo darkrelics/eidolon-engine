@@ -8,9 +8,9 @@ from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.character_data import character_get, character_clear_story
+from eidolon.character_data import character_clear_story, character_get
 from eidolon.character_segment import character_get_active_segment
-from eidolon.dynamo import TableName, dynamo, decimal_to_float
+from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time
 from eidolon.validation import validate_uuid

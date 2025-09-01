@@ -534,7 +534,7 @@
             "OpponentID": "51eadb06-e05c-4515-84a7-1e415d6b88e1",
             "MaxRounds": 10,
             "Environment": {}
-        },
+          },
           "Results": {
             "Death": {
               "Narrative": "The gremlin's wild flailing catches you off guard. You trip and fall, hitting your head. The last thing you hear is its cackling laughter.",

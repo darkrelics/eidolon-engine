@@ -165,11 +165,11 @@ Active → Abandoned
 Segments use ProcessingStatus to track their processing state:
 
 1. **pending**: Mechanical segments awaiting processing
-2. **processing**: Mechanical segments currently being processed  
+2. **processing**: Mechanical segments currently being processed
 3. **processed**: Segment ready for advancement when timer expires
 
-**Note**: There is no "completed" ProcessingStatus. When a segment advances (timer expires), 
-it is deleted from ActiveSegments and archived to SegmentHistory. The segment lifecycle ends 
+**Note**: There is no "completed" ProcessingStatus. When a segment advances (timer expires),
+it is deleted from ActiveSegments and archived to SegmentHistory. The segment lifecycle ends
 at "processed" status.
 
 ### ProcessingStatus Concurrency Control
@@ -179,12 +179,13 @@ The ProcessingStatus field provides atomic state transitions to prevent duplicat
 - **false** (or absent): Segment available for processing
 - **true**: Segment claimed by a Lambda instance for exclusive processing
 
-This is implemented as a DynamoDB conditional update to ensure atomicity. Despite documentation 
+This is implemented as a DynamoDB conditional update to ensure atomicity. Despite documentation
 suggesting it would store a request ID, the implementation uses a simple boolean for efficiency.
 
 ### Complete State Transitions
 
 #### Mechanical Segments
+
 ```
 Created → pending/false + IMMEDIATE QUEUE
   Trigger: Story start or previous segment advancement
@@ -222,6 +223,7 @@ processed/false → [deleted]
 ```
 
 #### Rest Segments
+
 ```
 Created → processed/false
   Trigger: Story advancement or player-initiated rest
@@ -242,6 +244,7 @@ processed/false → [deleted]
 ```
 
 #### Decision Segments
+
 ```
 Created → processed/false
   Trigger: Story advancement
@@ -303,8 +306,9 @@ Rest segments are special 15-minute rest periods that allow characters to take a
 - Character remains in "rest" mode until segment completion
 
 Note: Wound healing is time-based and independent of rest segments. Wounds heal based on their type:
+
 - Bashing wounds: heal after 15 minutes from infliction
-- Lethal wounds: heal after 6 hours from infliction  
+- Lethal wounds: heal after 6 hours from infliction
 - Aggravated wounds: heal after 7 days from infliction
 
 ### Flexible Branching Design
@@ -348,6 +352,7 @@ Death outcomes don't always end the story. The system supports:
 - **Reincarnation**: Death leads to rebirth scenarios
 
 Example:
+
 ```json
 "death": {
   "Narrative": "As darkness takes you, you feel your spirit rise...",
@@ -368,6 +373,7 @@ Failure outcomes can open entirely new storylines:
 - **Training Montages**: Failure leads to improvement segments
 
 Example:
+
 ```json
 "failure": {
   "Narrative": "The master shakes his head. 'You need more training.'",
@@ -534,11 +540,13 @@ All Lambda functions are deployed with:
 The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **two-query approach** for different segment scenarios:
 
 **Query 1 - Segments Approaching Expiry** (within 90 seconds):
+
 - Finds ALL segments that will expire before the next poll (90-second buffer)
 - For processed segments: Queues them to STORY_ADVANCEMENT_QUEUE for normal advancement
 - For unprocessed segments: Marks them as "exceptional" (protecting players from failures), then queues for advancement
 
 **Query 2 - Stuck Mechanical Segments**:
+
 - Finds mechanical segments where:
   - StartTime > 5 minutes ago (stuck threshold)
   - EndTime > 90 seconds from now (enough time to retry)
@@ -547,6 +555,7 @@ The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **t
 - Re-queues them to SEGMENT_QUEUE_URL for retry
 
 **The poller does NOT**:
+
 - Initially queue mechanical segments (that happens immediately at creation)
 - Process segments directly (all processing goes through SQS queues)
 - Create segments (only api-story-start and ops-story-advance create segments)
@@ -592,6 +601,7 @@ The polling system follows this state machine:
 ```
 
 **Key Design Principles**:
+
 - Separation of concerns: SSM parameter controls polling behavior, EventBridge rule controls execution
 - Single responsibility: Each Lambda has specific polling authority
 - Graceful degradation: System continues even if polling management fails

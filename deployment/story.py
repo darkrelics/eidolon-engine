@@ -228,7 +228,7 @@ def fix_eventbridge_lambda_permission(params) -> bool:
                         print(f"  [OK] EventBridge rule has {len(targets)} target(s)")
                         return True
                     else:
-                        print(f"  [WARNING] EventBridge rule has no targets")
+                        print("  [WARNING] EventBridge rule has no targets")
                         # Continue to add the target
                         break
         except ClientError as e:
@@ -287,7 +287,7 @@ def fix_eventbridge_lambda_permission(params) -> bool:
                 }
             ],
         )
-        print(f"  [OK] Configured Lambda target for EventBridge rule")
+        print("  [OK] Configured Lambda target for EventBridge rule")
 
         # Final verification
         print("  Verifying configuration...")
@@ -313,12 +313,12 @@ def fix_eventbridge_lambda_permission(params) -> bool:
         print(f"    Rule state: {rule_state}")
 
         if has_permission and has_target:
-            print(f"  [OK] EventBridge->Lambda integration fully configured")
+            print("  [OK] EventBridge->Lambda integration fully configured")
             if rule_state == "DISABLED":
-                print(f"  [INFO] Rule is currently DISABLED (will be enabled when a story starts)")
+                print("  [INFO] Rule is currently DISABLED (will be enabled when a story starts)")
             return True
         else:
-            print(f"  [ERROR] EventBridge->Lambda integration not properly configured")
+            print("  [ERROR] EventBridge->Lambda integration not properly configured")
             return False
 
     except ClientError as err:

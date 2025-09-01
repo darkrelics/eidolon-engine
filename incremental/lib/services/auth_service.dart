@@ -34,24 +34,51 @@ class CognitoConfig {
   /// Validates that the Cognito configuration is properly set.
   /// In production (release mode), this ensures environment variables are provided.
   /// In development (debug mode), this allows fallback values to be used.
+  /// 
+  /// This should be called during app initialization to fail fast on configuration issues.
   static void validateConfiguration() {
     final effectiveUserPoolId = userPoolIdWithFallback;
     final effectiveClientId = clientIdWithFallback;
 
-    // Basic validation - user pool ID must have the correct format
-    if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
-      throw ConfigurationException('Invalid identity provider configuration.');
-    }
-
-    // Client ID must be present
-    if (effectiveClientId.isEmpty) {
-      throw ConfigurationException('Client configuration is incomplete.');
-    }
-
     // In production, environment variables MUST be provided - no fallbacks allowed
     if (kReleaseMode && (userPoolId.isEmpty || clientId.isEmpty)) {
-      throw ConfigurationException('Production build is missing required environment variables.');
+      throw ConfigurationException(
+        'Production build is missing required environment variables. '
+        'Ensure USER_POOL_ID and CLIENT_ID are provided via --dart-define during build.'
+      );
     }
+
+    // Basic validation - user pool ID must have the correct format
+    if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
+      throw ConfigurationException(
+        'Invalid User Pool ID format. Expected format: "region_poolId" (e.g., "us-east-1_abcd1234")'
+      );
+    }
+
+    // Client ID must be present and have reasonable length
+    if (effectiveClientId.isEmpty) {
+      throw ConfigurationException(
+        'Client ID is missing. Ensure CLIENT_ID environment variable is set.'
+      );
+    }
+    
+    if (effectiveClientId.length < 10) {
+      throw ConfigurationException(
+        'Client ID appears invalid (too short). Expected a valid Cognito Client ID.'
+      );
+    }
+  }
+
+  /// Static validation that runs when the class is first accessed.
+  /// This ensures configuration issues are caught early in the app lifecycle.
+  static final bool _isValidated = _performEarlyValidation();
+  
+  static bool _performEarlyValidation() {
+    // Only validate automatically in release mode to catch production issues early
+    if (kReleaseMode) {
+      validateConfiguration();
+    }
+    return true;
   }
 }
 

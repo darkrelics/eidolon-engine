@@ -74,9 +74,9 @@ def verify_lambda_deployment(params) -> dict:
     try:
         iam_client = boto3.client("iam", region_name=params.region)
         iam_client.get_role(RoleName="eidolon-lambda-execution-role")
-        print(f"  [OK] Lambda execution role: eidolon-lambda-execution-role")
+        print("  [OK] Lambda execution role: eidolon-lambda-execution-role")
     except ClientError:
-        print(f"  [MISSING] Lambda execution role: eidolon-lambda-execution-role")
+        print("  [MISSING] Lambda execution role: eidolon-lambda-execution-role")
         validation["success"] = False
 
     return validation

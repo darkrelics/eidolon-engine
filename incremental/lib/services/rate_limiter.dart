@@ -5,10 +5,30 @@ import 'package:flutter/foundation.dart';
 class RateLimiter {
   static const Duration humanDrivenInterval = Duration(seconds: 15);
   static const Duration automatedInterval = Duration(seconds: 60);
+  static const Duration cleanupInterval = Duration(minutes: 5);
+  static const Duration maxAge = Duration(hours: 1);
   
   final Map<String, DateTime> _lastCallTimes = {};
   final Map<String, Timer?> _pendingTimers = {};
   final Map<String, Completer<void>?> _pendingCompleters = {};
+  Timer? _cleanupTimer;
+  
+  RateLimiter() {
+    _startPeriodicCleanup();
+  }
+  
+  /// Start periodic cleanup to prevent memory leaks
+  void _startPeriodicCleanup() {
+    _cleanupTimer = Timer.periodic(cleanupInterval, (_) => _cleanupOldEntries());
+  }
+  
+  /// Remove old entries from _lastCallTimes to prevent memory leaks
+  void _cleanupOldEntries() {
+    final cutoff = DateTime.now().subtract(maxAge);
+    _lastCallTimes.removeWhere((key, time) => time.isBefore(cutoff));
+    
+    debugPrint('RateLimiter: Cleaned up old entries, ${_lastCallTimes.length} keys remaining');
+  }
   
   /// Check if enough time has passed for a human-driven action
   bool canCallHumanDriven(String key) {
@@ -110,8 +130,8 @@ class RateLimiter {
           completer.completeError(e);
         }
       } finally {
-        _pendingTimers[key] = null;
-        _pendingCompleters[key] = null;
+        _pendingTimers.remove(key);
+        _pendingCompleters.remove(key);
       }
     });
     
@@ -163,6 +183,8 @@ class RateLimiter {
   
   /// Dispose of resources
   void dispose() {
+    _cleanupTimer?.cancel();
+    _cleanupTimer = null;
     clearAll();
   }
 }
