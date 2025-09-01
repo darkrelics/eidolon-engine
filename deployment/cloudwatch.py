@@ -7,8 +7,8 @@ from botocore.exceptions import ClientError
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
-from utilities import run_cdk_deploy, validate_policies
 from stacks import stack_utilities as utils
+from utilities import run_cdk_deploy, validate_policies
 
 
 def check_existing_log_group(region: str) -> str:

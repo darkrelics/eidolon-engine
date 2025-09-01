@@ -9,7 +9,7 @@ Triggered by SQS with ActiveSegmentID messages.
 
 from eidolon.character_data import get_character
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.responses import lambda_error, lambda_response
+from eidolon.responses import lambda_response
 from eidolon.segment_core import get_active_segment, get_segment_definition
 from eidolon.segment_processing import route_segment_processing
 from eidolon.segment_state import update_active_segment_outcome

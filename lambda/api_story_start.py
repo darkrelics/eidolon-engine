@@ -7,8 +7,6 @@ Lambda function to start a story for a character.
 Validates character state, creates active segment, and returns first segment details.
 """
 
-from botocore.exceptions import ClientError
-
 from eidolon.character_data import character_get
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler

@@ -375,7 +375,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     # Create character record
     try:
         create_character_record(character_item)
-    except ValueError as err:
+    except ValueError:
         # Name already taken - re-raise as-is for proper HTTP status
         raise
     except RuntimeError as err:

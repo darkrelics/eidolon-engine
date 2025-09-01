@@ -8,8 +8,8 @@ from botocore.exceptions import ClientError
 from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
-from utilities import run_cdk_deploy, validate_policies, validate_s3_bucket
 from stacks.stack_utilities import check_s3_bucket_exists
+from utilities import run_cdk_deploy, validate_policies, validate_s3_bucket
 
 
 def deploy_codebuild_stack(params) -> dict:

@@ -21,8 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import dynamo
-from eidolon.dynamo import TableName
+from eidolon.dynamo import TableName, dynamo
 from eidolon.validation import validate_character_name
 
 

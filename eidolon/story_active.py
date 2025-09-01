@@ -8,7 +8,6 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.time_utils import now_iso
 
 
 def get_active_story_segment(character_id: str) -> dict:

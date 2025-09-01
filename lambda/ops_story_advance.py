@@ -7,8 +7,6 @@ Lambda function to advance stories after segment completion.
 Triggered by SQS to apply character updates and progress stories.
 """
 
-import json
-
 from eidolon.character_data import get_character
 from eidolon.character_segment import update_character_active_segment
 from eidolon.character_story import apply_story_outcome_effects

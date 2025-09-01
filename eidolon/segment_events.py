@@ -4,8 +4,6 @@ Client event generation for segments.
 Provides functions for generating and formatting client events.
 """
 
-from eidolon.models import ClientEvent
-
 
 def to_pascal_key(key: str) -> str:
     """

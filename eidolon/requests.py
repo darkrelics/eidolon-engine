@@ -6,6 +6,7 @@ Lambda functions.
 """
 
 import json
+
 from eidolon.logger import logger
 
 
