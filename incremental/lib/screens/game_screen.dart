@@ -204,7 +204,7 @@ class _GameScreenState extends State<GameScreen> {
       } catch (e) {
         debugPrint('GameScreen: Error in polling loop: $e');
         // Continue polling after a delay
-        await Future.delayed(const Duration(seconds: 5));
+        await Future.delayed(const Duration(seconds: 30));
       }
     }
     
