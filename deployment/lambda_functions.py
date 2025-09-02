@@ -213,3 +213,121 @@ def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, 
 
     print("\n✓ Lambda Stack deployed successfully")
     return True
+
+
+def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> bool:
+    """Update Lambda functions directly using boto3 instead of full CDK redeployment.
+    
+    This function:
+    1. Rebuilds Lambda artifacts (layer and function zip files)  
+    2. Updates the Lambda layer to get new layer version ARN
+    3. Updates all 15 Lambda functions with new code and layer version
+    
+    Args:
+        params: Deployment parameters
+        region: AWS region
+        s3_bucket: S3 bucket containing Lambda artifacts
+        
+    Returns:
+        bool: True if all updates successful
+    """
+    print("\n" + "=" * 60)
+    print("Updating Lambda Functions with Latest Artifacts")
+    print("=" * 60)
+    
+    lambda_client = boto3.client("lambda", region_name=region)
+    
+    # Step 1: Rebuild artifacts
+    print("\n1. Building fresh Lambda artifacts...")
+    build_success = execute_lambda_builds(region)
+    if not build_success:
+        print("\n[ERROR] Failed to build Lambda artifacts")
+        return False
+    
+    # Step 2: Update Lambda layer to get new version ARN
+    print("\n2. Updating Lambda layer...")
+    try:
+        response = lambda_client.publish_layer_version(
+            LayerName="eidolon-dependencies",
+            Description="Shared dependencies for Eidolon Engine Lambda functions - Updated",
+            Content={
+                'S3Bucket': s3_bucket,
+                'S3Key': 'lambda-layer/lambda-layer.zip'
+            },
+            CompatibleRuntimes=['python3.12']
+        )
+        new_layer_arn = response['LayerVersionArn']
+        print(f"  [OK] New layer version: {new_layer_arn}")
+    except ClientError as err:
+        print(f"  [ERROR] Failed to update layer: {err}")
+        return False
+    
+    # Step 3: Define all Lambda functions to update
+    lambda_functions = [
+        # Character functions
+        "api-character-add",
+        "api-character-delete", 
+        "api-character-get",
+        "api-character-list",
+        "api-archetype-list",
+        # Player functions  
+        "cognito-player-new",
+        # Story functions
+        "api-story-start",
+        "api-story-abandon", 
+        "api-segment-decision",
+        "api-segment-history",
+        "api-segment-rest",
+        "api-segment-status",
+        "ops-segment-poller",
+        "ops-segment-process",
+        "ops-story-advance"
+    ]
+    
+    print(f"\n3. Updating {len(lambda_functions)} Lambda functions...")
+    
+    update_results = {}
+    for function_name in lambda_functions:
+        print(f"  Updating {function_name}...")
+        
+        try:
+            # Update function code
+            lambda_client.update_function_code(
+                FunctionName=function_name,
+                S3Bucket=s3_bucket,
+                S3Key=f"{function_name}.zip"
+            )
+            
+            # Update function configuration to use new layer
+            lambda_client.update_function_configuration(
+                FunctionName=function_name,
+                Layers=[new_layer_arn]
+            )
+            
+            print(f"    [OK] Updated {function_name}")
+            update_results[function_name] = True
+            
+        except ClientError as err:
+            error_code = err.response.get('Error', {}).get('Code', '')
+            if error_code == 'ResourceNotFoundException':
+                print(f"    [SKIP] Function {function_name} doesn't exist yet")
+                update_results[function_name] = None  # Skip, not an error
+            else:
+                print(f"    [ERROR] Failed to update {function_name}: {err}")
+                update_results[function_name] = False
+    
+    # Summary
+    updated_count = sum(1 for result in update_results.values() if result is True)
+    skipped_count = sum(1 for result in update_results.values() if result is None) 
+    failed_count = sum(1 for result in update_results.values() if result is False)
+    
+    print(f"\n4. Update Summary:")
+    print(f"  [OK] Updated: {updated_count} functions")
+    if skipped_count > 0:
+        print(f"  [SKIP] Not deployed yet: {skipped_count} functions")
+    if failed_count > 0:
+        print(f"  [ERROR] Failed: {failed_count} functions")
+        return False
+    
+    print("\n✓ Lambda function updates completed successfully")
+    return True
