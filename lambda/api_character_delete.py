@@ -12,7 +12,7 @@ from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player_character import delete_character
-from eidolon.requests import get_query_parameter_flexible
+from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 
 
@@ -87,8 +87,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Get character ID from query parameters (flexible: CharacterID or characterId)
-    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
+    # Get character ID from query parameters
+    character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 

@@ -76,7 +76,7 @@ def send_message_batch(queue_url: str, messages: list) -> dict:
         for i, msg in enumerate(messages):
             entry = {
                 "Id": str(i),
-                "MessageBody": json.dumps(msg.get("body")),
+                "MessageBody": msg.get("body"),
             }
             if "attributes" in msg:
                 entry["MessageAttributes"] = msg.get("attributes")

@@ -71,6 +71,7 @@ class CognitoConfig {
 
   /// Static validation that runs when the class is first accessed.
   /// This ensures configuration issues are caught early in the app lifecycle.
+  // ignore: unused_field
   static final bool _isValidated = _performEarlyValidation();
   
   static bool _performEarlyValidation() {
