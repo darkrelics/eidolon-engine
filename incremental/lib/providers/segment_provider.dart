@@ -51,6 +51,15 @@ class SegmentProvider extends ChangeNotifier {
         return;
       }
       
+      // Add story title from Story data if not present in segment
+      if (!segmentData.containsKey('StoryTitle') && 
+          character.storyState!.containsKey('Story')) {
+        final storyData = character.storyState!['Story'] as Map<String, dynamic>?;
+        if (storyData != null && storyData.containsKey('Title')) {
+          segmentData['StoryTitle'] = storyData['Title'];
+        }
+      }
+      
       _currentSegment = ActiveSegment.fromJson(segmentData);
       
       // For mechanical segments, check if already processed
