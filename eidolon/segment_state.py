@@ -257,6 +257,33 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
         raise RuntimeError(f"Failed to reset segment processing status: {err}") from err
 
 
+def mark_segment_as_completed(active_segment_id: str) -> None:
+    """
+    Mark a segment as completed.
+
+    Used when advancing a story to mark the current segment as completed
+    before recording history and creating the next segment.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET #status = :completed",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={":completed": "completed"},
+        )
+        logger.info(f"Marked segment as completed for {active_segment_id}")
+    except ClientError as err:
+        logger.error(f"Failed to mark segment as completed for {active_segment_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to mark segment as completed: {err}") from err
+
+
 def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
     """
     Mark an exhausted segment as completed with exceptional outcome.

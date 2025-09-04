@@ -387,10 +387,20 @@ def main():
             print(f"\nDeploying {stack_name} stack...")
             deploy_func = deployment_functions[stack_name]
             try:
-                success = deploy_func(params, config, state, config_path, state_path)
-                deployment_results[stack_name] = success
-                if not success:
-                    print(f"WARNING: {stack_name} deployment had issues")
+                result = deploy_func(params, config, state, config_path, state_path)
+                
+                # Special handling for client stack which returns a tuple
+                if stack_name == "client" and isinstance(result, tuple):
+                    infra_success, build_success = result
+                    if infra_success and not build_success:
+                        # Infrastructure OK but build failed - mark as warning
+                        deployment_results[stack_name] = "warning"
+                    else:
+                        deployment_results[stack_name] = infra_success
+                else:
+                    deployment_results[stack_name] = result
+                    if not result:
+                        print(f"WARNING: {stack_name} deployment had issues")
             except Exception as e:
                 print(f"\n{'='*60}")
                 print(f"ERROR deploying {stack_name} stack")
@@ -404,14 +414,13 @@ def main():
             print(f"\nSkipping {stack_name} stack (not yet implemented)")
             deployment_results[stack_name] = False
 
-    # Update Lambda functions with latest artifacts after deployment
+    # Phase 11: Lambda Function Updates
     overall_success = all(deployment_results.get(stack, False) for stack in ["codebuild", "lambda"])
     lambda_update_success = False
     if overall_success:
-        print("\nUpdating all Lambda functions with latest artifacts...")
         lambda_update_success = update_lambda_functions_directly(params, params.region, params.s3_bucket)
         if not lambda_update_success:
-            print("WARNING: Lambda function updates failed")
+            print("\nWARNING: Lambda function updates failed")
     else:
         print("\nSkipping Lambda function updates due to deployment issues")
 
@@ -422,7 +431,13 @@ def main():
     print(f"Mode: {params.deployment_mode.upper()}")
     for stack_name in deployment_order:
         if stack_name in deployment_results:
-            status = "OK" if deployment_results[stack_name] else "WARNING"
+            result = deployment_results[stack_name]
+            if result == "warning":
+                status = "WARNING"
+            elif result:
+                status = "OK"
+            else:
+                status = "FAILED"
             print(f"[{status}] {stack_name.capitalize()} Stack")
         else:
             print(f"[SKIPPED] {stack_name.capitalize()} Stack")
