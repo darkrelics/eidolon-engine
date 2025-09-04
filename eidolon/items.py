@@ -27,6 +27,7 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
         slot_num = 0
         container_id = None
         items_for_container = []
+        items_before_container = []  # Track items that went into container at creation
 
         # Single pass through all items
         for item_def in starting_items:
@@ -68,21 +69,15 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
             # Track first container
             if is_container and container_id is None:
                 container_id = item_id
-                # Update contents with items collected so far
+                # Update contents with items collected so far (items before container)
                 item_data["Contents"] = items_for_container.copy()
+                items_before_container = items_for_container.copy()  # Remember what we put in
+                # Clear the list for items after container
+                items_for_container = []
 
-            # If not worn and we have a container, add to container list
-            if not is_worn and not is_container and container_id:
-                items_for_container.append(item_id)
-                # Update the container's contents if it already exists
-                dynamo.update_item(
-                    TableName.ITEMS,
-                    Key={"ItemID": container_id},
-                    UpdateExpression="SET Contents = :contents",
-                    ExpressionAttributeValues={":contents": items_for_container},
-                )
-            elif not is_worn and not is_container and not container_id:
-                # No container yet, collect items for later
+            # If not worn and not a container, add to items list
+            # These will go into the container if one exists or will be created
+            if not is_worn and not is_container:
                 items_for_container.append(item_id)
 
             # Put item in Items table
@@ -94,6 +89,18 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
                 slot_num += 1
 
             logger.info(f"Created item from prototype for {character_id}")
+
+        # After all items are created, update container with items added after it
+        if container_id and items_for_container:
+            # Combine items before and after container
+            final_contents = items_before_container + items_for_container
+            dynamo.update_item(
+                TableName.ITEMS,
+                Key={"ItemID": container_id},
+                UpdateExpression="SET Contents = :contents",
+                ExpressionAttributeValues={":contents": final_contents},
+            )
+            logger.info(f"Updated container {container_id} with total of {len(final_contents)} items")
 
         return inventory
 

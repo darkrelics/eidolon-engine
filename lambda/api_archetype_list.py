@@ -33,7 +33,6 @@ def handle_get_archetypes() -> dict:
 
     Returns:
         Dict containing:
-            - success: bool - Whether retrieval was successful
             - archetypes: list - List of player archetypes
             - count: int - Number of archetypes
 
@@ -44,7 +43,7 @@ def handle_get_archetypes() -> dict:
 
     if archetypes_cache:
         logger.info("Returning pre-loaded player archetypes cache")
-        return {"success": True, "archetypes": archetypes_cache, "count": len(archetypes_cache)}
+        return {"archetypes": archetypes_cache, "count": len(archetypes_cache)}
 
     # Cache failed to load at module init, try again
     logger.warning("Cache not loaded at module init, attempting to load now")
@@ -55,7 +54,7 @@ def handle_get_archetypes() -> dict:
         archetypes_cache = archetypes
 
         logger.info("Successfully loaded archetypes cache on demand")
-        return {"success": True, "archetypes": archetypes, "count": len(archetypes)}
+        return {"archetypes": archetypes, "count": len(archetypes)}
     except RuntimeError as err:
         logger.error(f"Failed to load archetypes on demand: {err}")
         raise

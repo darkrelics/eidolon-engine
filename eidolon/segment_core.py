@@ -106,13 +106,13 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
         results = normalized.get("Results", {})
         logger.info(f"Segment {segment_id} normalized Results keys: {list(results.keys())}")
         # Log the structure of one result to debug
-        if results and "normal" in results:
-            normal_result = results["normal"]
+        if results and "Normal" in results:
+            normal_result = results["Normal"]
             logger.info(
-                f"  'normal' result keys: {list(normal_result.keys()) if isinstance(normal_result, dict) else 'not a dict'}"
+                f"  'Normal' result keys: {list(normal_result.keys()) if isinstance(normal_result, dict) else 'not a dict'}"
             )
             if isinstance(normal_result, dict) and "NextSegmentID" in normal_result:
-                logger.info(f"  'normal' NextSegmentID: {normal_result['NextSegmentID']}")
+                logger.info(f"  'Normal' NextSegmentID: {normal_result['NextSegmentID']}")
         return normalized
     except ClientError as err:
         logger.error(f"Failed to get segment definition for {segment_id} Error: {err}", exc_info=True)
@@ -251,8 +251,17 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
                 logger.error(f"Failed to get opponent data for rewards for {opponent_id} Error: {err}", exc_info=True)
 
     if outcome in ["death", "failure", "minimal", "normal", "exceptional"]:
-        outcome_results = segment_def.get("Results", {}).get(outcome, {})
-        outcome_effects = outcome_results.get("effects", {})
+        # Map outcome to PascalCase for Results lookup
+        outcome_map = {
+            "death": "Death",
+            "failure": "Failure",
+            "minimal": "Minimal",
+            "normal": "Normal",
+            "exceptional": "Exceptional"
+        }
+        outcome_key = outcome_map.get(outcome.lower(), outcome)
+        outcome_results = segment_def.get("Results", {}).get(outcome_key, {})
+        outcome_effects = outcome_results.get("Effects", {})  # PascalCase Effects
         if outcome_effects:
             updates["StoryEffects"] = outcome_effects
 

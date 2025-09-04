@@ -165,7 +165,7 @@ def lambda_response(status_code: int, body: dict, event: dict) -> dict:
     Returns:
         Formatted response with CORS headers and PascalCase field names
     """
-    logger.info(f"Lambda response for status {status_code}")
+    logger.debug(f"Lambda response for status {status_code}")
 
     # If it's an error response with lowercase "error" key, convert to PascalCase
     if "error" in body and status_code >= 400:
@@ -184,9 +184,8 @@ def lambda_error(event: dict, err: Exception) -> dict:
     Handle Lambda function errors with proper logging and CORS response using PascalCase.
 
     Args:
-        err: Exception that occurred
-        context: Lambda context
         event: Lambda event dict
+        err: Exception that occurred
 
     Returns:
         Error response with CORS headers and PascalCase fields

@@ -128,8 +128,8 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                 elif segment_type == "rest":
                     # Get rest segment results
                     rest_results = segment_def.get("Results", {})
-                    if isinstance(rest_results, dict) and "normal" in rest_results:
-                        normal_result = rest_results["normal"]
+                    if isinstance(rest_results, dict) and "Normal" in rest_results:
+                        normal_result = rest_results["Normal"]
                         response["Narrative"] = normal_result.get("Narrative", "")
                         response["Effects"] = normal_result.get("Effects", {})
                         response["NextSegmentID"] = normal_result.get("NextSegmentID")

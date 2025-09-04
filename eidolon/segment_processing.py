@@ -253,12 +253,22 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         return None
 
     elif segment_type in ["mechanical", "rest"]:
-        # Rest segments always use normal outcome
+        # Map outcome to PascalCase keys used in data
+        outcome_map = {
+            "death": "Death",
+            "failure": "Failure", 
+            "minimal": "Minimal",
+            "normal": "Normal",
+            "exceptional": "Exceptional"
+        }
+        
+        # Rest segments always use Normal outcome
         if segment_type == "rest":
-            outcome_key = "normal"
+            outcome_key = "Normal"
         else:
-            # Normalize outcome to lowercase for consistent lookup
-            outcome_key = str(outcome).lower() if outcome else "normal"
+            # Map outcome to PascalCase
+            outcome_lower = str(outcome).lower() if outcome else "normal"
+            outcome_key = outcome_map.get(outcome_lower, "Normal")
 
         # Get results dict
         results = segment_def.get("Results", {})
