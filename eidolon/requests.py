@@ -100,5 +100,3 @@ def get_query_parameter(event: dict, param: str, required: bool = False):
         raise ValueError(f"Missing required query parameter: {param}")
 
     return value if value else None
-
-

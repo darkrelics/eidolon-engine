@@ -29,14 +29,14 @@ def process_segment(active_segment: dict) -> None:
         RuntimeError: If processing fails
     """
     active_segment_id = active_segment.get("ActiveSegmentID")
-    
+
     # Check idempotency
     if active_segment.get("ProcessingStatus") == "processed":
         logger.info(f"Segment already processed: {active_segment_id}")
         return
-    
+
     # Claim the segment for processing (atomic operation)
-    if not claim_segment_for_processing(active_segment_id):
+    if not claim_segment_for_processing(active_segment_id):  # type: ignore
         logger.info(f"Segment already being processed by another worker: {active_segment_id}")
         return
 

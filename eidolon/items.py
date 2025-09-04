@@ -123,7 +123,7 @@ def get_inventory(inventory: dict) -> dict:
         return {}
 
     enriched_inventory = {}
-    
+
     # Separate null slots from actual item IDs
     item_slots = {}  # Maps item_id to list of slots
     for slot, item_id in inventory.items():
@@ -133,28 +133,28 @@ def get_inventory(inventory: dict) -> dict:
             if item_id not in item_slots:
                 item_slots[item_id] = []
             item_slots[item_id].append(slot)
-    
+
     # If no actual items, return early
     if not item_slots:
         return enriched_inventory
-    
+
     # Batch fetch all unique items
     unique_item_ids = list(item_slots.keys())
     item_keys = [{"ItemID": item_id} for item_id in unique_item_ids]
-    
+
     try:
         # Use batch_get_items to fetch all items in one operation
         items_data = dynamo.batch_get_items(TableName.ITEMS, item_keys)
-        
+
         # Create lookup map for fetched items (handle None or empty response)
         items_map = {}
         if items_data:
             items_map = {item["ItemID"]: item for item in items_data}
-        
+
         # Process each item and its slots
         for item_id, slots in item_slots.items():
             item = items_map.get(item_id)
-            
+
             if item:
                 # Create enriched item data
                 item_details = {
@@ -167,7 +167,7 @@ def get_inventory(inventory: dict) -> dict:
                     "mass": item.get("Mass", 0),
                     "value": item.get("Value", 0),
                 }
-                
+
                 # Assign to all slots that have this item
                 for slot in slots:
                     enriched_inventory[slot] = item_details
@@ -180,17 +180,17 @@ def get_inventory(inventory: dict) -> dict:
                     "description": "This item could not be loaded",
                     "quantity": 0,
                 }
-                
+
                 for slot in slots:
                     enriched_inventory[slot] = missing_item
-                    
+
     except ClientError as err:
         logger.error(f"Failed to batch get item details Error: {err}")
         # Fall back to individual lookups on batch failure
         for item_id, slots in item_slots.items():
             try:
                 item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
-                
+
                 if item:
                     item_details = {
                         "itemId": item_id,
@@ -202,7 +202,7 @@ def get_inventory(inventory: dict) -> dict:
                         "mass": item.get("Mass", 0),
                         "value": item.get("Value", 0),
                     }
-                    
+
                     for slot in slots:
                         enriched_inventory[slot] = item_details
                 else:
@@ -213,7 +213,7 @@ def get_inventory(inventory: dict) -> dict:
                             "description": "This item could not be loaded",
                             "quantity": 0,
                         }
-                        
+
             except ClientError as individual_err:
                 logger.error(f"Failed to get item {item_id} Error: {individual_err}")
                 for slot in slots:

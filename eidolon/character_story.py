@@ -220,7 +220,7 @@ def get_stories(character_id: str, player_id: str, available_story_ids: list) ->
 def get_stories_with_character(character: dict, available_story_ids: list) -> list:
     """
     Get story details for a list of story IDs using an already-loaded character.
-    
+
     This function avoids reloading the character from the database when the caller
     already has the character data.
 

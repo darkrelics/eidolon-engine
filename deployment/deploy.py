@@ -235,58 +235,58 @@ def update_lambdas_only():
     print("=" * 60)
     print("Lambda Functions Update")
     print("=" * 60)
-    
+
     # Load minimal configuration needed
     config_path = Path(__file__).parent.parent / "config.yml"
     config = Config.load(str(config_path))
-    
+
     # Get account ID and region
     try:
         account_id = get_aws_account_id()
         if not account_id:
             print("Error: Unable to determine AWS account ID")
             return 1
-            
+
         region = validate_region(config.region)
         if not region:
             print("Error: Invalid region in configuration")
             return 1
-            
+
         # Get S3 bucket from config or user input
-        s3_bucket = getattr(config, 's3_artifacts_bucket', '')
+        s3_bucket = getattr(config, "s3_artifacts_bucket", "")
         if not s3_bucket:
             s3_bucket = input("S3 Artifacts Bucket: ").strip()
             if not s3_bucket:
                 print("Error: S3 bucket name is required")
                 return 1
-        
+
         print(f"\nAccount: {account_id}")
         print(f"Region: {region}")
         print(f"S3 Bucket: {s3_bucket}")
-        
+
         response = input("\nProceed with Lambda updates? [Y/n]: ").strip().lower()
         if response == "n":
             print("Lambda update cancelled")
             return 0
-        
+
         # Create minimal params object
         class UpdateParams:
             def __init__(self, account_id, region):
                 self.account_id = account_id
                 self.region = region
-        
+
         params = UpdateParams(account_id, region)
-        
+
         # Run the Lambda update
         success = update_lambda_functions_directly(params, region, s3_bucket)
-        
+
         if success:
             print("\n✓ Lambda functions updated successfully")
             return 0
         else:
             print("\n✗ Lambda function update failed")
             return 1
-            
+
     except Exception as err:
         print(f"\nError during Lambda update: {err}")
         return 1
@@ -295,15 +295,18 @@ def update_lambdas_only():
 def main():
     """Main deployment entry point."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Eidolon Engine Infrastructure Deployment")
-    parser.add_argument("--update-lambdas", action="store_true", 
-                       help="Only update Lambda functions with latest artifacts (faster than full deployment)")
+    parser.add_argument(
+        "--update-lambdas",
+        action="store_true",
+        help="Only update Lambda functions with latest artifacts (faster than full deployment)",
+    )
     args = parser.parse_args()
-    
+
     if args.update_lambdas:
         return update_lambdas_only()
-    
+
     print("=" * 60)
     print("Eidolon Engine Infrastructure Deployment")
     print("=" * 60)
@@ -388,7 +391,7 @@ def main():
             deploy_func = deployment_functions[stack_name]
             try:
                 result = deploy_func(params, config, state, config_path, state_path)
-                
+
                 # Special handling for client stack which returns a tuple
                 if stack_name == "client" and isinstance(result, tuple):
                     infra_success, build_success = result
@@ -441,11 +444,11 @@ def main():
             print(f"[{status}] {stack_name.capitalize()} Stack")
         else:
             print(f"[SKIPPED] {stack_name.capitalize()} Stack")
-    
+
     if overall_success:
         lambda_status = "OK" if lambda_update_success else "WARNING"
         print(f"[{lambda_status}] Lambda Function Updates")
-    
+
     print("=" * 60)
 
     return 0

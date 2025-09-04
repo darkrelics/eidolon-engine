@@ -64,7 +64,8 @@ def character_get_active_segment(character: dict) -> dict:
         # Should only be one active segment per character
         active_segment = items[0]
 
-        logger.info("Active segment found via query")
+        segment_id = active_segment.get("ActiveSegmentID", "unknown")
+        logger.info(f"Active segment {segment_id} found for character {character_id}")
 
         return active_segment
 

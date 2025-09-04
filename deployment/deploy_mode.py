@@ -122,7 +122,7 @@ def display_mode_summary(mode: str) -> None:
     for i, stack_name in enumerate(deployment_order, 1):
         description = get_stack_description(stack_name)
         print(f"    {i}. {stack_name.capitalize()}: {description}")
-    
+
     # Add Phase 11
     print(f"    11. Lambda Function Updates: Update function code from S3 artifacts")
 

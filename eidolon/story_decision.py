@@ -48,11 +48,11 @@ def validate_decision_option(active_segment: dict, decision_id: str) -> None:
 def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
     """
     Update the active segment with the player's decision.
-    
+
     Uses conditional update to ensure:
     1. Decision hasn't already been submitted (prevents race conditions)
     2. Segment is still in 'active' status (prevents late updates)
-    
+
     Both conditions result in a ValueError that maps to HTTP 409 Conflict.
 
     Args:
@@ -72,11 +72,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
             Key={"ActiveSegmentID": active_segment_id},
             UpdateExpression="SET #decision = :decision, #status = :completed",
             ExpressionAttributeNames={"#decision": "Decision", "#status": "Status"},
-            ExpressionAttributeValues={
-                ":decision": decision_id,
-                ":completed": "completed",
-                ":active": "active"
-            },
+            ExpressionAttributeValues={":decision": decision_id, ":completed": "completed", ":active": "active"},
             ConditionExpression="attribute_not_exists(#decision) AND #status = :active",
         )
 
@@ -99,7 +95,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
             else:
                 logger.warning(f"Conditional check failed for {active_segment_id}")
                 raise ValueError("Decision already submitted") from err
-        
+
         logger.error(f"Failed to update active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update active segment: {err}") from err
 

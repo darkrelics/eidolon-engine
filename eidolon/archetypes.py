@@ -21,8 +21,6 @@ def get_archetypes() -> list:
     Raises:
         RuntimeError: If database scan fails
     """
-    logger.info("Loading archetypes from DynamoDB")
-
     try:
         # Scan all archetypes
         items: list = dynamo.scan_all(TableName.ARCHETYPES)  # type: ignore

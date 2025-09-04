@@ -17,7 +17,6 @@ archetypes_cache = []
 
 # Cache for player archetypes - populated at module load
 try:
-    logger.info("Loading player archetypes cache at module initialization")
     archetypes_cache = get_archetypes()
     logger.info(f"Player archetypes cache loaded successfully: count: {len(archetypes_cache)}")
 except Exception as err:
@@ -42,7 +41,7 @@ def handle_get_archetypes() -> dict:
     global archetypes_cache
 
     if archetypes_cache:
-        logger.info("Returning pre-loaded player archetypes cache")
+        logger.info(f"Returning pre-loaded player archetypes cache: {len(archetypes_cache)} archetypes")
         return {"archetypes": archetypes_cache, "count": len(archetypes_cache)}
 
     # Cache failed to load at module init, try again
@@ -53,7 +52,7 @@ def handle_get_archetypes() -> dict:
         # Cache the results
         archetypes_cache = archetypes
 
-        logger.info("Successfully loaded archetypes cache on demand")
+        logger.info(f"Successfully loaded archetypes cache on demand: {len(archetypes)} archetypes")
         return {"archetypes": archetypes, "count": len(archetypes)}
     except RuntimeError as err:
         logger.error(f"Failed to load archetypes on demand: {err}")
@@ -86,7 +85,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         result: dict = handle_get_archetypes()
-        logger.info("Lambda response for status 200")
         return lambda_response(
             200,
             {

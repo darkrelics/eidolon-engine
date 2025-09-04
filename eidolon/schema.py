@@ -114,8 +114,8 @@ def normalize_results(raw_results) -> dict:
     for outcome_key, outcome_val in raw_results.items():
         if not isinstance(outcome_val, dict):
             continue
-        # Normalize outcome key to lowercase for consistent lookup
-        k = str(outcome_key).lower()
+        # Normalize outcome key to title case for consistent lookup
+        k = str(outcome_key).title()
         narrative = outcome_val.get("Narrative", "")
         effects = outcome_val.get("Effects", {}) or {}
 

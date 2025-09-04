@@ -228,7 +228,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
             ExpressionAttributeNames={"#normal": "Normal"},
             ExpressionAttributeValues={
                 ":rest_id": rest_segment_id,
-                ":expected_next": rest_next_segment_id  # The value we read earlier
+                ":expected_next": rest_next_segment_id,  # The value we read earlier
             },
             ConditionExpression="Results.#normal.NextSegmentID = :expected_next",
         )
@@ -244,7 +244,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
                 pass
             # Raise a specific error that the API can map to 409/422
             raise ValueError("Rest segment insertion failed - concurrent modification detected") from err
-        
+
         logger.error(f"Failed to update segment to point to rest for {insertion_point_id} Error: {err}", exc_info=True)
         # Clean up on other errors too
         try:

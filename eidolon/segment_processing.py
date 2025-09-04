@@ -12,6 +12,7 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.segment_challenges import process_skill_challenges
 from eidolon.segment_combat import process_combat_segment
+from eidolon.segment_core import map_outcome_to_key
 
 
 def route_segment_processing(segment_def: dict, character: dict, active_segment: dict) -> tuple:
@@ -253,22 +254,11 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         return None
 
     elif segment_type in ["mechanical", "rest"]:
-        # Map outcome to PascalCase keys used in data
-        outcome_map = {
-            "death": "Death",
-            "failure": "Failure", 
-            "minimal": "Minimal",
-            "normal": "Normal",
-            "exceptional": "Exceptional"
-        }
-        
         # Rest segments always use Normal outcome
         if segment_type == "rest":
             outcome_key = "Normal"
         else:
-            # Map outcome to PascalCase
-            outcome_lower = str(outcome).lower() if outcome else "normal"
-            outcome_key = outcome_map.get(outcome_lower, "Normal")
+            outcome_key = map_outcome_to_key(outcome or "normal")
 
         # Get results dict
         results = segment_def.get("Results", {})

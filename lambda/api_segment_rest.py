@@ -130,7 +130,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         result = handle_character_rest(player_id, character_id)
-        logger.info("Lambda response for status 200")
+        rest_segment_id = result.get("rest_segment_id")
+        logger.info(f"Created rest segment {rest_segment_id} for character {character_id}")
         return lambda_response(
             200,
             {

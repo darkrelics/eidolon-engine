@@ -17,7 +17,7 @@ from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.schema import normalize_segment_definition
-from eidolon.segment_core import validate_segment_outcome_results
+from eidolon.segment_core import validate_segment_outcome_results, map_outcome_to_key
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story_segment
 from eidolon.time_utils import from_unix
@@ -107,21 +107,11 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                     results = segment_def.get("Results", {}) or {}
                     next_segment_id = None
                     if isinstance(results, dict):
-                        outcome_map = {
-                            "death": "Death",
-                            "failure": "Failure",
-                            "minimal": "Minimal",
-                            "normal": "Normal",
-                            "exceptional": "Exceptional",
-                        }
-                        outcome_key = outcome_map.get(str(outcome).lower())
+                        outcome_key = map_outcome_to_key(outcome or "normal")
                         if outcome_key and isinstance(results.get(outcome_key), dict):
                             outcome_block = results.get(outcome_key, {})
                             if isinstance(outcome_block, dict) and "NextSegmentID" in outcome_block:
                                 next_segment_id = outcome_block.get("NextSegmentID")
-
-                    if next_segment_id is None and "NextSegmentID" in segment_def:
-                        next_segment_id = segment_def.get("NextSegmentID")
 
                     response["NextSegmentID"] = next_segment_id
 

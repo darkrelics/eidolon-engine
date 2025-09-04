@@ -257,7 +257,7 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
             "failure": "Failure",
             "minimal": "Minimal",
             "normal": "Normal",
-            "exceptional": "Exceptional"
+            "exceptional": "Exceptional",
         }
         outcome_key = outcome_map.get(outcome.lower(), outcome)
         outcome_results = segment_def.get("Results", {}).get(outcome_key, {})
@@ -266,3 +266,19 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
             updates["StoryEffects"] = outcome_effects
 
     return updates
+
+
+@cache
+def map_outcome_to_key(outcome: str) -> str:
+    """
+    Map a segment outcome to its corresponding key in the Results.
+
+    Args:
+        outcome: The segment outcome
+
+    Returns:
+        The corresponding key for the outcome
+    """
+    outcome_map = {"death": "Death", "failure": "Failure", "minimal": "Minimal", "normal": "Normal", "exceptional": "Exceptional"}
+    result = outcome_map.get(outcome.lower(), outcome)
+    return result

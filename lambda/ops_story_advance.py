@@ -127,7 +127,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         active_segment["Status"] = "completed"
     except Exception as err:
         logger.error(f"Failed to mark segment as completed for {active_segment_id} Error: {err}", exc_info=True)
-    
+
     # Record segment history
     record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
 

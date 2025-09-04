@@ -52,7 +52,7 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
 
     # Get active story and segment, handling broken story chains
     active_story, active_segment = get_active_story_and_segment(character)
-    
+
     # Note: If broken chains were detected, get_active_story_and_segment already
     # cleared the fields in the database. The character dict may have stale values
     # but clients should use the presence of ActiveStory/ActiveSegment in the response
@@ -152,7 +152,8 @@ def lambda_handler(event: dict, context: object) -> dict:
         result: dict = get_character_logic(character_id, player_id)
 
         if result.get("success"):
-            logger.info("Lambda response for status 200")
+            character_name = result.get("data", {}).get("CharacterName", "unknown")
+            logger.info(f"Retrieved character '{character_name}' ({character_id}) for player {player_id}")
             return lambda_response(200, result.get("data", {}), event)
         else:
             # Log the error if it's a server error
