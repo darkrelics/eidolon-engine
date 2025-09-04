@@ -54,7 +54,14 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     # Mark segment as abandoned (set Status to "abandoned")
     try:
         mark_segment_as_abandoned(active_segment_id)
-    except (ValueError, RuntimeError) as err:
+    except ValueError as err:
+        if "already completed or abandoned" in str(err).lower():
+            logger.info(f"Segment {active_segment_id} already completed/abandoned, continuing")
+            # Continue - idempotent operation, segment already transitioned
+        else:
+            logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}")
+            # Continue anyway since we still want to update character state
+    except RuntimeError as err:
         logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}")
         # Continue anyway since we still want to update character state
 
@@ -128,7 +135,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -149,6 +156,13 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(200, result, event)
     except ValueError as err:
         logger.warning(f"Business logic error Error: {err}")
+        error_msg = str(err).lower()
+        if "no active" in error_msg:
+            return lambda_response(409, {"Error": "No active story to abandon"}, event)
+        elif "character not found" in error_msg:
+            return lambda_response(404, {"Error": "Character not found"}, event)
+        elif "not owned" in error_msg:
+            return lambda_response(403, {"Error": "Access denied"}, event)
         return lambda_response(400, {"Error": str(err)}, event)
     except RuntimeError as err:
         logger.error(f"Database error Error: {err}", exc_info=True)

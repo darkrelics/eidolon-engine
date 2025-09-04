@@ -11,6 +11,7 @@ from eidolon.character_data import get_character
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.responses import lambda_response
 from eidolon.segment_core import get_active_segment, get_segment_definition
+from eidolon.segment_polling import claim_segment_for_processing
 from eidolon.segment_processing import route_segment_processing
 from eidolon.segment_state import update_active_segment_outcome
 from eidolon.validation import validate_uuid
@@ -27,9 +28,16 @@ def process_segment(active_segment: dict) -> None:
         ValueError: If data validation fails
         RuntimeError: If processing fails
     """
+    active_segment_id = active_segment.get("ActiveSegmentID")
+    
     # Check idempotency
     if active_segment.get("ProcessingStatus") == "processed":
-        logger.info(f"Segment already processed: {active_segment.get('ActiveSegmentID')}")
+        logger.info(f"Segment already processed: {active_segment_id}")
+        return
+    
+    # Claim the segment for processing (atomic operation)
+    if not claim_segment_for_processing(active_segment_id):
+        logger.info(f"Segment already being processed by another worker: {active_segment_id}")
         return
 
     # Get segment definition
@@ -50,12 +58,12 @@ def process_segment(active_segment: dict) -> None:
 
     # Persist results
     try:
-        update_active_segment_outcome(active_segment.get("ActiveSegmentID"), outcome, results, segment_def)  # type: ignore
+        update_active_segment_outcome(active_segment_id, outcome, results, segment_def)  # type: ignore
     except (ValueError, RuntimeError) as err:
-        logger.error(f"Failed to update segment outcome for {active_segment.get('ActiveSegmentID')}: {err}", exc_info=True)
+        logger.error(f"Failed to update segment outcome for {active_segment_id}: {err}", exc_info=True)
         raise
 
-    logger.info(f"Segment {active_segment.get('ActiveSegmentID')} processed with outcome: {outcome}")
+    logger.info(f"Segment {active_segment_id} processed with outcome: {outcome}")
 
 
 def lambda_handler(event: dict, context: object) -> dict:

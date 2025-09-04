@@ -107,7 +107,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -152,6 +152,9 @@ def lambda_handler(event: dict, context: object) -> dict:
         elif "Cannot insert rest segment" in error_msg:
             # Early return cases - not enough time or at end of story
             status_code = 422  # Unprocessable Entity
+        elif "concurrent modification detected" in error_msg:
+            # Race condition - another request already inserted rest
+            status_code = 409  # Conflict
         else:
             status_code = 400
 

@@ -219,16 +219,34 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         raise RuntimeError(f"Failed to create rest segment: {err}") from err
 
     try:
+        # Use conditional update to prevent race conditions
+        # Only update if the NextSegmentID still matches what we expect
         dynamo.update_item(
             TableName.SEGMENTS,
             Key={"StoryID": story_id, "SegmentID": insertion_point_id},
             UpdateExpression="SET Results.#normal.NextSegmentID = :rest_id",
             ExpressionAttributeNames={"#normal": "Normal"},
-            ExpressionAttributeValues={":rest_id": rest_segment_id},
+            ExpressionAttributeValues={
+                ":rest_id": rest_segment_id,
+                ":expected_next": rest_next_segment_id  # The value we read earlier
+            },
+            ConditionExpression="Results.#normal.NextSegmentID = :expected_next",
         )
         logger.info(f"Updated segment normal outcome to point to rest for {insertion_point_id}")
     except ClientError as err:
+        # Check if this was a concurrent modification (race condition)
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning(f"Concurrent rest insertion detected for {insertion_point_id} - cleaning up orphaned rest segment")
+            # Clean up the rest segment we created since another request won the race
+            try:
+                dynamo.delete_item(TableName.SEGMENTS, Key={"StoryID": story_id, "SegmentID": rest_segment_id})
+            except ClientError:
+                pass
+            # Raise a specific error that the API can map to 409/422
+            raise ValueError("Rest segment insertion failed - concurrent modification detected") from err
+        
         logger.error(f"Failed to update segment to point to rest for {insertion_point_id} Error: {err}", exc_info=True)
+        # Clean up on other errors too
         try:
             dynamo.delete_item(TableName.SEGMENTS, Key={"StoryID": story_id, "SegmentID": rest_segment_id})
         except ClientError:

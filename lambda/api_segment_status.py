@@ -176,7 +176,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     Used by clients to poll for segment completion and retrieve results.
 
     Query Parameters:
-        characterId: Character ID to check (supports both CharacterID and characterId)
+        CharacterID: Character ID to check
 
     Returns:
         200: Segment status data
@@ -197,7 +197,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Extract player ID from JWT
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -219,6 +219,8 @@ def lambda_handler(event: dict, context: object) -> dict:
             return lambda_response(404, {"Error": "No active segment found"}, event)
         elif "not found" in error_msg.lower():
             return lambda_response(404, {"Error": "Character not found"}, event)
+        elif "not owned" in error_msg.lower():
+            return lambda_response(403, {"Error": "Access denied"}, event)
         return lambda_response(400, {"Error": str(err)}, event)
     except RuntimeError as err:
         logger.error(

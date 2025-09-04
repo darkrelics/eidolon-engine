@@ -17,7 +17,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.time_utils import from_unix
+from eidolon.time_utils import from_unix, now_iso
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> SegmentHistoryResponse:
@@ -156,7 +156,8 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
         formatted_segments.append(SegmentHistoryItem.model_validate(formatted_segment_dict))
 
     # Sort by start time, newest first
-    formatted_segments.sort(key=lambda x: x.start_time or 0, reverse=True)
+    # Use current time as default for missing timestamps to avoid mixed type comparison
+    formatted_segments.sort(key=lambda x: x.start_time or now_iso(), reverse=True)
 
     response = SegmentHistoryResponse(CharacterID=character_id, StoryID=story_id, Segments=formatted_segments)
 
@@ -194,7 +195,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Extract player ID from JWT
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)

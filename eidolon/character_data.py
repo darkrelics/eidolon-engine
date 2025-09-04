@@ -274,8 +274,8 @@ def build_character_record(
         "Resources": {},
         "Progress": {},
         "AvailableStories": archetype_data.get("AvailableStories", []),
-        "AbandonedStories": [],
-        "CompletedStories": [],
+        # AbandonedStories and CompletedStories are not initialized here
+        # They will be created as DynamoDB sets when first used via ADD operations
         "ActiveStoryID": None,
         "ActiveSegmentID": None,
         "Hidden": False,

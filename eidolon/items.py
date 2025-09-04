@@ -123,18 +123,41 @@ def get_inventory(inventory: dict) -> dict:
         return {}
 
     enriched_inventory = {}
-
+    
+    # Separate null slots from actual item IDs
+    item_slots = {}  # Maps item_id to list of slots
     for slot, item_id in inventory.items():
         if not item_id:
             enriched_inventory[slot] = None
-            continue
-
-        try:
-            # Get item details
-            item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
-
+        else:
+            if item_id not in item_slots:
+                item_slots[item_id] = []
+            item_slots[item_id].append(slot)
+    
+    # If no actual items, return early
+    if not item_slots:
+        return enriched_inventory
+    
+    # Batch fetch all unique items
+    unique_item_ids = list(item_slots.keys())
+    item_keys = [{"ItemID": item_id} for item_id in unique_item_ids]
+    
+    try:
+        # Use batch_get_items to fetch all items in one operation
+        items_data = dynamo.batch_get_items(TableName.ITEMS, item_keys)
+        
+        # Create lookup map for fetched items (handle None or empty response)
+        items_map = {}
+        if items_data:
+            items_map = {item["ItemID"]: item for item in items_data}
+        
+        # Process each item and its slots
+        for item_id, slots in item_slots.items():
+            item = items_map.get(item_id)
+            
             if item:
-                enriched_inventory[slot] = {
+                # Create enriched item data
+                item_details = {
                     "itemId": item_id,
                     "name": item.get("Name", "Unknown Item"),
                     "description": item.get("Description", ""),
@@ -144,22 +167,61 @@ def get_inventory(inventory: dict) -> dict:
                     "mass": item.get("Mass", 0),
                     "value": item.get("Value", 0),
                 }
+                
+                # Assign to all slots that have this item
+                for slot in slots:
+                    enriched_inventory[slot] = item_details
             else:
+                # Item not found - create missing item placeholder
                 logger.warning(f"Item not found in inventory for {item_id}")
-                enriched_inventory[slot] = {
+                missing_item = {
                     "itemId": item_id,
                     "name": "Missing Item",
                     "description": "This item could not be loaded",
                     "quantity": 0,
                 }
-
-        except ClientError as err:
-            logger.error(f"Failed to get item details for {item_id} Error: {err}")
-            enriched_inventory[slot] = {
-                "itemId": item_id,
-                "name": "Error Loading Item",
-                "description": "Failed to load item details",
-                "quantity": 0,
-            }
+                
+                for slot in slots:
+                    enriched_inventory[slot] = missing_item
+                    
+    except ClientError as err:
+        logger.error(f"Failed to batch get item details Error: {err}")
+        # Fall back to individual lookups on batch failure
+        for item_id, slots in item_slots.items():
+            try:
+                item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+                
+                if item:
+                    item_details = {
+                        "itemId": item_id,
+                        "name": item.get("Name", "Unknown Item"),
+                        "description": item.get("Description", ""),
+                        "quantity": item.get("Quantity", 1),
+                        "stackable": item.get("Stackable", False),
+                        "equipped": item.get("Equipped", False),
+                        "mass": item.get("Mass", 0),
+                        "value": item.get("Value", 0),
+                    }
+                    
+                    for slot in slots:
+                        enriched_inventory[slot] = item_details
+                else:
+                    for slot in slots:
+                        enriched_inventory[slot] = {
+                            "itemId": item_id,
+                            "name": "Missing Item",
+                            "description": "This item could not be loaded",
+                            "quantity": 0,
+                        }
+                        
+            except ClientError as individual_err:
+                logger.error(f"Failed to get item {item_id} Error: {individual_err}")
+                for slot in slots:
+                    enriched_inventory[slot] = {
+                        "itemId": item_id,
+                        "name": "Error Loading Item",
+                        "description": "Failed to load item details",
+                        "quantity": 0,
+                    }
 
     return enriched_inventory
