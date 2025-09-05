@@ -208,7 +208,6 @@ Resources:
           SEGMENTS_TABLE: segments
           ACTIVE_SEGMENTS_TABLE: active_segments
           OPPONENTS_TABLE: opponents
-          SEGMENT_PROCESSOR_FUNCTION_ARN: !GetAtt ProcessSegmentFunction.Arn
       MemorySize: 128
       Timeout: 30
       Role: !ImportValue
