@@ -8,7 +8,7 @@ from functools import cache
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import TableName, dynamo, decimal_to_float
 from eidolon.logger import logger
 from eidolon.schema import normalize_segment_definition
 
@@ -71,7 +71,8 @@ def get_active_segment(active_segment_id: str) -> dict:
         )
         if not active_segment:
             raise ValueError(f"Active segment not found: {active_segment_id}")
-        return active_segment
+        # Convert DynamoDB Decimal values to native Python types
+        return decimal_to_float(active_segment) # type: ignore
     except ClientError as err:
         logger.error(f"Failed to get active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get active segment: {err}") from err

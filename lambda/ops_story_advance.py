@@ -43,10 +43,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # Get active segment first to check its status
     active_segment = get_active_segment(active_segment_id)
 
-    # Check if segment is already completed (e.g., marked as exceptional by poller)
-    if active_segment.get("Status") == "completed":
-        logger.info(f"Segment already completed, skipping advancement for {active_segment_id}")
-        return {"success": True, "skipped": True, "reason": "Segment already completed"}
+    # Segments marked as completed still need to be advanced to create the next segment
+    # Only skip if the segment is abandoned or missing critical data
+    status = active_segment.get("Status")
+    if status == "abandoned":
+        logger.info(f"Segment abandoned, skipping advancement for {active_segment_id}")
+        return {"success": True, "skipped": True, "reason": "Segment abandoned"}
 
     # Extract key data
     character_id = active_segment.get("CharacterID")

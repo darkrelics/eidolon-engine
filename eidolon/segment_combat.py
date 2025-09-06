@@ -62,8 +62,8 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     # Track combat results
     combat_log = []
 
-    # Continue combat from current round
-    for round_num in range(current_round, min(current_round + 5, max_rounds)):
+    # Continue combat from current round  
+    for round_num in range(int(current_round), min(int(current_round) + 5, int(max_rounds))):
         round_results = {
             "round": round_num + 1,
             "playerAttack": None,
