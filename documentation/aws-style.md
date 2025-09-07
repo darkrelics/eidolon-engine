@@ -20,6 +20,7 @@ This document defines coding standards and naming conventions for AWS infrastruc
 **REQUIREMENT**: YAML is the preferred format for all configuration files.
 
 #### Format Rules
+
 - CloudFormation templates: YAML only (`.yml` extension)
 - CDK configuration: JSON allowed only for `cdk.json`
 - Infrastructure definitions: YAML
@@ -30,11 +31,13 @@ This document defines coding standards and naming conventions for AWS infrastruc
 #### Naming Standards
 
 **External/Shared Resources**: `{project}-{component}`
+
 - API Gateway: `eidolon-api`
 - Lambda Layer: `eidolon-dependencies`
 - IAM Roles: `eidolon-lambda-execution-role`
 
 **Internal/Isolated Resources**: `{component}` (no project prefix)
+
 - Lambda Functions: `api-segment-history`, `ops-segment-poller`, `cognito-player-new`
 - SQS Queues: `processing`, `advancement`
 - DynamoDB Tables: `players`, `characters`, `rooms`
@@ -45,11 +48,13 @@ Since each environment uses separate AWS accounts, prefixes are only needed for 
 #### Lambda Function Naming
 
 **Source File Names** use underscores with specific prefixes:
+
 - **`api_`** - Functions accessible via API Gateway (e.g., `api_segment_history.py`)
-- **`cognito_`** - Functions triggered by Cognito events (e.g., `cognito_player_new.py`) 
+- **`cognito_`** - Functions triggered by Cognito events (e.g., `cognito_player_new.py`)
 - **`ops_`** - Backend operational functions (e.g., `ops_segment_poller.py`)
 
 **Deployed Function Names** use dashes with no project prefix:
+
 - API Functions: `api-segment-history`, `api-story-start`
 - Cognito Functions: `cognito-player-new`, `cognito-player-delete`
 - Ops Functions: `ops-segment-poller`, `ops-story-advance`
@@ -57,12 +62,14 @@ Since each environment uses separate AWS accounts, prefixes are only needed for 
 ### 4. CDK Code Style Standards
 
 #### Module Organization Rules
+
 - **Maximum Size**: 1000 lines (300 lines preferred)
 - **Single Responsibility**: Each stack focuses on one service area
 - **Fixed Logical IDs**: Use consistent identifiers for persistent resources
 - **No AWS Calls**: CDK stack classes must not contain boto3 client instantiations
 
 #### Resource Management Style
+
 - Use `RemovalPolicy.RETAIN` for persistent data resources
 - Pass region as explicit parameter, not CDK token
 - Use CDK context for parameters, not argparse
@@ -71,16 +78,19 @@ Since each environment uses separate AWS accounts, prefixes are only needed for 
 ### 5. Resource Management Standards
 
 #### Data Resource Protection
+
 - Use `RemovalPolicy.RETAIN` for all persistent data resources (S3, DynamoDB)
 - Implement both CloudFormation deletion policies for DynamoDB tables
 - Apply fixed logical IDs to prevent resource recreation during updates
 
 #### Import Patterns
+
 - Check for existing resources in deployment layer, not CDK stacks
 - Pass existence status via CDK context to stack constructors
 - Use `from_bucket_name()` and similar methods for existing resources
 
 #### S3 Bucket Management
+
 For imported S3 buckets, set permissions post-deployment:
 
 ```python
@@ -105,11 +115,13 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str):
 ### 6. Cost Optimization Standards
 
 #### DynamoDB Configuration
+
 - Use on-demand billing for development and testing environments
 - Implement auto-scaling for production workloads
 - Enable point-in-time recovery selectively based on data criticality
 
 #### Lambda Resource Sizing
+
 - Right-size memory allocations based on actual usage patterns
 - Use ARM-based Graviton2 processors where compatible
 - Implement appropriate timeout values to prevent runaway costs
@@ -117,6 +129,7 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str):
 ### 8. Security Standards
 
 #### Data Handling Style
+
 - No hardcoded passwords, secrets, or API keys in code
 - Use SSM Parameter Store for configuration values
 - Environment variables for non-sensitive configuration
@@ -135,12 +148,14 @@ Tags:
 ### 10. Code Quality Standards
 
 #### General Guidelines
+
 - Use descriptive variable names that explain purpose
 - Follow consistent error handling patterns
 - Implement proper logging for operational visibility
 - Use safe dictionary access with `.get()` method
 
 #### Infrastructure Code
+
 - Use managed policies over inline policies
 - Document custom policy requirements
 - Implement consistent timeout and memory configurations
@@ -151,6 +166,7 @@ Tags:
 Before committing infrastructure code changes:
 
 #### Code Style
+
 - [ ] Uses fixed logical IDs for all persistent resources
 - [ ] No boto3 calls in CDK stack classes
 - [ ] Passes region as explicit parameter, not CDK token
@@ -159,12 +175,14 @@ Before committing infrastructure code changes:
 - [ ] Separate app file for each stack
 
 #### Naming Conventions
+
 - [ ] Follows naming conventions (external: eidolon-{component}, internal: {component})
-- [ ] Lambda files use underscore prefixes (api_, cognito_, ops_)
+- [ ] Lambda files use underscore prefixes (api*, cognito*, ops\_)
 - [ ] Deployed Lambda names use dash format
 - [ ] Uses YAML for CloudFormation templates
 
 #### Resource Standards
+
 - [ ] S3 buckets have RemovalPolicy.RETAIN
 - [ ] DynamoDB tables have retention policies
 - [ ] Uses import patterns for existing resources
@@ -175,6 +193,7 @@ Before committing infrastructure code changes:
 - [ ] Has CloudWatch logs configured
 
 #### Cost Optimization
+
 - [ ] Uses on-demand billing for development
 - [ ] Right-sized Lambda memory allocations
 - [ ] Appropriate timeout values configured
@@ -185,6 +204,7 @@ Before committing infrastructure code changes:
 - [AWS CDK Best Practices](https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html)
 
 For implementation details, deployment procedures, and architectural patterns, see:
+
 - `deployment.md` - Deployment procedures and system architecture
 - `cloudformation.md` - CloudFormation template documentation
 - `lambda-functions.md` - Lambda function implementation details

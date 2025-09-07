@@ -555,6 +555,7 @@ The system demonstrates that complex infrastructure can be managed effectively w
 Based on extensive production deployment experience, these patterns must be followed:
 
 #### CDK Synthesis Constraints
+
 - **No AWS Access During Synthesis**: CDK synthesis happens without AWS credentials. Any boto3 calls in CDK stack classes will fail. The deployment system uses boto3 in top-level deployment scripts for resource verification before CDK synthesis
 - **Fixed Logical IDs Required**: Use fixed IDs like `"PortalBucket"` not dynamic ones to prevent resource recreation
 - **CDK Tokens vs Strings**: `self.region` returns a token, not a string. Pass actual region values as parameters
