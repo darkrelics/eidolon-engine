@@ -21,7 +21,7 @@ from eidolon.segment_processing import determine_next_segment, process_decision_
 from eidolon.segment_state import create_next_active_segment, mark_segment_as_completed, update_segment_processing_status
 from eidolon.sqs import send_message
 from eidolon.story_completion import complete_story
-from eidolon.story_history import update_story_history_xp
+from eidolon.story_history import add_segment_to_history, update_story_history_xp
 from eidolon.story_rewards import apply_combat_rewards
 from eidolon.validation import validate_uuid
 
@@ -133,8 +133,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # Record segment history
     record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
 
-    # Update story history with accumulated XP
+    # Add segment to story history's SegmentHistory array
     story_instance_id = active_segment.get("StoryInstanceID")
+    if story_instance_id:
+        add_segment_to_history(character_id, story_instance_id, segment_id, outcome)  # type: ignore
+
+    # Update story history with accumulated XP
     skill_xp = character_updates.get("SkillXP", {})
     attribute_xp = character_updates.get("AttributeXP", {})
     if (skill_xp or attribute_xp) and story_instance_id:

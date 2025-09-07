@@ -438,23 +438,46 @@ class _SimpleSegmentCard extends StatelessWidget {
               ],
             ],
             
-            // Show narrative for processed/completed segments
-            if (segment['Narrative'] != null && segment['Narrative'].toString().isNotEmpty) ...[
+            // Show narrative for processed/completed segments OR initial prompt
+            if (segment['Narrative'] != null || segment['Prompt'] != null) ...[
               const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.2),
-                  ),
-                ),
-                child: Text(
-                  segment['Narrative'],
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.justify,
-                ),
+              Builder(
+                builder: (context) {
+                  final narrative = segment['Narrative']?.toString() ?? '';
+                  final prompt = segment['Prompt']?.toString() ?? '';
+                  final displayText = narrative.isNotEmpty ? narrative : prompt;
+                  
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (narrative.isEmpty && prompt.isNotEmpty)
+                          Text(
+                            'Story Prompt:',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        if (narrative.isEmpty && prompt.isNotEmpty)
+                          const SizedBox(height: 4),
+                        Text(
+                          displayText,
+                          style: theme.textTheme.bodyMedium,
+                          textAlign: TextAlign.justify,
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
             

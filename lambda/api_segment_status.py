@@ -19,7 +19,7 @@ from eidolon.responses import lambda_error, lambda_response
 from eidolon.schema import normalize_segment_definition
 from eidolon.segment_core import validate_segment_outcome_results, map_outcome_to_key
 from eidolon.story_active import get_active_story_segment_with_player_check
-from eidolon.story_retrieval import get_story_segment
+from eidolon.story_retrieval import get_story, get_story_segment
 from eidolon.time_utils import from_unix
 
 
@@ -67,13 +67,17 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     response = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
         "StoryID": active_segment.get("StoryID"),
+        "StoryInstanceID": active_segment.get("StoryInstanceID"),
         "SegmentID": active_segment.get("SegmentID"),
         "Status": active_segment.get("Status", "active"),
         "IsComplete": is_complete,
         "TimeRemaining": time_remaining,
+        "StartTime": from_unix(active_segment.get("StartTime", 0)) if active_segment.get("StartTime") else "",
         "EndTime": end_time,
         "ProcessingStatus": processing_status,
         "SegmentType": active_segment.get("SegmentType"),
+        "ShortStatus": active_segment.get("ShortStatus", active_segment.get("DefaultStatus", "")),
+        "Duration": active_segment.get("Duration", 60),
     }
 
     # Only include narrative data if segment is processed or if it's not a mechanical segment
@@ -135,6 +139,25 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                     response["Narrative"] = ""
                     response["Effects"] = {}
 
+                # Add StoryComplete flag
+                next_segment_id = response.get("NextSegmentID")
+                response["StoryComplete"] = next_segment_id is None
+                
+                # Add NextSegmentPreview if there's a next segment
+                if next_segment_id and (processing_status == "processed" or active_segment.get("Status") == "completed"):
+                    try:
+                        next_segment_def = get_story_segment(story_id, next_segment_id)  # type: ignore
+                        if next_segment_def:
+                            response["NextSegmentPreview"] = {
+                                "SegmentID": next_segment_id,
+                                "SegmentType": next_segment_def.get("SegmentType", "mechanical"),
+                                "SegmentDuration": next_segment_def.get("SegmentDuration", 60),
+                                "DefaultStatus": next_segment_def.get("DefaultStatus", "Processing..."),
+                            }
+                    except Exception as preview_err:
+                        logger.debug(f"Could not fetch next segment preview: {preview_err}")
+                        # Not critical, continue without preview
+
             except Exception as err:
                 logger.warning(
                     f"Failed to get narrative data for segment_id={segment_id}, character_id={character_id}: {err.__class__.__name__}: {err}"
@@ -152,6 +175,21 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     # Include healing data for rest segments
     if segment_type == "rest":
         response["HealingApplied"] = active_segment.get("HealingApplied")
+
+    # Include story information for consistent display
+    if story_id:
+        try:
+            story_data = get_story(story_id)  # type: ignore
+            if story_data:
+                response["Story"] = {
+                    "Title": story_data.get("Title", ""),
+                    "Description": story_data.get("Description", ""),
+                    "Type": story_data.get("StoryType", ""),
+                    "StoryID": story_id,
+                }
+        except Exception as err:
+            logger.debug(f"Could not fetch story data: {err}")
+            # Not critical, continue without story data
 
     logger.debug(f"Segment status retrieved for {character_id}")
 
