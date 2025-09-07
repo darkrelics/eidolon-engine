@@ -17,7 +17,7 @@ from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.schema import normalize_segment_definition
-from eidolon.segment_core import validate_segment_outcome_results, map_outcome_to_key
+from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
 from eidolon.time_utils import from_unix

@@ -8,7 +8,7 @@ from functools import cache
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import TableName, dynamo, decimal_to_float
+from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
 from eidolon.schema import normalize_segment_definition
 

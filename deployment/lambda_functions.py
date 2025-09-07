@@ -350,7 +350,7 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
     skipped_count = sum(1 for result in update_results.values() if result is None)
     failed_count = sum(1 for result in update_results.values() if result is False)
 
-    print(f"\n3. Update Summary:")
+    print("\n3. Update Summary:")
     print(f"  [OK] Updated: {updated_count} functions")
     if skipped_count > 0:
         print(f"  [SKIP] Not deployed yet: {skipped_count} functions")

@@ -124,7 +124,7 @@ def display_mode_summary(mode: str) -> None:
         print(f"    {i}. {stack_name.capitalize()}: {description}")
 
     # Add Phase 11
-    print(f"    11. Lambda Function Updates: Update function code from S3 artifacts")
+    print("    11. Lambda Function Updates: Update function code from S3 artifacts")
 
     # Show what's excluded
     if mode == "mud":
