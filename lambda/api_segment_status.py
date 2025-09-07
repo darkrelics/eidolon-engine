@@ -179,7 +179,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
     # Include story information for consistent display
     if story_id:
         try:
-            story_data = get_story(story_id)  # type: ignore
+            story_data = get_story(story_id)
             if story_data:
                 response["Story"] = {
                     "Title": story_data.get("Title", ""),

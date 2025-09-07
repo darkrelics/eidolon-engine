@@ -16,6 +16,33 @@ from eidolon.segment_core import validate_segment_outcome_results
 from eidolon.time_utils import from_unix
 
 
+def get_story(story_id: str) -> dict:
+    """
+    Get story metadata from the STORY table.
+
+    Args:
+        story_id: Story UUID
+
+    Returns:
+        Story data dict
+
+    Raises:
+        ValueError: If story not found
+        RuntimeError: If database query fails
+    """
+    if not story_id:
+        raise ValueError("Story ID cannot be empty")
+
+    try:
+        story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+        if not story:
+            raise ValueError("Story not found")
+        return story
+    except ClientError as err:
+        logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to get story: {err}") from err
+
+
 def get_story_segment(story_id: str, segment_id: str) -> dict:
     """
     Get a specific segment from the SEGMENTS table.
