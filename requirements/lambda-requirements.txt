@@ -1,5 +1,5 @@
 #Required
-boto3==1.40.8
+boto3==1.40.25
 botocore==1.40.11
 bloom-filter==1.3.3
 jsonschema==4.25.0 
