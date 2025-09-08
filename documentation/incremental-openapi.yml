@@ -1382,9 +1382,11 @@ components:
             SegmentType:
               type: string
             StartTime:
-              type: integer
+              type: string
+              format: date-time
             EndTime:
-              type: integer
+              type: string
+              format: date-time
             ShortStatus:
               type: string
             Duration:
@@ -1397,7 +1399,8 @@ components:
         Accepted:
           type: boolean
         NextSegmentTime:
-          type: integer
+          type: string
+          format: date-time
           nullable: true
       required: [Accepted]
 
@@ -1439,8 +1442,12 @@ components:
           type: boolean
         TimeRemaining:
           type: integer
+        StartTime:
+          type: string
+          format: date-time
         EndTime:
-          type: integer
+          type: string
+          format: date-time
         Outcome:
           type: string
           nullable: true
@@ -1468,9 +1475,17 @@ components:
         ProcessingStatus:
           type: string
         StartTime:
-          type: integer
+          type: string
+          format: date-time
+          nullable: true
         EndTime:
-          type: integer
+          type: string
+          format: date-time
+          nullable: true
+        CompletedAt:
+          type: string
+          format: date-time
+          nullable: true
         Outcome:
           type: string
         ClientEvents:
