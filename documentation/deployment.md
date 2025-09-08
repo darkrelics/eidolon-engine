@@ -22,7 +22,7 @@ The deployment will:
 
 1. Check CDK bootstrap status
 2. Collect deployment parameters (mode, domain, etc.)
-3. Deploy 9 CDK stacks in sequence based on selected mode
+3. Deploy 8–10 CDK stacks in sequence based on selected mode
 4. Execute Lambda builds automatically
 5. Update Lambda functions from S3 artifacts
 6. Execute portal build via CodeBuild
@@ -30,9 +30,9 @@ The deployment will:
 
 ## System Architecture
 
-- **9 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Story, S3, CloudWatch, API, Client
+- **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **16 Lambda Functions**: API handlers and operational functions
+- **15 Lambda Functions**: API handlers and operational functions
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **Fixed Logical IDs**: Preventing resource recreation on updates
 - **Post-Deploy Updates**: Lambda functions automatically updated from S3
@@ -46,25 +46,25 @@ The deployment system provides:
 - **AWS Access Isolation**: No AWS API calls during CDK synthesis
 - **Automated End-to-End**: From infrastructure to portal deployment
 - **Post-Deployment Operations**: Lambda updates, layer cleanup, trigger configuration
-- **Production Tested**: All 9 phases deployed and operational
+- **Production Tested**: All phases deployed and operational
 
 ## Deployment Modes
 
-### MUD Mode (8 Stacks)
+### MUD Mode (9 Stacks)
 
 - **Frontend**: Portal app via `buildspec/portal.yml`
 - **Excludes**: Story Stack (no SQS/EventBridge)
 - **Includes**: S3 Scripts, CloudWatch logging
 - **Use Case**: Traditional MUD experience only
 
-### Incremental Mode (7 Stacks)
+### Incremental Mode (8 Stacks)
 
 - **Frontend**: Incremental app via `buildspec/incremental.yml`
 - **Excludes**: S3 Scripts, CloudWatch Stack
 - **Includes**: Story Stack (SQS/EventBridge)
 - **Use Case**: Story-driven incremental gameplay
 
-### Hybrid Mode - Default (9 Stacks)
+### Hybrid Mode - Default (10 Stacks)
 
 - **Frontend**: Incremental app via `buildspec/incremental.yml`
 - **Includes**: All stacks for complete functionality
@@ -78,13 +78,17 @@ Stacks deploy in a specific order based on dependencies:
 
 1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
 2. **DynamoDB Stack**: 14 tables with managed IAM policy
-3. **Lambda Stack**: Layer, 16 functions, shared execution role
+3. **Lambda Stack**: Layer, 15 functions, shared execution role
 4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
-5. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
-6. **S3 Stack** (MUD/Hybrid only): Scripts bucket with Lua upload
-7. **CloudWatch Stack** (MUD/Hybrid only): Logging infrastructure
-8. **API Stack**: API Gateway with Lambda integrations
-9. **Client Stack**: CloudFront, S3, automated portal build
+5. **Character Stack**: Character-related Lambda resources
+6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
+7. **S3 Stack** (MUD/Hybrid only): Scripts bucket with Lua upload
+8. **CloudWatch Stack** (MUD/Hybrid only): Logging infrastructure
+9. **API Stack**: API Gateway with Lambda integrations
+10. **Client Stack**: CloudFront, S3, automated portal build
+
+Then (all modes):
+11. **Lambda Function Updates**: Update function code from S3 artifacts
 
 ## Deployment Process
 
@@ -268,7 +272,7 @@ Tracks deployed resources and outputs (gitignored).
 ## Resource Naming
 
 - **DynamoDB Tables** (14): `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`, `story`, `segments`, `active_segments`, `story_history`, `segment_history`, `opponents`
-- **Lambda Functions** (16): `api-*` and `ops-*` prefixed names
+- **Lambda Functions** (15): `api-*` and `ops-*` prefixed names
 - **S3 Buckets**: `eidolon-engine-lambda-{account}`, `eidolon-scripts-{account}`, portal bucket
 - **Cognito Pool**: `eidolon-users`
 - **CloudWatch**: `/eidolon/server` log group
@@ -351,8 +355,8 @@ if current_trigger == lambda_arn:
 
 ### Deployment Statistics
 
-- **Total Stacks**: 9 independent CDK stacks
-- **Lambda Functions**: 16 with shared execution role
+- **Total Stacks**: 10 independent CDK stacks
+- **Lambda Functions**: 15 with shared execution role
 - **DynamoDB Tables**: 14 with RemovalPolicy.RETAIN
 - **Module Size**: 94% under 300 lines, 100% under 1000 lines
 - **Deployment Time**: Full deployment in under 15 minutes
@@ -399,6 +403,7 @@ CodeBuild runs automatically after Client Stack:
 - **dynamodb.py**: DynamoDB stack deployment and validation
 - **codebuild.py**: Build infrastructure with automatic execution
 - **lambda_functions.py**: Lambda deployment with S3 updates
+- **character.py**: Character stack deployment and validation
 - **player.py**: Cognito deployment with trigger configuration
 - **story.py**: SQS/EventBridge deployment (mode-aware)
 - **api.py**: API Gateway deployment

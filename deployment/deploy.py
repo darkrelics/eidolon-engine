@@ -125,10 +125,6 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
 
     # S3 Client Bucket (for portal static files)
     client_bucket = cdk_context.get("client_bucket", params.client_bucket)
-    if not client_bucket:
-        # Generate default based on domain and client host
-        if params.domain and params.client_host:
-            client_bucket = f"{params.client_host}-{params.domain.replace('.', '-')}"
     if client_bucket:
         client_input = input(f"S3 Client Bucket [{client_bucket}]: ").strip()
         params.client_bucket = client_input if client_input else client_bucket
@@ -419,7 +415,8 @@ def main():
 
     # Phase 11: Lambda Function Updates
     # Check if all required stacks for Lambda updates were successful
-    required_stacks = ["codebuild", "lambda", "s3"]
+    # Incremental mode does not require the S3 stack; only gate on CodeBuild and Lambda
+    required_stacks = ["codebuild", "lambda"]
     overall_success = all(
         deployment_results.get(stack, False) and deployment_results.get(stack) != "warning" for stack in required_stacks
     )

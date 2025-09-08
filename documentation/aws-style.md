@@ -56,7 +56,7 @@ Since each environment uses separate AWS accounts, prefixes are only needed for 
 **Deployed Function Names** use dashes with no project prefix:
 
 - API Functions: `api-segment-history`, `api-story-start`
-- Cognito Functions: `cognito-player-new`, `cognito-player-delete`
+- Cognito Functions: `cognito-player-new`
 - Ops Functions: `ops-segment-poller`, `ops-story-advance`
 
 ### 4. CDK Code Style Standards

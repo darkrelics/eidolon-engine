@@ -36,29 +36,6 @@ def check_bucket_exists(bucket_name: str, region: str) -> bool:
             return False
 
 
-def check_cloudfront_exists(distribution_id: str) -> bool:
-    """Check if a CloudFront distribution exists.
-
-    Args:
-        distribution_id: CloudFront distribution ID
-
-    Returns:
-        True if distribution exists, False otherwise
-    """
-    if not distribution_id:
-        return False
-
-    try:
-        cf_client = boto3.client("cloudfront", region_name="us-east-1")
-        cf_client.get_distribution(Id=distribution_id)
-        return True
-    except ClientError as err:
-        error_code = err.response.get("Error", {}).get("Code", "")
-        if error_code in ["NoSuchDistribution", "DistributionNotFound"]:
-            return False
-        else:
-            return False
-
 
 def validate_codebuild_project(project_name: str, region: str) -> bool:
     """Validate that CodeBuild project exists.
