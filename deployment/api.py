@@ -130,7 +130,7 @@ def verify_api_deployment(params, state: CDKState) -> dict:
     # Validate API Gateway
     api_valid, api_id = validate_api_gateway("eidolon-api", params.region)
 
-    # Check custom domain
+    # Check custom domain and base path mapping to this API
     custom_domain_valid = False
     try:
         api_client = boto3.client("apigateway", region_name=params.region)
@@ -138,7 +138,15 @@ def verify_api_deployment(params, state: CDKState) -> dict:
         response = api_client.get_domain_name(domainName=domain_name)
         if response:
             print(f"  [OK] Custom domain: {domain_name}")
-            custom_domain_valid = True
+            # Verify a base path mapping exists pointing to our API ID
+            mappings = api_client.get_base_path_mappings(domainName=domain_name, limit=500)
+            mapped = any(m.get("restApiId") == api_id for m in mappings.get("items", [])) if api_id else False
+            if mapped:
+                print("  [OK] Base path mapping configured for API")
+                custom_domain_valid = True
+            else:
+                print("  [MISSING] Base path mapping for API")
+                custom_domain_valid = False
     except ClientError:
         print(f"  [MISSING] Custom domain: {params.api_host}.{params.domain}")
 
