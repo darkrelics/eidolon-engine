@@ -61,7 +61,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
             raise RuntimeError(f"Failed to retrieve archetype: {archetype_name}") from err
         if not archetype_data:
             # Invalid archetype provided, use defaults
-            logger.info("Invalid archetype provided, using defaults")
+            logger.info(f"Invalid archetype '{archetype_name}' provided, using defaults")
             archetype_data = {}
             archetype_name = "default"
         else:
@@ -93,7 +93,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id: str = extract_player_id(event)
     except ValueError as err:
-        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -120,7 +120,9 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         result: dict = handle_character_creation(player_id, character_name, archetype_name)  # type: ignore
-        logger.info("Lambda response for status 201")
+        logger.info(
+            f"Created character '{character_name}' ({result.get('character_id')}) with archetype '{result.get('archetype_name', 'default')}' for player {player_id}"
+        )
         return lambda_response(
             201,
             {

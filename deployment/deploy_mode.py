@@ -115,11 +115,16 @@ def display_mode_summary(mode: str) -> None:
 
     print(f"\n  Deployment Mode: {mode.upper()}")
     print(f"  Portal Buildspec: {get_portal_buildspec(mode)}")
-    print(f"  Stacks to deploy ({len(deployment_order)} total):")
+    # Add 1 for Phase 11 (Lambda Function Updates)
+    total_phases = len(deployment_order) + 1
+    print(f"  Phases to deploy ({total_phases} total):")
 
     for i, stack_name in enumerate(deployment_order, 1):
         description = get_stack_description(stack_name)
         print(f"    {i}. {stack_name.capitalize()}: {description}")
+
+    # Add Phase 11
+    print("    11. Lambda Function Updates: Update function code from S3 artifacts")
 
     # Show what's excluded
     if mode == "mud":

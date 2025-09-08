@@ -15,7 +15,6 @@ if s3_bucket:  # Only create if S3 bucket is provided
     lambda_stack = LambdaStack(
         app,
         "lambda",
-        description="Shared Lambda layer and execution role for Eidolon Engine",
         region_name=region,
         s3_bucket=s3_bucket,
         dynamodb_policy_arn=dynamodb_policy_arn,

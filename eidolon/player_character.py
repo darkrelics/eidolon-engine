@@ -90,7 +90,7 @@ def remove_character_from_player_list(player_id: str, character_name: str) -> di
 
 def delete_character_items(character: dict) -> dict:
     """
-    Delete all items belonging to a character.
+    Delete all items belonging to a character, including items inside containers.
 
     Args:
         character: Character dict containing inventory and equipped items
@@ -102,29 +102,80 @@ def delete_character_items(character: dict) -> dict:
     """
     result = {"deleted_count": 0, "errors": []}
 
-    # Collect all item IDs
-    item_ids = []
+    # Collect all top-level item IDs
+    top_level_items = []
 
     # Inventory items
     inventory = character.get("Inventory", {})
     for _, item_id in inventory.items():
         if item_id:
-            item_ids.append(item_id)
+            top_level_items.append(item_id)
 
     # Equipped items
     if character.get("LeftHandID"):
-        item_ids.append(character["LeftHandID"])
+        top_level_items.append(character["LeftHandID"])
     if character.get("RightHandID"):
-        item_ids.append(character["RightHandID"])
+        top_level_items.append(character["RightHandID"])
 
-    # Delete each item
-    for item_id in item_ids:
+    # Recursively collect all item IDs including contents
+    all_item_ids = set()
+    items_to_process = list(top_level_items)
+
+    while items_to_process:
+        item_id = items_to_process.pop()
+
+        # Skip if already processed
+        if item_id in all_item_ids:
+            continue
+
+        all_item_ids.add(item_id)
+
+        # Check if this item is a container and has contents
         try:
-            dynamo.delete_item(TableName.ITEMS, Key={"ItemID": item_id})
-            result["deleted_count"] += 1
+            item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+            if item and item.get("Container"):
+                # Add contents to process list
+                contents = item.get("Contents", [])
+                for content_id in contents:
+                    if content_id and content_id not in all_item_ids:
+                        items_to_process.append(content_id)
         except ClientError as err:
-            logger.error(f"Failed to delete item for {item_id} Error: {err}")
-            result["errors"].append(f"Failed to delete item {item_id}: {err}")
+            logger.error(f"Failed to check container contents for {item_id} Error: {err}")
+            result["errors"].append(f"Failed to check item {item_id}: {err}")
+
+    # Batch delete all items using DynamoDB's batch writer with automatic retries
+    if all_item_ids:
+        # Convert item IDs to Key format for batch delete
+        delete_keys = [{"ItemID": item_id} for item_id in all_item_ids]
+
+        try:
+            # Use the existing batch_write_with_retries method that handles:
+            # - Automatic batching (25 items per batch)
+            # - Automatic retry of unprocessed items
+            # - Exponential backoff for throttling
+            failed_items = dynamo.batch_write_with_retries(TableName.ITEMS, delete_keys, operation="delete")
+
+            # Count successful deletes
+            result["deleted_count"] = len(all_item_ids) - len(failed_items)
+
+            # Log failed items
+            for failed_key in failed_items:
+                item_id = failed_key.get("ItemID")
+                logger.error(f"Failed to delete item {item_id} after retries")
+                result["errors"].append(f"Failed to delete item {item_id}")
+
+        except Exception as err:
+            logger.error(f"Batch delete operation failed: {err}")
+            result["errors"].append(f"Batch delete failed: {err}")
+
+            # Fall back to individual deletes for all items
+            for item_id in all_item_ids:
+                try:
+                    dynamo.delete_item(TableName.ITEMS, Key={"ItemID": item_id})
+                    result["deleted_count"] += 1
+                except ClientError as err:
+                    logger.error(f"Failed to delete item {item_id} Error: {err}")
+                    result["errors"].append(f"Failed to delete item {item_id}: {err}")
 
     return result
 
@@ -151,16 +202,36 @@ def delete_character_active_segments(character_id: str) -> dict:
             ExpressionAttributeValues={":cid": character_id},
         )
 
-        for segment in active_segments:  # type: ignore
+        if active_segments:
+            # Prepare keys for batch deletion
+            delete_keys = [{"ActiveSegmentID": segment["ActiveSegmentID"]} for segment in active_segments]
+
             try:
-                dynamo.delete_item(
-                    TableName.ACTIVE_SEGMENTS,
-                    Key={"ActiveSegmentID": segment["ActiveSegmentID"]},
-                )
-                result["deleted_count"] += 1
-            except ClientError as err:
-                logger.error(f"Failed to delete active segment for {segment['ActiveSegmentID']} Error: {err}")
-                result["errors"].append(f"Failed to delete active segment {segment['ActiveSegmentID']}: {err}")
+                # Batch delete all segments with automatic retries
+                failed_items = dynamo.batch_write_with_retries(TableName.ACTIVE_SEGMENTS, delete_keys, operation="delete")
+
+                # Count successful deletes
+                result["deleted_count"] = len(active_segments) - len(failed_items)
+
+                # Log failed items
+                for failed_key in failed_items:
+                    segment_id = failed_key.get("ActiveSegmentID")
+                    logger.error(f"Failed to delete active segment {segment_id} after retries")
+                    result["errors"].append(f"Failed to delete active segment {segment_id}")
+
+            except Exception as err:
+                logger.error(f"Batch delete of segments failed: {err}")
+                # Fall back to individual deletes
+                for segment in active_segments:
+                    try:
+                        dynamo.delete_item(
+                            TableName.ACTIVE_SEGMENTS,
+                            Key={"ActiveSegmentID": segment["ActiveSegmentID"]},
+                        )
+                        result["deleted_count"] += 1
+                    except ClientError as err:
+                        logger.error(f"Failed to delete active segment {segment['ActiveSegmentID']} Error: {err}")
+                        result["errors"].append(f"Failed to delete active segment {segment['ActiveSegmentID']}: {err}")
 
     except ClientError as err:
         logger.error(f"Failed to query active segments for {character_id} Error: {err}")
@@ -190,16 +261,36 @@ def delete_character_history(character_id: str) -> dict:
             ExpressionAttributeValues={":cid": character_id},
         )
 
-        for record in history_records:  # type: ignore
+        if history_records:
+            # Prepare composite keys for batch deletion
+            delete_keys = [{"CharacterID": character_id, "StoryID": record["StoryID"]} for record in history_records]
+
             try:
-                dynamo.delete_item(
-                    TableName.STORY_HISTORY,
-                    Key={"CharacterID": character_id, "StoryID": record["StoryID"]},
-                )
-                result["deleted_count"] += 1
-            except ClientError as err:
-                logger.error(f"Failed to delete history record for {record['StoryID']} Error: {err}")
-                result["errors"].append(f"Failed to delete history record for story {record['StoryID']}: {err}")
+                # Batch delete all history records with automatic retries
+                failed_items = dynamo.batch_write_with_retries(TableName.STORY_HISTORY, delete_keys, operation="delete")
+
+                # Count successful deletes
+                result["deleted_count"] = len(history_records) - len(failed_items)
+
+                # Log failed items
+                for failed_key in failed_items:
+                    story_id = failed_key.get("StoryID")
+                    logger.error(f"Failed to delete history record for story {story_id} after retries")
+                    result["errors"].append(f"Failed to delete history record for story {story_id}")
+
+            except Exception as err:
+                logger.error(f"Batch delete of history records failed: {err}")
+                # Fall back to individual deletes
+                for record in history_records:
+                    try:
+                        dynamo.delete_item(
+                            TableName.STORY_HISTORY,
+                            Key={"CharacterID": character_id, "StoryID": record["StoryID"]},
+                        )
+                        result["deleted_count"] += 1
+                    except ClientError as err:
+                        logger.error(f"Failed to delete history record for {record['StoryID']} Error: {err}")
+                        result["errors"].append(f"Failed to delete history record for story {record['StoryID']}: {err}")
 
     except ClientError as err:
         logger.error(f"Failed to query history for {character_id} Error: {err}")

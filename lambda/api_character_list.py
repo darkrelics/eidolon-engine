@@ -63,7 +63,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id: str = extract_player_id(event)
     except ValueError as err:
-        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
@@ -71,7 +71,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         response_data: dict = list_characters(player_id)
-        logger.info("Lambda response for status 200")
+        character_count = len(response_data.get("Characters", []))
+        logger.info(f"Listed {character_count} characters for player {player_id}")
         return lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(f"Player not found for {player_id} Error: {err}")

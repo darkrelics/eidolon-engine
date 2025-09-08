@@ -257,6 +257,40 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
         raise RuntimeError(f"Failed to reset segment processing status: {err}") from err
 
 
+def mark_segment_as_completed(active_segment_id: str) -> None:
+    """
+    Mark a segment as completed.
+
+    Used when advancing a story to mark the current segment as completed
+    before recording history and creating the next segment.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET #status = :completed",
+            ConditionExpression="#status = :active",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={
+                ":completed": "completed",
+                ":active": "active",
+            },
+        )
+        logger.info(f"Marked segment as completed for {active_segment_id}")
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.info(f"Segment {active_segment_id} already completed or abandoned, skipping completion")
+            return  # Non-fatal - segment already in terminal state
+        logger.error(f"Failed to mark segment as completed for {active_segment_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to mark segment as completed: {err}") from err
+
+
 def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
     """
     Mark an exhausted segment as completed with exceptional outcome.
@@ -274,15 +308,20 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :proc_status, #status = :status, #outcome = :outcome",
+            UpdateExpression="SET ProcessingStatus = :proc_status, #status = :completed, #outcome = :outcome",
+            ConditionExpression="#status = :active AND ProcessingStatus <> :proc_status",
             ExpressionAttributeNames={"#outcome": "Outcome", "#status": "Status"},
             ExpressionAttributeValues={
                 ":proc_status": "processed",
-                ":status": "completed",
+                ":active": "active",
+                ":completed": "completed",
                 ":outcome": "exceptional",
             },
         )
         logger.info(f"Marked exhausted segment as completed with exceptional outcome for {active_segment_id}")
     except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.info(f"Segment {active_segment_id} already processed or completed, skipping exceptional completion")
+            return  # Non-fatal - segment already in terminal state
         logger.error(f"Failed to mark segment as completed exceptional for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to mark segment as completed exceptional: {err}") from err

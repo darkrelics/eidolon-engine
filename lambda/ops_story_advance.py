@@ -16,12 +16,12 @@ from eidolon.mechanics import apply_death_or_unconscious_outcome
 from eidolon.polling import update_polling_state
 from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
 from eidolon.segment_history import insert_rest_segment, record_segment_history
-from eidolon.segment_polling import check_active_segments_exist, claim_segment_for_processing, delete_active_segment
+from eidolon.segment_polling import check_active_segments_exist, delete_active_segment
 from eidolon.segment_processing import determine_next_segment, process_decision_segment
-from eidolon.segment_state import create_next_active_segment, update_segment_processing_status
+from eidolon.segment_state import create_next_active_segment, mark_segment_as_completed, update_segment_processing_status
 from eidolon.sqs import send_message
 from eidolon.story_completion import complete_story
-from eidolon.story_history import update_story_history_xp
+from eidolon.story_history import add_segment_to_history, update_story_history_xp
 from eidolon.story_rewards import apply_combat_rewards
 from eidolon.validation import validate_uuid
 
@@ -43,14 +43,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # Get active segment first to check its status
     active_segment = get_active_segment(active_segment_id)
 
-    # Check if segment is already completed (e.g., marked as exceptional by poller)
-    if active_segment.get("Status") == "completed":
-        logger.info(f"Segment already completed, skipping advancement for {active_segment_id}")
-        return {"success": True, "skipped": True, "reason": "Segment already completed"}
-
-    # Claim segment for processing
-    if not claim_segment_for_processing(active_segment_id):
-        return {"success": True, "skipped": True, "reason": "Already being processed"}
+    # Segments marked as completed still need to be advanced to create the next segment
+    # Only skip if the segment is abandoned or missing critical data
+    status = active_segment.get("Status")
+    if status == "abandoned":
+        logger.info(f"Segment abandoned, skipping advancement for {active_segment_id}")
+        return {"success": True, "skipped": True, "reason": "Segment abandoned"}
 
     # Extract key data
     character_id = active_segment.get("CharacterID")
@@ -63,9 +61,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Story history should already exist (created when story started)
 
-    # Process simple segments if not already processed
-    processing_status = active_segment.get("ProcessingStatus")
-    if is_simple_segment(segment_type) and processing_status != "processed":  # type: ignore
+    # Handle simple segments (rest/decision) that need their outcome determined
+    if is_simple_segment(segment_type):  # type: ignore
         logger.info(f"Processing simple segment for {active_segment_id}")
 
         # Get segment definition
@@ -126,11 +123,22 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             except Exception as err:
                 logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
 
+    # Mark segment as completed in DynamoDB before recording history
+    try:
+        mark_segment_as_completed(active_segment_id)
+        active_segment["Status"] = "completed"
+    except Exception as err:
+        logger.error(f"Failed to mark segment as completed for {active_segment_id} Error: {err}", exc_info=True)
+
     # Record segment history
     record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
 
-    # Update story history with accumulated XP
+    # Add segment to story history's SegmentHistory array
     story_instance_id = active_segment.get("StoryInstanceID")
+    if story_instance_id:
+        add_segment_to_history(character_id, story_instance_id, segment_id, outcome)  # type: ignore
+
+    # Update story history with accumulated XP
     skill_xp = character_updates.get("SkillXP", {})
     attribute_xp = character_updates.get("AttributeXP", {})
     if (skill_xp or attribute_xp) and story_instance_id:

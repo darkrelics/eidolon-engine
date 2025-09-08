@@ -547,3 +547,88 @@ The Eidolon Engine deployment system represents a complete transformation from a
 - **140 Lessons Applied**: Best practices throughout
 
 The system demonstrates that complex infrastructure can be managed effectively with proper modularization, fixed logical IDs, and clear separation between CDK synthesis and AWS operations.
+
+## CDK Development Notes
+
+### Critical CDK Synthesis Limitations
+
+Based on extensive production deployment experience, these patterns must be followed:
+
+#### CDK Synthesis Constraints
+
+- **No AWS Access During Synthesis**: CDK synthesis happens without AWS credentials. Any boto3 calls in CDK stack classes will fail. The deployment system uses boto3 in top-level deployment scripts for resource verification before CDK synthesis
+- **Fixed Logical IDs Required**: Use fixed IDs like `"PortalBucket"` not dynamic ones to prevent resource recreation
+- **CDK Tokens vs Strings**: `self.region` returns a token, not a string. Pass actual region values as parameters
+- **No Runtime Imports**: All imports must be at module level. No dynamic imports or module injection
+
+#### Resource Management Patterns
+
+```python
+# CORRECT: Fixed logical ID with RETAIN policy
+bucket = s3.Bucket(
+    self,
+    "ArtifactsBucket",  # Fixed ID - won't change between deployments
+    bucket_name=bucket_name,
+    removal_policy=RemovalPolicy.RETAIN,
+    auto_delete_objects=False,
+)
+
+# WRONG: Dynamic ID causes recreation
+bucket = s3.Bucket(
+    self,
+    f"Bucket-{timestamp}",  # Changes every deployment!
+    bucket_name=bucket_name,
+)
+```
+
+#### Import Pattern for Existing Resources
+
+```python
+# In deployment module (has AWS access)
+def deploy_stack(params):
+    from stacks.stack_utilities import check_s3_bucket_exists
+    bucket_exists = check_s3_bucket_exists(params.bucket, params.region)
+
+    context_args = [
+        "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
+    ]
+    return run_cdk_deploy("stack", params.region, app_command, context_args)
+
+# In CDK stack
+def __init__(self, scope, id, bucket_exists: bool = False, **kwargs):
+    if bucket_exists:
+        bucket = s3.Bucket.from_bucket_name(self, "Bucket", bucket_name)
+    else:
+        bucket = s3.Bucket(self, "Bucket", bucket_name=bucket_name,
+                          removal_policy=RemovalPolicy.RETAIN)
+```
+
+#### Lambda Layer Version Management
+
+```python
+# Post-deployment cleanup of old layer versions
+def update_lambda_layer(layer_name: str, s3_key: str):
+    # Publish new version
+    new_version = lambda_client.publish_layer_version(...)
+
+    # Update all functions to use new version
+    for function in functions:
+        lambda_client.update_function_configuration(
+            FunctionName=function,
+            Layers=[new_version['LayerVersionArn']]
+        )
+
+    # Delete old version
+    lambda_client.delete_layer_version(
+        LayerName=layer_name,
+        VersionNumber=old_version
+    )
+```
+
+#### Common Pitfalls to Avoid
+
+1. **Square Bracket Dictionary Access**: Use `.get()` method for safe access
+2. **Environment Variable Manipulation**: Pass region explicitly, don't rely on CDK environment
+3. **Inline IAM Policies**: Always use managed policies
+4. **Dynamic Resource Naming**: Causes resource recreation on every deployment
+5. **Resource Checks in CDK**: Will always fail during synthesis

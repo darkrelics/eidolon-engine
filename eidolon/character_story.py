@@ -217,6 +217,83 @@ def get_stories(character_id: str, player_id: str, available_story_ids: list) ->
     return stories
 
 
+def get_stories_with_character(character: dict, available_story_ids: list) -> list:
+    """
+    Get story details for a list of story IDs using an already-loaded character.
+
+    This function avoids reloading the character from the database when the caller
+    already has the character data.
+
+    Args:
+        character: Character dict containing character data
+        available_story_ids: List of story IDs available to the character
+
+    Returns:
+        List of story data dicts with availability information
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    if not available_story_ids:
+        return []
+
+    character_id = character.get("CharacterID")
+    if not character_id:
+        logger.error("Character missing CharacterID field")
+        return []
+
+    stories: list = []
+
+    for story_id in available_story_ids:
+        try:
+            story_data = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+            if not story_data:
+                continue
+        except ClientError as err:
+            logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
+            continue
+
+        try:
+            # Check prerequisites
+            prerequisites = story_data.get("Prerequisites", {})
+            if not check_story_prerequisites(character, prerequisites):
+                continue
+
+            # Check cooldown
+            story_type = story_data.get("StoryType", "repeatable")
+            cooldown = get_story_cooldown(character_id, story_id, story_type)
+
+            if cooldown == -1:  # Permanently unavailable
+                continue
+
+            # Format story for response with PascalCase
+            formatted_story: dict = {
+                "StoryID": story_id,
+                "Title": story_data.get("Title", "Unknown Story"),
+                "Description": story_data.get("Description", ""),
+                "Type": story_type,
+                "Available": cooldown == 0,
+                "CooldownRemaining": max(0, cooldown) if cooldown is not None else 0,
+                "EstimatedDuration": int(story_data.get("EstimatedDuration", 0)),
+                "Prerequisites": prerequisites,
+                "DifficultyMap": story_data.get("DifficultyMap", {}),
+                "RewardTiers": story_data.get("RewardTiers", {}),
+                "BaseXPMultiplier": float(story_data.get("BaseXPMultiplier", 0.5)),
+            }
+
+            stories.append(formatted_story)
+            logger.debug(f"Story processed for {story_id}")
+
+        except ValueError:
+            logger.warning(f"Story not found for {story_id}")
+            continue
+        except RuntimeError as err:
+            logger.error(f"Error loading story for {story_id} Error: {err}")
+            continue
+
+    return stories
+
+
 def reset_character_game_mode(character_id: str) -> None:
     """
     Reset character's game mode and clear active story/segment fields.
@@ -258,14 +335,14 @@ def character_get_active_story(character: dict) -> dict:
         character: Character Record dict
 
     Returns:
-        Story dict. Empty dict if no active segment found.
+        Story dict. Empty dict if no active story found.
 
     Raises:
         RuntimeError: If database error occurs
     """
     active_story_id: str = character.get("ActiveStoryID")  # type: ignore
 
-    # First try: If character has ActiveSegmentID, use GetItem
+    # First try: If character has ActiveStoryID, use GetItem
     if active_story_id:
         try:
             active_story: dict = dynamo.get_item(TableName.STORY, key={"StoryID": active_story_id})  # type: ignore
@@ -274,7 +351,7 @@ def character_get_active_story(character: dict) -> dict:
                 logger.debug("Active story found via GetItem")
                 return active_story
             else:
-                logger.warning("Segment found but not valid")
+                logger.warning("Story ID found but story not valid")
                 return {}
         except ClientError as err:
             logger.error(f"Error retrieving story by ID: {err}")

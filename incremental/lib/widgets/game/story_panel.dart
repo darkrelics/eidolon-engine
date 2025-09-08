@@ -46,8 +46,25 @@ class _StoryPanelState extends State<StoryPanel> {
 
   bool _isStoryComplete() {
     // Story is complete if we have an active story but no active segment
+    // AND we have completed segments in the history
     final char = widget.character;
-    return char.activeStoryID != null && char.activeSegmentID == null;
+    final hasCompletedSegments = char.storyState?['CompletedSegments'] != null &&
+        (char.storyState!['CompletedSegments'] as List).isNotEmpty;
+    
+    // Additional check: if the last segment outcome was 'death' or final 'failure'
+    if (hasCompletedSegments) {
+      final segments = char.storyState!['CompletedSegments'] as List;
+      final lastSegment = segments.last as Map<String, dynamic>;
+      final lastOutcome = lastSegment['Outcome']?.toString().toLowerCase();
+      
+      // Story is complete if no active segment and we have history
+      // OR if the last outcome was a terminal state
+      return (char.activeStoryID != null && char.activeSegmentID == null) ||
+             lastOutcome == 'death' ||
+             (lastOutcome == 'failure' && lastSegment['NextSegmentID'] == null);
+    }
+    
+    return false;
   }
 
   @override

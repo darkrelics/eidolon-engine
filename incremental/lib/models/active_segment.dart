@@ -4,7 +4,7 @@ import '../utils/time_utils.dart';
 class ActiveSegment {
   final String activeSegmentID;
   final String storyID;
-  final String storyTitle;
+  final String? storyTitle;
   final String segmentID;
   final String segmentType;
   final String status;
@@ -23,7 +23,7 @@ class ActiveSegment {
   ActiveSegment({
     required this.activeSegmentID,
     required this.storyID,
-    required this.storyTitle,
+    this.storyTitle,
     required this.segmentID,
     required this.segmentType,
     required this.status,
@@ -44,7 +44,7 @@ class ActiveSegment {
     return ActiveSegment(
       activeSegmentID: json['ActiveSegmentID'] as String,
       storyID: json['StoryID'] as String,
-      storyTitle: json['StoryTitle'] as String,
+      storyTitle: json['StoryTitle'] as String?,
       segmentID: json['SegmentID'] as String,
       segmentType: json['SegmentType'] as String,
       status: json['Status'] as String,

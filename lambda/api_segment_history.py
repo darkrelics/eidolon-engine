@@ -17,7 +17,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.time_utils import from_unix
+from eidolon.time_utils import from_unix, now_iso
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> SegmentHistoryResponse:
@@ -59,8 +59,86 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
         raise RuntimeError(f"Failed to query active segment: {err}") from err
 
     if not active_segments:
-        # No active story, return empty history
-        logger.info(f"No active story for character for {character_id}")
+        # No active segment found - check character state to be sure
+        logger.info(f"No active segment found for {character_id}, checking character state")
+        
+        try:
+            character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+            if not character:
+                raise ValueError(f"Character not found: {character_id}")
+            
+            # Check if character has an active story
+            active_story_id = character.get("ActiveStoryID")
+            active_segment_id = character.get("ActiveSegmentID")
+            
+            if not active_story_id:
+                # No active story at all - return empty
+                logger.info(f"Character {character_id} has no active story")
+                return SegmentHistoryResponse(CharacterID=character_id, StoryID=None, Segments=[])
+            
+            # Character has an active story but no segment yet (between segments)
+            # or story just completed - get history for the current story instance
+            logger.info(f"Character has story {active_story_id} but no active segment - fetching recent history")
+            
+            # Get the most recent story instance from story_history
+            try:
+                story_histories = dynamo.query(
+                    TableName.STORY_HISTORY,
+                    KeyConditionExpression="CharacterID = :cid",
+                    FilterExpression="StoryID = :sid",
+                    ExpressionAttributeValues={
+                        ":cid": character_id,
+                        ":sid": active_story_id,
+                    },
+                    ScanIndexForward=False,  # Most recent first
+                    Limit=1,
+                )
+                
+                if story_histories:
+                    story_instance_id = story_histories[0].get("StoryInstanceID")
+                    
+                    # Get all segments for this story instance
+                    segments = dynamo.query(
+                        TableName.SEGMENT_HISTORY,
+                        KeyConditionExpression="CharacterID = :cid",
+                        FilterExpression="StoryInstanceID = :siid",
+                        ExpressionAttributeValues={
+                            ":cid": character_id,
+                            ":siid": story_instance_id,
+                        },
+                    )
+                    
+                    # Sort by StartTime ascending (first to last)
+                    sorted_segments = sorted(segments or [], key=lambda s: s.get("StartTime", 0))
+                    
+                    # Convert to response format
+                    segment_items = []
+                    for seg in sorted_segments:
+                        segment_items.append(
+                            SegmentHistoryItem(
+                                ActiveSegmentID=seg.get("ActiveSegmentID"),
+                                SegmentID=seg.get("SegmentID"),
+                                SegmentType=seg.get("SegmentType", "mechanical"),
+                                Status=seg.get("Status"),
+                                Outcome=seg.get("Outcome"),
+                                StartTime=from_unix(seg.get("StartTime", 0)) if seg.get("StartTime") else "",
+                                EndTime=from_unix(seg.get("CompletedAt", 0)) if seg.get("CompletedAt") else "",
+                                ClientEvents=seg.get("ClientEvents", []),
+                            )
+                        )
+                    
+                    return SegmentHistoryResponse(
+                        CharacterID=character_id,
+                        StoryID=active_story_id,
+                        Segments=segment_items,
+                    )
+            except ClientError as err:
+                logger.warning(f"Failed to get story history segments: {err}")
+                
+        except ClientError as err:
+            logger.error(f"Failed to get character data: {err}")
+            
+        # Fallback to empty if we can't determine state
         return SegmentHistoryResponse(CharacterID=character_id, StoryID=None, Segments=[])
 
     active_segment = active_segments[0]
@@ -155,8 +233,9 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
 
         formatted_segments.append(SegmentHistoryItem.model_validate(formatted_segment_dict))
 
-    # Sort by start time, newest first
-    formatted_segments.sort(key=lambda x: x.start_time or 0, reverse=True)
+    # Sort by start time, ascending (first to last) for chronological order
+    # Use current time as default for missing timestamps to avoid mixed type comparison
+    formatted_segments.sort(key=lambda x: x.start_time or now_iso(), reverse=False)
 
     response = SegmentHistoryResponse(CharacterID=character_id, StoryID=story_id, Segments=formatted_segments)
 
@@ -194,7 +273,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Extract player ID from JWT
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
