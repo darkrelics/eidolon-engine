@@ -26,6 +26,8 @@ deployment_mode = app.node.try_get_context("deployment_mode") or "hybrid"
 github_owner = app.node.try_get_context("github_owner") or "robinje"
 github_repo = app.node.try_get_context("github_repo") or "eidolon-engine"
 github_branch = app.node.try_get_context("github_branch") or "develop"
+
+
 def _ctx_bool(value, default: bool = False) -> bool:
     """Best-effort parse of CDK context booleans.
 
@@ -38,6 +40,7 @@ def _ctx_bool(value, default: bool = False) -> bool:
     if isinstance(value, (int, float)):
         return bool(value)
     return default
+
 
 bucket_exists = _ctx_bool(app.node.try_get_context("bucket_exists"), False)
 

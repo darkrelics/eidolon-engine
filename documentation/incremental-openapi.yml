@@ -1024,7 +1024,8 @@ components:
           description: List of current wounds
         CharState:
           type: string
-          description: Current character state (e.g., standing, unconscious)
+          description: Current character state
+          enum: [standing, unconscious, dead]
         LeftHandID:
           type: string
           format: uuid

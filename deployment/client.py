@@ -36,7 +36,6 @@ def check_bucket_exists(bucket_name: str, region: str) -> bool:
             return False
 
 
-
 def validate_codebuild_project(project_name: str, region: str) -> bool:
     """Validate that CodeBuild project exists.
 

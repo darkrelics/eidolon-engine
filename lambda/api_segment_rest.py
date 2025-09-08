@@ -10,6 +10,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_history import insert_rest_segment
+from eidolon.models import CharState
 from eidolon.segment_polling import get_active_segment_info
 
 
@@ -31,7 +32,7 @@ def handle_character_rest(player_id: str, character_id: str) -> dict:
     character = character_get(character_id, player_id)
 
     # Check if character is dead
-    if character.get("Dead") or character.get("CharState") == "dead":
+    if character.get("Dead") or character.get("CharState") == CharState.DEAD.value:
         logger.warning(f"Dead character attempted to rest: {character_id}")
         raise ValueError("Dead characters cannot rest")
 

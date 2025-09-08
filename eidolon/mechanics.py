@@ -8,6 +8,7 @@ from eidolon.character_data import get_character
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_HEALTH
 from eidolon.logger import logger
+from eidolon.models import CharState
 
 # Wound healing durations (matching MUD server)
 BASHING_HEAL_TIME = timedelta(minutes=15)
@@ -53,20 +54,20 @@ def determine_character_state_from_wounds(max_health: int, wounds: list) -> str:
         Character state: "standing", "unconscious", or "dead"
     """
     if not wounds:
-        return "standing"
+        return CharState.STANDING.value
 
     current_health = max_health - len(wounds)
 
     if current_health > 0:
-        return "standing"
+        return CharState.STANDING.value
 
     # Health is 0 or less - check wound types
     has_bashing = any(w.get("DamageType") == "bashing" for w in wounds)
 
     if has_bashing:
-        return "unconscious"
+        return CharState.UNCONSCIOUS.value
     else:
-        return "dead"
+        return CharState.DEAD.value
 
 
 def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: list) -> str:
@@ -85,7 +86,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
         RuntimeError: If database operation fails
     """
     if outcome != "death":
-        return "standing"  # Only death outcomes change state
+        return CharState.STANDING.value  # Only death outcomes change state
 
     try:
         # Get character to check current state and max health
@@ -95,7 +96,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
         # Determine new state based on wounds
         new_state = determine_character_state_from_wounds(max_health, wounds)
 
-        if new_state != character.get("CharState", "standing"):
+        if new_state != character.get("CharState", CharState.STANDING.value):
             timestamp = datetime.now(timezone.utc).isoformat()
 
             # Update character state
@@ -103,7 +104,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
             expression_values = {":state": new_state, ":timestamp": timestamp}
 
             # If dead, also update location to death room
-            if new_state == "dead":
+            if new_state == CharState.DEAD.value:
                 update_expression += ", Room = :room"
                 expression_values[":room"] = "0"  # Death room
 
@@ -117,7 +118,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
                 logger.info(f"Updated character state to {new_state} for {character_id}")
 
                 # If dead, also update the Dead flag in player's CharacterList
-                if new_state == "dead":
+                if new_state == CharState.DEAD.value:
                     player_id = character.get("PlayerID")
                     character_name = character.get("CharacterName")
                     if player_id and character_name:

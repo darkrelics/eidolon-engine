@@ -140,7 +140,9 @@ def character_get(character_id: str, player_id: str) -> dict:
     logger.debug(f"Character retrieved successfully: {character_id}")
 
     # Heal expired wounds
-    if character.get("Wounds") and character.get("CharState") != "dead":
+    from eidolon.models import CharState
+
+    if character.get("Wounds") and character.get("CharState") != CharState.DEAD.value:
         wounds: list = character.get("Wounds", [])
         current_time: datetime = datetime.now(timezone.utc)
 
@@ -162,14 +164,14 @@ def character_get(character_id: str, player_id: str) -> dict:
             logger.info("It's a miracle!")
 
             # Update character with healed wounds
-            if character.get("CharState", "standing") == "unconscious":
-                character["CharState"] = "standing"
+            if character.get("CharState", CharState.STANDING.value) == CharState.UNCONSCIOUS.value:
+                character["CharState"] = CharState.STANDING.value
 
             # Update the character's wounds in the database
             update_expression = "SET Wounds = :wounds, CharState = :state, UpdatedAt = :timestamp"
             expression_values: dict = {
                 ":wounds": remaining_wounds,
-                ":state": character.get("CharState", "standing"),
+                ":state": character.get("CharState", CharState.STANDING.value),
                 ":timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -198,42 +200,6 @@ def character_get(character_id: str, player_id: str) -> dict:
     return character
 
 
-# TODO - Move to Bloom Module
-def check_character_name_availability(character_name: str) -> bool:
-    """
-    Check if a character name is available.
-
-    Args:
-        character_name: Name to check
-
-    Returns:
-        True if name is available, False if taken
-
-    Raises:
-        RuntimeError: If database query fails
-    """
-    logger.info(f"Checking character name availability for {character_name}")
-
-    try:
-        existing_chars = dynamo.query(
-            TableName.CHARACTERS,
-            IndexName="CharacterNameIndex",
-            KeyConditionExpression="CharacterName = :name",
-            ExpressionAttributeValues={":name": character_name},
-            Limit=1,
-        )
-
-        if existing_chars:
-            logger.info(f"Character name already taken for {character_name}")
-            return False
-
-        return True
-
-    except ClientError as err:
-        logger.error(f"Error checking character name availability for {character_name} Error: {err}")
-        raise RuntimeError(f"Failed to check character name availability: {err}") from err
-
-
 def build_character_record(
     character_id: str,
     player_id: str,
@@ -258,6 +224,8 @@ def build_character_record(
     Returns:
         Complete character record dict
     """
+    from eidolon.models import CharState
+
     return {
         "CharacterID": character_id,
         "PlayerID": player_id,
@@ -279,7 +247,7 @@ def build_character_record(
         "ActiveStoryID": None,
         "ActiveSegmentID": None,
         "Hidden": False,
-        "CharState": "standing",
+        "CharState": CharState.STANDING.value,
         "GameMode": "None",
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,

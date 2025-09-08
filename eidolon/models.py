@@ -17,12 +17,11 @@ from pydantic.alias_generators import to_pascal
 
 
 class CharState(str, Enum):
-    """Character state enumeration."""
+    """Character state enumeration for MUD consumption."""
 
-    ACTIVE = "Active"
-    INACTIVE = "Inactive"
-    DEAD = "Dead"
-    RESTING = "Resting"
+    STANDING = "standing"
+    UNCONSCIOUS = "unconscious"
+    DEAD = "dead"
 
 
 class GameMode(str, Enum):
@@ -188,7 +187,7 @@ class CharacterModel(BaseEidolonModel):
 
     # Status
     wounds: list[Wound] = Field(default_factory=list)
-    char_state: CharState = Field(CharState.ACTIVE, alias="CharState")
+    char_state: CharState = Field(CharState.STANDING, alias="CharState")
     game_mode: GameMode = Field(GameMode.EXPLORATION, alias="GameMode")
     room_id: str | None = Field(default=None, alias="RoomID")
 
