@@ -109,7 +109,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
                     )
                     
                     # Sort by StartTime ascending (first to last)
-                    sorted_segments = sorted(segments, key=lambda s: s.get("StartTime", 0))
+                    sorted_segments = sorted(segments or [], key=lambda s: s.get("StartTime", 0))
                     
                     # Convert to response format
                     segment_items = []
@@ -119,12 +119,10 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> Seg
                                 ActiveSegmentID=seg.get("ActiveSegmentID"),
                                 SegmentID=seg.get("SegmentID"),
                                 SegmentType=seg.get("SegmentType", "mechanical"),
-                                ShortStatus=seg.get("ShortStatus", ""),
+                                Status=seg.get("Status"),
                                 Outcome=seg.get("Outcome"),
                                 StartTime=from_unix(seg.get("StartTime", 0)) if seg.get("StartTime") else "",
                                 EndTime=from_unix(seg.get("CompletedAt", 0)) if seg.get("CompletedAt") else "",
-                                Narrative=seg.get("Narrative", ""),
-                                Effects=seg.get("Effects", {}),
                                 ClientEvents=seg.get("ClientEvents", []),
                             )
                         )

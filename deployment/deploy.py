@@ -418,7 +418,12 @@ def main():
             deployment_results[stack_name] = False
 
     # Phase 11: Lambda Function Updates
-    overall_success = all(deployment_results.get(stack, False) for stack in ["codebuild", "lambda"])
+    # Check if all required stacks for Lambda updates were successful
+    required_stacks = ["codebuild", "lambda", "s3"]
+    overall_success = all(
+        deployment_results.get(stack, False) and deployment_results.get(stack) != "warning"
+        for stack in required_stacks
+    )
     lambda_update_success = False
     if overall_success:
         lambda_update_success = update_lambda_functions_directly(params, params.region, params.s3_bucket)
