@@ -6,7 +6,7 @@ constructs==10.4.2
 
 #Dependancies
 attrs==25.3.0
-aws-cdk.asset-awscli-v1==2.2.242
+aws-cdk.asset-awscli-v1==2.2.250
 aws-cdk.asset-node-proxy-agent-v6==2.1.0
 aws-cdk.cloud-assembly-schema==48.4.0
 botocore==1.40.11
