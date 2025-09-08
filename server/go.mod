@@ -1,6 +1,8 @@
 module github.com/robinje/eidolon-engine
 
-go 1.24
+go 1.24.0
+
+toolchain go1.24.6
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.38.3
@@ -19,7 +21,7 @@ require (
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/crypto v0.41.0
 	golang.org/x/text v0.28.0
-	golang.org/x/time v0.12.0
+	golang.org/x/time v0.13.0
 )
 
 require (
