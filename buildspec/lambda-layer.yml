@@ -9,6 +9,8 @@ phases:
     commands:
       - mkdir -p python/lib/python3.12/site-packages
       - pip install -r requirements/lambda-requirements.txt -t python/lib/python3.12/site-packages/
+      - find python -type d -name '__pycache__' -prune -exec rm -rf {} +
+      - find python -type f -name '*.pyc' -delete
       - zip -r lambda-layer.zip python/
 
   post_build:
