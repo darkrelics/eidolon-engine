@@ -115,11 +115,13 @@ Modular deployment functions for each stack:
 ## Deployment Flow
 
 1. **Prerequisites Check**
+
    - Verify CDK bootstrap status
    - Validate AWS credentials and region
    - Auto-copy config.template.yml if needed
 
 2. **Parameter Collection**
+
    - Priority: Defaults → cdk.json → config.yml → User prompts
    - Collect all user input upfront
    - Single deployment confirmation
@@ -128,21 +130,26 @@ Modular deployment functions for each stack:
 3. **Stack Deployment Order (Mode-Dependent)**
 
    **Hybrid Mode (Default):**
+
    1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. Story → 6. S3 → 7. CloudWatch → 8. API → 9. Client → [Portal Build]
 
    **MUD Mode:**
+
    1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. S3 → 6. CloudWatch → 7. API → 8. Client → [Portal Build]
 
    **Incremental Mode:**
+
    1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. Story → 6. API → 7. Client → [Portal Build]
 
 4. **CDK Execution**
+
    - Pass parameters via CDK context (-c flags)
    - Each stack in separate app file
    - Fixed logical IDs for all resources
    - Post-deployment validation with boto3
 
 5. **Post-Deployment Operations**
+
    - Lambda function updates from S3
    - Layer version management and cleanup
    - Cognito trigger configuration for imported pools

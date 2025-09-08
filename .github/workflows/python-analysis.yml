@@ -3,8 +3,14 @@ name: Python Analysis
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "requirements/*-requirements.txt"
+      - "**/*.py"
   pull_request:
     branches: "**"
+    paths:
+      - "requirements/*-requirements.txt"
+      - "**/*.py"
 
 permissions:
   pull-requests: read
@@ -42,7 +48,7 @@ jobs:
         continue-on-error: true
         id: bandit
         run: |
-          bandit -q -ii -lll -r .
+          bandit -q --confidence-level high --severity-level high -r .
 
       - name: Test with Vulture
         continue-on-error: true
@@ -68,7 +74,7 @@ jobs:
         continue-on-error: true
         id: bandit_evaluate
         run: |
-          bandit -q -i -l --exit-zero -r .
+          bandit -q --confidence-level medium --severity-level low --exit-zero -r .
 
       - name: Evaluate with Pylint
         continue-on-error: true

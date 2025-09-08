@@ -3,8 +3,15 @@ name: Flutter JSON Schema Validation
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "scripts/generate_jsonschemas.py"
+      - "incremental/**"
+      - "portal/**"
   pull_request:
-    branches: "**"
+    paths:
+      - "scripts/generate_jsonschemas.py"
+      - "incremental/**"
+      - "portal/**"
 
 jobs:
   validate:
@@ -29,6 +36,7 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: "3.x"
           channel: "stable"
 
       - name: Flutter pub get

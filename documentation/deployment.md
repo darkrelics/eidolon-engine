@@ -209,7 +209,8 @@ API:
   Subdomain: api # api.darkrelics.net
 
 # CORS configuration for API Gateway
-allowed_cors_origins: [] # Optional list; when empty, API preflight defaults to "*" without credentials
+allowed_cors_origins:
+  [] # Optional list; when empty, API preflight defaults to "*" without credentials
   # When set, API Gateway preflight uses this explicit list and allows credentials
   # ALLOWED_ORIGINS env var is passed to Lambdas as a comma-separated string
 

@@ -3,8 +3,9 @@ name: JavaScript Auto Format
 on:
   push:
     branches: [develop, qa, prod]
+    paths: ["**/*.{js,jsx,ts,tsx,json,md,yml,yaml}"]
   pull_request:
-    branches: "**"
+    paths: ["**/*.{js,jsx,ts,tsx,json,md,yml,yaml}"]
 
 permissions:
   pull-requests: write

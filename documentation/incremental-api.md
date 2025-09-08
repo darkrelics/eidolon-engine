@@ -196,6 +196,7 @@ Authorization: Bearer <jwt-token>
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-archetype-list` function uses:
+
    - Shared execution role: `eidolon-lambda-execution-role`
    - DynamoDB policy: `eidolon-dynamodb-policy` with DescribeTable permission
    - Environment variables: Table names from DynamoDB stack outputs
@@ -274,6 +275,7 @@ Authorization: Bearer <jwt-token>
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-character-list` function:
+
    - Uses the shared Lambda execution role
    - Accesses the `players` DynamoDB table
    - Returns PascalCase field names matching database schema
@@ -354,12 +356,14 @@ Content-Type: application/json
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-character-add` function:
+
    - Accesses both `characters` and `archetypes` tables
    - Uses environment variable `MAX_CHARACTERS_PER_PLAYER` (default 1)
    - Validates against bloom filter loaded at function initialization
    - Fixed logical ID: `ApiCharacterAddFunction`
 
 2. **Name Validation:** Character names must:
+
    - Be 3-32 characters long
    - Contain only letters, spaces, and hyphens
    - Not be in the restricted names bloom filter
@@ -368,11 +372,13 @@ Content-Type: application/json
 3. **Character Limit:** Players can create up to the configured maximum (from environment variable).
 
 4. **Archetype Resolution:**
+
    - If no archetype is specified, "default" is used
    - If an invalid archetype is specified, "default" is used with a log warning
    - Only player-available archetypes (`Player: true`) can be used
 
 5. **Starting Items:** Based on the archetype's `StartingItems` configuration:
+
    - Items are created from prototypes and added to the character's inventory
    - The first container item becomes the primary container (e.g., backpack)
    - Worn items (`IsWorn: true`) are equipped automatically
@@ -571,6 +577,7 @@ Maps inventory slot numbers to detailed item information:
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-character-get` function:
+
    - Accesses `characters`, `story`, `segments`, and `items` tables
    - Enriches response with multiple table lookups
    - Environment includes all DynamoDB table names
@@ -579,6 +586,7 @@ Maps inventory slot numbers to detailed item information:
 2. **Character Ownership:** The Lambda validates that the requested character belongs to the authenticated player. Attempting to access another player's character returns 404.
 
 3. **Response Field Behavior:** The response dynamically includes different fields based on the character's state:
+
    - **With active story:** Includes `ActiveStory` and `ActiveSegment` objects (if present), does NOT include `AvailableStories`
    - **Without active story:** Does NOT include `ActiveStory` or `ActiveSegment`, but includes `AvailableStories` array if any stories are available
    - Fields are completely omitted from the response rather than being set to null
@@ -702,6 +710,7 @@ Content-Type: application/json
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-story-start` function:
+
    - Writes to `story`, `active_segments` tables
    - May send message to SQS queue (Incremental/Hybrid modes)
    - Environment includes `SEGMENT_QUEUE_URL` for SQS integration

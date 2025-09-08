@@ -3,8 +3,13 @@ name: Python Autoformatting
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "requirements/*-requirements.txt"
+      - "**/*.py"
   pull_request:
-    branches: "**"
+    paths:
+      - "requirements/*-requirements.txt"
+      - "**/*.py"
 
 permissions:
   pull-requests: write
