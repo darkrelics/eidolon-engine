@@ -3,6 +3,7 @@ PyYAML==6.0.2
 aws-cdk-lib==2.210.0
 boto3==1.40.11
 constructs==10.4.2
+uuid-extension==0.2.0
 
 #Dependancies
 attrs==25.3.0

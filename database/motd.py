@@ -9,8 +9,8 @@ This module adds a Message of the Day (MOTD) to the DynamoDB database.
 import argparse
 import os
 import sys
-import uuid
-from datetime import datetime
+from uuid_extension import uuid7
+from datetime import datetime, timezone
 
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -38,14 +38,16 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
     if not message:
         raise ValueError("Message cannot be empty")
 
-    motd_id: str = str(uuid.uuid4())
+    # Use time-ordered UUIDv7 for better locality and sorting
+    motd_id: str = str(uuid7())
 
     # Prepare the item data to put into the table
     motd_item = {
         "MotdID": motd_id,
         "Active": active,
         "Message": message,
-        "CreatedAt": datetime.utcnow().isoformat(),
+        # RFC3339/ISO-8601 timestamp with UTC timezone offset
+        "CreatedAt": datetime.now(timezone.utc).isoformat(),
     }
 
     try:
@@ -90,5 +92,4 @@ def main() -> None:
         sys.exit(1)
 
 
-if __name__ == "__main__":
-    main()
+main()

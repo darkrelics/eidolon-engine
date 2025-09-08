@@ -58,15 +58,19 @@ def store_exits(exits_data):
                 "ScriptID": exit_data.get("ScriptID", ""),
             }
 
-            # Build update expression dynamically
+            # Build update expression dynamically with attribute names to avoid reserved keywords
             update_expression = "SET "
             expression_attribute_values = {}
+            expression_attribute_names = {}
             expression_parts = []
 
             for key, value in exit_item.items():
                 if key != "ExitID":  # Skip the key
-                    expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = value
+                    name_placeholder = f"#{key}"
+                    value_placeholder = f":{key.lower()}"
+                    expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                    expression_attribute_names[name_placeholder] = key
+                    expression_attribute_values[value_placeholder] = value
 
             update_expression += ", ".join(expression_parts)
 
@@ -74,6 +78,7 @@ def store_exits(exits_data):
                 TableName.EXITS,
                 Key={"ExitID": exit_data["ExitID"]},
                 UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
         logging.info(f"Successfully stored {len(exits_data.get('Exits', []))} exits in DynamoDB")
@@ -104,15 +109,19 @@ def store_rooms(rooms_data):
                 "ScriptID": room.get("ScriptID", ""),
             }
 
-            # Build update expression dynamically
+            # Build update expression dynamically with attribute names to avoid reserved keywords
             update_expression = "SET "
             expression_attribute_values = {}
+            expression_attribute_names = {}
             expression_parts = []
 
             for key, value in room_item.items():
                 if key != "RoomID":  # Skip the key
-                    expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = value
+                    name_placeholder = f"#{key}"
+                    value_placeholder = f":{key.lower()}"
+                    expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                    expression_attribute_names[name_placeholder] = key
+                    expression_attribute_values[value_placeholder] = value
 
             update_expression += ", ".join(expression_parts)
 
@@ -120,6 +129,7 @@ def store_rooms(rooms_data):
                 TableName.ROOMS,
                 Key={"RoomID": room["RoomID"]},
                 UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
         logging.info(f"Successfully stored {len(rooms_data.get('Rooms', []))} rooms in DynamoDB")
@@ -171,15 +181,19 @@ def store_archetypes(archetypes_data):
             if "AvailableStories" in archetype:
                 archetype_item["AvailableStories"] = archetype["AvailableStories"]
 
-            # Build update expression dynamically
+            # Build update expression dynamically with attribute names to avoid reserved keywords
             update_expression = "SET "
             expression_attribute_values = {}
+            expression_attribute_names = {}
             expression_parts = []
 
             for key, value in archetype_item.items():
                 if key != "ArchetypeName":  # Skip the key
-                    expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = value
+                    name_placeholder = f"#{key}"
+                    value_placeholder = f":{key.lower()}"
+                    expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                    expression_attribute_names[name_placeholder] = key
+                    expression_attribute_values[value_placeholder] = value
 
             update_expression += ", ".join(expression_parts)
 
@@ -187,6 +201,7 @@ def store_archetypes(archetypes_data):
                 TableName.ARCHETYPES,
                 Key={"ArchetypeName": name},
                 UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
         logging.info(f"Successfully stored {len(archetypes_data.get('Archetypes', {}))} archetypes in DynamoDB")
@@ -209,6 +224,18 @@ def store_item_prototypes(prototypes_data):
         for prototype in prototypes_data.get("ItemPrototypes", []):
             prototype_id = prototype["PrototypeID"]
             prototype_data = prototype.copy()
+
+            # Normalize prototype name to schema: ensure PrototypeName exists
+            if "PrototypeName" not in prototype_data and "Name" in prototype_data:
+                prototype_data["PrototypeName"] = prototype_data.pop("Name")
+
+            # Enforce WornOn is a list per schema
+            if "WornOn" in prototype_data:
+                worn_on = prototype_data["WornOn"]
+                if worn_on is None:
+                    prototype_data["WornOn"] = []
+                elif isinstance(worn_on, str):
+                    prototype_data["WornOn"] = [worn_on]
 
             # Build update expression dynamically
             update_expression = "SET "
@@ -450,15 +477,19 @@ def store_story(story_data):
                 "Version": story.get("Version", 1),
             }
 
-            # Build update expression
+            # Build update expression with attribute names
             update_expression = "SET "
             expression_attribute_values = {}
+            expression_attribute_names = {}
             expression_parts = []
 
             for key, value in story_item.items():
                 if key != "StoryID":  # Skip the key
-                    expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = value
+                    name_placeholder = f"#{key}"
+                    value_placeholder = f":{key.lower()}"
+                    expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                    expression_attribute_names[name_placeholder] = key
+                    expression_attribute_values[value_placeholder] = value
 
             update_expression += ", ".join(expression_parts)
 
@@ -466,6 +497,7 @@ def store_story(story_data):
                 TableName.STORY,
                 Key={"StoryID": story["StoryID"]},
                 UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
             logging.info(f"Successfully stored story '{story['Title']}' (ID: {story['StoryID']}) in DynamoDB")
@@ -498,15 +530,19 @@ def store_story(story_data):
                 else:
                     print(f"Unknown segment type: {segment['SegmentType']}")
 
-                # Build update expression
+                # Build update expression with attribute names
                 update_expression = "SET "
                 expression_attribute_values = {}
+                expression_attribute_names = {}
                 expression_parts = []
 
                 for key, value in segment_item.items():
                     if key not in ["StoryID", "SegmentID"]:  # Skip the keys
-                        expression_parts.append(f"{key} = :{key.lower()}")
-                        expression_attribute_values[f":{key.lower()}"] = value
+                        name_placeholder = f"#{key}"
+                        value_placeholder = f":{key.lower()}"
+                        expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                        expression_attribute_names[name_placeholder] = key
+                        expression_attribute_values[value_placeholder] = value
 
                 update_expression += ", ".join(expression_parts)
 
@@ -514,6 +550,7 @@ def store_story(story_data):
                     TableName.SEGMENTS,
                     Key={"StoryID": segment["StoryID"], "SegmentID": segment["SegmentID"]},
                     UpdateExpression=update_expression,
+                    ExpressionAttributeNames=expression_attribute_names,
                     ExpressionAttributeValues=expression_attribute_values,
                 )
 
@@ -919,5 +956,4 @@ def main():
     display_opponents(loaded_opponents)
 
 
-if __name__ == "__main__":
-    main()
+main()

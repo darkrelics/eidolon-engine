@@ -142,7 +142,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                 # Add StoryComplete flag
                 next_segment_id = response.get("NextSegmentID")
                 response["StoryComplete"] = next_segment_id is None
-                
+
                 # Add NextSegmentPreview if there's a next segment
                 if next_segment_id and (processing_status == "processed" or active_segment.get("Status") == "completed"):
                     try:
