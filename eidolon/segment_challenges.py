@@ -42,22 +42,14 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
         # Try multiple casings for attribute/skill names for compatibility
         if attribute:
-            attribute_value = (
-                character_attributes.get(attribute, 0)
-                or character_attributes.get(attribute.capitalize(), 0)
-                or character_attributes.get(attribute.upper(), 0)
-                or 0
-            )
+            # Enforce exact key usage per style guide (no case-tolerant reads)
+            attribute_value = character_attributes.get(attribute, 0)
         else:
             attribute_value = 0
 
         if skill:
-            skill_value = (
-                character_skills.get(skill, 0)
-                or character_skills.get(skill.capitalize(), 0)
-                or character_skills.get(skill.upper(), 0)
-                or 0
-            )
+            # Enforce exact key usage per style guide (no case-tolerant reads)
+            skill_value = character_skills.get(skill, 0)
         else:
             skill_value = 0
 
