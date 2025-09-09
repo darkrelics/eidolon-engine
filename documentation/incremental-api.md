@@ -452,24 +452,24 @@ Authorization: Bearer <jwt-token>
     },
     "InventoryDetails": {
       "0": {
-        "itemId": "abc123-item-uuid",
-        "name": "Leather Backpack",
-        "description": "A sturdy leather backpack",
-        "quantity": 1,
-        "stackable": false,
-        "equipped": true,
-        "mass": 2,
-        "value": 50
+        "ItemID": "abc123-item-uuid",
+        "Name": "Leather Backpack",
+        "Description": "A sturdy leather backpack",
+        "Quantity": 1,
+        "Stackable": false,
+        "Equipped": true,
+        "Mass": 2,
+        "Value": 50
       },
       "1": {
-        "itemId": "def456-item-uuid",
-        "name": "Iron Sword",
-        "description": "A well-crafted iron sword",
-        "quantity": 1,
-        "stackable": false,
-        "equipped": false,
-        "mass": 3,
-        "value": 100
+        "ItemID": "def456-item-uuid",
+        "Name": "Iron Sword",
+        "Description": "A well-crafted iron sword",
+        "Quantity": 1,
+        "Stackable": false,
+        "Equipped": false,
+        "Mass": 3,
+        "Value": 100
       }
     },
     "Attributes": {
@@ -529,9 +529,8 @@ Authorization: Bearer <jwt-token>
     "Outcome": "normal",
     "ClientEvents": [
       {
-        "eventType": "narrative",
-        "title": "Combat Begins",
-        "description": "A goblin jumps out from the shadows!"
+        "Title": "Combat Begins",
+        "Description": "A goblin jumps out from the shadows!"
       }
     ]
   }
@@ -555,21 +554,21 @@ Contains all character fields as stored in the database, plus:
 | ------------------ | ------ | --------------------------------------------- |
 | `InventoryDetails` | Object | Enriched inventory with full item information |
 
-**InventoryDetails Structure:**
+**InventoryDetails Structure (PascalCase):**
 
 Maps inventory slot numbers to detailed item information:
 
 ```json
 {
-  "slotNumber": {
-    "itemId": "UUID",
-    "name": "Item Name",
-    "description": "Item description",
-    "quantity": 1,
-    "stackable": false,
-    "equipped": false,
-    "mass": 1.5,
-    "value": 100
+  "SlotNumber": {
+    "ItemID": "UUID",
+    "Name": "Item Name",
+    "Description": "Item description",
+    "Quantity": 1,
+    "Stackable": false,
+    "Equipped": false,
+    "Mass": 1.5,
+    "Value": 100
   }
 }
 ```

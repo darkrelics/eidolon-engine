@@ -52,13 +52,13 @@ type Room struct {
 
 // RoomData represents the structure for storing room data in DynamoDB
 type RoomData struct {
-	RoomID      int64    `json:"roomID" dynamodbav:"RoomID"`
-	Area        string   `json:"area" dynamodbav:"Area"`
-	Title       string   `json:"title" dynamodbav:"Title"`
-	Description string   `json:"description" dynamodbav:"Description"`
-	ExitIDs     []string `json:"exitID" dynamodbav:"ExitID"`
-	Persistent  bool     `json:"persistent" dynamodbav:"Persistent"`
-	ScriptID    string   `json:"scriptID" dynamodbav:"ScriptID"`
+    RoomID      int64    `json:"RoomID" dynamodbav:"RoomID"`
+    Area        string   `json:"Area" dynamodbav:"Area"`
+    Title       string   `json:"Title" dynamodbav:"Title"`
+    Description string   `json:"Description" dynamodbav:"Description"`
+    ExitIDs     []string `json:"ExitID" dynamodbav:"ExitID"`
+    Persistent  bool     `json:"Persistent" dynamodbav:"Persistent"`
+    ScriptID    string   `json:"ScriptID" dynamodbav:"ScriptID"`
 }
 
 func NewRoom(ctx context.Context, roomID int64, area, title, description string, persistent bool, scriptID string) *Room {

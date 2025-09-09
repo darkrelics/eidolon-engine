@@ -322,23 +322,23 @@ The story system supports flexible narrative branching where any outcome can lea
 
 ```json
 "Results": {
-  "death": {
+  "Death": {
     "Narrative": "Your journey ends here...",
     "NextSegmentID": null  // Story ends
   },
-  "failure": {
+  "Failure": {
     "Narrative": "You are captured by guards...",
     "NextSegmentID": "prison-escape-segment"  // Continue in prison
   },
-  "minimal": {
+  "Minimal": {
     "Narrative": "You barely succeed...",
     "NextSegmentID": "next-segment-wounded"  // Different path
   },
-  "normal": {
+  "Normal": {
     "Narrative": "You succeed as expected...",
     "NextSegmentID": "next-segment-standard"  // Standard path
   },
-  "exceptional": {
+  "Exceptional": {
     "Narrative": "Your exceptional performance is noted...",
     "NextSegmentID": "next-segment-bonus"  // Bonus path
   }
@@ -357,7 +357,7 @@ Death outcomes don't always end the story. The system supports:
 Example:
 
 ```json
-"death": {
+"Death": {
   "Narrative": "As darkness takes you, you feel your spirit rise...",
   "NextSegmentID": "ghost-revenge-segment-1",
   "Effects": {
@@ -378,7 +378,7 @@ Failure outcomes can open entirely new storylines:
 Example:
 
 ```json
-"failure": {
+"Failure": {
   "Narrative": "The master shakes his head. 'You need more training.'",
   "NextSegmentID": "training-montage-segment",
   "Effects": {

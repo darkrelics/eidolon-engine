@@ -15,7 +15,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.schema import normalize_segment_definition
+# Runtime paths assume canonical PascalCase data; validation occurs at boundaries.
 from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
@@ -98,7 +98,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             try:
                 # Get segment definition for narrative text
                 segment_def = get_story_segment(story_id, segment_id)  # type: ignore
-                segment_def = normalize_segment_definition(segment_def)
 
                 if segment_type == "mechanical":
                     outcome = active_segment.get("Outcome", "normal")

@@ -233,14 +233,14 @@ paths:
                         "1": def456-item-uuid
                       InventoryDetails:
                         "0":
-                          itemId: abc123-item-uuid
-                          name: Leather Backpack
-                          description: A sturdy leather backpack
-                          quantity: 1
-                          stackable: false
-                          equipped: true
-                          mass: 2
-                          value: 50
+                          ItemID: abc123-item-uuid
+                          Name: Leather Backpack
+                          Description: A sturdy leather backpack
+                          Quantity: 1
+                          Stackable: false
+                          Equipped: true
+                          Mass: 2
+                          Value: 50
                       Attributes:
                         Strength: 8
                         Agility: 5
@@ -1078,35 +1078,35 @@ components:
     ItemDetail:
       type: object
       required:
-        - itemId
-        - name
-        - description
-        - quantity
+        - ItemID
+        - Name
+        - Description
+        - Quantity
       properties:
-        itemId:
+        ItemID:
           type: string
           format: uuid
           description: UUID of the item
-        name:
+        Name:
           type: string
           description: Display name of the item
-        description:
+        Description:
           type: string
           description: Item description
-        quantity:
+        Quantity:
           type: integer
           minimum: 1
           description: Number of items in stack
-        stackable:
+        Stackable:
           type: boolean
           description: Whether item can be stacked
-        equipped:
+        Equipped:
           type: boolean
           description: Whether item is currently equipped
-        mass:
+        Mass:
           type: number
           description: Weight of the item
-        value:
+        Value:
           type: integer
           description: Monetary value
 

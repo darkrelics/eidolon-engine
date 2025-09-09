@@ -262,21 +262,21 @@ def create_character(name: str) -> dict:
     """
     Returns:
         Dict with:
-            - success: bool
-            - character_id: str (if success)
-            - error: str (if failed)
+            - Success: bool
+            - CharacterID: str (if success)
+            - Error: str (if failed)
     """
     try:
         character_id = generate_id()
         # ... create character ...
         return {
-            "success": True,
-            "character_id": character_id
+            "Success": True,
+            "CharacterID": character_id
         }
     except Exception as err:
         return {
-            "success": False,
-            "error": str(err)
+            "Success": False,
+            "Error": str(err)
         }
 
 # Less preferred
@@ -741,10 +741,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         result = business_logic_function(player_id, body.get("param"))
 
         # 6. Return formatted response
-        if result["success"]:
-            return create_response(200, result["data"])
+        if result["Success"]:
+            return create_response(200, result["Data"])
         else:
-            return error_response(result["error"], result["status_code"])
+            return error_response(result["Error"], result["StatusCode"])
     except ValueError as err:
         logger.error("Request validation failed")
         return error_response(str(err), 400)
@@ -757,14 +757,14 @@ def business_logic_function(player_id: str, param: str) -> dict:
     try:
         # Validate inputs
         if not param:
-            return {"success": False, "error": "Missing param", "status_code": 400}
+            return {"Success": False, "Error": "Missing param", "StatusCode": 400}
 
         # Call eidolon library functions
         data = some_eidolon_function(param)
 
-        return {"success": True, "data": data}
+        return {"Success": True, "Data": data}
     except ValueError as err:
-        return {"success": False, "error": str(err), "status_code": 400}
+        return {"Success": False, "Error": str(err), "StatusCode": 400}
 ```
 
 ## Pydantic Model Guidelines
@@ -1009,7 +1009,7 @@ def process_character(character_data: dict) -> dict:
     # Sends notification
     send_email(character_data["email"], "Character created")
 
-    return {"success": True}
+    return {"Success": True}
 
 # Good - separate responsibilities
 def validate_character_data(character_data: dict) -> None:

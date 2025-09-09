@@ -380,12 +380,12 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         # Your code here...
 
-        return lambda_response(200, {"success": True}, event)
+        return lambda_response(200, {"Success": True}, event)
 
     except ValueError as err:
         # Handle expected business logic errors
         logger.error("Validation error")
-        return lambda_response(400, {"error": str(err)}, event)
+        return lambda_response(400, {"Error": str(err)}, event)
 
     except Exception as err:
         # CRITICAL: Catch ALL exceptions to prevent Lambda failures
@@ -411,7 +411,7 @@ The `api_get_character.py` function applies several transformations for client c
 1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
 
    - Database: `{"RightHand": "sword-uuid"}`
-   - Response adds: `{"InventoryDetails": {"RightHand": {"itemId": "sword-uuid", "name": "Iron Sword", ...}}}`
+   - Response adds: `{"InventoryDetails": {"RightHand": {"ItemID": "sword-uuid", "Name": "Iron Sword", ...}}}`
 
 2. **Decimal to Float Conversion**: DynamoDB Decimal types are converted to standard floats
    - Applied to all numeric fields in the response

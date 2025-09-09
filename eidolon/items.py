@@ -160,15 +160,15 @@ def get_inventory(inventory: dict) -> dict:
             if item:
                 # Create enriched item data
                 item_details = {
-                    "itemId": item_id,
-                    "name": item.get("Name", "Unknown Item"),
-                    "description": item.get("Description", ""),
-                    "quantity": item.get("Quantity", 1),
-                    "stackable": item.get("Stackable", False),
+                    "ItemID": item_id,
+                    "Name": item.get("Name", "Unknown Item"),
+                    "Description": item.get("Description", ""),
+                    "Quantity": item.get("Quantity", 1),
+                    "Stackable": item.get("Stackable", False),
                     # Prefer 'Equipped', fall back to 'IsWorn' used at creation
-                    "equipped": item.get("Equipped", item.get("IsWorn", False)),
-                    "mass": item.get("Mass", 0),
-                    "value": item.get("Value", 0),
+                    "Equipped": item.get("Equipped", item.get("IsWorn", False)),
+                    "Mass": item.get("Mass", 0),
+                    "Value": item.get("Value", 0),
                 }
 
                 # Assign to all slots that have this item
@@ -178,10 +178,10 @@ def get_inventory(inventory: dict) -> dict:
                 # Item not found - create missing item placeholder
                 logger.warning(f"Item not found in inventory for {item_id}")
                 missing_item = {
-                    "itemId": item_id,
-                    "name": "Missing Item",
-                    "description": "This item could not be loaded",
-                    "quantity": 0,
+                    "ItemID": item_id,
+                    "Name": "Missing Item",
+                    "Description": "This item could not be loaded",
+                    "Quantity": 0,
                 }
 
                 for slot in slots:
@@ -196,14 +196,14 @@ def get_inventory(inventory: dict) -> dict:
 
                 if item:
                     item_details = {
-                        "itemId": item_id,
-                        "name": item.get("Name", "Unknown Item"),
-                        "description": item.get("Description", ""),
-                        "quantity": item.get("Quantity", 1),
-                        "stackable": item.get("Stackable", False),
-                        "equipped": item.get("Equipped", item.get("IsWorn", False)),
-                        "mass": item.get("Mass", 0),
-                        "value": item.get("Value", 0),
+                        "ItemID": item_id,
+                        "Name": item.get("Name", "Unknown Item"),
+                        "Description": item.get("Description", ""),
+                        "Quantity": item.get("Quantity", 1),
+                        "Stackable": item.get("Stackable", False),
+                        "Equipped": item.get("Equipped", item.get("IsWorn", False)),
+                        "Mass": item.get("Mass", 0),
+                        "Value": item.get("Value", 0),
                     }
 
                     for slot in slots:
@@ -211,20 +211,20 @@ def get_inventory(inventory: dict) -> dict:
                 else:
                     for slot in slots:
                         enriched_inventory[slot] = {
-                            "itemId": item_id,
-                            "name": "Missing Item",
-                            "description": "This item could not be loaded",
-                            "quantity": 0,
+                            "ItemID": item_id,
+                            "Name": "Missing Item",
+                            "Description": "This item could not be loaded",
+                            "Quantity": 0,
                         }
 
             except ClientError as individual_err:
                 logger.error(f"Failed to get item {item_id} Error: {individual_err}")
                 for slot in slots:
                     enriched_inventory[slot] = {
-                        "itemId": item_id,
-                        "name": "Error Loading Item",
-                        "description": "Failed to load item details",
-                        "quantity": 0,
+                        "ItemID": item_id,
+                        "Name": "Error Loading Item",
+                        "Description": "Failed to load item details",
+                        "Quantity": 0,
                     }
 
     return enriched_inventory

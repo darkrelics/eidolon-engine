@@ -22,10 +22,10 @@ type MOTD struct {
 }
 
 type MOTDData struct {
-	MotdID    string `json:"MotdID" dynamodbav:"MotdID"`
-	Active    bool   `json:"active" dynamodbav:"Active"`
-	Message   string `json:"message" dynamodbav:"Message"`
-	CreatedAt string `json:"createdAt" dynamodbav:"CreatedAt"`
+    MotdID    string `json:"MotdID" dynamodbav:"MotdID"`
+    Active    bool   `json:"Active" dynamodbav:"Active"`
+    Message   string `json:"Message" dynamodbav:"Message"`
+    CreatedAt string `json:"CreatedAt" dynamodbav:"CreatedAt"`
 }
 
 /*

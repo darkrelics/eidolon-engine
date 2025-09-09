@@ -140,9 +140,9 @@ def add_segment_to_history(character_id: str, story_instance_id: str, segment_id
     """
     try:
         segment_entry = {
-            "segmentId": segment_id,
-            "completedAt": now_iso(),
-            "outcome": outcome,
+            "SegmentID": segment_id,
+            "CompletedAt": now_iso(),
+            "Outcome": outcome,
         }
 
         dynamo.update_item(

@@ -45,25 +45,12 @@ This complete example shows how segment processing results are stored, including
   "Outcome": "minimal",
   "ClientEvents": [
     {
-      "eventType": "narrative",
-      "title": "Into the Woods",
-      "description": "The morning mist clings to the forest floor...",
-      "data": {}
+      "Title": "Into the Woods",
+      "Description": "The morning mist clings to the forest floor..."
     },
     {
-      "eventType": "skillCheck",
-      "title": "Perception Challenge",
-      "description": "You scan the forest for hidden dangers...",
-      "data": {
-        "skill": "perception",
-        "attribute": "agility",
-        "effectiveScore": 12,
-        "difficulty": 8,
-        "sigma": 0.82,
-        "success": true,
-        "skillXPAwarded": 0.25,
-        "attributeXPAwarded": 0.025
-      }
+      "Title": "Perception Challenge",
+      "Description": "You scan the forest for hidden dangers..."
     }
   ],
   "CharacterUpdates": {
@@ -83,8 +70,8 @@ This complete example shows how segment processing results are stored, including
     }
   },
   "ChallengeResults": [
-    { "skill": "perception", "success": true, "sigma": 0.82 },
-    { "skill": "perception", "success": false, "sigma": -0.45 }
+    { "Skill": "perception", "Success": true, "Sigma": 0.82 },
+    { "Skill": "perception", "Success": false, "Sigma": -0.45 }
   ]
 }
 ```
@@ -104,34 +91,34 @@ Mechanical segments can contain both skill challenges and combat encounters. Thi
   "NextSegmentID": "seg-forest-004",
   "Combat": {
     "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-    "maxRounds": 15,
-    "environment": {
+    "MaxRounds": 15,
+    "Environment": {
       "lighting": "dim",
       "terrain": "muddy"
     }
   },
   "Results": {
-    "death": {
-      "narrative": "The goblin's blade finds your heart...",
-      "effects": { "room": 0 }
+    "Death": {
+      "Narrative": "The goblin's blade finds your heart...",
+      "Effects": { "Room": 0 }
     },
-    "failure": {
-      "narrative": "Exhausted, you retreat from battle...",
-      "effects": { "room": 5 }
+    "Failure": {
+      "Narrative": "Exhausted, you retreat from battle...",
+      "Effects": { "Room": 5 }
     },
-    "minimal": {
-      "narrative": "You defeat the goblin but suffer grievous wounds...",
-      "effects": { "room": 7, "items": ["goblin-pouch-001"] }
+    "Minimal": {
+      "Narrative": "You defeat the goblin but suffer grievous wounds...",
+      "Effects": { "Room": 7, "Items": ["goblin-pouch-001"] }
     },
-    "normal": {
-      "narrative": "Your combat training prevails...",
-      "effects": { "room": 7, "items": ["goblin-pouch-001", "rusty-blade-001"] }
+    "Normal": {
+      "Narrative": "Your combat training prevails...",
+      "Effects": { "Room": 7, "Items": ["goblin-pouch-001", "rusty-blade-001"] }
     },
-    "exceptional": {
-      "narrative": "You dispatch the goblin without a scratch!",
-      "effects": {
-        "room": 7,
-        "items": ["goblin-pouch-001", "rusty-blade-001", "goblin-ear-001"]
+    "Exceptional": {
+      "Narrative": "You dispatch the goblin without a scratch!",
+      "Effects": {
+        "Room": 7,
+        "Items": ["goblin-pouch-001", "rusty-blade-001", "goblin-ear-001"]
       }
     }
   }
@@ -258,13 +245,13 @@ def lambda_handler(event, context):
         logger.info("Request completed")
 
         return create_response(
-            result['status_code'],
-            result['body']
+            result['StatusCode'],
+            result['Body']
         )
 
     except Exception as e:
         logger.error("Lambda error", exc_info=True)
-        return create_response(500, {"error": "Internal server error"})
+        return create_response(500, {"Error": "Internal server error"})
 ```
 
 ### 2.2 Common Validation Patterns
@@ -287,7 +274,7 @@ def check_game_mode(character, required_mode="None"):
     current_mode = character.get('GameMode', 'None')
     if current_mode != required_mode:
         return create_response(409, {
-            "error": f"Character is in {current_mode} mode, must be in {required_mode} mode"
+            "Error": f"Character is in {current_mode} mode, must be in {required_mode} mode"
         })
     return None
 ```
@@ -302,12 +289,12 @@ def process_segment(active_segment_id):
     segment = get_active_segment(active_segment_id)
     if not segment:
         logger.error(f"Segment not found: {active_segment_id}")
-        return {"success": False, "error": "Segment not found"}
+        return {"Success": False, "Error": "Segment not found"}
 
     # Skip if already processed
     if segment.get('ProcessingStatus') == 'processed':
         logger.info(f"Segment already processed: {active_segment_id}")
-        return {"success": True, "skipped": True}
+        return {"Success": True, "Skipped": True}
 
     # Mark as processing
     update_processing_status(active_segment_id, 'processing')
@@ -322,12 +309,12 @@ def process_segment(active_segment_id):
         update_segment_results(active_segment_id, result)
         update_processing_status(active_segment_id, 'processed')
 
-        return {"success": True, "result": result}
+        return {"Success": True, "Result": result}
 
     except Exception as e:
         logger.error(f"Segment processing failed", exc_info=True)
         update_processing_status(active_segment_id, 'failed', str(e))
-        return {"success": False, "error": str(e)}
+        return {"Success": False, "Error": str(e)}
 ```
 
 ### 2.4 Mechanical Segment Processing
@@ -368,10 +355,8 @@ def process_mechanical_segment(segment):
             # Create client event
             for r in result['results']:
                 client_events.append({
-                    'eventType': 'skillCheck',
-                    'title': challenge.get('title', f"{skill.title()} Challenge"),
-                    'description': challenge.get('description', ''),
-                    'data': r
+                    'Title': challenge.get('Title', f"{skill.title()} Challenge"),
+                    'Description': challenge.get('Description', '')
                 })
 
     # Process combat if present
@@ -395,14 +380,13 @@ def process_mechanical_segment(segment):
 
     # Add narrative event
     client_events.insert(0, {
-        'eventType': 'narrative',
-        'title': segment_definition.get('Title', 'Story Progress'),
-        'description': outcome_def['narrative']
+        'Title': segment_definition.get('Title', 'Story Progress'),
+        'Description': outcome_def['Narrative']
     })
 
     # Apply outcome effects
-    if 'room' in outcome_def.get('effects', {}):
-        character_updates['Room'] = outcome_def['effects']['room']
+    if 'Room' in outcome_def.get('Effects', {}):
+        character_updates['Room'] = outcome_def['Effects']['Room']
 
     return {
         'Outcome': outcome,
@@ -443,24 +427,24 @@ def resolve_skill_challenge(character, challenge_def):
         )
 
         results.append({
-            "attempt": attempt + 1,
-            "skill": skill,
-            "attribute": attribute,
-            "effectiveScore": effective_score,
-            "difficulty": difficulty,
-            "sigma": round(sigma, 2),
-            "success": success,
-            "skillXPAwarded": skill_xp,
-            "attributeXPAwarded": attribute_xp
+            "Attempt": attempt + 1,
+            "Skill": skill,
+            "Attribute": attribute,
+            "EffectiveScore": effective_score,
+            "Difficulty": difficulty,
+            "Sigma": round(sigma, 2),
+            "Success": success,
+            "SkillXPAwarded": skill_xp,
+            "AttributeXPAwarded": attribute_xp
         })
 
         total_skill_xp += skill_xp
         total_attribute_xp += attribute_xp
 
     return {
-        "results": results,
-        "totalSkillXP": {skill: total_skill_xp},
-        "totalAttributeXP": {attribute: total_attribute_xp}
+        "Results": results,
+        "TotalSkillXP": {skill: total_skill_xp},
+        "TotalAttributeXP": {attribute: total_attribute_xp}
     }
 ```
 
@@ -1236,13 +1220,13 @@ class IncrementalError(Exception):
     """Base exception for incremental game errors."""
     def __init__(self, message, status_code=500, details=None):
         super().__init__(message)
-        self.status_code = status_code
-        self.details = details or {}
+        self.StatusCode = status_code
+        self.Details = details or {}
 
 class ValidationError(IncrementalError):
     """Invalid request data."""
     def __init__(self, message, field=None):
-        super().__init__(message, 400, {'field': field})
+        super().__init__(message, 400, {'Field': field})
 
 class NotFoundError(IncrementalError):
     """Resource not found."""
@@ -1260,10 +1244,10 @@ def handle_errors(func):
         try:
             return func(event, context)
         except IncrementalError as e:
-            logger.warning(f"Business error: {err}")
-            return create_response(e.status_code, {
-                "error": str(e),
-                **e.details
+            logger.warning(f"Business error: {e}")
+            return create_response(e.StatusCode, {
+                "Error": str(e),
+                **e.Details
             })
         except ClientError as e:
             error_code = e.response['Error']['Code']

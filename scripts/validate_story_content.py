@@ -1,13 +1,13 @@
 """
-Validates story segment data offline using existing normalization and helpers.
-Ensures all segments in test_story.json conform to expected structure.
+Validates story segment data offline using strict boundary validation.
+Ensures all segments in test_story.json conform to PascalCase schema.
 """
 
 import json
 import sys
 from pathlib import Path
 
-from eidolon.schema import normalize_segment_definition
+from eidolon.schema import validate_segment_definition
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -18,10 +18,10 @@ def validate_mechanical_segment(segment: dict):
     errors = []
     warnings = []
 
-    # Check Results if present
+    # Check Results if present (PascalCase outcome keys)
     results = segment.get("Results", {})
     if results:
-        for outcome in ["death", "failure", "minimal", "normal", "exceptional"]:
+        for outcome in ["Death", "Failure", "Minimal", "Normal", "Exceptional"]:
             if outcome in results:
                 outcome_data = results[outcome]
 
@@ -41,28 +41,23 @@ def validate_mechanical_segment(segment: dict):
                     if next_id is not None and not (isinstance(next_id, str) and next_id):
                         errors.append(f"  - {outcome} NextSegmentID is not a non-empty string")
 
-    # Check Challenges if present
+    # Check Challenges if present (PascalCase field names only)
     challenges = segment.get("Challenges", [])
     for i, challenge in enumerate(challenges):
-        # Check for Attribute/Skill in either case
-        has_attribute = "Attribute" in challenge or "attribute" in challenge
-        has_skill = "Skill" in challenge or "skill" in challenge
-
-        if not has_attribute:
+        if "Attribute" not in challenge:
             errors.append(f"  - Challenge {i+1} missing Attribute field")
-        if not has_skill:
+        if "Skill" not in challenge:
             errors.append(f"  - Challenge {i+1} missing Skill field")
 
         # Check Difficulty is numeric
-        difficulty = challenge.get("Difficulty") or challenge.get("difficulty")
+        difficulty = challenge.get("Difficulty")
         if difficulty is not None and not isinstance(difficulty, (int, float)):
             errors.append(f"  - Challenge {i+1} Difficulty is not numeric")
 
         # Check Attempts is int >= 1
-        attempts = challenge.get("Attempts") or challenge.get("attempts")
-        if attempts is not None:
-            if not isinstance(attempts, int) or attempts < 1:
-                errors.append(f"  - Challenge {i+1} Attempts must be int >= 1")
+        attempts = challenge.get("Attempts")
+        if attempts is not None and (not isinstance(attempts, int) or attempts < 1):
+            errors.append(f"  - Challenge {i+1} Attempts must be int >= 1")
 
     # Check Combat if present and actually has opponent
     combat = segment.get("Combat", {})
@@ -146,11 +141,11 @@ def validate_story_content(story_file: Path) -> bool:
         print(f"\nSegment: {segment_id}")
         print(f"Type: {segment_type}")
 
-        # Normalize the segment
+        # Strictly validate the segment
         try:
-            normalized = normalize_segment_definition(segment)
+            normalized = validate_segment_definition(segment)
         except Exception as err:
-            print(f"  ERROR: Failed to normalize: {err}")
+            print(f"  ERROR: Validation failed: {err}")
             total_errors += 1
             continue
 

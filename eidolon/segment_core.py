@@ -10,7 +10,8 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
-from eidolon.schema import normalize_segment_definition
+
+# Runtime paths assume canonical PascalCase data; avoid normalization here.
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
@@ -100,11 +101,8 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
         )
         if not segment_def:
             raise ValueError(f"Segment definition not found: {segment_id}")
-        # Normalize mixed-case inputs from content or tools
-        normalized = normalize_segment_definition(segment_def)
-        # Skip Pydantic validation for now to preserve normalized structure
-        # The normalization already handles the key conversions we need
-        results = normalized.get("Results", {})
+        # Data is expected to be canonical (PascalCase) by the time it reaches runtime
+        results = segment_def.get("Results", {})
         logger.info(f"Segment {segment_id} normalized Results keys: {list(results.keys())}")
         # Log the structure of one result to debug
         if results and "Normal" in results:
@@ -114,7 +112,7 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
             )
             if isinstance(normal_result, dict) and "NextSegmentID" in normal_result:
                 logger.info(f"  'Normal' NextSegmentID: {normal_result['NextSegmentID']}")
-        return normalized
+        return segment_def
     except ClientError as err:
         logger.error(f"Failed to get segment definition for {segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get segment definition: {err}") from err

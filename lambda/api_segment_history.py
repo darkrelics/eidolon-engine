@@ -68,7 +68,6 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
 
             # Check if character has an active story
             active_story_id = character.get("ActiveStoryID")
-            active_segment_id = character.get("ActiveSegmentID")
 
             if not active_story_id:
                 # No active story at all - return empty

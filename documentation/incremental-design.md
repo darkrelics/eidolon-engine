@@ -86,14 +86,14 @@ POST /stories/start
 
 ```json
 {
-  "success": true,
-  "segment": {
-    "activeSegmentId": "active-seg-uuid-123",
-    "segmentType": "decision",
-    "startTime": 1737000000,
-    "endTime": 1737000300,
-    "shortStatus": "Choosing your path",
-    "duration": 300
+  "Success": true,
+  "Segment": {
+    "ActiveSegmentID": "active-seg-uuid-123",
+    "SegmentType": "decision",
+    "StartTime": 1737000000,
+    "EndTime": 1737000300,
+    "ShortStatus": "Choosing your path",
+    "Duration": 300
   }
 }
 ```
