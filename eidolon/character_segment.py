@@ -4,6 +4,8 @@ Character segment management utilities.
 Provides functions for managing character interactions with story segments.
 """
 
+from datetime import datetime, timezone
+
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
@@ -96,8 +98,11 @@ def update_character_active_segment(character_id: str, active_segment_id: str) -
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
-            UpdateExpression="SET ActiveSegmentID = :segment_id",
-            ExpressionAttributeValues={":segment_id": active_segment_id},
+            UpdateExpression="SET ActiveSegmentID = :segment_id, UpdatedAt = :updated_at",
+            ExpressionAttributeValues={
+                ":segment_id": active_segment_id,
+                ":updated_at": datetime.now(timezone.utc).isoformat(),
+            },
         )
         logger.info(f"Updated character active segment for {character_id}")
     except ClientError as err:

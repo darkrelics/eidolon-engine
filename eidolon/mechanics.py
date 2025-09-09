@@ -5,15 +5,12 @@ from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import get_character
-from eidolon.constants import CharState
+from eidolon.constants import AGGRAVATED_HEAL_TIME, BASHING_HEAL_TIME, DEFAULT_DEATH_ROOM_ID, LETHAL_HEAL_TIME, CharState
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_HEALTH
 from eidolon.logger import logger
 
-# Wound healing durations (matching MUD server)
-BASHING_HEAL_TIME = timedelta(minutes=15)
-LETHAL_HEAL_TIME = timedelta(hours=6)
-AGGRAVATED_HEAL_TIME = timedelta(days=7)
+# Wound healing durations are defined in eidolon.constants; use them here
 
 
 def calculate_heal_time(damage_type: str) -> str:
@@ -101,12 +98,13 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
 
             # Update character state
             update_expression = "SET CharState = :state, UpdatedAt = :timestamp"
-            expression_values = {":state": new_state, ":timestamp": timestamp}
+            # Use a generic dict type to allow mixed value types (str, int)
+            expression_values: dict = {":state": new_state, ":timestamp": timestamp}
 
             # If dead, also update location to death room
             if new_state == CharState.DEAD.value:
                 update_expression += ", RoomID = :room"
-                expression_values[":room"] = "0"  # Death room
+                expression_values[":room"] = DEFAULT_DEATH_ROOM_ID  # Death room (NUMBER)
 
             try:
                 dynamo.update_item(
@@ -153,7 +151,9 @@ def resolve_opposed_check(aggressor: float, defender: float) -> dict:
         defender: Defender's rating
 
     Returns:
-        Dictionary with success (bool) and sigma (float)
+        Dict:
+            - Success: bool
+            - Sigma: float
     """
     # Constants from MUD mechanics
     k_shift = 0.20  # How much rating difference matters
@@ -172,4 +172,4 @@ def resolve_opposed_check(aggressor: float, defender: float) -> dict:
     sigma: float = random.gauss(mean, variance)
     success: bool = sigma >= 0
 
-    return {"success": success, "sigma": sigma}
+    return {"Success": success, "Sigma": sigma}

@@ -2,8 +2,14 @@
 Bloom filter utilities for character name validation.
 
 Provides bloom filter functionality for checking restricted character names.
-If the bloom filter file is not available, it gracefully degrades to allow
-all names. The pickled payload is produced by the build and is trusted.
+Fail-safe behavior: If the bloom filter file is missing or cannot be loaded,
+or if an error occurs during checking, the module rejects names rather than
+allowing them. This prevents bypassing name restrictions if the filter is
+unavailable.
+
+The pickled payload is produced by the build and is trusted. The in-memory
+result caching is intentional to survive Lambda warm starts and reduce cost
+within a container's lifetime.
 """
 
 import os
@@ -18,7 +24,8 @@ def load_bloom_filter(filter_path: str):
 
     Returns the loaded bloom filter object on success, or None if not
     available or failed to load. Errors are logged and treated as
-    non-fatal so that name checks default to permissive behavior.
+    non-fatal; the caller will apply fail-safe restrictive behavior
+    (reject names) when the filter is unavailable.
     """
     if not os.path.exists(filter_path):
         logger.warning(f"Bloom filter file not found at {filter_path} - name restrictions disabled")
@@ -50,7 +57,8 @@ class CharacterNameFilter:
         """Return True if the given name is approved (not restricted).
 
         The check is cached per normalized name. When the bloom filter is
-        unavailable or an error occurs during checking, names are approved.
+        unavailable or an error occurs during checking, names are rejected
+        (fail-safe).
         """
         normalized = (name or "").lower()
 

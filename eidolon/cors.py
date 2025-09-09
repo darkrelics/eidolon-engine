@@ -2,6 +2,17 @@
 CORS handler module for Lambda functions.
 
 Provides centralized CORS configuration and validation for API responses.
+
+Behavior notes:
+- If ALLOWED_ORIGINS contains "*", the handler always returns
+  Access-Control-Allow-Origin: "*" and does NOT allow credentials.
+- If ALLOWED_ORIGINS is empty or unset, the handler defaults to a
+  permissive wildcard response ("*") without credentials. This keeps
+  cross-origin reads working during misconfiguration, but cookies/
+  credentials will not be sent.
+- When one or more explicit origins are configured, the handler reflects
+  the request origin only if it is present in the list, and includes the
+  Access-Control-Allow-Credentials header when enabled by environment.
 """
 
 from eidolon.environment import ALLOWED_ORIGINS, CORS_ALLOW_CREDENTIALS, CORS_ALLOWED_HEADERS, CORS_ALLOWED_METHODS, CORS_MAX_AGE
@@ -20,9 +31,10 @@ class CorsHandler:
         # If '*' is present, always return '*' without credentials regardless of other entries
         self._wildcard = "*" in self.allowed_origins
 
-        # Default to restrictive CORS if no origins specified
+        # Default to permissive CORS if no origins specified
+        # (Wildcard origin without credentials; see get_allowed_origin_header)
         if not self.allowed_origins and not self._wildcard:
-            logger.warning("No ALLOWED_ORIGINS configured, CORS will be restrictive")
+            logger.warning("No ALLOWED_ORIGINS configured, CORS will be permissive (wildcard, no credentials)")
             self.allowed_origins = []
 
         # Whether to allow credentials
@@ -84,6 +96,14 @@ class CorsHandler:
 
         Returns:
             Tuple of (origin_header_value, should_allow_credentials)
+
+        Logic summary:
+        - If "*" is configured in ALLOWED_ORIGINS, always return ("*", False).
+        - If ALLOWED_ORIGINS is empty, return ("*", False) (permissive, no creds).
+        - If origin is in ALLOWED_ORIGINS, return (origin, allow_credentials).
+        - If only a single origin is configured, fall back to that origin with
+          configured credential policy.
+        - Otherwise return (None, False) to omit the header.
         """
         # Explicit wildcard configured in environment - always '*' without credentials
         if self._wildcard:

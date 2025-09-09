@@ -188,7 +188,6 @@ def get_stories(character_id: str, player_id: str, available_story_ids: list) ->
             if cooldown == -1:  # Permanently unavailable
                 continue
 
-            # Format story for response with PascalCase
             formatted_story: dict = {
                 "StoryID": story_id,
                 "Title": story_data.get("Title", "Unknown Story"),
@@ -265,7 +264,6 @@ def get_stories_with_character(character: dict, available_story_ids: list) -> li
             if cooldown == -1:  # Permanently unavailable
                 continue
 
-            # Format story for response with PascalCase
             formatted_story: dict = {
                 "StoryID": story_id,
                 "Title": story_data.get("Title", "Unknown Story"),

@@ -156,9 +156,7 @@ def store_archetypes(archetypes_data):
                 logging.error(f"Invalid archetype name '{name}': {err}")
                 continue
 
-            # Keep attributes in PascalCase
             attributes = archetype.get("Attributes", {})
-            # Keep skills in PascalCase
             skills = archetype.get("Skills", {})
 
             archetype_item = {

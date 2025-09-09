@@ -22,33 +22,42 @@ def get_archetypes() -> list:
         RuntimeError: If database scan fails
     """
     try:
-        # Scan all archetypes
-        items: list = dynamo.scan_all(TableName.ARCHETYPES)  # type: ignore
+        # Scan only player-available archetypes (reduces records processed/transferred)
+        items: list = dynamo.scan_all(
+            TableName.ARCHETYPES,
+            FilterExpression="Player = :true",
+            ExpressionAttributeValues={":true": True},
+        )  # type: ignore
     except ClientError as err:
-        logger.error(f"Failed to scan archetypes table: {err.response.get('Error', {}).get('Message', 'Unknown error')}")
+        logger.error(
+            f"Failed to scan archetypes table: {err.response.get('Error', {}).get('Message', 'Unknown error')}",
+            exc_info=True,
+        )
         raise RuntimeError(f"Failed to load archetypes: {err}") from err
 
     # Filter for player archetypes
     player_archetypes: list = []
     for item in items:  # type: ignore
-        # Check if Player field exists and is True
-        if item.get("Player", False):
-            attributes = item.get("Attributes", {})
-            skills = item.get("Skills", {})
+        # Defensive check in case filter was bypassed/misconfigured
+        if not item.get("Player", False):
+            continue
 
-            player_archetypes.append(
-                {
-                    "ArchetypeName": item.get("ArchetypeName", ""),
-                    "Description": item.get("Description", ""),
-                    "Attributes": attributes,
-                    "Skills": skills,
-                    "StartRoom": item.get("StartRoom", 0),
-                    "StartingItems": item.get("StartingItems", []),
-                    "Health": item.get("Health", DEFAULT_HEALTH),
-                    "Essence": item.get("Essence", DEFAULT_ESSENCE),
-                    "AvailableStories": item.get("AvailableStories", []),
-                }
-            )
+        attributes: dict = item.get("Attributes", {})
+        skills: dict = item.get("Skills", {})
+
+        player_archetypes.append(
+            {
+                "ArchetypeName": item.get("ArchetypeName", ""),
+                "Description": item.get("Description", ""),
+                "Attributes": attributes,
+                "Skills": skills,
+                "StartRoom": item.get("StartRoom", 0),
+                "StartingItems": item.get("StartingItems", []),
+                "Health": item.get("Health", DEFAULT_HEALTH),
+                "Essence": item.get("Essence", DEFAULT_ESSENCE),
+                "AvailableStories": item.get("AvailableStories", []),
+            }
+        )
 
     # Sort by archetype name for consistent ordering
     player_archetypes.sort(key=lambda x: x["ArchetypeName"])
@@ -84,5 +93,5 @@ def get_archetype(archetype_name: str) -> dict:
         return archetype
 
     except ClientError as err:
-        logger.error(f"Error retrieving archetype: {err}")
+        logger.error(f"Error retrieving archetype: {err}", exc_info=True)
         raise RuntimeError(f"Failed to retrieve archetype: {archetype_name}") from err

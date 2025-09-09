@@ -316,6 +316,21 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         ValueError: If character name is already taken
         RuntimeError: If database operations fail
     """
+    # Enforce name uniqueness using CharacterNameIndex (per schema)
+    try:
+        existing = dynamo.query(
+            TableName.CHARACTERS,
+            IndexName="CharacterNameIndex",
+            KeyConditionExpression="CharacterName = :name",
+            ExpressionAttributeValues={":name": character_name},
+            ProjectionExpression="CharacterID",
+        )
+        if existing:
+            raise ValueError("Character name is already taken")
+    except ClientError as err:
+        logger.error(f"Failed to check character name uniqueness for '{character_name}' Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to create character: {err}") from err
+
     character_id = generate_character_id()
     timestamp = datetime.now(timezone.utc).isoformat()
 
@@ -433,12 +448,18 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
             update_expression += ", UpdatedAt = :updated_at"
             expression_values[":updated_at"] = datetime.now(timezone.utc).isoformat()
 
+            # Build kwargs to avoid passing None for iterable parameters
+            update_kwargs = {
+                "UpdateExpression": update_expression,
+                "ExpressionAttributeValues": expression_values,
+            }
+            if expression_names:
+                update_kwargs["ExpressionAttributeNames"] = expression_names
+
             dynamo.update_item(
                 TableName.CHARACTERS,
                 Key={"CharacterID": character_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeNames=expression_names if expression_names else None,
-                ExpressionAttributeValues=expression_values,
+                **update_kwargs,
             )
 
             logger.info(f"Character updates applied for {character_id}")

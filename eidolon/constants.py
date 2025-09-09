@@ -50,8 +50,8 @@ BASHING_HEAL_TIME = timedelta(minutes=15)
 LETHAL_HEAL_TIME = timedelta(hours=6)
 AGGRAVATED_HEAL_TIME = timedelta(days=7)
 
-# Default room used when character dies
-DEFAULT_DEATH_ROOM_ID = "0"
+# Default room used when character dies (NUMBER per schema)
+DEFAULT_DEATH_ROOM_ID = 0
 
 
 class CharState(str, Enum):

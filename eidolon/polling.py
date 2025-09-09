@@ -105,16 +105,30 @@ def ensure_polling_enabled() -> None:
     Sets SSM parameter to "run" and enables EventBridge rule.
     Used only by api-story-start.
     """
+    logger.info(f"Enabling polling system - Rule: {EVENTBRIDGE_RULE_NAME}, SSM: {SSM_POLLER_STATE_PARAMETER}")
+
+    # 1) Update SSM parameter to 'run' (narrow try block)
+    ssm_ok = True
     try:
-        logger.info(f"Enabling polling system - Rule: {EVENTBRIDGE_RULE_NAME}, SSM: {SSM_POLLER_STATE_PARAMETER}")
-
-        # Set parameter to run
         update_polling_state("run")
-
-        # Enable the EventBridge rule
-        manage_eventbridge_rule(True)
-
-        logger.info("Polling system enabled successfully")
+        logger.info("Polling state parameter set to 'run'")
     except Exception as err:
-        # Log error but don't block story start
-        logger.error(f"Failed to enable polling system: {err}", exc_info=True)
+        ssm_ok = False
+        logger.error(f"Failed to update polling state to 'run' Error: {err}", exc_info=True)
+
+    # 2) Enable the EventBridge rule (narrow try block)
+    rule_ok = True
+    try:
+        manage_eventbridge_rule(True)
+        logger.info("EventBridge rule enabled")
+    except Exception as err:
+        rule_ok = False
+        logger.error(f"Failed to enable EventBridge rule Error: {err}", exc_info=True)
+
+    # 3) Summarize outcome without raising (story start must proceed)
+    if ssm_ok and rule_ok:
+        logger.info("Polling system enabled successfully")
+    else:
+        logger.warning(
+            f"Polling system partially enabled: SSM={'OK' if ssm_ok else 'FAILED'}, Rule={'OK' if rule_ok else 'FAILED'}"
+        )

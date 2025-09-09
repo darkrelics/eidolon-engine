@@ -82,9 +82,9 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         # Player attacks opponent using MUD mechanics
         attack_outcome = resolve_opposed_check(character_combat, opponent_defense)
 
-        if attack_outcome["success"]:
+        if attack_outcome["Success"]:
             # Determine damage based on sigma
-            sigma = attack_outcome["sigma"]
+            sigma = attack_outcome["Sigma"]
             if sigma > COMBAT_SIGMA_CRITICAL:
                 damage = 3  # Critical hit
                 damage_type = "critical"
@@ -132,15 +132,15 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         else:
             round_results["PlayerAttack"] = {
                 "Hit": False,
-                "Sigma": round(attack_outcome["sigma"], 2),
+                "Sigma": round(attack_outcome["Sigma"], 2),
             }
 
         # Opponent attacks player using MUD mechanics
         defense_outcome = resolve_opposed_check(opponent_combat, character_defense)
 
-        if defense_outcome["success"]:
+        if defense_outcome["Success"]:
             # Determine damage based on sigma
-            sigma = defense_outcome["sigma"]
+            sigma = defense_outcome["Sigma"]
             if sigma > 2.0:
                 damage = 3  # Critical hit
                 damage_type = "critical"
@@ -194,7 +194,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         else:
             round_results["OpponentAttack"] = {
                 "Hit": False,
-                "Sigma": round(defense_outcome["sigma"], 2),
+                "Sigma": round(defense_outcome["Sigma"], 2),
             }
 
         combat_log.append(round_results)
