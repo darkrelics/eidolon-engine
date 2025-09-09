@@ -9,7 +9,6 @@ Returns segment completion status and any available results.
 
 import time
 
-from eidolon.api_models import SegmentStatusResponse
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
@@ -23,7 +22,7 @@ from eidolon.story_retrieval import get_story, get_story_segment
 from eidolon.time_utils import from_unix
 
 
-def get_segment_status_business_logic(character_id: str, player_id: str) -> SegmentStatusResponse:
+def get_segment_status_business_logic(character_id: str, player_id: str) -> dict:
     """
     Business logic for getting segment status.
 
@@ -193,7 +192,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
 
     logger.debug(f"Segment status retrieved for {character_id}")
 
-    return SegmentStatusResponse.model_validate(response)
+    return response
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -237,8 +236,8 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        response_data = get_segment_status_business_logic(character_id, player_id)  # type: ignore
-        return lambda_response(200, response_data.model_dump(by_alias=True), event)
+        response_data = get_segment_status_business_logic(character_id, player_id)
+        return lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(f"Invalid request or not found for {character_id} Error: {err}")
         error_msg = str(err)

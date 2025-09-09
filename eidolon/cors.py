@@ -16,8 +16,12 @@ class CorsHandler:
         # Get allowed origins from environment variable
         self.allowed_origins = [origin.strip() for origin in ALLOWED_ORIGINS.split(",") if origin.strip()]
 
+        # Treat explicit wildcard configuration as short-circuit mode
+        # If '*' is present, always return '*' without credentials regardless of other entries
+        self._wildcard = "*" in self.allowed_origins
+
         # Default to restrictive CORS if no origins specified
-        if not self.allowed_origins:
+        if not self.allowed_origins and not self._wildcard:
             logger.warning("No ALLOWED_ORIGINS configured, CORS will be restrictive")
             self.allowed_origins = []
 
@@ -81,6 +85,10 @@ class CorsHandler:
         Returns:
             Tuple of (origin_header_value, should_allow_credentials)
         """
+        # Explicit wildcard configured in environment - always '*' without credentials
+        if self._wildcard:
+            return "*", False
+
         # No origins configured - use wildcard without credentials
         if not self.allowed_origins:
             return "*", False

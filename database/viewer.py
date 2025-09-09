@@ -8,12 +8,13 @@ Copyright 2024-2025 Jason E. Robinson
 import os
 import sys
 
-# Add parent directory to path to import eidolon modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
+
+# Add parent directory to path to import eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 # Define table names mapping
 TABLE_NAMES = {

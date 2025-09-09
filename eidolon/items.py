@@ -62,6 +62,8 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
                 "Container": prototype.get("Container", False),
                 "Contents": [],
                 "IsWorn": is_worn,
+                # Keep compatibility with any consumers that expect 'Equipped'
+                "Equipped": is_worn,
                 "CanPickUp": prototype.get("CanPickUp", True),
                 "Metadata": prototype.get("Metadata", {}),
             }
@@ -163,7 +165,8 @@ def get_inventory(inventory: dict) -> dict:
                     "description": item.get("Description", ""),
                     "quantity": item.get("Quantity", 1),
                     "stackable": item.get("Stackable", False),
-                    "equipped": item.get("Equipped", False),
+                    # Prefer 'Equipped', fall back to 'IsWorn' used at creation
+                    "equipped": item.get("Equipped", item.get("IsWorn", False)),
                     "mass": item.get("Mass", 0),
                     "value": item.get("Value", 0),
                 }
@@ -198,7 +201,7 @@ def get_inventory(inventory: dict) -> dict:
                         "description": item.get("Description", ""),
                         "quantity": item.get("Quantity", 1),
                         "stackable": item.get("Stackable", False),
-                        "equipped": item.get("Equipped", False),
+                        "equipped": item.get("Equipped", item.get("IsWorn", False)),
                         "mass": item.get("Mass", 0),
                         "value": item.get("Value", 0),
                     }

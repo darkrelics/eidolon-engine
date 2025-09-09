@@ -9,15 +9,15 @@ This module adds a Message of the Day (MOTD) to the DynamoDB database.
 import argparse
 import os
 import sys
-from uuid_extension import uuid7
 from datetime import datetime, timezone
+
+from botocore.exceptions import ClientError
+from uuid_extension import uuid7
+
+from eidolon.dynamo import TableName, dynamo
 
 # Add parent directory to path to import eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from botocore.exceptions import ClientError
-
-from eidolon.dynamo import TableName, dynamo
 
 
 def add_or_update_motd(message: str, active: bool = True) -> dict:

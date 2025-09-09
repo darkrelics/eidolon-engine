@@ -185,10 +185,11 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
         logger.error(f"Results field is not a dictionary for {segment.get('SegmentID')}")
         return {"Narrative": "", "Effects": {}}
 
-    outcome_key = str(outcome).lower() if outcome else "normal"
+    # Use PascalCase key for normalized Results
+    outcome_key = map_outcome_to_key(outcome or "normal")
     outcome_result = results.get(outcome_key)
 
-    if outcome_result is None:
+    if not outcome_result:
         logger.info(f"No specific result for outcome for {segment.get('SegmentID')}")
         if outcome == "exceptional":
             return {"Narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "Effects": {}}
@@ -228,25 +229,25 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
     """
     updates = {}
 
-    xp_updates = results.get("xpUpdates")
+    xp_updates = results.get("XPUpdates")
     if xp_updates:
         updates.update(xp_updates)
 
-    wound_updates = results.get("woundUpdates")
+    wound_updates = results.get("WoundUpdates")
     if wound_updates:
         updates.update(wound_updates)
 
-    combat_state = results.get("combatState", {})
-    if combat_state.get("opponentDefeated"):
-        opponent_id = combat_state.get("opponentId")
+    combat_state = results.get("CombatState", {})
+    if combat_state.get("OpponentDefeated"):
+        opponent_id = combat_state.get("OpponentID")
         if opponent_id:
             try:
                 opponent_data = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
                 if opponent_data:
                     updates["CombatRewards"] = {
-                        "opponentId": opponent_id,
-                        "defeated": True,
-                        "opponentData": opponent_data,
+                        "OpponentID": opponent_id,
+                        "Defeated": True,
+                        "OpponentData": opponent_data,
                     }
             except Exception as err:
                 logger.error(f"Failed to get opponent data for rewards for {opponent_id} Error: {err}", exc_info=True)

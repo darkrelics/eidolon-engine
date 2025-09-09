@@ -140,7 +140,7 @@ def character_get(character_id: str, player_id: str) -> dict:
     logger.debug(f"Character retrieved successfully: {character_id}")
 
     # Heal expired wounds
-    from eidolon.models import CharState
+    from eidolon.constants import CharState
 
     if character.get("Wounds") and character.get("CharState") != CharState.DEAD.value:
         wounds: list = character.get("Wounds", [])
@@ -149,7 +149,7 @@ def character_get(character_id: str, player_id: str) -> dict:
         remaining_wounds: list = []
 
         for wound in wounds:
-            heal_at: str = wound.get("HealedAt")
+            heal_at: str = wound.get("HealAt")
 
             try:
                 if datetime.fromisoformat(heal_at.replace("Z", "+00:00")) > current_time:
@@ -224,7 +224,7 @@ def build_character_record(
     Returns:
         Complete character record dict
     """
-    from eidolon.models import CharState
+    from eidolon.constants import CharState
 
     return {
         "CharacterID": character_id,

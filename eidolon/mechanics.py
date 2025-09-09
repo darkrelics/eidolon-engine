@@ -5,10 +5,10 @@ from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import get_character
+from eidolon.constants import CharState
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_HEALTH
 from eidolon.logger import logger
-from eidolon.models import CharState
 
 # Wound healing durations (matching MUD server)
 BASHING_HEAL_TIME = timedelta(minutes=15)
@@ -105,7 +105,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
 
             # If dead, also update location to death room
             if new_state == CharState.DEAD.value:
-                update_expression += ", Room = :room"
+                update_expression += ", RoomID = :room"
                 expression_values[":room"] = "0"  # Death room
 
             try:

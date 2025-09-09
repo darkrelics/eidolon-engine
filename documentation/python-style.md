@@ -19,6 +19,31 @@ These style guidelines have been validated through production deployment:
 - **Explicit over Implicit**: Make intentions clear in the code
 - **Python3 Compatibility**: Always use `python3` command, not `python`
 
+### Casing Policy
+
+- Use PascalCase keys across the codebase: persistence, in-memory dicts, and API responses.
+- Capitalize well-known abbreviations in keys: `SegmentID`, `OpponentID`, `SkillXP`, `HTTPStatusCode`.
+- Do not write case-conversion helpers or case-tolerant reads; fix producers to emit correct keys.
+
+Example:
+
+```
+{
+  "ChallengeResults": [
+    {
+      "Attribute": "Melee",
+      "Skill": "Parry",
+      "Difficulty": 7,
+      "Attempts": [{"EffectiveScore": 9, "Difficulty": 7, "Sigma": 0.8, "Success": true}],
+      "BestSigma": 0.8,
+      "Passed": true
+    }
+  ],
+  "XPUpdates": {"SkillXP": {"Melee": 0.5}, "AttributeXP": {"Agility": 0.05}},
+  "CombatState": {"Rounds": 3, "PlayerWounds": [], "OpponentWounds": [], "CombatLog": [], "Victor": "player", "OpponentDefeated": true, "OpponentID": "..."}
+}
+```
+
 ## Import Style
 
 ### Use Explicit Imports

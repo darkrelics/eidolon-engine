@@ -262,35 +262,47 @@ def delete_character_history(character_id: str) -> dict:
         )
 
         if history_records:
-            # Prepare composite keys for batch deletion
-            delete_keys = [{"CharacterID": character_id, "StoryID": record["StoryID"]} for record in history_records]
+            # Prepare composite keys for batch deletion using CharacterID + StoryInstanceID
+            delete_keys = []
+            for record in history_records:
+                story_instance_id = record.get("StoryInstanceID")
+                if story_instance_id:
+                    delete_keys.append({"CharacterID": character_id, "StoryInstanceID": story_instance_id})
+                else:
+                    logger.warning(
+                        f"History record missing StoryInstanceID for character {character_id}; skipping batch delete for this record"
+                    )
 
             try:
                 # Batch delete all history records with automatic retries
                 failed_items = dynamo.batch_write_with_retries(TableName.STORY_HISTORY, delete_keys, operation="delete")
 
                 # Count successful deletes
-                result["deleted_count"] = len(history_records) - len(failed_items)
+                result["deleted_count"] = len(delete_keys) - len(failed_items)
 
                 # Log failed items
                 for failed_key in failed_items:
-                    story_id = failed_key.get("StoryID")
-                    logger.error(f"Failed to delete history record for story {story_id} after retries")
-                    result["errors"].append(f"Failed to delete history record for story {story_id}")
+                    story_instance_id = failed_key.get("StoryInstanceID")
+                    logger.error(f"Failed to delete history record for story instance {story_instance_id} after retries")
+                    result["errors"].append(f"Failed to delete history record for story instance {story_instance_id}")
 
             except Exception as err:
                 logger.error(f"Batch delete of history records failed: {err}")
                 # Fall back to individual deletes
                 for record in history_records:
+                    story_instance_id = record.get("StoryInstanceID")
+                    if not story_instance_id:
+                        result["errors"].append("History record missing StoryInstanceID; cannot delete this record individually")
+                        continue
                     try:
                         dynamo.delete_item(
                             TableName.STORY_HISTORY,
-                            Key={"CharacterID": character_id, "StoryID": record["StoryID"]},
+                            Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
                         )
                         result["deleted_count"] += 1
                     except ClientError as err:
-                        logger.error(f"Failed to delete history record for {record['StoryID']} Error: {err}")
-                        result["errors"].append(f"Failed to delete history record for story {record['StoryID']}: {err}")
+                        logger.error(f"Failed to delete history record for StoryInstanceID {story_instance_id} Error: {err}")
+                        result["errors"].append(f"Failed to delete history record for story instance {story_instance_id}: {err}")
 
     except ClientError as err:
         logger.error(f"Failed to query history for {character_id} Error: {err}")
@@ -342,6 +354,7 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
         "character_removed_from_player": False,
         "items_deleted": 0,
         "active_segments_deleted": 0,
+        "history_deleted": 0,
         "errors": [],
     }
 
@@ -383,6 +396,11 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
     segments_result = delete_character_active_segments(character_id)
     results["active_segments_deleted"] = segments_result["deleted_count"]
     results["errors"].extend(segments_result["errors"])
+
+    # Delete character history records (story history)
+    history_result = delete_character_history(character_id)
+    results["history_deleted"] = history_result.get("deleted_count", 0)
+    results["errors"].extend(history_result.get("errors", []))
 
     # Log deletion summary
     logger.info(f"Character deletion completed for {character_id}")

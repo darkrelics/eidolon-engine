@@ -11,11 +11,11 @@ import sys
 import uuid
 from decimal import Decimal
 
-# Add parent directory to path to import eidolon modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from eidolon.dynamo import dynamo  # noqa: E402
 from eidolon.dynamo import TableName
+
+# Add parent directory to path to import eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def display_prototypes() -> list:

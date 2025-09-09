@@ -6,6 +6,17 @@ Provides functions for processing combat encounters.
 
 from botocore.exceptions import ClientError
 
+from eidolon.constants import (
+    COMBAT_DOMINANCE_RATIO,
+    COMBAT_OPPONENT_WOUNDS_MULTIPLIER_FOR_DEFEAT,
+    COMBAT_ROUNDS_PER_TICK,
+    COMBAT_SIGMA_CRITICAL,
+    COMBAT_SIGMA_SOLID,
+    DEFAULT_COMBAT_ROUNDS,
+    DEFAULT_OPPONENT_HEALTH,
+    PLAYER_DEATH_LETHAL_WOUNDS,
+    PLAYER_INCAPACITATED_TOTAL_WOUNDS,
+)
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time, resolve_opposed_check
@@ -24,9 +35,9 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         Tuple of (outcome, combat_state)
     """
     combat_config = segment_def.get("Combat", {})
-    # Accept both PascalCase and camelCase for compatibility
-    opponent_id = combat_config.get("OpponentID") or combat_config.get("opponentId")
-    max_rounds = combat_config.get("MaxRounds") or combat_config.get("maxRounds") or 10
+    # Enforce PascalCase configuration
+    opponent_id = combat_config.get("OpponentID")
+    max_rounds = combat_config.get("MaxRounds") or DEFAULT_COMBAT_ROUNDS
 
     # Get opponent data
     try:
@@ -41,10 +52,9 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
     # Initialize combat state from active segment or create new
     combat_state = active_segment.get("CombatState", {})
-    # Tolerate both PascalCase and camelCase
-    player_wounds = combat_state.get("PlayerWounds", combat_state.get("playerWounds", []))
-    opponent_wounds = combat_state.get("OpponentWounds", combat_state.get("opponentWounds", []))
-    current_round = combat_state.get("Round", combat_state.get("round", 0))
+    player_wounds = combat_state.get("PlayerWounds", [])
+    opponent_wounds = combat_state.get("OpponentWounds", [])
+    current_round = combat_state.get("Round", 0)
 
     # Get character combat stats
     character_attributes = character.get("Attributes", {})
@@ -63,11 +73,11 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     combat_log = []
 
     # Continue combat from current round
-    for round_num in range(int(current_round), min(int(current_round) + 5, int(max_rounds))):
+    for round_num in range(int(current_round), min(int(current_round) + COMBAT_ROUNDS_PER_TICK, int(max_rounds))):
         round_results = {
-            "round": round_num + 1,
-            "playerAttack": None,
-            "opponentAttack": None,
+            "Round": round_num + 1,
+            "PlayerAttack": None,
+            "OpponentAttack": None,
         }
 
         # Player attacks opponent using MUD mechanics
@@ -76,10 +86,10 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         if attack_outcome["success"]:
             # Determine damage based on sigma
             sigma = attack_outcome["sigma"]
-            if sigma > 2.0:
+            if sigma > COMBAT_SIGMA_CRITICAL:
                 damage = 3  # Critical hit
                 damage_type = "critical"
-            elif sigma > 1.0:
+            elif sigma > COMBAT_SIGMA_SOLID:
                 damage = 2  # Solid hit
                 damage_type = "solid"
             else:
@@ -97,30 +107,33 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                     }
                 )
 
-            round_results["playerAttack"] = {
-                "hit": True,
-                "sigma": round(sigma, 2),
-                "damage": damage,
-                "damageType": damage_type,
+            round_results["PlayerAttack"] = {
+                "Hit": True,
+                "Sigma": round(sigma, 2),
+                "Damage": damage,
+                "DamageType": damage_type,
             }
 
             # Check if opponent is defeated
             lethal_wounds = sum(1 for w in opponent_wounds if w.get("DamageType") == "lethal")
-            if lethal_wounds >= opponent_health or len(opponent_wounds) >= opponent_health * 2:
+            if (
+                lethal_wounds >= opponent_health
+                or len(opponent_wounds) >= opponent_health * COMBAT_OPPONENT_WOUNDS_MULTIPLIER_FOR_DEFEAT
+            ):
                 combat_log.append(round_results)
                 return "normal", {
-                    "rounds": round_num + 1,
-                    "playerWounds": player_wounds,
-                    "opponentWounds": opponent_wounds,
-                    "combatLog": combat_log,
-                    "victor": "player",
-                    "opponentDefeated": True,
-                    "opponentId": opponent_id,
+                    "Rounds": round_num + 1,
+                    "PlayerWounds": player_wounds,
+                    "OpponentWounds": opponent_wounds,
+                    "CombatLog": combat_log,
+                    "Victor": "player",
+                    "OpponentDefeated": True,
+                    "OpponentID": opponent_id,
                 }
         else:
-            round_results["playerAttack"] = {
-                "hit": False,
-                "sigma": round(attack_outcome["sigma"], 2),
+            round_results["PlayerAttack"] = {
+                "Hit": False,
+                "Sigma": round(attack_outcome["sigma"], 2),
             }
 
         # Opponent attacks player using MUD mechanics
@@ -150,39 +163,39 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                     }
                 )
 
-            round_results["opponentAttack"] = {
-                "hit": True,
-                "sigma": round(sigma, 2),
-                "damage": damage,
-                "damageType": damage_type,
+            round_results["OpponentAttack"] = {
+                "Hit": True,
+                "Sigma": round(sigma, 2),
+                "Damage": damage,
+                "DamageType": damage_type,
             }
 
             # Check if player is defeated
             lethal_wounds = sum(1 for w in player_wounds if w.get("DamageType") == "lethal")
             total_wounds = len(player_wounds)
 
-            if lethal_wounds >= 5:  # 5+ lethal wounds = death
+            if lethal_wounds >= PLAYER_DEATH_LETHAL_WOUNDS:
                 combat_log.append(round_results)
                 return "death", {
-                    "rounds": round_num + 1,
-                    "playerWounds": player_wounds,
-                    "opponentWounds": opponent_wounds,
-                    "combatLog": combat_log,
-                    "victor": "opponent",
+                    "Rounds": round_num + 1,
+                    "PlayerWounds": player_wounds,
+                    "OpponentWounds": opponent_wounds,
+                    "CombatLog": combat_log,
+                    "Victor": "opponent",
                 }
-            elif total_wounds >= 10:  # 10+ total wounds = incapacitated
+            elif total_wounds >= PLAYER_INCAPACITATED_TOTAL_WOUNDS:
                 combat_log.append(round_results)
                 return "failure", {
-                    "rounds": round_num + 1,
-                    "playerWounds": player_wounds,
-                    "opponentWounds": opponent_wounds,
-                    "combatLog": combat_log,
-                    "victor": "opponent",
+                    "Rounds": round_num + 1,
+                    "PlayerWounds": player_wounds,
+                    "OpponentWounds": opponent_wounds,
+                    "CombatLog": combat_log,
+                    "Victor": "opponent",
                 }
         else:
-            round_results["opponentAttack"] = {
-                "hit": False,
-                "sigma": round(defense_outcome["sigma"], 2),
+            round_results["OpponentAttack"] = {
+                "Hit": False,
+                "Sigma": round(defense_outcome["sigma"], 2),
             }
 
         combat_log.append(round_results)
@@ -194,12 +207,12 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     # Calculate final rounds (round_num might not be defined if no combat occurred)
     final_rounds = len(combat_log)
 
-    if opponent_total_wounds > player_total_wounds * 2:
+    if opponent_total_wounds > player_total_wounds * COMBAT_DOMINANCE_RATIO:
         # Player dealt significantly more damage
         outcome = "normal"
         victor = "player"
         opponent_defeated = True
-    elif player_total_wounds > opponent_total_wounds * 2:
+    elif player_total_wounds > opponent_total_wounds * COMBAT_DOMINANCE_RATIO:
         # Opponent dealt significantly more damage
         outcome = "failure"
         victor = "opponent"
@@ -211,11 +224,11 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         opponent_defeated = opponent_total_wounds >= opponent_health
 
     return outcome, {
-        "rounds": final_rounds,
-        "playerWounds": player_wounds,
-        "opponentWounds": opponent_wounds,
-        "combatLog": combat_log,
-        "victor": victor,
-        "opponentDefeated": opponent_defeated,
-        "opponentId": opponent_id,
+        "Rounds": final_rounds,
+        "PlayerWounds": player_wounds,
+        "OpponentWounds": opponent_wounds,
+        "CombatLog": combat_log,
+        "Victor": victor,
+        "OpponentDefeated": opponent_defeated,
+        "OpponentID": opponent_id,
     }

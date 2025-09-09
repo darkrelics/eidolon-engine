@@ -51,7 +51,7 @@ def manage_eventbridge_rule(should_enable: bool) -> None:
             logger.error(f"Access denied for EventBridge rule '{EVENTBRIDGE_RULE_NAME}'", exc_info=True)
         else:
             logger.error(f"Failed to manage EventBridge rule - Code: {error_code}", exc_info=True)
-        raise
+        raise RuntimeError(f"Failed to manage EventBridge rule '{EVENTBRIDGE_RULE_NAME}': {error_code}") from err
 
 
 def update_polling_state(state: str) -> None:
@@ -70,10 +70,10 @@ def update_polling_state(state: str) -> None:
 
     try:
         put_parameter(SSM_POLLER_STATE_PARAMETER, state)
-        logger.info(f"Updated polling state for {state}")
+        logger.info(f"Updated polling state to {state}")
     except Exception as err:
-        logger.error(f"Failed to update polling state for {state} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to update polling state: {err}")
+        logger.error(f"Failed to update polling state to {state} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to update polling state: {err}") from err
 
 
 def get_polling_state() -> str:
@@ -96,7 +96,7 @@ def get_polling_state() -> str:
         return "run"
     except Exception as err:
         logger.error(f"Failed to get polling state Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to get polling state: {err}")
+        raise RuntimeError(f"Failed to get polling state: {err}") from err
 
 
 def ensure_polling_enabled() -> None:

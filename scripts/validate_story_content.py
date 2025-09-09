@@ -7,10 +7,10 @@ import json
 import sys
 from pathlib import Path
 
+from eidolon.schema import normalize_segment_definition
+
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from eidolon.schema import normalize_segment_definition
 
 
 def validate_mechanical_segment(segment: dict):

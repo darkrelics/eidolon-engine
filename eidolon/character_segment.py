@@ -52,6 +52,7 @@ def character_get_active_segment(character: dict) -> dict:
             ":cid": character_id,
             ":status": "active",
         },
+        "Limit": 1,
     }
 
     try:

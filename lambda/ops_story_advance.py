@@ -10,10 +10,10 @@ Triggered by SQS to apply character updates and progress stories.
 from eidolon.character_data import get_character
 from eidolon.character_segment import update_character_active_segment
 from eidolon.character_story import apply_story_outcome_effects
+from eidolon.constants import CharState
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome
-from eidolon.models import CharState
 from eidolon.polling import update_polling_state
 from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
 from eidolon.segment_history import insert_rest_segment, record_segment_history
@@ -108,8 +108,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     if character_updates and character_id:
         # Apply combat rewards if present
         combat_rewards = character_updates.get("CombatRewards", {})
-        if combat_rewards and combat_rewards.get("defeated"):
-            opponent_data = combat_rewards.get("opponentData")
+        if combat_rewards and combat_rewards.get("Defeated"):
+            opponent_data = combat_rewards.get("OpponentData")
             if opponent_data:
                 try:
                     apply_combat_rewards(character_id, opponent_data)

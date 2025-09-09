@@ -4,13 +4,13 @@ import time
 
 from eidolon.character_data import character_get
 from eidolon.cognito import extract_player_id
+from eidolon.constants import CharState
 from eidolon.cors import cors_handler
 from eidolon.environment import REST_SEGMENT_DURATION
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_history import insert_rest_segment
-from eidolon.models import CharState
 from eidolon.segment_polling import get_active_segment_info
 
 

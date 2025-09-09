@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.player_character import delete_character
+from eidolon.player_character import delete_character, delete_character_history
 
 
 def create_player_record(user_uuid: str, email: str) -> None:
@@ -402,13 +402,13 @@ def delete_player_active_segments(player_id: str) -> int:
 
 def delete_player_character_history(player_id: str) -> int:
     """
-    Delete all segment history records for the player's characters.
+    Delete all segment and story history records for the player's characters.
 
-    Since the segment_history table uses CharacterID as partition key (not PlayerID),
+    Since history tables use CharacterID as the partition key (not PlayerID),
     we need to:
     1. Get the player's character list
-    2. Query segment history for each character
-    3. Delete the found records
+    2. Delete segment history for each character
+    3. Delete story history for each character via helper
 
     Args:
         player_id: Cognito user ID
@@ -430,14 +430,14 @@ def delete_player_character_history(player_id: str) -> int:
 
         character_list = player.get("CharacterList", {})
 
-        # For each character, query and delete their segment history
+        # For each character, delete their segment history and story history
         for _, char_info in character_list.items():
             character_id = char_info.get("UUID")
             if not character_id:
                 continue
 
+            # Delete segment history records for this character
             try:
-                # Query segment_history table with CharacterID as partition key
                 items = dynamo.query(
                     TableName.SEGMENT_HISTORY,
                     KeyConditionExpression="CharacterID = :cid",
@@ -446,53 +446,34 @@ def delete_player_character_history(player_id: str) -> int:
 
                 for item in items:  # type: ignore
                     try:
-                        # Delete using composite key: CharacterID + ActiveSegmentID
                         dynamo.delete_item(
                             TableName.SEGMENT_HISTORY,
-                            Key={"CharacterID": character_id, "ActiveSegmentID": item.get("ActiveSegmentID")},
+                            Key={
+                                "CharacterID": character_id,
+                                "ActiveSegmentID": item.get("ActiveSegmentID"),
+                            },
                         )
                         deleted_count += 1
                     except ClientError as err:
                         logger.error(f"Failed to delete segment history for {item.get('ActiveSegmentID')}: {err}")
-
             except ClientError as err:
                 logger.error(f"Error querying segment history for character {character_id}: {err}")
-                continue
 
-        # Also delete from story_history table
-        for _, char_info in character_list.items():
-            character_id = char_info.get("UUID")
-            if not character_id:
-                continue
-
+            # Delete story history using shared helper
             try:
-                # Query story_history table with CharacterID as partition key
-                items = dynamo.query(
-                    TableName.STORY_HISTORY,
-                    KeyConditionExpression="CharacterID = :cid",
-                    ExpressionAttributeValues={":cid": character_id},
-                )
-
-                for item in items:  # type: ignore
-                    try:
-                        # Delete using composite key: CharacterID + StoryID
-                        dynamo.delete_item(
-                            TableName.STORY_HISTORY,
-                            Key={"CharacterID": character_id, "StoryID": item.get("StoryID")},
-                        )
-                        deleted_count += 1
-                    except ClientError as err:
-                        logger.error(f"Failed to delete story history for {item.get('StoryID')}: {err}")
-
-            except ClientError as err:
-                logger.error(f"Error querying story history for character {character_id}: {err}")
-                continue
+                history_result = delete_character_history(character_id)
+                deleted_count += history_result.get("deleted_count", 0)
+            except Exception as err:
+                logger.error(f"Failed to delete story history via helper for {character_id}: {err}")
 
         logger.info(f"Deleted {deleted_count} history records for player {player_id}")
         return deleted_count
 
     except Exception as err:
-        logger.error(f"Error deleting character history for player {player_id}: {err}", exc_info=True)
+        logger.error(
+            f"Error deleting character history for player {player_id}: {err}",
+            exc_info=True,
+        )
         return deleted_count
 
 

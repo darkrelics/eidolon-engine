@@ -30,11 +30,11 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
     successes = 0
 
     for challenge in challenges:
-        # Accept both lowercase and PascalCase keys for compatibility
-        attribute = challenge.get("attribute") or challenge.get("Attribute")
-        skill = challenge.get("skill") or challenge.get("Skill")
-        difficulty = challenge.get("difficulty") or challenge.get("Difficulty") or 8
-        attempts = int(challenge.get("attempts") or challenge.get("Attempts") or 1)
+        # Enforce PascalCase keys
+        attribute = challenge.get("Attribute")
+        skill = challenge.get("Skill")
+        difficulty = challenge.get("Difficulty") or 8
+        attempts = int(challenge.get("Attempts") or 1)
 
         # Get character's attribute and skill values
         character_attributes = character.get("Attributes", {})
@@ -88,10 +88,10 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
             challenge_attempts.append(
                 {
-                    "effectiveScore": effective_score,
-                    "difficulty": difficulty,
-                    "sigma": round(sigma, 2),
-                    "success": success,
+                    "EffectiveScore": effective_score,
+                    "Difficulty": difficulty,
+                    "Sigma": round(sigma, 2),
+                    "Success": success,
                 }
             )
 
@@ -112,12 +112,12 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
         challenge_results.append(
             {
-                "attribute": attribute,
-                "skill": skill,
-                "difficulty": difficulty,
-                "attempts": challenge_attempts,
-                "bestSigma": round(best_sigma, 2),
-                "passed": passed,
+                "Attribute": attribute,
+                "Skill": skill,
+                "Difficulty": difficulty,
+                "Attempts": challenge_attempts,
+                "BestSigma": round(best_sigma, 2),
+                "Passed": passed,
             }
         )
 

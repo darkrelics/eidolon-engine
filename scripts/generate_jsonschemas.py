@@ -10,12 +10,12 @@ import json
 import sys
 from pathlib import Path
 
+import eidolon.models as _eid_models  # type: ignore # noqa: E402
+
 # Ensure local package is importable when run from repo root/CI
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
-
-import eidolon.models as _eid_models  # type: ignore # noqa: E402
 
 
 def write_schema(model, out_dir: Path, name: str) -> None:

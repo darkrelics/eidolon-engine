@@ -52,7 +52,7 @@ jobs:
       - name: Run code formatters
         continue-on-error: true
         run: |
-          isort -l 132 --up --tc -m 3 --atomic --py 312 .
+          isort -l 132 --up --tc -m 3 --atomic --py 312 --float-to-top .
           ruff check . --ignore E501 --fix
           black . -l 132 -t py311
 

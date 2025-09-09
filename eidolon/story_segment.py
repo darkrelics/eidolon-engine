@@ -65,7 +65,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, segm
 
         combat_config = segment.get("Combat", {})
         if combat_config:
-            opponent_id = combat_config.get("OpponentID") or combat_config.get("opponentId")
+            opponent_id = combat_config.get("OpponentID")
 
             # Only create CombatState if there's actually an opponent
             if opponent_id:

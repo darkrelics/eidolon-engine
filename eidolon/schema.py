@@ -7,24 +7,6 @@ use PascalCase.
 """
 
 
-def get_first_key(d: dict, *keys: str, default=None):
-    """
-    Return the first present key's value from a dictionary.
-
-    Args:
-        d: Source dictionary
-        keys: Keys to try in order
-        default: Value to return if none of the keys are present
-
-    Returns:
-        The value for the first found key, or default if none found.
-    """
-    for k in keys:
-        if k in d:
-            return d[k]
-    return default
-
-
 def coerce_int(value, default: int = 0) -> int:
     """
     Convert a value to int, returning default on failure.
@@ -47,7 +29,7 @@ def normalize_challenges(raw_challenges) -> list:
     Normalize Challenges list to internal field names.
 
     Args:
-        raw_challenges: List of challenge dicts with possible mixed casing
+        raw_challenges: List of challenge dicts using PascalCase keys
 
     Returns:
         List of normalized challenge dicts with attribute, skill, difficulty, attempts.
@@ -58,12 +40,16 @@ def normalize_challenges(raw_challenges) -> list:
     for c in raw_challenges:
         if not isinstance(c, dict):
             continue
+        attribute = c.get("Attribute")
+        skill = c.get("Skill")
+        difficulty = coerce_int(c.get("Difficulty", 0), 0)
+        attempts = coerce_int(c.get("Attempts", 1), 1)
         norm.append(
             {
-                "Attribute": c.get("Attribute"),
-                "Skill": c.get("Skill"),
-                "Difficulty": coerce_int(c.get("Difficulty", 0)),
-                "Attempts": coerce_int(c.get("Attempts", 1)),
+                "Attribute": attribute,
+                "Skill": skill,
+                "Difficulty": difficulty,
+                "Attempts": attempts,
             }
         )
     return norm
@@ -86,10 +72,16 @@ def normalize_wounds(raw_wounds) -> list:
         if isinstance(w, str):
             out.append({"DamageType": w})
         elif isinstance(w, dict):
-            wd = dict(w)
-            # Ensure canonical key
-            if "DamageType" in wd:
-                wd["DamageType"] = wd.get("DamageType")
+            wd: dict = {}
+            damage_type = w.get("DamageType")
+            if damage_type is not None:
+                wd["DamageType"] = damage_type
+            # Preserve only PascalCase keys as-is (no conversion)
+            for k, v in w.items():
+                if k == "DamageType":
+                    continue
+                if k and k[0].isupper():
+                    wd[k] = v
             out.append(wd)
     return out
 
@@ -98,14 +90,15 @@ def normalize_results(raw_results) -> dict:
     """
     Normalize Results mapping for outcomes.
 
-    Outcome keys are lower-cased for internal lookup. Inner fields use
-    'narrative' and 'effects'; per-outcome NextSegmentID is preserved.
+    Outcome keys are normalized to Title/PascalCase (e.g., "Normal",
+    "Exceptional"). Inner fields use PascalCase keys: "Narrative" and
+    "Effects". Per-outcome "NextSegmentID" is preserved when present.
 
     Args:
         raw_results: Dict mapping outcome -> result block
 
     Returns:
-        Dict of normalized results keyed by lower-case outcome.
+        Dict of normalized results keyed by Title/PascalCase outcome.
     """
     if not isinstance(raw_results, dict):
         return {}
@@ -114,21 +107,26 @@ def normalize_results(raw_results) -> dict:
     for outcome_key, outcome_val in raw_results.items():
         if not isinstance(outcome_val, dict):
             continue
-        # Normalize outcome key to title case for consistent lookup
+        # Normalize outcome key to Title/PascalCase for consistent lookup
         k = str(outcome_key).title()
-        narrative = outcome_val.get("Narrative", "")
-        effects = outcome_val.get("Effects", {}) or {}
 
-        if isinstance(effects, dict):
-            effects = {
-                "Room": effects.get("Room"),
-                "Items": effects.get("Items", []),
-                "Wounds": normalize_wounds(effects.get("Wounds", [])),
-            }
+        narrative = outcome_val.get("Narrative", "")
+        effects_in = outcome_val.get("Effects", {}) or {}
+
+        effects_out: dict = {}
+        if isinstance(effects_in, dict):
+            room = effects_in.get("Room")
+            items = effects_in.get("Items", []) or []
+            wounds = effects_in.get("Wounds", []) or []
+            if room is not None:
+                effects_out["Room"] = room
+            if items is not None:
+                effects_out["Items"] = items
+            effects_out["Wounds"] = normalize_wounds(wounds)
 
         norm[k] = {
             "Narrative": narrative if isinstance(narrative, str) else str(narrative),
-            "Effects": effects if isinstance(effects, dict) else {},
+            "Effects": effects_out,
         }
 
         next_seg = outcome_val.get("NextSegmentID")
@@ -176,23 +174,32 @@ def normalize_segment_definition(raw: dict) -> dict:
 
     seg = dict(raw)
 
+    # SegmentType
     seg_type = raw.get("SegmentType")
     if seg_type:
         seg["SegmentType"] = seg_type
 
-    duration = raw.get("SegmentDuration")
-    if duration is not None:
-        seg["SegmentDuration"] = coerce_int(duration, 0)
+    # SegmentDuration
+    duration_val = raw.get("SegmentDuration")
+    if duration_val is not None:
+        seg["SegmentDuration"] = coerce_int(duration_val, 0)
 
-    seg["Challenges"] = normalize_challenges(raw.get("Challenges", []))
+    # Challenges
+    challenges_in = raw.get("Challenges", [])
+    seg["Challenges"] = normalize_challenges(challenges_in)
 
-    combat = normalize_combat(raw.get("Combat", {}))
+    # Combat
+    combat_in = raw.get("Combat", {})
+    combat = normalize_combat(combat_in)
     if combat:
         seg["Combat"] = combat
 
-    results = normalize_results(raw.get("Results", {}))
+    # Results
+    results_in = raw.get("Results", {})
+    results = normalize_results(results_in)
     seg["Results"] = results
 
+    # Decision fields
     if "DecisionOptions" in raw:
         seg["DecisionOptions"] = raw.get("DecisionOptions", {}) or {}
     if "DecisionText" in raw:
