@@ -748,7 +748,6 @@ def segment_poller_handler(event, context):
     next_poll_buffer = 90  # 60 seconds to next poll + 30 second buffer
 
     # Phase 1: Find ALL segments approaching expiry (within 90 seconds)
-    # These need advancement (if processed) or recovery (if not processed)
     expiring_segments = get_segments_approaching_expiry(current_time + next_poll_buffer)
 
     advancement_messages = []
@@ -759,7 +758,6 @@ def segment_poller_handler(event, context):
         processing_status = segment.get('ProcessingStatus', 'pending')
 
         if processing_status == 'processed':
-            # Normal advancement - segment completed processing
             advancement_messages.append({'body': active_segment_id})
         else:
             # Not processed in time - mark exceptional to protect player
@@ -768,8 +766,6 @@ def segment_poller_handler(event, context):
             segments_marked_exceptional += 1
 
     # Phase 2: Find stuck mechanical segments with time to retry
-    # Criteria: StartTime > 5 minutes ago, EndTime > 90 seconds from now,
-    # ProcessingStatus in (pending, processing), SegmentType = mechanical
     stuck_segments = get_stuck_mechanical_segments(current_time)
 
     processing_messages = []
@@ -777,12 +773,14 @@ def segment_poller_handler(event, context):
         active_segment_id = segment['ActiveSegmentID']
         processing_status = segment.get('ProcessingStatus', 'pending')
 
-        # Reset if stuck in processing
         if processing_status == 'processing':
             reset_segment_processing_status(active_segment_id)
 
         processing_messages.append({'body': active_segment_id})
 
+    # Phase 3: GameMode Consistency Validation (NEW)
+    orphaned_characters = validate_gamemode_consistency()
+    
     # Send messages to appropriate queues
     if advancement_messages:
         send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
@@ -790,17 +788,160 @@ def segment_poller_handler(event, context):
     if processing_messages:
         send_message_batch(SEGMENT_QUEUE_URL, processing_messages)
 
+    # Log any GameMode corrections
+    if orphaned_characters:
+        logger.info(f"Corrected GameMode for {len(orphaned_characters)} characters to None")
+
     # Manage polling state transitions
     if state == 'run':
-        # Check if there are still active segments
         if not check_active_segments_exist():
             update_polling_state('stop', enable_rule=False)
     else:  # state == 'stop'
-        # Check for active segments
         if check_active_segments_exist():
             update_polling_state('run', enable_rule=True)
 
     return {'statusCode': 200}
+
+def validate_gamemode_consistency():
+    """
+    Check for characters in GameMode=Incremental without valid ActiveSegmentID.
+    Auto-correct to fail-safe GameMode=None.
+    
+    Returns:
+        List of character IDs that were corrected
+    """
+    # Find characters in Incremental mode
+    incremental_chars = dynamo.scan(
+        TableName.CHARACTERS,
+        FilterExpression='GameMode = :mode',
+        ExpressionAttributeValues={':mode': 'Incremental'},
+        ProjectionExpression='CharacterID, ActiveStoryID, ActiveSegmentID'
+    )
+    
+    orphaned_characters = []
+    
+    for char in incremental_chars['items']:
+        character_id = char['CharacterID']
+        active_story_id = char.get('ActiveStoryID')
+        active_segment_id = char.get('ActiveSegmentID')
+        
+        # Check if segment still exists in active_segments table
+        if active_segment_id:
+            segment_exists = dynamo.get_item(
+                TableName.ACTIVE_SEGMENTS,
+                Key={'ActiveSegmentID': active_segment_id}
+            )
+            
+            if not segment_exists:
+                # Orphaned - segment was deleted but character not updated
+                logger.warning(f"Character {character_id} has orphaned ActiveSegmentID, correcting to None")
+                orphaned_characters.append(character_id)
+        
+        elif not active_story_id or not active_segment_id:
+            # Missing story/segment IDs while in Incremental mode
+            logger.warning(f"Character {character_id} in Incremental mode without story/segment, correcting to None")  
+            orphaned_characters.append(character_id)
+    
+    # Batch correct all orphaned characters
+    for character_id in orphaned_characters:
+        try:
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={'CharacterID': character_id},
+                UpdateExpression='SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID',
+                ExpressionAttributeValues={':none': 'None'}
+            )
+        except Exception as err:
+            logger.error(f"Failed to correct GameMode for {character_id}: {err}")
+    
+    return orphaned_characters
+
+### 5.3 Segment Timeout Edge Cases
+
+#### **Critical Timeout Scenarios**
+
+**1. Processing Queue Failure:**
+- **Scenario**: SQS processing queue unavailable during segment creation
+- **Detection**: mechanical segments remain ProcessingStatus="pending" >5 minutes
+- **Recovery**: Poller retries via `get_stuck_mechanical_segments()`
+- **Fallback**: If no recovery by EndTime → exceptional outcome
+
+**2. Advancement Queue Delay:**
+- **Scenario**: Story advancement queue processes slowly  
+- **Detection**: Segments marked "processed" but not advanced
+- **Recovery**: Normal advancement when queue processes (no special handling needed)
+- **Impact**: Minimal - clients wait for server timing
+
+**3. Lambda Function Cold Start:**
+- **Scenario**: ops-segment-process experiences cold start delay
+- **Detection**: ProcessingStatus stuck in "processing" >5 minutes
+- **Recovery**: Poller calls `reset_segment_processing_status()` and retries
+- **Fallback**: If reset fails or retries fail → exceptional outcome
+
+**4. EventBridge Rule Disabled:**
+- **Scenario**: Poller rule disabled during active segments
+- **Detection**: No polling occurs, segments expire without advancement  
+- **Recovery**: Next API call triggers `ensure_polling_enabled()` to restart polling
+- **Impact**: Segments may get exceptional outcomes until polling resumes
+
+#### **Client-Server Timeout Coordination**
+
+**Server Timeout Markers for Client UI:**
+
+```python
+# Add to segment status response
+{
+  "ProcessingStatus": "pending",        # pending/processing/processed
+  "ElapsedMinutes": 6,                  # How long segment has been running
+  "RetryAttempts": 2,                   # How many retry attempts made  
+  "AutoResolveAt": 1737003600,          # When exceptional will be applied
+  "ExpectedOutcome": "exceptional"      # What outcome if auto-resolved
+}
+```
+
+**Client Timeout Display Logic:**
+
+```dart  
+String getProcessingMessage(Map<String, dynamic> status) {
+  final processingStatus = status['ProcessingStatus'] as String? ?? 'pending';
+  final elapsedMinutes = status['ElapsedMinutes'] as int? ?? 0;
+  final segmentType = status['SegmentType'] as String? ?? 'unknown';
+  
+  if (segmentType != 'mechanical') {
+    return 'Waiting for timer...';
+  }
+  
+  switch (processingStatus) {
+    case 'pending':
+      if (elapsedMinutes < 5) return 'Processing your actions...';
+      if (elapsedMinutes < 15) return 'Processing delayed - retrying...';
+      return 'Resolving automatically soon...';
+      
+    case 'processing':
+      if (elapsedMinutes > 10) return 'Processing delayed - system working...';
+      return 'Processing your actions...';
+      
+    case 'processed':
+      return 'Ready to advance!';
+      
+    default:
+      return 'Processing...';
+  }
+}
+```
+
+#### **Monitoring and Alerting**
+
+**Key Metrics to Track:**
+- **Exceptional Outcome Rate**: High rate indicates processing problems
+- **Stuck Segment Count**: Number of segments requiring retry
+- **Processing Duration**: Average time from creation to processed status
+- **Queue Depth**: SQS message counts for processing bottlenecks
+
+**Alert Thresholds:**
+- **>10% exceptional outcomes** in 1-hour window → Processing system health check
+- **>50 stuck segments** at one time → SQS queue capacity issue  
+- **>90% mechanical segments** taking >5 minutes → Lambda memory/timeout adjustment needed
 
 def get_segments_approaching_expiry(threshold_time):
     """Get ALL segments that will expire before next poll (90 seconds).

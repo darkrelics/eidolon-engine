@@ -2,6 +2,19 @@
 
 This guide establishes consistent standards for all documentation in the Eidolon Engine project. Following these guidelines ensures clarity, maintainability, and professionalism across all documents.
 
+## Data Naming Standards
+
+### JSON Field Naming Convention
+
+**All JSON fields use PascalCase with capitalized abbreviations:**
+
+- **IDs**: `CharacterID`, `PlayerID`, `StoryID`, `ActiveSegmentID` (not `characterId` or `character_id`)  
+- **Abbreviations**: `ClientID`, `APIKey`, `HTTPMethod`, `XMLData`, `JSONBody`
+- **Standard Fields**: `GameMode`, `AvailableStories`, `CompletedStories`
+- **Error Responses**: `{"Error": "message"}` (always PascalCase "Error" field)
+
+**Rationale**: Matches DynamoDB schema field names for seamless data mapping across all system layers.
+
 ## Document Structure
 
 ### File Naming

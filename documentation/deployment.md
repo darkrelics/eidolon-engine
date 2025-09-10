@@ -517,6 +517,47 @@ lambda_client.delete_layer_version(
 )
 ```
 
+## Environment Strategy
+
+### Multi-Account Deployment Architecture
+
+**Each deployment environment uses its own AWS account:**
+
+- **Development**: Separate AWS account for individual developer testing
+- **Staging**: Dedicated AWS account for integration testing  
+- **Production**: Isolated AWS account for live system
+
+**Benefits:**
+- **Complete Isolation**: No resource name conflicts between environments
+- **Security**: Full account-level separation prevents cross-environment access
+- **Cost Tracking**: Clear cost attribution per environment
+- **IAM Simplicity**: No complex environment-based permissions needed
+
+**Resource Naming:**
+- **Same names across accounts**: All environments use identical resource names (`eidolon-api`, `characters`, etc.)
+- **No prefixes needed**: Account isolation eliminates naming conflicts
+- **Consistent configuration**: Same `config.yml` structure across environments
+
+**Flutter Configuration Management:**
+```dart
+// Build-time environment configuration
+const String apiDomain = String.fromEnvironment(
+  'API_DOMAIN',
+  defaultValue: 'api.darkrelics.net',  // Production default
+);
+
+// Environment-specific builds:
+// Dev: flutter build web --dart-define=API_DOMAIN=api-dev.darkrelics.net
+// Staging: flutter build web --dart-define=API_DOMAIN=api-staging.darkrelics.net  
+// Prod: flutter build web --dart-define=API_DOMAIN=api.darkrelics.net
+```
+
+**Deployment Process Per Account:**
+1. **Bootstrap each account**: `cdk bootstrap aws://ACCOUNT-ID/REGION` 
+2. **Deploy with same parameters**: Same domain names, resource names, configuration
+3. **Account-specific domains**: Use subdomain routing (api-dev.domain.com vs api.domain.com)
+4. **Consistent resource names**: No prefixes needed due to account isolation
+
 ## Best Practices
 
 ### Architecture Guidelines
@@ -526,6 +567,7 @@ lambda_client.delete_layer_version(
 3. **CDK Context**: Use for all parameter passing
 4. **Stack Isolation**: Separate app file per stack
 5. **Post-Deploy Updates**: Always update Lambdas from S3
+6. **Account Isolation**: Use separate AWS accounts for each environment
 
 ### Deployment Guidelines
 

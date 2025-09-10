@@ -1,6 +1,8 @@
-**Schema Overview:**
+# Eidolon Engine Database Schema
 
-This schema supports the Eidolon Engine's unified backend infrastructure, providing shared data structures used by both MUD and Incremental game modes. All tables listed here are actively used by both game modes, with the GameMode field on characters preventing concurrent access.
+## Overview
+
+This document defines the complete database schema for the Eidolon Engine's unified backend infrastructure. The schema provides shared data structures used by both MUD and Incremental game modes, with 14 DynamoDB tables that support all game functionality while preventing concurrent access through the GameMode field on characters.
 
 **Key Design Principles:**
 
@@ -76,7 +78,7 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
   {
     "SlotName": {
       "ItemID": "uuid",
-      "Name": "Item Name",
+      "Name": "Item Name", 
       "Description": "Item description",
       "Mass": 1.5,
       "Value": 100,
@@ -85,7 +87,29 @@ This schema supports the Eidolon Engine's unified backend infrastructure, provid
     }
   }
   ```
-- **Decimal Values**: All numeric values are converted from DynamoDB Decimal to standard floats
+
+#### **Data Type Conversion Standards**
+
+**DynamoDB Storage → API Response:**
+- **All NUMBER fields**: Stored as Decimal in DynamoDB, automatically converted to float in API responses
+- **Precision Guarantee**: 64-bit IEEE 754 floats provide sufficient precision for all game values (no precision loss)
+- **Value Semantics**: 
+  - **Integer Semantics**: Health, RoomID, Currency, ItemID counts (display without decimals)
+  - **Fractional Semantics**: Skills, Attributes, XP values, Sigma calculations (preserve 2-3 decimal precision)
+
+**Conversion Examples:**
+```json
+// DynamoDB Storage (internal)
+{"Stealth": Decimal("5.375"), "Health": Decimal("12"), "Gold": Decimal("150")}
+
+// API Response (client receives)  
+{"Stealth": 5.375, "Health": 12.0, "Gold": 150.0}
+
+// Client Display (recommended)
+"Stealth: 5.38, Health: 12, Gold: 150"
+```
+
+**No Precision Loss**: Game values (0.00-10.00 skills, 0-1000 currency) are well within float64 precision limits.
 
 ---
 

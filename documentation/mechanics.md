@@ -1,8 +1,8 @@
-# Game Mechanics System
+# Game Mechanics and Experience System
 
 ## Overview
 
-The mechanics module provides a system for opposed checks in the game. It uses a sophisticated probability model that balances skill differences with controlled randomness, creating engaging gameplay where outcomes are neither too predictable nor too chaotic.
+This document describes the complete game mechanics and experience system for the Eidolon Engine. The system provides two primary resolution methods (opposed checks and static checks) integrated with a continuous skill progression system that rewards character development through actual use rather than abstract point allocation.
 
 ## Core Components
 
@@ -56,217 +56,148 @@ The system uses a normal distribution with two key transformations:
    - σ = 1 + kVar × tanh(Δ/10)
    - Widens or narrows the outcome distribution
 
-## Tuning Parameters
+## Integration with Experience System
 
-The system exposes three constants that control game feel:
+The mechanics system integrates with the experience system to provide character progression. For detailed information about:
 
-### kShift (Default: 0.20) - The Gravity Well
+- **Mathematical formulas** and tuning parameters
+- **Experience calculation** and skill progression  
+- **Implementation details** and constants
 
-kShift controls **who wins** by tilting the probability distribution.
+See [Experience System Documentation](experience.md).
 
-| kShift Value | Effect        | Game Feel                               |
-| ------------ | ------------- | --------------------------------------- |
-| 0.10         | Weak bias     | High upset potential, luck matters more |
-| 0.20         | Moderate bias | Balanced skill vs luck                  |
-| 0.30         | Strong bias   | Skill dominates, upsets are rare        |
+## Core Process Flow
 
-**Tuning Guide:**
+### Opposed Check Process
 
-- Increase if experts lose to novices too often
-- Decrease if matches feel too predictable
-- Each 0.05 change shifts win rates by ~3-5% per rating point
+1. **Input Validation**: Verify both participants have valid ratings
+2. **Difference Calculation**: Compute rating gap between participants  
+3. **Probability Distribution**: Apply mathematical model to determine outcome likelihood
+4. **Random Resolution**: Generate outcome using controlled randomness
+5. **Result Return**: Provide success/failure with outcome strength (sigma value)
+6. **Experience Award**: Automatically grant XP based on challenge difficulty (if using XP variant)
 
-### kVar (Default: 0.35) - The Springiness
+### Static Check Process  
 
-kVar controls **by how much** winners win through variance scaling.
+1. **Input Validation**: Verify character has valid effective score
+2. **Challenge Assessment**: Compare character capability to fixed difficulty
+3. **Probability Calculation**: Determine success likelihood based on difference
+4. **Random Resolution**: Generate outcome with appropriate variance
+5. **Result Return**: Provide success/failure with performance measure
+6. **Experience Award**: Grant XP based on challenge attempted (if using XP variant)
 
-| kVar Value | Effect         | Game Feel                                  |
-| ---------- | -------------- | ------------------------------------------ |
-| 0.20       | Tight outcomes | Close margins, consistent results          |
-| 0.35       | Moderate swing | Balanced drama vs predictability           |
-| 0.50       | High variance  | Spectacular victories and crushing defeats |
+## Usage Contexts
 
-**Tuning Guide:**
+### Combat Resolution
+- **Process**: Character attacks use opposed checks (attacker skill vs defender skill)
+- **Inputs**: Character combat skills and relevant attributes
+- **Output**: Hit/miss determination with damage scaling based on sigma value
 
-- Increase for more cinematic, swingy results
-- Decrease for tighter, more chess-like play
-- Does NOT affect overall win rates, only margin of victory
+### Skill Challenges  
+- **Process**: Character abilities tested against environmental difficulties
+- **Inputs**: Character skill + attribute vs static difficulty number
+- **Output**: Success/failure with quality measure for narrative outcomes
 
-### minSig (Default: 0.25) - The Safety Net
+### Social Interactions
+- **Process**: Character social skills vs target resistance or static social challenge
+- **Inputs**: Social skills (persuasion, deception) + relevant attributes  
+- **Output**: Interaction success with degree for determining NPC response
 
-minSig provides an absolute floor for variance to prevent degenerate cases.
+### Stealth and Detection
+- **Process**: Hiding character stealth vs observer investigation abilities
+- **Inputs**: Stealth skill + attribute vs investigation skill + attribute
+- **Output**: Detection success/failure determining visibility state
 
-| minSig Value | Effect          | Game Feel                                             |
-| ------------ | --------------- | ----------------------------------------------------- |
-| 0.10         | Minimal safety  | Allows very tight distributions in extreme mismatches |
-| 0.25         | Standard safety | Ensures some randomness even in dominant positions    |
-| 0.50         | High floor      | Maintains significant uncertainty in all matchups     |
+## System Properties
 
-**Tuning Guide:**
+- **Balanced Competition**: Higher skills win more often but upsets remain possible
+- **Predictable Randomness**: Outcomes vary within controlled ranges
+- **Experience Integration**: XP awarded based on actual challenge difficulty
+- **Failure Learning**: Failed attempts still provide character progression
 
-- Rarely needs adjustment
-- Prevents sigma from becoming too small when ratings are extremely different
-- Ensures there's always some chance of unexpected outcomes
+## Experience System Integration
 
-## Practical Examples
+### Philosophy
 
-### Win Probability by Rating Difference
+The experience system implements continuous skill progression designed around these core principles:
 
-| Rating Difference | Win Probability | Description          |
-| ----------------- | --------------- | -------------------- |
-| 0                 | 50%             | Fair contest         |
-| 2                 | 65%             | Slight advantage     |
-| 5                 | 79%             | Clear favorite       |
-| 10                | 94%             | Dominant position    |
-| 15                | 99%             | Near certain victory |
+1. **Learn by Doing** - Characters improve skills and attributes through actual use, not by spending abstract points
+2. **Meaningful Opposition** - Challenging opponents provide more growth than trivial ones  
+3. **Smooth Progression** - Skills advance continuously (0.00 to 10.00) rather than in discrete levels
+4. **Natural Soft Cap** - Exponential XP requirements create a practical limit around 6.0 without hard barriers
+5. **Failure Teaches** - Even failed attempts grant experience (at 50% rate), encouraging players to take risks
 
-### Outcome Ranges (Sigma Values)
+### Core Mechanics
 
-For a contest between equals (Δ = 0):
+- **No XP Pools** - Skills and attributes ARE the progression. They increase directly through use.
+- **Continuous Values** - All skills and attributes are 64-bit floats ranging from 0.00 to 10.00
+- **Contested Actions** - Experience is awarded when characters engage in opposed checks
+- **Static Challenges** - Experience is awarded when characters face environmental challenges  
+- **Automatic Awards** - The system automatically grants experience after any mechanics resolution
 
-- 68% of outcomes fall within [-1.0, +1.0]
-- 95% of outcomes fall within [-2.0, +2.0]
-- Extreme results (|σ| > 3) occur ~0.3% of the time
+### Mathematical Model
 
-## Integration Guide
-
-### Basic Usage
-
-```go
-// Simple combat resolution
-attackerSkill := 15
-defenderSkill := 12
-
-outcome := ResolveOpposedCheck(attackerSkill, defenderSkill)
-if outcome.Success {
-    // Apply damage based on outcome.Sigma
-    damage := baseDamage + int(outcome.Sigma * damageScale)
-} else {
-    // Defender blocks/dodges
-}
+#### XP Requirement Formula
+```
+XP_required(score) = 10 * 3.5^score
 ```
 
-### Advanced Usage
+This creates an exponential curve where:
+- 0→1: ~80 actions at even odds
+- 5→6: ~42,000 actions at even odds  
+- 9→10: ~4.4 million actions at even odds
 
-```go
-// Use Sigma for degrees of success
-outcome := ResolveOpposedCheck(thief.Stealth, guard.Perception)
-switch {
-case outcome.Sigma > 2.0:
-    // Critical success - completely undetected
-case outcome.Sigma > 0:
-    // Success - sneaks past
-case outcome.Sigma > -2.0:
-    // Failure - spotted but can flee
-default:
-    // Critical failure - caught red-handed
-}
+#### Variance Modifier
+```
+ratio = min(E_att, E_def) / max(E_att, E_def)
+xp_modifier = ratio^2
 ```
 
-### Static Checks
+This ensures:
+- Even match (10 vs 10): 100% XP
+- Moderate advantage (10 vs 5): 25% XP for stronger, 400% for weaker
+- Extreme mismatch (10 vs 2): 4% XP for stronger, 2500% for weaker
 
-Static checks are used when testing against environmental challenges or fixed difficulties:
+### Tuning Parameters
 
-```go
-// Climbing a wall (difficulty 4)
-climbSkill := character.GetSkill("climbing") + character.GetAttribute("strength")
-outcome := ResolveStaticCheck(int(climbSkill), 4)
+#### **Experience System Parameters**
 
-if outcome.Success {
-    // Successfully climbed the wall
-} else {
-    // Failed to climb
-}
-```
+Located in `eidolon/constants.py`:
 
-Common difficulty guidelines:
+- `BASE_XP = 0.25` - Base experience per action
+- `FAILURE_XP_PENALTY = 0.5` - Failed actions give 50% XP  
+- `ATTRIBUTE_XP_RATIO = 0.1` - Attributes gain 10% of skill XP
+- `maxScore = 10.0` - Hard cap on progression
 
-- 2: Trivial task
-- 4: Easy task
-- 6: Moderate task
-- 8: Hard task
-- 10: Very hard task
-- 12+: Exceptional task
+#### **Mechanics System Parameters**
 
-## Performance Considerations
+Located in `eidolon/constants.py`:
 
-- Uses cryptographically secure random numbers (slower but truly random)
-- Each resolution requires ~2-3 microseconds on modern hardware
-- No caching or state - each check is independent
-- Thread-safe - can be called concurrently
+- `OPPOSED_SHIFT = 0.20` (kShift) - Controls **who wins** by tilting probability distribution
+- `OPPOSED_VARIANCE = 0.35` (kVar) - Controls **by how much** winners win through variance scaling  
+- `OPPOSED_MIN_SIGMA = 0.25` (minSig) - Minimum variance floor to prevent degenerate cases
 
-## Security Notes
+#### **Tuning Effects**
 
-The system uses `crypto/rand` for true randomness:
+| Parameter | Increase Effect | Decrease Effect |
+|-----------|----------------|-----------------|
+| **OPPOSED_SHIFT** | Skill dominates more | More upsets possible |
+| **OPPOSED_VARIANCE** | Bigger victory margins | Tighter, closer outcomes |
+| **BASE_XP** | Faster progression | Slower progression |
 
-- Prevents prediction or manipulation of outcomes
-- Suitable for competitive or high-stakes gameplay
-- Cannot be seeded for replay/debugging (use test framework for deterministic testing)
+**Tuning Guidelines:**
+- **Too random?** Increase OPPOSED_SHIFT
+- **Too predictable?** Decrease OPPOSED_SHIFT  
+- **Want bigger swings?** Increase OPPOSED_VARIANCE
+- **Want tighter games?** Decrease OPPOSED_VARIANCE
 
-### Random Number Generation
+### Skill Progression Timeline
 
-The system generates normal distribution samples using the Box-Muller transform:
-
-1. Generate two uniform random values (u1, u2) using crypto/rand
-2. Transform to normal distribution: `z = sqrt(-2 * ln(u1)) * cos(2π * u2)`
-3. Apply mean shift and variance scaling to get final outcome
-
-This method efficiently produces high-quality normal distribution samples from uniform random inputs.
-
-## Tuning Workflow
-
-1. **Start with defaults** (kShift=0.20, kVar=0.35)
-2. **Run playtests** focusing on:
-   - Do skill differences feel meaningful?
-   - Are upsets exciting but not frustrating?
-   - Do victories feel earned?
-3. **Adjust one parameter at a time**:
-   - Too random? Increase kShift
-   - Too predictable? Decrease kShift
-   - Want bigger swings? Increase kVar
-   - Want tighter games? Decrease kVar
-4. **Test edge cases**:
-   - Novice vs Expert (large Δ)
-   - Evenly matched opponents (Δ ≈ 0)
-   - Chain multiple checks
-
-## Common Patterns
-
-### Best of N
-
-```go
-// First to 2 wins
-wins := 0
-for rounds := 0; rounds < 5 && wins < 2; rounds++ {
-    if ResolveOpposedCheck(a, d).Success {
-        wins++
-    }
-}
-success := wins >= 2
-```
-
-### Advantage/Disadvantage
-
-```go
-// Roll twice, take better/worse
-outcome1 := ResolveOpposedCheck(a, d)
-outcome2 := ResolveOpposedCheck(a, d)
-bestOutcome := outcome1
-if outcome2.Sigma > outcome1.Sigma {
-    bestOutcome = outcome2
-}
-```
-
-## FAQ
-
-**Q: Why use crypto/rand instead of math/rand?**
-A: Prevents any possibility of prediction or manipulation, essential for fair multiplayer games.
-
-**Q: Can I save/replay random sequences?**
-A: No, but the test framework supports deterministic testing with seeded random numbers.
-
-**Q: How do I handle ties?**
-A: True ties (Sigma = 0.0) are astronomically rare. The system always determines a winner.
-
-**Q: What about more than two participants?**
-A: Run pairwise checks or implement a tournament structure. The system handles only binary oppositions.
+| Score Range | Description | Typical Time to Achieve  |
+| ----------- | ----------- | ------------------------ |
+| 0.0 - 1.0   | Novice      | Hours of play            |
+| 1.0 - 3.0   | Competent   | Days to weeks            |
+| 3.0 - 5.0   | Expert      | Weeks to months          |
+| 5.0 - 6.0   | Master      | Months of dedicated play |
+| 6.0 - 8.0   | Legendary   | Years of play            |
+| 8.0 - 10.0  | Mythical    | Theoretical maximum      |

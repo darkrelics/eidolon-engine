@@ -657,3 +657,11 @@ The polling system follows this state machine:
 ## Summary
 
 The Eidolon Engine's incremental story system implements a robust state machine architecture that ensures reliable progression through narrative content. The front-loaded processing model calculates all outcomes when segments begin, allowing for predictable client experiences. The distributed Lambda architecture with SQS queuing provides scalability and fault tolerance, while the comprehensive history tracking enables analytics and debugging. The system prioritizes player experience by gracefully handling failures and providing automatic recovery mechanisms.
+
+### Recovery and Fault Tolerance
+
+The system provides automatic recovery through multiple mechanisms:
+- EventBridge ensures processing continues even if individual Lambda invocations fail
+- Server-side state authority eliminates client synchronization issues  
+- Multiple cleanup paths prevent players from getting permanently stuck
+- All segments guaranteed to eventually process or timeout with player-favorable outcomes

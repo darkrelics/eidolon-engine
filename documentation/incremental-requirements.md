@@ -48,16 +48,21 @@ This document defines the functional and non-functional requirements for the Inc
 
 ### 2.3 Character Integration
 
-**FR-006**: Characters SHALL maintain a single game mode at a time (MUD, Incremental, or None).
+**FR-006**: Characters SHALL maintain a single atomic game mode: MUD, Incremental, or None.
 
 **FR-007**: Character state SHALL persist across modes including:
 
 - Wounds and health status
-- Inventory and equipment
+- Inventory and equipment  
 - Skills and attributes
 - Room location
 
-**FR-008**: The system SHALL prevent concurrent access to both game modes.
+**FR-008**: The system SHALL use fail-safe GameMode management:
+- **Incremental**: When character has ActiveStoryID and ActiveSegmentID
+- **MUD**: When character is logged into MUD session  
+- **None**: Default fail-safe state when no active game session
+- **Atomic Operations**: All GameMode transitions are single database operations
+- **Regular Validation**: System validates GameMode consistency and auto-corrects to None if invalid state detected
 
 ### 2.4 User Interface
 
@@ -100,10 +105,14 @@ This document defines the functional and non-functional requirements for the Inc
 
 ### 3.1 Performance
 
-**NFR-001**: Support 10,000 concurrent incremental players.
+**NFR-001**: Support 10,000 total registered users with <5,000 concurrent during peak hours.
 
+- **Concurrent Stories**: 2,000-4,000 active stories during typical operation
+- **Peak Story Starts**: System designed to handle 3,000 concurrent story starts (burst scenario)
+- **Geographic Scope**: North America (US/Canada) deployment only
+- **Load Pattern**: Few thousand concurrent stories with 1-minute heartbeat polling
 - **Implementation**: DynamoDB on-demand pricing, Lambda auto-scaling
-- **Status**: Architecture supports target load
+- **Status**: Architecture supports significantly beyond target load
 
 **NFR-002**: API response time SHALL be less than 2 seconds.
 
@@ -241,7 +250,27 @@ This document defines the functional and non-functional requirements for the Inc
 - **Complete**: Meet all response time requirements (sub-500ms average)
 - **Complete**: Achieve 99.9% availability over 30 days (AWS SLA guarantees)
 
-## 6. Implementation References
+## 6. Frequently Asked Questions
+
+### System Performance
+**Q: What are the actual performance targets?**
+A: 10,000 total users, <5,000 concurrent users, 2,000-4,000 active stories typical, with capability to handle 3,000 concurrent story starts during peak scenarios.
+
+**Q: Why is the system limited to North America?**  
+A: Single region deployment (us-east-1) provides cost optimization and operational simplicity while maintaining acceptable latency (20-80ms) across North America.
+
+### Client Implementation
+**Q: How should clients handle network failures during polling?**
+A: Use simple 30-second retry delays. Server-authoritative design means clients can always recover by requesting current state from server.
+
+**Q: What happens if a player force-closes their app during a story?**
+A: Stories continue server-side. Next `api-character-get` call automatically recovers GameMode state. No progress is lost.
+
+### Technical Architecture  
+**Q: Why use polling instead of WebSockets for story updates?**
+A: Story segments last 1-60 minutes, making real-time updates unnecessary. Polling is more battery-efficient, serverless-compatible, and fault-tolerant for this use case.
+
+## 7. Implementation References
 
 For detailed implementation information, see:
 
