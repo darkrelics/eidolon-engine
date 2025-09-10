@@ -1,31 +1,26 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:provider/provider.dart';
 
-import '../../lib/models/character.dart';
-import '../../lib/providers/auth_provider.dart';
-import '../../lib/screens/game_screen.dart';
-import '../../lib/services/api_service.dart';
-import '../../lib/services/auth_service.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/screens/game_screen.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
 
 @GenerateNiceMocks([
   MockSpec<ApiService>(),
-  MockSpec<AuthService>(),
 ])
 import 'game_screen_polling_test.mocks.dart';
 
 void main() {
   group('GameScreen Polling Logic', () {
     late MockApiService mockApiService;
-    late MockAuthService mockAuthService;
     late Character testCharacter;
 
     setUp(() {
       mockApiService = MockApiService();
-      mockAuthService = MockAuthService();
       
       testCharacter = Character(
         id: 'test-char-1',
@@ -76,7 +71,7 @@ void main() {
         (_) async => testCharacter,
       );
       
-      when(mockApiService.getSegmentStatus(characterId: any)).thenAnswer(
+      when(mockApiService.getSegmentStatus(characterId: anyNamed('characterId'))).thenAnswer(
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 60,
@@ -99,7 +94,7 @@ void main() {
 
     testWidgets('should handle segment completion correctly', (tester) async {
       // Set up segment completion scenario
-      when(mockApiService.getSegmentStatus(characterId: any)).thenAnswer(
+      when(mockApiService.getSegmentStatus(characterId: anyNamed('characterId'))).thenAnswer(
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 0,
@@ -124,7 +119,7 @@ void main() {
 
     testWidgets('should handle story completion', (tester) async {
       // Set up story completion scenario
-      when(mockApiService.getSegmentStatus(characterId: any)).thenAnswer(
+      when(mockApiService.getSegmentStatus(characterId: anyNamed('characterId'))).thenAnswer(
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 0,

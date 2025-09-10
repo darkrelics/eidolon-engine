@@ -77,36 +77,6 @@ class SegmentProvider extends ChangeNotifier {
   
   // Removed polling logic - now handled by GameScreen
   
-  /// Fetch segment history for processed mechanical segments
-  Future<void> _fetchSegmentHistory(String characterId) async {
-    try {
-      final history = await _apiService.getSegmentHistory(
-        characterId: characterId,
-      );
-      
-      if (history.isNotEmpty && _currentSegment != null) {
-        // Find the matching segment in history
-        final historySegment = history.firstWhere(
-          (seg) => seg['ActiveSegmentID'] == _currentSegment!.activeSegmentID,
-          orElse: () => <String, dynamic>{},
-        );
-        
-        if (historySegment.isNotEmpty) {
-          // Update current segment with history data
-          final updatedData = _currentSegment!.toJson();
-          updatedData['ClientEvents'] = historySegment['ClientEvents'];
-          updatedData['CharacterUpdates'] = historySegment['CharacterUpdates'];
-          updatedData['Outcome'] = historySegment['Outcome'];
-          
-          _currentSegment = ActiveSegment.fromJson(updatedData);
-          notifyListeners();
-        }
-      }
-    } catch (e) {
-      debugPrint('Error fetching segment history: $e');
-    }
-  }
-  
   /// Handle segment completion
   Future<void> completeSegment(String characterId) async {
     try {
