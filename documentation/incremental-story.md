@@ -459,11 +459,6 @@ All Lambda functions are deployed with:
 - Sets DecisionMadeAt timestamp
 - Returns confirmation to client
 
-**api-segment-outcome** (Logical ID: `ApiSegmentOutcomeFunction`):
-
-- Retrieves completed segment results
-- Returns narrative and effects
-- Used by client after segment timer expires
 
 **api-story-abandon** (Logical ID: `ApiStoryAbandonFunction`):
 

@@ -82,7 +82,6 @@ All endpoints use the existing API Gateway at `api.{domain}`. Field names follow
 | GET    | /character/list   | api-character-list   | List player's characters   |
 | POST   | /segment/decision | api-segment-decision | Submit player choice       |
 | GET    | /segment/history  | api-segment-history  | Retrieve processed results |
-| GET    | /segment/outcome  | api-segment-outcome  | Get segment outcome        |
 | POST   | /segment/rest     | api-segment-rest     | Initiate rest segment      |
 | GET    | /segment/status   | api-segment-status   | Check segment readiness    |
 | POST   | /story/abandon    | api-story-abandon    | Exit current story         |
@@ -720,7 +719,6 @@ lambda_configs = [
     # Story API functions
     ("api-segment-decision", "api_segment_decision.lambda_handler"),
     ("api-segment-history", "api_segment_history.lambda_handler"),
-    ("api-segment-outcome", "api_segment_outcome.lambda_handler"),
     ("api-segment-rest", "api_segment_rest.lambda_handler"),
     ("api-segment-status", "api_segment_status.lambda_handler"),
     ("api-story-abandon", "api_story_abandon.lambda_handler"),

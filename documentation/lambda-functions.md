@@ -19,7 +19,7 @@ The Lambda functions are deployed as part of the 9-stack CDK architecture:
 
 ## Current Implementation Status
 
-All 16 Lambda functions are fully implemented and operational in production:
+All 15 Lambda functions are fully implemented and operational in production:
 
 ### Character Management (5 functions)
 
@@ -29,14 +29,13 @@ All 16 Lambda functions are fully implemented and operational in production:
 - `api-character-get` - Get character details with inventory enrichment
 - `api-character-list` - List player's characters
 
-### Story Operations (7 functions)
+### Story Operations (6 functions)
 
 - `api-story-start` - Begin new story
 - `api-story-abandon` - Exit active story
 - `api-segment-decision` - Submit player choice
 - `api-segment-rest` - Initiate healing segment
 - `api-segment-status` - Check segment readiness
-- `api-segment-outcome` - Get segment results
 - `api-segment-history` - Retrieve past segments
 
 ### Processing Functions (3 functions)
@@ -78,7 +77,6 @@ logical_id_map = {
     "api-character-list": "ApiCharacterListFunction",
     "api-segment-decision": "ApiSegmentDecisionFunction",
     "api-segment-history": "ApiSegmentHistoryFunction",
-    "api-segment-outcome": "ApiSegmentOutcomeFunction",
     "api-segment-rest": "ApiSegmentRestFunction",
     "api-segment-status": "ApiSegmentStatusFunction",
     "api-story-abandon": "ApiStoryAbandonFunction",
