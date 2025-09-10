@@ -352,15 +352,18 @@ class _SimpleSegmentCard extends StatelessWidget {
     final defaultStatus = segment['DefaultStatus'] ?? '';
     final outcome = segment['Outcome'];
     final endTime = segment['EndTime'];
+    final processingStatus = segment['ProcessingStatus'] ?? 'pending';
+    final isProcessed = processingStatus == 'processed';
     
     // Determine card color based on outcome
     Color cardColor;
     IconData icon;
     Color backgroundColor;
     
-    // Check outcome for color
+    // Check outcome for color, but only for processed segments
     final outcomeStr = outcome is String ? outcome : outcome?['Type'];
-    if (outcomeStr != null) {
+    if (isProcessed && outcomeStr != null) {
+      // Completed segment - show outcome-based colors
       switch (outcomeStr.toLowerCase()) {
         case 'death':
           cardColor = Colors.black;
@@ -380,10 +383,20 @@ class _SimpleSegmentCard extends StatelessWidget {
           icon = Icons.check_circle;
       }
     } else {
-      // No outcome yet - use default theme colors
+      // Segment not processed yet or no outcome - use neutral colors
       cardColor = theme.colorScheme.primary;
-      backgroundColor = theme.colorScheme.surface;
-      icon = isActive ? Icons.play_circle_outline : Icons.check_circle_outline;
+      backgroundColor = isActive 
+          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.1)
+          : theme.colorScheme.surface;
+      
+      // Choose icon based on processing status and active state
+      if (isActive) {
+        icon = processingStatus == 'processing' 
+            ? Icons.hourglass_empty 
+            : Icons.play_circle_outline;
+      } else {
+        icon = Icons.check_circle_outline;
+      }
     }
 
     return Card(
@@ -418,6 +431,41 @@ class _SimpleSegmentCard extends StatelessWidget {
               ],
             ),
             
+            // Show processing status for active segments
+            if (isActive && processingStatus == 'processing') ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          theme.colorScheme.tertiary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Processing...',
+                      style: TextStyle(
+                        color: theme.colorScheme.tertiary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            
             // Show timer and DefaultStatus for active segments
             if (isActive && endTime != null && endTime.isNotEmpty) ...[
               const SizedBox(height: 12),
@@ -438,14 +486,37 @@ class _SimpleSegmentCard extends StatelessWidget {
               ],
             ],
             
-            // Show narrative for processed/completed segments OR initial prompt
-            if (segment['Narrative'] != null || segment['Prompt'] != null) ...[
+            // Show narrative for processed segments OR initial prompt for unprocessed active segments
+            // ClientEvents contain the narrative for processed segments
+            if ((isProcessed && (segment['Narrative'] != null || segment['ClientEvents'] != null)) || 
+                (isActive && !isProcessed && segment['Prompt'] != null)) ...[
               const SizedBox(height: 12),
               Builder(
                 builder: (context) {
                   final narrative = segment['Narrative']?.toString() ?? '';
                   final prompt = segment['Prompt']?.toString() ?? '';
-                  final displayText = narrative.isNotEmpty ? narrative : prompt;
+                  final clientEvents = segment['ClientEvents'] as List<dynamic>?;
+                  
+                  // For processed segments, show narrative from ClientEvents or Narrative field
+                  // For active unprocessed segments, show initial prompt
+                  String displayText = '';
+                  if (isProcessed) {
+                    if (clientEvents != null && clientEvents.isNotEmpty) {
+                      // Use ClientEvents descriptions joined together
+                      displayText = clientEvents
+                          .map((event) => event['Description']?.toString() ?? '')
+                          .where((desc) => desc.isNotEmpty)
+                          .join('\n\n');
+                    }
+                    if (displayText.isEmpty && narrative.isNotEmpty) {
+                      displayText = narrative;
+                    }
+                  } else {
+                    displayText = prompt;
+                  }
+                  
+                  // Only show if we have text to display
+                  if (displayText.isEmpty) return const SizedBox();
                   
                   return Container(
                     padding: const EdgeInsets.all(12),
@@ -459,15 +530,15 @@ class _SimpleSegmentCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (narrative.isEmpty && prompt.isNotEmpty)
+                        if (isActive && !isProcessed && prompt.isNotEmpty)
                           Text(
-                            'Story Prompt:',
+                            'Current Activity:',
                             style: theme.textTheme.labelMedium?.copyWith(
                               fontWeight: FontWeight.bold,
                               color: theme.colorScheme.primary,
                             ),
                           ),
-                        if (narrative.isEmpty && prompt.isNotEmpty)
+                        if (isActive && !isProcessed && prompt.isNotEmpty)
                           const SizedBox(height: 4),
                         Text(
                           displayText,
@@ -481,8 +552,8 @@ class _SimpleSegmentCard extends StatelessWidget {
               ),
             ],
             
-            // Show outcome for completed segments
-            if (outcome != null) ...[
+            // Show outcome ONLY for processed segments
+            if (isProcessed && outcome != null) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -503,8 +574,8 @@ class _SimpleSegmentCard extends StatelessWidget {
               ),
             ],
             
-            // Show effects if present
-            if (segment['Effects'] != null && (segment['Effects'] as Map).isNotEmpty) ...[
+            // Show effects ONLY for processed segments
+            if (isProcessed && segment['Effects'] != null && (segment['Effects'] as Map).isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
                 'Effects:',

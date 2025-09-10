@@ -62,17 +62,8 @@ class SegmentProvider extends ChangeNotifier {
       
       _currentSegment = ActiveSegment.fromJson(segmentData);
       
-      // For mechanical segments, check if already processed
-      if (_currentSegment!.segmentType == 'mechanical' && 
-          _currentSegment!.processingStatus != 'processed') {
-        // Start polling for processing completion
-        _startPollingForProcessing(characterId);
-      } else if (_currentSegment!.segmentType == 'mechanical' &&
-                 _currentSegment!.processingStatus == 'processed' &&
-                 _currentSegment!.clientEvents == null) {
-        // If processed but no events, fetch from history
-        await _fetchSegmentHistory(characterId);
-      }
+      // Note: Polling is now handled by GameScreen to avoid conflicts
+      // This provider is primarily for data access
       
       _isLoading = false;
       notifyListeners();
@@ -84,53 +75,7 @@ class SegmentProvider extends ChangeNotifier {
     }
   }
   
-  /// Start polling for mechanical segment processing completion
-  void _startPollingForProcessing(String characterId) {
-    _pollingTimer?.cancel();
-    
-    int retryCount = 0;
-    const maxRetries = 5;
-    const maxPollingDuration = Duration(minutes: 5);
-    final startTime = DateTime.now();
-    
-    // Poll every 60 seconds for processed status (API rate limit requirement)
-    _pollingTimer = Timer.periodic(const Duration(seconds: 60), (timer) async {
-      try {
-        // Check if we've exceeded max polling duration
-        if (DateTime.now().difference(startTime) > maxPollingDuration) {
-          timer.cancel();
-          _error = 'Processing timeout - please refresh';
-          notifyListeners();
-          return;
-        }
-        
-        // Check segment status
-        final statusData = await _apiService.getSegmentStatus(
-          characterId: characterId,
-        );
-        
-        final isComplete = statusData['IsComplete'] as bool? ?? false;
-        
-        if (isComplete) {
-          timer.cancel();
-          retryCount = 0; // Reset retry count on success
-          
-          // Fetch the updated segment with full results
-          await loadCurrentStory(characterId);
-        }
-      } catch (e) {
-        debugPrint('Polling error: $e');
-        retryCount++;
-        
-        // If we've had too many consecutive errors, stop polling
-        if (retryCount >= maxRetries) {
-          timer.cancel();
-          _error = 'Connection error - please check your network and refresh';
-          notifyListeners();
-        }
-      }
-    });
-  }
+  // Removed polling logic - now handled by GameScreen
   
   /// Fetch segment history for processed mechanical segments
   Future<void> _fetchSegmentHistory(String characterId) async {
