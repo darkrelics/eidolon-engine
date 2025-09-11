@@ -112,7 +112,6 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error(f"Failed to parse request body: {err}", exc_info=True)
         return lambda_error(event, err)
 
-    # Extract and validate required fields - PascalCase only
     character_name = body.get("CharacterName")
     if not character_name:
         return lambda_response(400, {"Error": "CharacterName is required"}, event)

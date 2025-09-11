@@ -133,7 +133,6 @@ def error_response(error: str, status_code: int = 400, details=None, headers=Non
 
     error_body: dict = {"Error": error}
     if details:
-        # No implicit key conversion; callers must pass PascalCase details
         error_body.update(details)
 
     return {
@@ -153,24 +152,23 @@ def lambda_response(status_code: int, body: dict, event: dict) -> dict:
         event: Lambda event dict
 
     Returns:
-        Formatted response with CORS headers and PascalCase field names
+        Formatted response with CORS headers
     """
     logger.debug(f"Lambda response for status {status_code}")
 
-    # Strict PascalCase: callers must supply PascalCase keys
     return cors_handler.add_cors_headers(create_response(status_code, body), event)
 
 
 def lambda_error(event: dict, err: Exception) -> dict:
     """
-    Handle Lambda function errors with proper logging and CORS response using PascalCase.
+    Handle Lambda function errors with proper logging and CORS response.
 
     Args:
         event: Lambda event dict
         err: Exception that occurred
 
     Returns:
-        Error response with CORS headers and PascalCase fields
+        Error response with CORS headers.
     """
     logger.error(
         f"Unexpected error in lambda_handler {err}",

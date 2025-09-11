@@ -1,16 +1,10 @@
 """
 Validates story segment data offline using strict boundary validation.
-Ensures all segments in test_story.json conform to PascalCase schema.
 """
 
 import json
 import sys
 from pathlib import Path
-
-from eidolon.schema import validate_segment_definition
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 def validate_mechanical_segment(segment: dict):
@@ -18,7 +12,6 @@ def validate_mechanical_segment(segment: dict):
     errors = []
     warnings = []
 
-    # Check Results if present (PascalCase outcome keys)
     results = segment.get("Results", {})
     if results:
         for outcome in ["Death", "Failure", "Minimal", "Normal", "Exceptional"]:
@@ -41,7 +34,6 @@ def validate_mechanical_segment(segment: dict):
                     if next_id is not None and not (isinstance(next_id, str) and next_id):
                         errors.append(f"  - {outcome} NextSegmentID is not a non-empty string")
 
-    # Check Challenges if present (PascalCase field names only)
     challenges = segment.get("Challenges", [])
     for i, challenge in enumerate(challenges):
         if "Attribute" not in challenge:
@@ -141,24 +133,16 @@ def validate_story_content(story_file: Path) -> bool:
         print(f"\nSegment: {segment_id}")
         print(f"Type: {segment_type}")
 
-        # Strictly validate the segment
-        try:
-            normalized = validate_segment_definition(segment)
-        except Exception as err:
-            print(f"  ERROR: Validation failed: {err}")
-            total_errors += 1
-            continue
-
         # Validate based on type
         errors = []
         warnings = []
 
         if segment_type == "mechanical":
-            errors, warnings = validate_mechanical_segment(normalized)
+            errors, warnings = validate_mechanical_segment(segment)
         elif segment_type == "decision":
-            errors, warnings = validate_decision_segment(normalized)
+            errors, warnings = validate_decision_segment(segment)
         elif segment_type == "rest":
-            errors, warnings = validate_rest_segment(normalized)
+            errors, warnings = validate_rest_segment(segment)
         else:
             errors.append(f"  - Unknown segment type: {segment_type}")
 

@@ -34,7 +34,6 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         Tuple of (outcome, combat_state)
     """
     combat_config = segment_def.get("Combat", {})
-    # Enforce PascalCase configuration
     opponent_id = combat_config.get("OpponentID")
     max_rounds = combat_config.get("MaxRounds") or DEFAULT_COMBAT_ROUNDS
 

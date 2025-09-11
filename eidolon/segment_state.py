@@ -34,13 +34,11 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
     challenge_results = results.get("ChallengeResults")
     if challenge_results:
         update_expression += ", ChallengeResults = :results"
-        # Already in PascalCase
         expression_values[":results"] = challenge_results  # type: ignore
 
     combat_state = results.get("CombatState")
     if combat_state:
         update_expression += ", CombatState = :state"
-        # Already in PascalCase
         expression_values[":state"] = combat_state  # type: ignore
 
     if segment_def:

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Eidolon Engine Incremental Game API
-  description: RESTful API for the Eidolon Engine incremental game mode. All endpoints require authentication via AWS Cognito and return JSON responses with PascalCase keys.
+  description: RESTful API for the Eidolon Engine incremental game mode. All endpoints require authentication via AWS Cognito and return JSON responses.
   version: 1.0.0
   contact:
     name: Jason E. Robinson
@@ -1186,7 +1186,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ClientEvent"
-          description: Events to display to client (PascalCase fields)
+          description: Events to display to client.
 
     AvailableStory:
       type: object

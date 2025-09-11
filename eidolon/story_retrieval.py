@@ -11,8 +11,6 @@ from botocore.exceptions import ClientError
 from eidolon.character_story import get_story_history
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-
-# Runtime paths assume canonical PascalCase data; avoid normalization here.
 from eidolon.segment_core import validate_segment_outcome_results
 from eidolon.time_utils import from_unix
 

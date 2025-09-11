@@ -30,7 +30,6 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
     successes = 0
 
     for challenge in challenges:
-        # Enforce PascalCase keys
         attribute = challenge.get("Attribute")
         skill = challenge.get("Skill")
         difficulty = challenge.get("Difficulty") or 8
