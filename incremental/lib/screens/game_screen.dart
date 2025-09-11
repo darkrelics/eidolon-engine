@@ -9,7 +9,6 @@ import '../services/auth_service.dart';
 import '../services/rate_limiter.dart';
 import '../services/notification_service.dart';
 import '../services/story_polling_service.dart';
-import '../services/story_cache_service.dart';
 import '../utils/error_handler.dart';
 import '../utils/retry.dart';
 import '../widgets/shared/breadcrumb.dart';
@@ -31,11 +30,11 @@ class _GameScreenState extends State<GameScreen> {
   late ApiService _apiService;
   late StoryPollingService _pollingService;
   final GlobalRateLimiter _rateLimiter = GlobalRateLimiter();
-  final StoryCacheService _storyCacheService = StoryCacheService();
   Character? _character;
   CharacterInfo? _characterInfo;
   bool _isLoading = true;
   String? _error;
+  bool _isSubmittingDecision = false;
   
   // Segment history for the current story display
   List<Map<String, dynamic>> _segmentHistory = [];
@@ -53,19 +52,29 @@ class _GameScreenState extends State<GameScreen> {
     // Setup polling service callbacks
     _pollingService.onCharacterUpdated = (character) {
       if (mounted) {
+        // Check if we've moved to a new segment
+        final oldSegmentId = _character?.activeSegmentID;
+        final newSegmentId = character?.activeSegmentID;
+        
         setState(() {
           _character = character;
         });
+        
+        // If segment changed, reload history to include the completed segment
+        if (oldSegmentId != null && newSegmentId != null && oldSegmentId != newSegmentId) {
+          debugPrint('GameScreen: Segment changed from $oldSegmentId to $newSegmentId, reloading history');
+          _loadSegmentHistory();
+        }
       }
     };
     
     _pollingService.onStoryCompleted = () async {
       debugPrint('GameScreen: Story completed via polling service');
+      _pollingService.stopPolling(); // Ensure polling is stopped
       if (mounted) {
-        // Cache the completed story before reloading character data
-        await _cacheCompletedStoryIfNeeded();
-        _loadCharacterData();
-        _loadSegmentHistory();
+        // Don't reload data yet - keep the story visible
+        // Just show the completion dialog
+        _showStoryCompletionDialog();
       }
     };
     
@@ -98,13 +107,13 @@ class _GameScreenState extends State<GameScreen> {
           dead: args.health <= 0,
         );
         // Only call setState if actually changing from loading state
-        if (_isLoading) {
+        if (_isLoading && mounted) {
           setState(() {
             _isLoading = false;
           });
         }
         // Start polling if needed
-        if (_character?.activeSegmentID != null) {
+        if (_character?.activeSegmentID != null && !_pollingService.isPolling) {
           _pollingService.startPolling(_character!.id);
         }
       } else {
@@ -137,10 +146,12 @@ class _GameScreenState extends State<GameScreen> {
     if (_characterInfo == null) return;
 
     try {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _error = null;
+        });
+      }
 
       // Always use automated rate limiting for character loads
       final character = await retryWithBackoff(
@@ -161,7 +172,7 @@ class _GameScreenState extends State<GameScreen> {
         });
         
         // Start polling if there's an active story
-        if (character?.activeSegmentID != null) {
+        if (character?.activeSegmentID != null && !_pollingService.isPolling) {
           _pollingService.startPolling(_character!.id);
         }
       }
@@ -197,11 +208,13 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     try {
-      setState(() {
-        _isLoading = true;
-        // Clear segment history when starting a new story
-        _segmentHistory = [];
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          // Clear segment history when starting a new story
+          _segmentHistory = [];
+        });
+      }
 
       final initialSegment = await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.startStory,
@@ -235,7 +248,7 @@ class _GameScreenState extends State<GameScreen> {
       }
       
       // Start polling if there's an active segment
-      if (_character?.activeSegmentID != null) {
+      if (_character?.activeSegmentID != null && !_pollingService.isPolling) {
         _pollingService.startPolling(_character!.id);
       }
     } catch (e) {
@@ -246,9 +259,11 @@ class _GameScreenState extends State<GameScreen> {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -259,9 +274,11 @@ class _GameScreenState extends State<GameScreen> {
   
   Future<void> _loadSegmentHistory() async {
     if (_character == null) {
-      setState(() {
-        _segmentHistory = [];
-      });
+      if (mounted) {
+        setState(() {
+          _segmentHistory = [];
+        });
+      }
       return;
     }
     
@@ -311,10 +328,16 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _handleDecisionSelect(String choiceId) async {
+    // Prevent double submissions
+    if (_isSubmittingDecision) return;
+    
     try {
-      setState(() {
-        _isLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isSubmittingDecision = true;
+          _error = null;
+        });
+      }
 
       final response = await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.submitDecision,
@@ -329,27 +352,25 @@ class _GameScreenState extends State<GameScreen> {
       if (response['NextSegment'] != null) {
         final nextSegment = response['NextSegment'] as Map<String, dynamic>;
         
-        setState(() {
-          // Update character's active segment locally
-          _character = _character!.copyWith(
-            activeSegmentId: nextSegment['ActiveSegmentID'] as String?,
-            storyState: {
-              'ActiveSegment': nextSegment,
-            },
-          );
-        });
+        if (mounted) {
+          setState(() {
+            // Update character's active segment locally
+            _character = _character!.copyWith(
+              activeSegmentId: nextSegment['ActiveSegmentID'] as String?,
+              storyState: {
+                'ActiveSegment': nextSegment,
+              },
+            );
+          });
+        }
         
         // Start polling for the new segment
-        if (nextSegment['ActiveSegmentID'] != null) {
+        if (nextSegment['ActiveSegmentID'] != null && !_pollingService.isPolling) {
           _pollingService.startPolling(_character!.id);
         }
       } else {
-        // No next segment means story completed - cache before reloading
-        await _cacheCompletedStoryIfNeeded();
-        await Future.wait([
-          _loadCharacterData(),
-          _loadSegmentHistory(),
-        ]);
+        // No next segment means story completed - show completion dialog
+        _showStoryCompletionDialog();
       }
       
       if (mounted) {
@@ -387,7 +408,14 @@ class _GameScreenState extends State<GameScreen> {
           ),
         );
         setState(() {
-          _isLoading = false;
+          _error = ErrorHandler.getUserFriendlyMessage(e);
+        });
+      }
+    } finally {
+      // Always reset submission flag
+      if (mounted) {
+        setState(() {
+          _isSubmittingDecision = false;
         });
       }
     }
@@ -397,9 +425,11 @@ class _GameScreenState extends State<GameScreen> {
     debugPrint('GameScreen: Rest segment triggered');
     
     try {
-      setState(() {
-        _isLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
 
       // Call the rest endpoint directly
       await _rateLimiter.limiter.executeHumanDriven(
@@ -429,62 +459,70 @@ class _GameScreenState extends State<GameScreen> {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
+  }
+
+  Future<void> _showStoryCompletionDialog() async {
+    final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
+    final storyTitle = storyData?['Title'] ?? 'Story';
+    final segmentData = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+    final outcome = segmentData?['Outcome'] ?? 'completed';
+    
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: Text('$storyTitle Complete!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('You have completed the story with outcome: $outcome'),
+            const SizedBox(height: 16),
+            if (_segmentHistory.isNotEmpty) ...[
+              Text('Total segments completed: ${_segmentHistory.length}'),
+              const SizedBox(height: 8),
+            ],
+            const Text('Would you like to continue to available stories?'),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _handleReturnToStories();
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleReturnToStories() async {
-    // Cache completed story data BEFORE clearing storyState
-    await _cacheCompletedStoryIfNeeded();
-    
     // Clear story state locally and reload to get available stories
-    setState(() {
-      if (_character != null) {
-        _character!.storyState = null;
-      }
-    });
+    if (mounted) {
+      setState(() {
+        if (_character != null) {
+          _character!.storyState = null;
+        }
+      });
+    }
     
     // Reload character to get available stories
-    await Future.wait([
-      _loadCharacterData(),
-      _loadSegmentHistory(),
-    ]);
-  }
-  
-  /// Cache completed story data before it gets lost
-  Future<void> _cacheCompletedStoryIfNeeded() async {
-    if (_character?.storyState == null) return;
-    
-    try {
-      final storyData = _character!.storyState!['Story'] as Map<String, dynamic>?;
-      final completedSegments = _character!.storyState!['CompletedSegments'] as List<dynamic>?;
-      
-      // Only cache if we have both story data and completed segments
-      if (storyData != null && completedSegments != null && completedSegments.isNotEmpty) {
-        final storyId = storyData['StoryID'] as String? ?? storyData['Title'] as String? ?? 'unknown';
-        
-        // Cache the complete story state
-        await _storyCacheService.cacheCompletedStory(
-          characterId: _character!.id,
-          storyId: storyId,
-          storyState: _character!.storyState!,
-        );
-        
-        debugPrint('GameScreen: Cached completed story: $storyId');
-      }
-    } catch (e) {
-      debugPrint('GameScreen: Failed to cache completed story: $e');
+    await _loadCharacterData();
+    // Clear segment history after story completion
+    if (mounted) {
+      setState(() {
+        _segmentHistory = [];
+      });
     }
-  }
-
-  /// Handle completed story selection for viewing
-  Future<void> _handleCompletedStorySelect(String storyId) async {
-    debugPrint('GameScreen: Selected completed story: $storyId');
-    // The StoryPanel will handle the actual viewing logic
-    // This callback is mainly for logging/analytics
   }
 
   Future<void> _handleAbandonStory() async {
@@ -512,9 +550,11 @@ class _GameScreenState extends State<GameScreen> {
     if (confirmed != true) return;
 
     try {
-      setState(() {
-        _isLoading = true;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
 
       await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.abandonStory,
@@ -535,9 +575,11 @@ class _GameScreenState extends State<GameScreen> {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
-        setState(() {
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     }
   }
@@ -775,7 +817,6 @@ class _GameScreenState extends State<GameScreen> {
                 : null,
             onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
-            onCompletedStorySelect: _handleCompletedStorySelect,
           ),
         ),
         // Inventory Panel (Right)
@@ -816,7 +857,6 @@ class _GameScreenState extends State<GameScreen> {
                 : null,
             onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
-            onCompletedStorySelect: _handleCompletedStorySelect,
           ),
         ),
         // Inventory Panel (Collapsible)

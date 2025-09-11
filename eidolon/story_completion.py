@@ -4,7 +4,7 @@ Story completion and abandonment operations.
 Provides functions for completing stories and cleaning up state.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
@@ -56,8 +56,12 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
             if history:
                 started_at = history.get("StartedAt", "")
                 if started_at:
-                    start_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
-                    end_time = datetime.utcnow()
+                    # Handle both string and datetime formats
+                    if isinstance(started_at, str):
+                        start_time = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                    else:
+                        start_time = started_at
+                    end_time = datetime.now(timezone.utc)
                     duration = int((end_time - start_time).total_seconds())
                 else:
                     duration = 0
@@ -96,5 +100,5 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
         segments_completed = 0
 
     rewards = calculate_story_rewards(story_metadata, outcome, segments_completed)
-    if rewards.get("xp", 0) > 0 or rewards.get("items") or rewards.get("currency", 0) > 0:
+    if rewards.get("items") or rewards.get("currency", 0) > 0:
         apply_story_rewards(character_id, rewards)

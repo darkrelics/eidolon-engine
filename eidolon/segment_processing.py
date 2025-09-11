@@ -190,24 +190,40 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     # Determine overall outcome
     if not outcomes:
         logger.warning(f"Mechanical segment has no challenges or combat for {segment_def.get('SegmentID')}")
-        return "normal", results
-
-    # If any outcome is death, overall is death
-    if "death" in outcomes:
-        return "death", results
-
-    # If any outcome is failure, overall is failure
-    if "failure" in outcomes:
-        return "failure", results
-
-    # Otherwise, take the worst non-failure outcome
-    outcome_priority = ["minimal", "normal", "exceptional"]
-    for outcome in outcome_priority:
-        if outcome in outcomes:
-            return outcome, results
-
-    # Default to normal
-    return "normal", results
+        overall_outcome = "normal"
+    elif "death" in outcomes:
+        overall_outcome = "death"
+    elif "failure" in outcomes:
+        overall_outcome = "failure"
+    else:
+        # Take the worst non-failure outcome
+        outcome_priority = ["minimal", "normal", "exceptional"]
+        overall_outcome = "normal"
+        for outcome in outcome_priority:
+            if outcome in outcomes:
+                overall_outcome = outcome
+                break
+    
+    # Apply story outcome effects immediately (wounds, room changes, etc.)
+    from eidolon.character_story import apply_story_outcome_effects
+    from eidolon.segment_core import map_outcome_to_key
+    
+    outcome_key = map_outcome_to_key(overall_outcome)
+    outcome_results = segment_def.get("Results", {}).get(outcome_key, {})
+    story_effects = outcome_results.get("Effects", {})
+    
+    if story_effects:
+        character_id = character.get("CharacterID")
+        if character_id:
+            try:
+                apply_story_outcome_effects(character_id, story_effects)
+                logger.info(f"Applied story outcome effects for {character_id}")
+                # Store effects in results for CharacterUpdates (for client display)
+                results["StoryEffects"] = story_effects
+            except Exception as err:
+                logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
+    
+    return overall_outcome, results
 
 
 def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str) -> object:

@@ -25,7 +25,10 @@ class StoryPollingService {
   
   /// Start server-authoritative polling
   Future<void> startPolling(String characterId) async {
-    if (_isPolling) return;
+    if (_isPolling) {
+      debugPrint('StoryPollingService: Already polling, ignoring duplicate start request');
+      return;
+    }
     _isPolling = true;
     
     debugPrint('StoryPollingService: Starting polling for character: $characterId');
@@ -62,6 +65,9 @@ class StoryPollingService {
         // Step 2: Check character state for story completion
         final character = await _apiService.getCharacterById(characterId);
         
+        // Check if polling was stopped during the await
+        if (!_isPolling) break;
+        
         if (character == null) {
           debugPrint('StoryPollingService: Character not found');
           onPollingError?.call('Character not found');
@@ -83,21 +89,20 @@ class StoryPollingService {
           characterId: characterId
         );
         
+        // Check if polling was stopped during the await
+        if (!_isPolling) break;
+        
         // Step 4: Wait server-specified time exactly
         final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
         
         debugPrint('StoryPollingService: Server says wait $timeRemaining seconds');
         
         if (timeRemaining > 0 && _isPolling) {
-          // Use Timer for precise timing control
-          _pollTimer?.cancel();
-          _pollTimer = Timer(Duration(seconds: timeRemaining), () {
-            if (_isPolling) {
-              // Continue polling loop after server-specified time
-              _runPollingLoop(characterId);
-            }
-          });
-          return; // Exit this iteration, timer will continue the loop
+          // Wait the server-specified time before next poll
+          await Future.delayed(Duration(seconds: timeRemaining));
+        } else if (_isPolling) {
+          // If timeRemaining is 0 or negative, wait a small delay before next poll
+          await Future.delayed(const Duration(seconds: 5));
         }
         
         // Reset consecutive errors on successful poll cycle

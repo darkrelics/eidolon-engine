@@ -437,8 +437,8 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
         update_expressions.append("RoomID = :room")
         expression_values[":room"] = room_id
 
-    # Set common values
-    if expression_values and ":zero" not in expression_values:
+    # Set common values - only add :zero if we have skill or attribute XP updates
+    if (skill_xp or updates.get("AttributeXP")) and ":zero" not in expression_values:
         expression_values[":zero"] = Decimal("0")
 
     # Execute update if there are changes
