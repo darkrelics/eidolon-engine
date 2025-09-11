@@ -1,16 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../models/character.dart';
 import '../../models/story.dart';
-import '../../services/story_cache_service.dart';
 import '../story/active_story_widget.dart';
 import '../story/available_stories_widget.dart';
-
-/// Story panel display modes
-enum StoryPanelState {
-  selection,        // Show available + completed stories
-  activeStory,      // Show active story + segments
-  viewingCompleted  // Show completed story + segments
-}
+import '../story/story_history_widget.dart';
 
 /// Center panel that displays story content dynamically
 class StoryPanel extends StatefulWidget {
@@ -24,7 +17,6 @@ class StoryPanel extends StatefulWidget {
   final VoidCallback? onAbandonStory;
   final VoidCallback? onRestSegment;
   final VoidCallback? onReturnToStories;
-  final Function(String)? onCompletedStorySelect;
 
   const StoryPanel({
     super.key,
@@ -38,7 +30,6 @@ class StoryPanel extends StatefulWidget {
     this.onAbandonStory,
     this.onRestSegment,
     this.onReturnToStories,
-    this.onCompletedStorySelect,
   });
 
   @override
@@ -46,90 +37,38 @@ class StoryPanel extends StatefulWidget {
 }
 
 class _StoryPanelState extends State<StoryPanel> {
-  StoryPanelState _currentState = StoryPanelState.selection;
-  Map<String, dynamic>? _viewingCompletedStory;
-  List<CompletedStoryInfo> _cachedCompletedStories = [];
-  final StoryCacheService _storyCacheService = StoryCacheService();
+  bool _showHistory = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadCachedCompletedStories();
+  bool _hasActiveStory([Character? character]) {
+    final char = character ?? widget.character;
+    return char.activeStoryID != null;
   }
 
-  @override
-  void didUpdateWidget(StoryPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    
-    // Update state based on character changes
-    if (oldWidget.character.id != widget.character.id ||
-        oldWidget.character.lastUpdated != widget.character.lastUpdated) {
-      _updatePanelState();
-      _loadCachedCompletedStories();
-    }
-  }
-
-  /// Load cached completed stories for this character
-  Future<void> _loadCachedCompletedStories() async {
-    final cachedStories = await _storyCacheService.getCachedStoriesForCharacter(
-      widget.character.id,
-    );
-    
-    if (mounted) {
-      setState(() {
-        _cachedCompletedStories = cachedStories;
-      });
-    }
-  }
-
-  /// Update panel state based on character state
-  void _updatePanelState() {
+  bool _isStoryComplete() {
+    // Story is complete if we have an active story but no active segment
+    // AND we have completed segments in the history
     final char = widget.character;
+    final hasCompletedSegments = char.storyState?['CompletedSegments'] != null &&
+        (char.storyState!['CompletedSegments'] as List).isNotEmpty;
     
-    if (_viewingCompletedStory != null) {
-      // Stay in viewing completed mode unless explicitly changed
-      _currentState = StoryPanelState.viewingCompleted;
-    } else if (char.activeStoryID != null) {
-      // Character has an active story
-      _currentState = StoryPanelState.activeStory;
-    } else {
-      // No active story, show selection
-      _currentState = StoryPanelState.selection;
-      _viewingCompletedStory = null; // Clear any completed story viewing
-    }
-  }
-
-  /// Handle completed story selection
-  void _handleCompletedStorySelect(String storyId) async {
-    final cachedStory = await _storyCacheService.getCachedStory(
-      characterId: widget.character.id,
-      storyId: storyId,
-    );
-    
-    if (cachedStory != null && mounted) {
-      setState(() {
-        _currentState = StoryPanelState.viewingCompleted;
-        _viewingCompletedStory = cachedStory;
-      });
+    // Additional check: if the last segment outcome was 'death' or final 'failure'
+    if (hasCompletedSegments) {
+      final segments = char.storyState!['CompletedSegments'] as List;
+      final lastSegment = segments.last as Map<String, dynamic>;
+      final lastOutcome = lastSegment['Outcome']?.toString().toLowerCase();
       
-      // Call the callback if provided
-      widget.onCompletedStorySelect?.call(storyId);
+      // Story is complete if no active segment and we have history
+      // OR if the last outcome was a terminal state
+      return (char.activeStoryID != null && char.activeSegmentID == null) ||
+             lastOutcome == 'death' ||
+             (lastOutcome == 'failure' && lastSegment['NextSegmentID'] == null);
     }
-  }
-
-  /// Return to story selection
-  void _handleReturnToSelection() {
-    setState(() {
-      _currentState = StoryPanelState.selection;
-      _viewingCompletedStory = null;
-    });
+    
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Update state based on current character
-    _updatePanelState();
-    
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -163,15 +102,19 @@ class _StoryPanelState extends State<StoryPanel> {
                   ),
                 ),
                 const Spacer(),
-                // Back button for completed story viewing
-                if (_currentState == StoryPanelState.viewingCompleted)
+                // History toggle button
+                if (!_hasActiveStory() && widget.character.completedStories.isNotEmpty)
                   IconButton(
                     icon: Icon(
-                      Icons.arrow_back,
+                      _showHistory ? Icons.library_books : Icons.history,
                       color: colorScheme.onPrimaryContainer,
                     ),
-                    onPressed: _handleReturnToSelection,
-                    tooltip: 'Back to Stories',
+                    onPressed: () {
+                      setState(() {
+                        _showHistory = !_showHistory;
+                      });
+                    },
+                    tooltip: _showHistory ? 'Show Available Stories' : 'Show History',
                   ),
                 if (widget.onRefresh != null)
                   IconButton(
@@ -196,27 +139,20 @@ class _StoryPanelState extends State<StoryPanel> {
   }
 
   String _getHeaderTitle() {
-    switch (_currentState) {
-      case StoryPanelState.selection:
-        return 'Stories';
-      case StoryPanelState.activeStory:
-        // Check if story is complete (has completed segments but no active segment)
-        final hasCompletedSegments = widget.character.storyState?['CompletedSegments'] != null &&
-            (widget.character.storyState!['CompletedSegments'] as List).isNotEmpty;
-        final hasActiveSegment = widget.character.activeSegmentID != null;
-        
-        if (hasCompletedSegments && !hasActiveSegment) {
-          return 'Story Complete';
-        }
-        return 'Story';
-      case StoryPanelState.viewingCompleted:
-        return _viewingCompletedStory?['storyState']?['Story']?['Title'] ?? 'Completed Story';
+    if (_isStoryComplete()) {
+      return 'Story Complete';
+    } else if (_hasActiveStory()) {
+      return 'Story';
+    } else if (_showHistory) {
+      return 'Story History';
+    } else {
+      return 'Available Stories';
     }
   }
 
   Widget _buildContent() {
-    // Handle loading state
-    if (widget.isLoading && _currentState == StoryPanelState.selection && 
+    // Don't show loading if we already have content
+    if (widget.isLoading && !_hasActiveStory() && 
         widget.character.availableStoriesDetails == null) {
       return Center(
         child: Column(
@@ -235,20 +171,23 @@ class _StoryPanelState extends State<StoryPanel> {
       );
     }
 
-    // Handle error state
     if (widget.error != null) {
       return _buildErrorWidget();
     }
 
-    // Build content based on current state
-    switch (_currentState) {
-      case StoryPanelState.selection:
-        return _buildUnifiedStorySelection();
-      case StoryPanelState.activeStory:
-        return _buildActiveStoryWidget();
-      case StoryPanelState.viewingCompleted:
-        return _buildCompletedStoryView();
+    if (_isStoryComplete()) {
+      return _buildStoryCompleteWidget();
     }
+
+    if (_hasActiveStory()) {
+      return _buildActiveStoryWidget();
+    }
+
+    if (_showHistory) {
+      return _buildHistoryWidget();
+    }
+
+    return _buildAvailableStoriesWidget();
   }
 
   Widget _buildErrorWidget() {
@@ -295,140 +234,6 @@ class _StoryPanelState extends State<StoryPanel> {
     );
   }
 
-  /// Build unified story selection showing available + completed stories
-  Widget _buildUnifiedStorySelection() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Available Stories Section
-          _buildAvailableStoriesSection(),
-          
-          // Completed Stories Section
-          if (_cachedCompletedStories.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            _buildCompletedStoriesSection(),
-          ],
-        ],
-      ),
-    );
-  }
-
-  /// Build available stories section
-  Widget _buildAvailableStoriesSection() {
-    return AvailableStoriesWidget(
-      key: const ValueKey('available_stories'),
-      character: widget.character,
-      onStorySelect: widget.onStorySelect,
-      isLoading: widget.isLoading,
-    );
-  }
-
-  /// Build completed stories section
-  Widget _buildCompletedStoriesSection() {
-    final theme = Theme.of(context);
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Section Header
-        Row(
-          children: [
-            Icon(
-              Icons.history,
-              color: theme.colorScheme.primary,
-              size: 20,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Completed Stories',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: theme.colorScheme.primary,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${_cachedCompletedStories.length}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onPrimaryContainer,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        
-        // Completed Story Cards
-        ...(_cachedCompletedStories.take(5).map((completedStory) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: _CompletedStoryCard(
-            completedStory: completedStory,
-            onTap: () => _handleCompletedStorySelect(completedStory.storyId),
-          ),
-        ))),
-        
-        // Show More Button if there are more than 5
-        if (_cachedCompletedStories.length > 5) ...[
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: () {
-              // TODO: Show expanded completed stories view
-            },
-            icon: const Icon(Icons.expand_more),
-            label: Text('Show ${_cachedCompletedStories.length - 5} More'),
-          ),
-        ],
-      ],
-    );
-  }
-
-  /// Build completed story view (when viewing a specific completed story)
-  Widget _buildCompletedStoryView() {
-    if (_viewingCompletedStory == null) {
-      return const Center(
-        child: Text('No completed story data'),
-      );
-    }
-
-    final storyState = _viewingCompletedStory!['storyState'] as Map<String, dynamic>;
-    final story = storyState['Story'] as Map<String, dynamic>?;
-    final completedSegments = storyState['CompletedSegments'] as List<dynamic>?;
-    
-    if (story == null || completedSegments == null) {
-      return const Center(
-        child: Text('Invalid story data'),
-      );
-    }
-
-    // Create a mock character with the completed story data for ActiveStoryWidget
-    final mockCharacter = widget.character.copyWith(
-      storyState: storyState,
-    );
-    
-    // Convert completed segments to the format expected by ActiveStoryWidget
-    final segmentHistory = completedSegments.cast<Map<String, dynamic>>();
-
-    return ActiveStoryWidget(
-      key: ValueKey('completed_story_${_viewingCompletedStory!['storyId']}'),
-      character: mockCharacter,
-      segmentHistory: segmentHistory,
-      // No interactive callbacks for completed stories
-      onDecisionSelect: null,
-      onAbandonStory: null,
-      onRestSegment: null,
-      onRefresh: null,
-    );
-  }
-
   Widget _buildActiveStoryWidget() {
     return ActiveStoryWidget(
       key: ValueKey('active_story_${widget.character.storyState?.hashCode}'),
@@ -441,273 +246,173 @@ class _StoryPanelState extends State<StoryPanel> {
     );
   }
 
-}
+  Widget _buildAvailableStoriesWidget() {
+    return AvailableStoriesWidget(
+      key: const ValueKey('available_stories'),
+      character: widget.character,
+      onStorySelect: widget.onStorySelect,
+      isLoading: widget.isLoading,
+    );
+  }
 
-/// Widget for displaying a completed story in the selection list
-class _CompletedStoryCard extends StatelessWidget {
-  final CompletedStoryInfo completedStory;
-  final VoidCallback onTap;
+  Widget _buildHistoryWidget() {
+    return StoryHistoryWidget(
+      key: const ValueKey('story_history'),
+      character: widget.character,
+    );
+  }
 
-  const _CompletedStoryCard({
-    required this.completedStory,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildStoryCompleteWidget() {
     final theme = Theme.of(context);
-    final outcomeColor = _getOutcomeColor(completedStory.lastOutcome);
-    final outcomeIcon = _getOutcomeIcon(completedStory.lastOutcome);
-
-    return Card(
-      elevation: 1,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header Row
-              Row(
-                children: [
-                  // Outcome Icon
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: outcomeColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(6),
+    final colorScheme = theme.colorScheme;
+    
+    // Get story data and completed segments
+    final storyData = widget.character.storyState?['Story'] as Map<String, dynamic>?;
+    final completedSegments = widget.character.storyState?['CompletedSegments'] as List<dynamic>?;
+    
+    if (completedSegments == null || completedSegments.isEmpty) {
+      // Fallback to simple completion screen
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle, size: 80, color: colorScheme.primary),
+            const SizedBox(height: 16),
+            Text('Story Complete', style: theme.textTheme.headlineMedium),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: widget.onReturnToStories,
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('Return to Stories'),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Get the last segment to determine overall outcome
+    final lastSegment = completedSegments.last as Map<String, dynamic>;
+    final lastOutcome = lastSegment['Outcome'] ?? 'normal';
+    
+    // Check if story ended in death or complete failure
+    final storyFailed = lastOutcome == 'death' || lastOutcome == 'failure';
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Story Card at the top
+          if (storyData != null) ...[
+            Card(
+              elevation: 2,
+              color: storyFailed ? Colors.red.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    Icon(
+                      storyFailed ? Icons.dangerous : Icons.check_circle,
+                      size: 64,
+                      color: storyFailed ? Colors.red : Colors.green,
                     ),
-                    child: Icon(
-                      outcomeIcon,
-                      size: 20,
-                      color: outcomeColor,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Title and Type
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          completedStory.storyTitle,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        _TypeBadge(type: completedStory.storyType),
-                      ],
-                    ),
-                  ),
-                  // Outcome Badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: outcomeColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: outcomeColor.withValues(alpha: 0.5)),
-                    ),
-                    child: Text(
-                      completedStory.lastOutcome.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 10,
+                    const SizedBox(height: 8),
+                    Text(
+                      storyData['Title'] ?? 'Story',
+                      style: theme.textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.bold,
-                        color: outcomeColor,
-                        letterSpacing: 0.5,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              
-              // Description (if available)
-              if (completedStory.storyDescription.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  completedStory.storyDescription,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                    const SizedBox(height: 4),
+                    Text(
+                      storyFailed ? 'FAILED' : 'COMPLETED',
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: storyFailed ? Colors.red : Colors.green,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-              
-              const SizedBox(height: 12),
-              
-              // Footer with stats
-              Row(
-                children: [
-                  // Segment count
-                  _StatChip(
-                    icon: Icons.flag_outlined,
-                    label: '${completedStory.segmentCount} segments',
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 8),
-                  // Completion time
-                  _StatChip(
-                    icon: Icons.schedule_outlined,
-                    label: completedStory.formatCompletedAt(),
-                    color: theme.colorScheme.primary,
-                  ),
-                  const Spacer(),
-                  // View indicator
-                  Icon(
-                    Icons.chevron_right,
-                    size: 16,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ],
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Color _getOutcomeColor(String outcome) {
-    switch (outcome.toLowerCase()) {
-      case 'success':
-      case 'exceptional':
-        return Colors.purple;
-      case 'normal':
-        return Colors.green;
-      case 'minimal':
-        return Colors.orange;
-      case 'failure':
-        return Colors.red;
-      case 'death':
-        return Colors.black;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _getOutcomeIcon(String outcome) {
-    switch (outcome.toLowerCase()) {
-      case 'success':
-      case 'exceptional':
-        return Icons.workspace_premium;
-      case 'normal':
-        return Icons.check_circle;
-      case 'minimal':
-        return Icons.check_circle_outline;
-      case 'failure':
-        return Icons.cancel;
-      case 'death':
-        return Icons.dangerous;
-      default:
-        return Icons.help_outline;
-    }
-  }
-}
-
-/// Type badge widget for story types
-class _TypeBadge extends StatelessWidget {
-  final String type;
-
-  const _TypeBadge({required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _getTypeColor(type);
-    final icon = _getTypeIcon(type);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.5), width: 0.5),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 2),
+            ),
+            const SizedBox(height: 16),
+          ],
+          
+          // Segment History - Reverse order (newest first)
           Text(
-            type.toUpperCase(),
-            style: TextStyle(
-              fontSize: 8,
+            'Story Segments',
+            style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
-              color: color,
-              letterSpacing: 0.5,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Color _getTypeColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'one-time':
-        return Colors.purple;
-      case 'daily':
-        return Colors.blue;
-      case 'repeatable':
-        return Colors.green;
-      case 'main':
-        return Colors.orange;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  IconData _getTypeIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'one-time':
-        return Icons.looks_one;
-      case 'daily':
-        return Icons.today;
-      case 'repeatable':
-        return Icons.all_inclusive;
-      case 'main':
-        return Icons.star;
-      default:
-        return Icons.help_outline;
-    }
-  }
-}
-
-/// Small stat chip widget
-class _StatChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  const _StatChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: color,
-              fontWeight: FontWeight.w500,
+          const SizedBox(height: 8),
+          
+          // Display segments in reverse order
+          ...completedSegments.reversed.map((segment) {
+            final segmentMap = segment as Map<String, dynamic>;
+            final outcome = segmentMap['Outcome'] ?? 'normal';
+            final segmentType = segmentMap['SegmentType'] ?? 'mechanical';
+            final shortStatus = segmentMap['ShortStatus'] ?? 'Segment';
+            
+            // Determine color based on outcome
+            Color segmentColor;
+            Color backgroundColor;
+            IconData icon;
+            
+            if (outcome == 'death') {
+              segmentColor = Colors.black;
+              backgroundColor = Colors.black.withValues(alpha: 0.1);
+              icon = Icons.dangerous;
+            } else if (outcome == 'failure' || outcome == 'failed') {
+              segmentColor = Colors.red;
+              backgroundColor = Colors.red.withValues(alpha: 0.1);
+              icon = Icons.cancel;
+            } else {
+              // Success (exceptional, normal, minimal, etc.)
+              segmentColor = Colors.green;
+              backgroundColor = Colors.green.withValues(alpha: 0.1);
+              icon = Icons.check_circle;
+            }
+            
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Card(
+                color: backgroundColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  side: BorderSide(color: segmentColor.withValues(alpha: 0.3), width: 1),
+                ),
+                child: ListTile(
+                  leading: Icon(icon, color: segmentColor),
+                  title: Text(
+                    shortStatus,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: segmentColor,
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Type: $segmentType | Outcome: $outcome',
+                    style: TextStyle(
+                      color: segmentColor.withValues(alpha: 0.8),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+          
+          const SizedBox(height: 24),
+          
+          // Return button
+          Center(
+            child: FilledButton.icon(
+              onPressed: widget.onReturnToStories,
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('Return to Stories'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
             ),
           ),
         ],

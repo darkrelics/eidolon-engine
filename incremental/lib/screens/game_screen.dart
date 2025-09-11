@@ -893,7 +893,6 @@ class _GameScreenState extends State<GameScreen> {
               : null,
           onRestSegment: _handleRestSegment,
           onReturnToStories: _handleReturnToStories,
-          onCompletedStorySelect: _handleCompletedStorySelect,
         );
       case 2:
         return InventoryPanel(
