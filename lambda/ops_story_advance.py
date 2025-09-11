@@ -9,7 +9,6 @@ Triggered by SQS to apply character updates and progress stories.
 
 from eidolon.character_data import get_character
 from eidolon.character_segment import update_character_active_segment
-from eidolon.character_story import apply_story_outcome_effects
 from eidolon.constants import CharState
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
@@ -105,6 +104,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Apply deferred rewards (combat rewards and story outcome effects)
     character_updates = active_segment.get("CharacterUpdates", {})
+    logger.info(f"CharacterUpdates from segment: {character_updates}")
     if character_updates and character_id:
         # Apply combat rewards if present
         combat_rewards = character_updates.get("CombatRewards", {})
@@ -116,13 +116,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 except Exception as err:
                     logger.error(f"Failed to apply combat rewards for {character_id} Error: {err}", exc_info=True)
 
-        # Apply story outcome effects if present
+        # Story outcome effects are now applied immediately in ops_segment_process
+        # This is kept for backwards compatibility with existing segments that may have effects stored
         story_effects = character_updates.get("StoryEffects", {})
         if story_effects:
-            try:
-                apply_story_outcome_effects(character_id, story_effects)
-            except Exception as err:
-                logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
+            logger.info(f"Found legacy StoryEffects in CharacterUpdates (already applied by processor)")
+            # Effects should have already been applied by ops_segment_process
 
     # Mark segment as completed in DynamoDB before recording history
     try:

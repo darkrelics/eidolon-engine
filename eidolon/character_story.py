@@ -387,10 +387,19 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
             # Add heal times to wounds
             wounds_with_heal_times = []
             for wound in outcome_effects["Wounds"]:
-                wound_data = wound.copy()
-                if "HealAt" not in wound_data:
-                    damage_type = wound_data.get("DamageType", "lethal")
-                    wound_data["HealAt"] = calculate_heal_time(damage_type)
+                # Handle both string format (from story JSON) and dict format (from combat)
+                if isinstance(wound, str):
+                    wound_data = {
+                        "DamageType": wound,
+                        "HealAt": calculate_heal_time(wound)
+                    }
+                else:
+                    # Wound is already a dict from combat processing
+                    damage_type = wound.get("DamageType", "lethal")
+                    wound_data = {
+                        "DamageType": damage_type,
+                        "HealAt": wound.get("HealAt", calculate_heal_time(damage_type))
+                    }
                 wounds_with_heal_times.append(wound_data)
 
             # Apply wounds through character updates

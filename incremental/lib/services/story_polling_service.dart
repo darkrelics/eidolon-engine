@@ -25,7 +25,10 @@ class StoryPollingService {
   
   /// Start server-authoritative polling
   Future<void> startPolling(String characterId) async {
-    if (_isPolling) return;
+    if (_isPolling) {
+      debugPrint('StoryPollingService: Already polling, ignoring duplicate start request');
+      return;
+    }
     _isPolling = true;
     
     debugPrint('StoryPollingService: Starting polling for character: $characterId');
@@ -62,6 +65,9 @@ class StoryPollingService {
         // Step 2: Check character state for story completion
         final character = await _apiService.getCharacterById(characterId);
         
+        // Check if polling was stopped during the await
+        if (!_isPolling) break;
+        
         if (character == null) {
           debugPrint('StoryPollingService: Character not found');
           onPollingError?.call('Character not found');
@@ -82,6 +88,9 @@ class StoryPollingService {
         final segmentStatus = await _apiService.getSegmentStatus(
           characterId: characterId
         );
+        
+        // Check if polling was stopped during the await
+        if (!_isPolling) break;
         
         // Step 4: Wait server-specified time exactly
         final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;

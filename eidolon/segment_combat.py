@@ -101,8 +101,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                 opponent_wounds.append(
                     {
                         "DamageType": wound_type,
-                        "HealAt": calculate_heal_time(wound_type),
-                        "round": round_num + 1,
+                        "HealAt": calculate_heal_time(wound_type)
                     }
                 )
 
@@ -157,8 +156,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                 player_wounds.append(
                     {
                         "DamageType": wound_type,
-                        "HealAt": calculate_heal_time(wound_type),
-                        "round": round_num + 1,
+                        "HealAt": calculate_heal_time(wound_type)
                     }
                 )
 
