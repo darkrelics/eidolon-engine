@@ -89,15 +89,11 @@ class StoryPollingService {
         debugPrint('StoryPollingService: Server says wait $timeRemaining seconds');
         
         if (timeRemaining > 0 && _isPolling) {
-          // Use Timer for precise timing control
-          _pollTimer?.cancel();
-          _pollTimer = Timer(Duration(seconds: timeRemaining), () {
-            if (_isPolling) {
-              // Continue polling loop after server-specified time
-              _runPollingLoop(characterId);
-            }
-          });
-          return; // Exit this iteration, timer will continue the loop
+          // Wait the server-specified time before next poll
+          await Future.delayed(Duration(seconds: timeRemaining));
+        } else if (_isPolling) {
+          // If timeRemaining is 0 or negative, wait a small delay before next poll
+          await Future.delayed(const Duration(seconds: 5));
         }
         
         // Reset consecutive errors on successful poll cycle
