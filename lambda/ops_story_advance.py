@@ -120,7 +120,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         # This is kept for backwards compatibility with existing segments that may have effects stored
         story_effects = character_updates.get("StoryEffects", {})
         if story_effects:
-            logger.info(f"Found legacy StoryEffects in CharacterUpdates (already applied by processor)")
+            logger.info("Found legacy StoryEffects in CharacterUpdates (already applied by processor)")
             # Effects should have already been applied by ops_segment_process
 
     # Mark segment as completed in DynamoDB before recording history

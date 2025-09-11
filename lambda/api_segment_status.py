@@ -15,6 +15,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
+
 # Runtime paths assume canonical PascalCase data; validation occurs at boundaries.
 from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check

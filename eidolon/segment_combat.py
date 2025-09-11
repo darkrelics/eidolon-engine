@@ -98,12 +98,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             # Apply damage as wounds to opponent
             for _ in range(damage):
                 wound_type = "lethal" if damage_type == "critical" else "bashing"
-                opponent_wounds.append(
-                    {
-                        "DamageType": wound_type,
-                        "HealAt": calculate_heal_time(wound_type)
-                    }
-                )
+                opponent_wounds.append({"DamageType": wound_type, "HealAt": calculate_heal_time(wound_type)})
 
             round_results["PlayerAttack"] = {
                 "Hit": True,
@@ -153,12 +148,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             # Apply damage as wounds to player
             for _ in range(damage):
                 wound_type = "lethal" if damage_type == "critical" else "bashing"
-                player_wounds.append(
-                    {
-                        "DamageType": wound_type,
-                        "HealAt": calculate_heal_time(wound_type)
-                    }
-                )
+                player_wounds.append({"DamageType": wound_type, "HealAt": calculate_heal_time(wound_type)})
 
             round_results["OpponentAttack"] = {
                 "Hit": True,
