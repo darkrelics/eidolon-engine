@@ -18,45 +18,45 @@ import (
 )
 
 type ItemData struct {
-    ItemID      string            `json:"ItemID" dynamodbav:"ItemID"`
-    PrototypeID string            `json:"PrototypeID" dynamodbav:"PrototypeID"`
-    Name        string            `json:"Name" dynamodbav:"item_name"`
-    Description string            `json:"Description" dynamodbav:"Description"`
-    Mass        float64           `json:"Mass" dynamodbav:"Mass"`
-    Value       uint64            `json:"Value" dynamodbav:"Value"`
-    Stackable   bool              `json:"Stackable" dynamodbav:"Stackable"`
-    MaxStack    uint32            `json:"MaxStack" dynamodbav:"MaxStack"`
-    Quantity    uint32            `json:"Quantity" dynamodbav:"Quantity"`
-    Wearable    bool              `json:"Wearable" dynamodbav:"Wearable"`
-    WornOn      []string          `json:"WornOn" dynamodbav:"WornOn"`
-    Verbs       map[string]string `json:"Verbs" dynamodbav:"Verbs"`
-    Overrides   map[string]string `json:"Overrides" dynamodbav:"Overrides"`
-    TraitMods   map[string]int8   `json:"TraitMods" dynamodbav:"TraitMods"`
-    Container   bool              `json:"Container" dynamodbav:"Container"`
-    Contents    []string          `json:"Contents" dynamodbav:"Contents"`
-    IsWorn      bool              `json:"IsWorn" dynamodbav:"IsWorn"`
-    CanPickUp   bool              `json:"CanPickUp" dynamodbav:"CanPickUp"`
-    Metadata    map[string]string `json:"Metadata" dynamodbav:"Metadata"`
+	ItemID      string            `json:"ItemID" dynamodbav:"ItemID"`
+	PrototypeID string            `json:"PrototypeID" dynamodbav:"PrototypeID"`
+	Name        string            `json:"Name" dynamodbav:"item_name"`
+	Description string            `json:"Description" dynamodbav:"Description"`
+	Mass        float64           `json:"Mass" dynamodbav:"Mass"`
+	Value       uint64            `json:"Value" dynamodbav:"Value"`
+	Stackable   bool              `json:"Stackable" dynamodbav:"Stackable"`
+	MaxStack    uint32            `json:"MaxStack" dynamodbav:"MaxStack"`
+	Quantity    uint32            `json:"Quantity" dynamodbav:"Quantity"`
+	Wearable    bool              `json:"Wearable" dynamodbav:"Wearable"`
+	WornOn      []string          `json:"WornOn" dynamodbav:"WornOn"`
+	Verbs       map[string]string `json:"Verbs" dynamodbav:"Verbs"`
+	Overrides   map[string]string `json:"Overrides" dynamodbav:"Overrides"`
+	TraitMods   map[string]int8   `json:"TraitMods" dynamodbav:"TraitMods"`
+	Container   bool              `json:"Container" dynamodbav:"Container"`
+	Contents    []string          `json:"Contents" dynamodbav:"Contents"`
+	IsWorn      bool              `json:"IsWorn" dynamodbav:"IsWorn"`
+	CanPickUp   bool              `json:"CanPickUp" dynamodbav:"CanPickUp"`
+	Metadata    map[string]string `json:"Metadata" dynamodbav:"Metadata"`
 }
 
 type PrototypeData struct {
-    PrototypeID string            `json:"PrototypeID" dynamodbav:"prototypeID"`
-    Name        string            `json:"Name" dynamodbav:"prototype_name"`
-    Description string            `json:"Description" dynamodbav:"description"`
-    Mass        float64           `json:"Mass" dynamodbav:"mass"`
-    Value       uint64            `json:"Value" dynamodbav:"value"`
-    Stackable   bool              `json:"Stackable" dynamodbav:"stackable"`
-    MaxStack    uint32            `json:"MaxStack" dynamodbav:"max_stack"`
-    Quantity    uint32            `json:"Quantity" dynamodbav:"quantity"`
-    Wearable    bool              `json:"Wearable" dynamodbav:"wearable"`
-    WornOn      []string          `json:"WornOn" dynamodbav:"worn_on"`
-    Verbs       map[string]string `json:"Verbs" dynamodbav:"verbs"`
-    Overrides   map[string]string `json:"Overrides" dynamodbav:"overrides"`
-    TraitMods   map[string]int8   `json:"TraitMods" dynamodbav:"trait_mods"`
-    Container   bool              `json:"Container" dynamodbav:"container"`
-    Contents    []string          `json:"Contents" dynamodbav:"contents"`
-    CanPickUp   bool              `json:"CanPickUp" dynamodbav:"can_pick_up"`
-    Metadata    map[string]string `json:"Metadata" dynamodbav:"metadata"`
+	PrototypeID string            `json:"PrototypeID" dynamodbav:"prototypeID"`
+	Name        string            `json:"Name" dynamodbav:"prototype_name"`
+	Description string            `json:"Description" dynamodbav:"description"`
+	Mass        float64           `json:"Mass" dynamodbav:"mass"`
+	Value       uint64            `json:"Value" dynamodbav:"value"`
+	Stackable   bool              `json:"Stackable" dynamodbav:"stackable"`
+	MaxStack    uint32            `json:"MaxStack" dynamodbav:"max_stack"`
+	Quantity    uint32            `json:"Quantity" dynamodbav:"quantity"`
+	Wearable    bool              `json:"Wearable" dynamodbav:"wearable"`
+	WornOn      []string          `json:"WornOn" dynamodbav:"worn_on"`
+	Verbs       map[string]string `json:"Verbs" dynamodbav:"verbs"`
+	Overrides   map[string]string `json:"Overrides" dynamodbav:"overrides"`
+	TraitMods   map[string]int8   `json:"TraitMods" dynamodbav:"trait_mods"`
+	Container   bool              `json:"Container" dynamodbav:"container"`
+	Contents    []string          `json:"Contents" dynamodbav:"contents"`
+	CanPickUp   bool              `json:"CanPickUp" dynamodbav:"can_pick_up"`
+	Metadata    map[string]string `json:"Metadata" dynamodbav:"metadata"`
 }
 
 func (item *Item) SaveItemTree(ctx context.Context, k *KeyPair) error {
