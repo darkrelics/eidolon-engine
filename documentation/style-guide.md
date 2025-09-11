@@ -8,7 +8,7 @@ This guide establishes consistent standards for all documentation in the Eidolon
 
 **All JSON fields use PascalCase with capitalized abbreviations:**
 
-- **IDs**: `CharacterID`, `PlayerID`, `StoryID`, `ActiveSegmentID` (not `characterId` or `character_id`)  
+- **IDs**: `CharacterID`, `PlayerID`, `StoryID`, `ActiveSegmentID` (not `characterId` or `character_id`)
 - **Abbreviations**: `ClientID`, `APIKey`, `HTTPMethod`, `XMLData`, `JSONBody`
 - **Standard Fields**: `GameMode`, `AvailableStories`, `CompletedStories`
 - **Error Responses**: `{"Error": "message"}` (always PascalCase "Error" field)

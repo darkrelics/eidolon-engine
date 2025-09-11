@@ -137,20 +137,17 @@ Active → Abandoned
 ### Story Lifecycle
 
 1. **Initialization** (from prototype):
-
    - Story definitions loaded from Story table
    - Available stories determined by archetype and prerequisites
    - Added to character's AvailableStories list
 
 2. **Activation**:
-
    - Player selects story via api-story-start
    - First segment copied from Segments table
    - ActiveSegment instance created with calculated outcomes
    - Character state atomically updated
 
 3. **Progression**:
-
    - Segments advance one by one
    - Each segment completion triggers next segment creation
    - Story remains active until terminal outcome or completion
@@ -397,27 +394,23 @@ Example:
 ### Segment Lifecycle
 
 1. **Creation** (from prototype):
-
    - Segment definition loaded from Segments table
    - ActiveSegment instance created with UUID
    - All outcomes calculated immediately (front-loaded)
    - ClientEvents generated for entire duration
 
 2. **Processing** (mechanical only):
-
    - Poller detects segment ready for processing
    - Queued to SQS for ops-segment-process
    - Challenges evaluated, combat simulated
    - XP and wounds applied to character
 
 3. **Waiting**:
-
    - Segment timer runs (SegmentDuration)
    - Client displays events over time
    - No server processing during wait
 
 4. **Advancement**:
-
    - Poller detects EndTime reached
    - Queued to SQS for ops-story-advance
    - Character updates applied
@@ -458,7 +451,6 @@ All Lambda functions are deployed with:
 - Records player choice in Decision field
 - Sets DecisionMadeAt timestamp
 - Returns confirmation to client
-
 
 **api-story-abandon** (Logical ID: `ApiStoryAbandonFunction`):
 
@@ -656,7 +648,8 @@ The Eidolon Engine's incremental story system implements a robust state machine 
 ### Recovery and Fault Tolerance
 
 The system provides automatic recovery through multiple mechanisms:
+
 - EventBridge ensures processing continues even if individual Lambda invocations fail
-- Server-side state authority eliminates client synchronization issues  
+- Server-side state authority eliminates client synchronization issues
 - Multiple cleanup paths prevent players from getting permanently stuck
 - All segments guaranteed to eventually process or timeout with player-favorable outcomes

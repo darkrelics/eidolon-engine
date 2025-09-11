@@ -52,16 +52,19 @@ The system uses a front-loaded processing model where all outcomes are calculate
 The system uses server-authoritative state with multiple automatic recovery mechanisms:
 
 **Server-Side State Authority:**
+
 - All game state stored in DynamoDB tables only
-- Client maintains no authoritative state or calculations  
+- Client maintains no authoritative state or calculations
 - GameMode field prevents concurrent access between MUD and Incremental modes
 
 **Automatic Recovery Paths:**
+
 1. **Character Retrieval Cleanup**: `api-character-get` resets GameMode to "None" if no valid ActiveStoryID/ActiveSegmentID exists
 2. **Polling System Recovery**: EventBridge triggers `ops-segment-poller` every minute to process expired segments and clean orphaned states
 3. **Segment Processing Guarantee**: `ops-story-advance` ensures eventual processing of all segments
 
 **Failure Recovery Scenarios:**
+
 - **Client crash/network loss**: Next API call triggers automatic GameMode cleanup
 - **Lambda timeout**: EventBridge ensures retry within 1 minute maximum
 - **Orphaned segments**: Automatic timeout to "exceptional" outcome protects players
@@ -165,7 +168,7 @@ All functions use:
 **ops-segment-poller** (EventBridge triggered)
 
 - EventBridge rule: `eidolon-story-poller` (1-minute schedule)
-- Reads SSM parameter `/eidolon/story/config` for run/stop state  
+- Reads SSM parameter `/eidolon/story/config` for run/stop state
 - Queries EndTimeIndex for segments where EndTime <= Now
 - Sends ALL completed segments to `eidolon-advancement-queue`
 - **GameMode Validation**: Checks characters for orphaned ActiveSegmentID/ActiveStoryID
@@ -203,7 +206,7 @@ All functions use:
   - `ActiveSegmentID` (time-based ordering for efficient polling)
   - `StoryInstanceID` (chronological story execution tracking)
   - Event IDs, session IDs, transaction IDs, audit records
-- **UUIDv4**: For truly unique, persistent elements  
+- **UUIDv4**: For truly unique, persistent elements
   - `PlayerID`, `CharacterID`, `RoomID`, `ItemID`
   - `StoryID`, `SegmentID`, `OpponentID`, `ArchetypeID`
 
@@ -272,10 +275,10 @@ Avoid transactions for high-frequency operations:
 
 ```
 1. EventBridge: Trigger ops_segment_poller every minute
-2. Poller: Query EndTimeIndex for expired segments  
+2. Poller: Query EndTimeIndex for expired segments
 3. Poller: Check processing status and handle by type:
    - Processed segments → Story Advancement Queue
-   - Unprocessed mechanical → Mark exceptional → Advancement Queue  
+   - Unprocessed mechanical → Mark exceptional → Advancement Queue
    - Unprocessed decision/rest → Advancement Queue (natural fallbacks)
 4. Poller: Find stuck mechanical segments (>5min old) → Processing Queue retry
 5. SQS: Trigger ops_advance_story for advancement messages
@@ -288,21 +291,23 @@ Avoid transactions for high-frequency operations:
 #### **Processing Timeout Thresholds**
 
 **Timeline for Mechanical Segments:**
+
 - **0-5 minutes**: Normal processing window
 - **5-15 minutes**: Stuck detection - retry if EndTime > 90 seconds remaining
 - **EndTime reached**: Auto-mark as "exceptional" outcome (player protection)
 
-**Timeline for Decision/Rest Segments:**  
+**Timeline for Decision/Rest Segments:**
+
 - **Any time**: No processing needed, advance with natural fallbacks
 - **EndTime reached**: Apply DefaultDecision (decision) or normal advancement (rest)
 
 #### **Timeout Resolution by Type**
 
-| Segment Type | Timeout Behavior | Outcome | Player Impact |
-|--------------|------------------|---------|---------------|
-| **Mechanical** | Auto-exceptional | `"exceptional"` | Best possible result |
-| **Decision** | DefaultDecision | Based on segment | Fallback choice applied |
-| **Rest** | Normal advance | `"normal"` | Healing time completed |
+| Segment Type   | Timeout Behavior | Outcome          | Player Impact           |
+| -------------- | ---------------- | ---------------- | ----------------------- |
+| **Mechanical** | Auto-exceptional | `"exceptional"`  | Best possible result    |
+| **Decision**   | DefaultDecision  | Based on segment | Fallback choice applied |
+| **Rest**       | Normal advance   | `"normal"`       | Healing time completed  |
 
 #### **Player Protection Philosophy**
 
@@ -310,21 +315,23 @@ Avoid transactions for high-frequency operations:
 
 1. **Mechanical Processing Failure**: Player gets exceptional outcome (best rewards)
 2. **Decision Timeout**: Player gets reasonable default choice
-3. **Rest Timeout**: Player gets normal healing benefit  
+3. **Rest Timeout**: Player gets normal healing benefit
 4. **No Punishment**: Technical issues never result in death/failure outcomes
 
 #### **Stuck Segment Recovery**
 
 **Detection Criteria** (from `segment_polling.py:49-67`):
+
 ```python
 # Mechanical segments that are:
 StartTime < (now - 300)           # 5+ minutes old (stuck threshold)
-EndTime > (now + 90)              # 90+ seconds remaining (retry window)  
+EndTime > (now + 90)              # 90+ seconds remaining (retry window)
 ProcessingStatus IN (pending, processing)  # Not processed yet
 SegmentType = "mechanical"        # Only mechanical can get stuck
 ```
 
 **Recovery Process**:
+
 1. **Reset ProcessingStatus** to "pending"
 2. **Resend to Processing Queue** for retry
 3. **Limited Window**: Only retry if ≥90 seconds before EndTime
@@ -482,13 +489,14 @@ The client implements an intelligent cache layer using IndexedDB that provides:
 - **Performance Optimization**: 85-90% reduction in API calls while maintaining server-authoritative design
 
 #### **Data Flow Pattern**
+
 ```
 Server Updates → IndexedDB Cache → Provider State → UI Components
      ↑                   ↓
      └── Smart Refresh ←───┘
 
 - Server provides authoritative state changes
-- IndexedDB organizes and relates data locally  
+- IndexedDB organizes and relates data locally
 - Providers manage UI state from IndexedDB
 - Smart refresh patterns minimize server requests
 ```
@@ -502,7 +510,7 @@ Character and inventory panels maintain instant responsiveness with IndexedDB da
 #### **Core Polling Principles**
 
 1. **Server Authority**: Always trust server timing and state
-2. **Single Polling Loop**: Only one timer, one source of truth  
+2. **Single Polling Loop**: Only one timer, one source of truth
 3. **Minimal API Calls**: Maximum 2 calls per segment
 4. **Simple Error Handling**: Exponential backoff only
 5. **No Local State Management**: Server provides all timing information
@@ -510,22 +518,26 @@ Character and inventory panels maintain instant responsiveness with IndexedDB da
 #### **Why Polling Architecture is Optimal**
 
 **Serverless Compatibility:**
+
 - Lambda functions cannot maintain persistent WebSocket connections
 - Stateless design - each API call is independent with no connection state
 - Auto-scaling works naturally with distributed polling load
 
 **Story Timing Alignment:**
+
 - Segments last 1-60 minutes - real-time updates unnecessary
 - Server provides exact EndTime timestamps - no client guesswork needed
 - Natural polling cadence matches story progression rhythm
 
 **Battery Efficiency (When Correctly Implemented):**
+
 - 60-second intervals more efficient than persistent connections
 - No WebSocket keepalive overhead draining battery continuously
 - App can fully background/sleep between polls
 - Server timing eliminates client-side calculations
 
 **Fault Tolerance:**
+
 - Temporary network issues don't break story state
 - Simple recovery - next successful poll resumes normally
 - No complex WebSocket reconnection logic required
@@ -536,31 +548,31 @@ Character and inventory panels maintain instant responsiveness with IndexedDB da
 ```dart
 class ServerAuthoritativePolling {
   bool _isPolling = false;
-  
+
   /// Simple polling loop that follows server cadence exactly
   Future<void> startStoryPolling(String characterId) async {
     if (_isPolling) return;
     _isPolling = true;
-    
+
     // ALWAYS wait 60 seconds for initial server processing
     await Future.delayed(const Duration(seconds: 60));
-    
+
     while (_isPolling) {
       try {
         // 1. Get character state (includes activeSegmentID)
         final character = await apiService.getCharacterById(characterId);
         updateUIWithServerState(character);
-        
+
         // 2. Check if story is complete
         if (character?.activeSegmentID == null) {
           break; // Story finished - stop polling
         }
-        
+
         // 3. Get segment timing from server
         final segmentStatus = await apiService.getSegmentStatus(
           characterId: characterId
         );
-        
+
         // 4. Wait exactly the time server specifies
         final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
         if (timeRemaining > 0) {
@@ -569,13 +581,13 @@ class ServerAuthoritativePolling {
           // Segment complete, brief delay before next check
           await Future.delayed(const Duration(seconds: 5));
         }
-        
+
       } catch (e) {
         // 30-second retry delay for all errors
         await Future.delayed(const Duration(seconds: 30));
       }
     }
-    
+
     _isPolling = false;
   }
 }
@@ -584,7 +596,8 @@ class ServerAuthoritativePolling {
 #### **Polling Flow by Segment Type**
 
 **All Segment Types Use Same Pattern:**
-1. Wait 60 seconds for server processing (mechanical segments) or immediate availability (decision/rest)  
+
+1. Wait 60 seconds for server processing (mechanical segments) or immediate availability (decision/rest)
 2. Get character state to check story completion
 3. Get segment status to determine remaining time
 4. Wait server-specified time
@@ -615,7 +628,7 @@ class ServerAuthoritativePolling {
 #### **Common Implementation Problems**
 
 ❌ **Dual Polling Systems**: Multiple timers competing for same resources (GameScreen + SegmentProvider)
-❌ **API Call Explosion**: 10x more calls than necessary (10 vs 2 per segment) 
+❌ **API Call Explosion**: 10x more calls than necessary (10 vs 2 per segment)
 ❌ **Race Conditions**: Multiple async operations updating UI state simultaneously
 ❌ **Complex Client Logic**: Attempting to predict server behavior instead of trusting it
 ❌ **Local State Management**: Maintaining segment history client-side instead of using server API
@@ -631,7 +644,7 @@ Future<void> _runStoryPolling() async {
   // local history management, race condition prone code
 }
 
-// BEFORE: Competing SegmentProvider polling  
+// BEFORE: Competing SegmentProvider polling
 void _startPollingForProcessing(String characterId) {
   _pollingTimer = Timer.periodic(Duration(seconds: 60), (timer) async {
     // More complexity that conflicts with GameScreen
@@ -644,6 +657,7 @@ pollingService.startPolling(characterId); // Done
 ```
 
 **Benefits of Correct Implementation**:
+
 - **70% fewer API calls** (2 vs 10 per segment)
 - **No race conditions** (single source of truth)
 - **Better battery life** (eliminates aggressive polling)

@@ -78,7 +78,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
   {
     "SlotName": {
       "ItemID": "uuid",
-      "Name": "Item Name", 
+      "Name": "Item Name",
       "Description": "Item description",
       "Mass": 1.5,
       "Value": 100,
@@ -91,18 +91,20 @@ This document defines the complete database schema for the Eidolon Engine's unif
 #### **Data Type Conversion Standards**
 
 **DynamoDB Storage → API Response:**
+
 - **All NUMBER fields**: Stored as Decimal in DynamoDB, automatically converted to float in API responses
 - **Precision Guarantee**: 64-bit IEEE 754 floats provide sufficient precision for all game values (no precision loss)
-- **Value Semantics**: 
+- **Value Semantics**:
   - **Integer Semantics**: Health, RoomID, Currency, ItemID counts (display without decimals)
   - **Fractional Semantics**: Skills, Attributes, XP values, Sigma calculations (preserve 2-3 decimal precision)
 
 **Conversion Examples:**
+
 ```json
 // DynamoDB Storage (internal)
 {"Stealth": Decimal("5.375"), "Health": Decimal("12"), "Gold": Decimal("150")}
 
-// API Response (client receives)  
+// API Response (client receives)
 {"Stealth": 5.375, "Health": 12.0, "Gold": 150.0}
 
 // Client Display (recommended)
@@ -417,19 +419,16 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 **Lifecycle:**
 
 1. **Creation**: Record created when story starts via `create_story_history_entry()`
-
    - Generates UUIDv7 StoryInstanceID for time-ordered unique identification
    - Sets StartedAt timestamp
    - Initializes empty SegmentHistory list and XP maps
 
 2. **During Play**:
-
    - ActiveSegmentIDs added to SegmentHistory list as segments are created (not just completed)
    - XP accumulates in SkillXPAwarded/AttributeXPAwarded maps via `update_story_history_xp()`
    - Creates complete audit trail of all segments attempted
 
 3. **Completion (Success or Failure)**: When story reaches its conclusion via `complete_story()`
-
    - Sets FinishedAt timestamp and FinalOutcome (death/failure/minimal/normal/exceptional)
    - Death and failure outcomes are still considered "completed" attempts, not abandonments
    - Story added to character's CompletedStories list (regardless of outcome)
@@ -437,7 +436,6 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
    - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
 
 4. **Abandonment (Player-Initiated)**: When player voluntarily quits via `api_story_abandon`
-
    - Sets FinishedAt timestamp and FinalOutcome to "abandoned"
    - Story added to character's AbandonedStories list (not CompletedStories)
    - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared

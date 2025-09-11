@@ -62,24 +62,27 @@ All successful responses return HTTP 200 with JSON data using PascalCase keys ma
 #### **Data Type Conversion Standards**
 
 **DynamoDB → API Response Conversion:**
+
 - **Decimal → Float**: All DynamoDB Decimal values automatically converted to JSON floats
 - **Precision**: 64-bit IEEE 754 floats provide sufficient precision for all game values
 - **Integer Semantics**: Values that represent counts (Health, RoomID, Currency) are returned as floats but should be treated as integers by clients
 - **Fractional Values**: Skills, attributes, and XP values are true floats with 2-3 decimal precision
 
 **Value Categories:**
+
 ```json
 {
-  "Health": 12.0,           // Integer semantic (display as 12, not 12.0)
-  "Stealth": 5.375,         // Fractional semantic (display with precision)
-  "RoomID": 100.0,          // Integer semantic (use as 100)
+  "Health": 12.0, // Integer semantic (display as 12, not 12.0)
+  "Stealth": 5.375, // Fractional semantic (display with precision)
+  "RoomID": 100.0, // Integer semantic (use as 100)
   "SkillXP": {
-    "fighting": 0.375       // Fractional semantic (preserve precision)
+    "fighting": 0.375 // Fractional semantic (preserve precision)
   }
 }
 ```
 
 **Client Handling Guidelines:**
+
 - **Flutter**: Receive all numbers as `double`, convert to `int` for display when semantically appropriate
 - **Precision**: No precision loss occurs for game values (0.00-10.00 range)
 - **Display**: Show integer semantics without decimal (12, not 12.0), show fractional with 2-3 decimals (5.38, not 5.375)
@@ -95,6 +98,7 @@ All successful responses return HTTP 200 with JSON data using PascalCase keys ma
 ```
 
 **Field Naming Rules**:
+
 - Error field is always PascalCase `"Error"` (never `"error"` or `"message"`)
 - Error messages are user-friendly strings
 - No additional error fields unless specifically documented
@@ -102,7 +106,7 @@ All successful responses return HTTP 200 with JSON data using PascalCase keys ma
 **HTTP Status Code Standards**:
 
 - `400` - Bad Request: Invalid parameters, malformed JSON, validation failures
-- `401` - Unauthorized: Missing/invalid JWT token, authentication failures  
+- `401` - Unauthorized: Missing/invalid JWT token, authentication failures
 - `403` - Forbidden: Valid auth but access denied (character not owned, story not available)
 - `404` - Not Found: Resource doesn't exist (character, story, segment not found)
 - `409` - Conflict: Resource state conflict (character busy, decision already made)
@@ -119,7 +123,7 @@ All successful responses return HTTP 200 with JSON data using PascalCase keys ma
 **Simple 4-Step Loop:**
 
 1. **Initial Wait**: Always wait 60 seconds after story start for server processing
-2. **Check Character State**: `GET /character?CharacterID=uuid` 
+2. **Check Character State**: `GET /character?CharacterID=uuid`
    - If `ActiveSegmentID == null` → Story complete, stop polling
 3. **Get Server Timing**: `GET /segment/status?CharacterID=uuid`
    - Use server's `TimeRemaining` value exactly
@@ -128,12 +132,14 @@ All successful responses return HTTP 200 with JSON data using PascalCase keys ma
 ### API Call Pattern
 
 **Per Segment (Normal Case):**
-- 1x `GET /character` - Check story completion  
+
+- 1x `GET /character` - Check story completion
 - 1x `GET /segment/status` - Get server timing
 - **Total: 2 API calls maximum**
 
 **Error Cases:**
-- Network timeout: Wait 30 seconds, retry same call  
+
+- Network timeout: Wait 30 seconds, retry same call
 - 404 response: Story complete, stop polling
 - Other errors: Wait 30 seconds, retry same call
 
@@ -150,52 +156,52 @@ class StoryPollingService {
   final ApiService _apiService;
   bool _isPolling = false;
   Timer? _pollTimer;
-  
+
   // Callbacks for UI updates
   Function(Character?)? onCharacterUpdated;
   Function(String)? onPollingError;
   Function()? onStoryCompleted;
-  
-  StoryPollingService({required ApiService apiService}) 
+
+  StoryPollingService({required ApiService apiService})
       : _apiService = apiService;
-  
+
   /// Start server-authoritative polling
   Future<void> startPolling(String characterId) async {
     if (_isPolling) return;
     _isPolling = true;
-    
+
     try {
       await _runPollingLoop(characterId);
     } finally {
       _isPolling = false;
     }
   }
-  
+
   /// Core polling loop following server cadence exactly
   Future<void> _runPollingLoop(String characterId) async {
     int consecutiveErrors = 0;
     const maxConsecutiveErrors = 3;
-    
+
     // ALWAYS wait 60 seconds initially for server processing
     await Future.delayed(const Duration(seconds: 60));
-    
+
     while (_isPolling) {
       try {
         // Step 1: Get character state from server
         final character = await _apiService.getCharacterById(characterId);
         onCharacterUpdated?.call(character);
-        
+
         // Step 2: Check if story is complete
         if (character?.activeSegmentID == null) {
           onStoryCompleted?.call();
           break; // Story finished
         }
-        
+
         // Step 3: Get segment timing from server
         final segmentStatus = await _apiService.getSegmentStatus(
           characterId: characterId
         );
-        
+
         // Step 4: Wait exactly what server says
         final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
         if (timeRemaining > 0) {
@@ -203,47 +209,47 @@ class StoryPollingService {
         } else {
           await _waitWithCancellation(const Duration(seconds: 5));
         }
-        
+
         consecutiveErrors = 0; // Reset on success
-        
+
       } catch (e) {
         consecutiveErrors++;
-        
+
         // Handle 404 as story completion
-        if (e.toString().contains('404') || 
+        if (e.toString().contains('404') ||
             e.toString().toLowerCase().contains('no active segment')) {
           onStoryCompleted?.call();
           break;
         }
-        
+
         // Stop after too many errors
         if (consecutiveErrors >= maxConsecutiveErrors) {
           onPollingError?.call('Connection problems - please refresh');
           break;
         }
-        
+
         // 30-second retry delay
         await _waitWithCancellation(const Duration(seconds: 30));
       }
     }
   }
-  
+
   Future<void> _waitWithCancellation(Duration duration) async {
     final completer = Completer<void>();
     _pollTimer = Timer(duration, () => completer.complete());
-    
+
     while (_isPolling && !completer.isCompleted) {
       await Future.delayed(const Duration(milliseconds: 100));
     }
-    
+
     _pollTimer?.cancel();
   }
-  
+
   void stopPolling() {
     _isPolling = false;
     _pollTimer?.cancel();
   }
-  
+
   void dispose() => stopPolling();
 }
 ```
@@ -255,11 +261,11 @@ class StoryPollingService {
 class _GameScreenState extends State<GameScreen> {
   late StoryPollingService _pollingService;
   Character? _character;
-  
+
   @override
   void initState() {
     super.initState();
-    
+
     _pollingService = StoryPollingService(apiService: _apiService);
     _pollingService.onCharacterUpdated = (character) {
       if (mounted) setState(() => _character = character);
@@ -268,25 +274,25 @@ class _GameScreenState extends State<GameScreen> {
       if (mounted) _loadCharacterData(); // Refresh for available stories
     };
   }
-  
+
   @override
   void dispose() {
     _pollingService.dispose();
     super.dispose();
   }
-  
+
   Future<void> _handleStorySelect(StoryMetadata story) async {
     await _apiService.startStory(
       characterId: _character!.id,
       storyId: story.storyID,
     );
-    
+
     // Start polling - replaces all complex polling logic
     _pollingService.startPolling(_character!.id);
   }
-  
+
   // REMOVE these methods completely:
-  // - _runStoryPolling() 
+  // - _runStoryPolling()
   // - _setupSegmentPolling()
   // - Complex timing calculations
   // - Local segment history management
@@ -304,7 +310,8 @@ class _GameScreenState extends State<GameScreen> {
 
 ### Error Handling Standards
 
-**Network Errors**: 
+**Network Errors**:
+
 ```dart
 catch (NetworkException e) {
   await Future.delayed(Duration(seconds: 30));
@@ -313,21 +320,24 @@ catch (NetworkException e) {
 ```
 
 **404 Not Found**:
-```dart  
+
+```dart
 catch (NotFoundException e) {
   break; // Story complete, stop polling
 }
 ```
 
 **Rate Limiting**:
+
 ```dart
 catch (RateLimitException e) {
   await Future.delayed(Duration(seconds: e.retryAfterSeconds ?? 60));
-  continue; // Retry same operation  
+  continue; // Retry same operation
 }
 ```
 
 **Maximum Error Protection**:
+
 - Stop polling after 3 consecutive errors
 - Never poll faster than every 30 seconds minimum
 - Use consistent 30-second retry delay for all errors
@@ -337,17 +347,20 @@ catch (RateLimitException e) {
 #### **Server Timeout Behavior by Segment Type**
 
 **Mechanical Segments:**
+
 - **Normal**: Process within 5 minutes, advance at EndTime
-- **Stuck**: Retry if >5 minutes old and >90 seconds remaining  
+- **Stuck**: Retry if >5 minutes old and >90 seconds remaining
 - **Timeout**: Auto-marked "exceptional" outcome if not processed by EndTime
 - **Client Display**: Show "Processing..." until ProcessingStatus="processed"
 
 **Decision Segments:**
+
 - **Normal**: No processing needed, wait for player input or EndTime
 - **Timeout**: Apply DefaultDecision from segment definition
 - **Client Display**: Show choices until EndTime, then show result
 
-**Rest Segments:**  
+**Rest Segments:**
+
 - **Normal**: No processing needed, advance at EndTime
 - **Timeout**: Normal advancement with healing applied
 - **Client Display**: Show countdown timer until EndTime
@@ -362,10 +375,10 @@ Widget buildSegmentDisplay(Map<String, dynamic> segmentStatus) {
   final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
   final startTime = segmentStatus['StartTime'] as int? ?? 0;
   final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-  
+
   // Calculate how long segment has been running
   final elapsedMinutes = (now - startTime) ~/ 60;
-  
+
   if (segmentType == 'mechanical') {
     if (processingStatus == 'pending' && elapsedMinutes > 5) {
       return Text('Processing delayed - retrying...');
@@ -375,7 +388,7 @@ Widget buildSegmentDisplay(Map<String, dynamic> segmentStatus) {
       return Text('Ready to advance!');
     }
   }
-  
+
   // For decision/rest, just show normal countdown
   return Text('Time remaining: ${timeRemaining}s');
 }
@@ -384,12 +397,14 @@ Widget buildSegmentDisplay(Map<String, dynamic> segmentStatus) {
 #### **Timeout Communication Strategy**
 
 **For Players:**
-- **0-5 minutes**: "Processing your actions..."  
+
+- **0-5 minutes**: "Processing your actions..."
 - **5-15 minutes**: "Processing delayed - retrying..."
 - **15+ minutes approaching EndTime**: "Resolving automatically..."
 - **After exceptional assignment**: "System protected you - exceptional result!"
 
 **For Developers:**
+
 - **CloudWatch Logs**: All timeouts logged with segment ID and timing
 - **Metrics**: Track exceptional outcomes as potential system health indicator
 - **Monitoring**: Alert on high exceptional outcome rates (indicates processing issues)
@@ -413,6 +428,7 @@ Widget buildSegmentDisplay(Map<String, dynamic> segmentStatus) {
 3. **Field Naming**: Follow PascalCase conventions defined in [Style Guide](style-guide.md#json-field-naming-convention)
 
 ### Important: NO Path Parameters for IDs
+
 - **Never use**: `/characters/123` or `/stories/456`
 - **Always use**: Query parameters for GET/DELETE, request body for POST/PUT
 
@@ -508,7 +524,6 @@ Authorization: Bearer <jwt-token>
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-archetype-list` function uses:
-
    - Shared execution role: `eidolon-lambda-execution-role`
    - DynamoDB policy: `eidolon-dynamodb-policy` with DescribeTable permission
    - Environment variables: Table names from DynamoDB stack outputs
@@ -587,7 +602,6 @@ Authorization: Bearer <jwt-token>
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-character-list` function:
-
    - Uses the shared Lambda execution role
    - Accesses the `players` DynamoDB table
    - Returns PascalCase field names matching database schema
@@ -668,14 +682,12 @@ Content-Type: application/json
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-character-add` function:
-
    - Accesses both `characters` and `archetypes` tables
    - Uses environment variable `MAX_CHARACTERS_PER_PLAYER` (default 1)
    - Validates against bloom filter loaded at function initialization
    - Fixed logical ID: `ApiCharacterAddFunction`
 
 2. **Name Validation:** Character names must:
-
    - Be 3-32 characters long
    - Contain only letters, spaces, and hyphens
    - Not be in the restricted names bloom filter
@@ -684,13 +696,11 @@ Content-Type: application/json
 3. **Character Limit:** Players can create up to the configured maximum (from environment variable).
 
 4. **Archetype Resolution:**
-
    - If no archetype is specified, "default" is used
    - If an invalid archetype is specified, "default" is used with a log warning
    - Only player-available archetypes (`Player: true`) can be used
 
 5. **Starting Items:** Based on the archetype's `StartingItems` configuration:
-
    - Items are created from prototypes and added to the character's inventory
    - The first container item becomes the primary container (e.g., backpack)
    - Worn items (`IsWorn: true`) are equipped automatically
@@ -888,7 +898,6 @@ Maps inventory slot numbers to detailed item information:
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-character-get` function:
-
    - Accesses `characters`, `story`, `segments`, and `items` tables
    - Enriches response with multiple table lookups
    - Environment includes all DynamoDB table names
@@ -897,7 +906,6 @@ Maps inventory slot numbers to detailed item information:
 2. **Character Ownership:** The Lambda validates that the requested character belongs to the authenticated player. Attempting to access another player's character returns 404.
 
 3. **Response Field Behavior:** The response dynamically includes different fields based on the character's state:
-
    - **With active story:** Includes `ActiveStory` and `ActiveSegment` objects (if present), does NOT include `AvailableStories`
    - **Without active story:** Does NOT include `ActiveStory` or `ActiveSegment`, but includes `AvailableStories` array if any stories are available
    - Fields are completely omitted from the response rather than being set to null
@@ -1021,7 +1029,6 @@ Content-Type: application/json
 **Implementation Notes:**
 
 1. **Lambda Configuration:** The `api-story-start` function:
-
    - Writes to `story`, `active_segments` tables
    - May send message to SQS queue (Incremental/Hybrid modes)
    - Environment includes `SEGMENT_QUEUE_URL` for SQS integration
@@ -1445,6 +1452,7 @@ The API is deployed at `api.{domain}` with:
 ## Frequently Asked Questions
 
 ### System Performance
+
 **Q: What are the actual performance targets?**
 A: 10,000 total users, <5,000 concurrent users, 2,000-4,000 active stories typical, with capability to handle 3,000 concurrent story starts during peak scenarios.
 
@@ -1452,12 +1460,14 @@ A: 10,000 total users, <5,000 concurrent users, 2,000-4,000 active stories typic
 A: Single region deployment (us-east-1) provides cost optimization and operational simplicity while maintaining acceptable latency (20-80ms) across North America.
 
 ### Client Implementation
+
 **Q: How should clients handle network failures during polling?**
 A: Use simple 30-second retry delays. Server-authoritative design means clients can always recover by requesting current state from server.
 
 **Q: What happens if a player force-closes their app during a story?**
 A: Stories continue server-side. Next `api-character-get` call automatically recovers GameMode state. No progress is lost.
 
-### Technical Architecture  
+### Technical Architecture
+
 **Q: Why use polling instead of WebSockets for story updates?**
 A: Story segments last 1-60 minutes, making real-time updates unnecessary. Polling is more battery-efficient, serverless-compatible, and fault-tolerant for this use case.

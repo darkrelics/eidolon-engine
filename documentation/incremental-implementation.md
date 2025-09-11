@@ -736,7 +736,7 @@ This design ensures characters naturally recover over time regardless of segment
 
 The EventBridge-triggered polling function discovers segments ready for processing and manages the polling state through SSM parameters, automatically starting and stopping based on active segment presence to optimize costs.
 
-```python
+````python
 def segment_poller_handler(event, context):
     """EventBridge-triggered polling function (runs every minute)."""
     # Check SSM parameter
@@ -780,7 +780,7 @@ def segment_poller_handler(event, context):
 
     # Phase 3: GameMode Consistency Validation (NEW)
     orphaned_characters = validate_gamemode_consistency()
-    
+
     # Send messages to appropriate queues
     if advancement_messages:
         send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
@@ -806,7 +806,7 @@ def validate_gamemode_consistency():
     """
     Check for characters in GameMode=Incremental without valid ActiveSegmentID.
     Auto-correct to fail-safe GameMode=None.
-    
+
     Returns:
         List of character IDs that were corrected
     """
@@ -817,31 +817,31 @@ def validate_gamemode_consistency():
         ExpressionAttributeValues={':mode': 'Incremental'},
         ProjectionExpression='CharacterID, ActiveStoryID, ActiveSegmentID'
     )
-    
+
     orphaned_characters = []
-    
+
     for char in incremental_chars['items']:
         character_id = char['CharacterID']
         active_story_id = char.get('ActiveStoryID')
         active_segment_id = char.get('ActiveSegmentID')
-        
+
         # Check if segment still exists in active_segments table
         if active_segment_id:
             segment_exists = dynamo.get_item(
                 TableName.ACTIVE_SEGMENTS,
                 Key={'ActiveSegmentID': active_segment_id}
             )
-            
+
             if not segment_exists:
                 # Orphaned - segment was deleted but character not updated
                 logger.warning(f"Character {character_id} has orphaned ActiveSegmentID, correcting to None")
                 orphaned_characters.append(character_id)
-        
+
         elif not active_story_id or not active_segment_id:
             # Missing story/segment IDs while in Incremental mode
-            logger.warning(f"Character {character_id} in Incremental mode without story/segment, correcting to None")  
+            logger.warning(f"Character {character_id} in Incremental mode without story/segment, correcting to None")
             orphaned_characters.append(character_id)
-    
+
     # Batch correct all orphaned characters
     for character_id in orphaned_characters:
         try:
@@ -853,7 +853,7 @@ def validate_gamemode_consistency():
             )
         except Exception as err:
             logger.error(f"Failed to correct GameMode for {character_id}: {err}")
-    
+
     return orphaned_characters
 
 ### 5.3 Segment Timeout Edge Cases
@@ -867,7 +867,7 @@ def validate_gamemode_consistency():
 - **Fallback**: If no recovery by EndTime → exceptional outcome
 
 **2. Advancement Queue Delay:**
-- **Scenario**: Story advancement queue processes slowly  
+- **Scenario**: Story advancement queue processes slowly
 - **Detection**: Segments marked "processed" but not advanced
 - **Recovery**: Normal advancement when queue processes (no special handling needed)
 - **Impact**: Minimal - clients wait for server timing
@@ -880,7 +880,7 @@ def validate_gamemode_consistency():
 
 **4. EventBridge Rule Disabled:**
 - **Scenario**: Poller rule disabled during active segments
-- **Detection**: No polling occurs, segments expire without advancement  
+- **Detection**: No polling occurs, segments expire without advancement
 - **Recovery**: Next API call triggers `ensure_polling_enabled()` to restart polling
 - **Impact**: Segments may get exceptional outcomes until polling resumes
 
@@ -893,37 +893,37 @@ def validate_gamemode_consistency():
 {
   "ProcessingStatus": "pending",        # pending/processing/processed
   "ElapsedMinutes": 6,                  # How long segment has been running
-  "RetryAttempts": 2,                   # How many retry attempts made  
+  "RetryAttempts": 2,                   # How many retry attempts made
   "AutoResolveAt": 1737003600,          # When exceptional will be applied
   "ExpectedOutcome": "exceptional"      # What outcome if auto-resolved
 }
-```
+````
 
 **Client Timeout Display Logic:**
 
-```dart  
+```dart
 String getProcessingMessage(Map<String, dynamic> status) {
   final processingStatus = status['ProcessingStatus'] as String? ?? 'pending';
   final elapsedMinutes = status['ElapsedMinutes'] as int? ?? 0;
   final segmentType = status['SegmentType'] as String? ?? 'unknown';
-  
+
   if (segmentType != 'mechanical') {
     return 'Waiting for timer...';
   }
-  
+
   switch (processingStatus) {
     case 'pending':
       if (elapsedMinutes < 5) return 'Processing your actions...';
       if (elapsedMinutes < 15) return 'Processing delayed - retrying...';
       return 'Resolving automatically soon...';
-      
+
     case 'processing':
       if (elapsedMinutes > 10) return 'Processing delayed - system working...';
       return 'Processing your actions...';
-      
+
     case 'processed':
       return 'Ready to advance!';
-      
+
     default:
       return 'Processing...';
   }
@@ -933,18 +933,20 @@ String getProcessingMessage(Map<String, dynamic> status) {
 #### **Monitoring and Alerting**
 
 **Key Metrics to Track:**
+
 - **Exceptional Outcome Rate**: High rate indicates processing problems
 - **Stuck Segment Count**: Number of segments requiring retry
 - **Processing Duration**: Average time from creation to processed status
 - **Queue Depth**: SQS message counts for processing bottlenecks
 
 **Alert Thresholds:**
+
 - **>10% exceptional outcomes** in 1-hour window → Processing system health check
-- **>50 stuck segments** at one time → SQS queue capacity issue  
+- **>50 stuck segments** at one time → SQS queue capacity issue
 - **>90% mechanical segments** taking >5 minutes → Lambda memory/timeout adjustment needed
 
 def get_segments_approaching_expiry(threshold_time):
-    """Get ALL segments that will expire before next poll (90 seconds).
+"""Get ALL segments that will expire before next poll (90 seconds).
 
     These segments need advancement (if processed) or recovery (if not processed).
     NO ProcessingStatus filter - we need to handle all expiring segments.
@@ -963,7 +965,7 @@ def get_segments_approaching_expiry(threshold_time):
     return response.get('Items', [])
 
 def get_stuck_mechanical_segments(current_time):
-    """Get mechanical segments stuck in pending/processing with time to retry.
+"""Get mechanical segments stuck in pending/processing with time to retry.
 
     Criteria:
     - StartTime > 5 minutes ago (stuck threshold)
@@ -993,7 +995,8 @@ def get_stuck_mechanical_segments(current_time):
         }
     )
     return response.get('Items', [])
-```
+
+````
 
 ### 5.2 SQS Message Processing
 
@@ -1057,7 +1060,7 @@ def claim_segment_for_processing(active_segment_id):
         if e.response['Error']['Code'] == 'ConditionalCheckFailedException':
             return False
         raise
-```
+````
 
 ## 6. Client Implementation
 

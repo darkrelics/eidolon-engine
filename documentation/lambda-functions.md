@@ -172,7 +172,6 @@ All Lambda functions must follow these parameter standards:
   - Example: `/characters?characterId=123`
   - Use `get_query_parameter()` from `eidolon.requests`
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
-
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
@@ -192,13 +191,11 @@ Lambda functions are deployed through the modular CDK stack system:
 ### CDK Stack Deployment (Lambda Stack #3)
 
 1. **CodeBuild Process** (Stack #1):
-
    - Builds Lambda layer from `requirements/lambda-requirements.txt`
    - Packages each function with `eidolon` modules
    - Uploads artifacts to S3 bucket
 
 2. **Lambda Stack Deployment** (Stack #3):
-
    - Creates shared execution role
    - Deploys Lambda layer
    - Creates 16 functions with fixed logical IDs
@@ -276,7 +273,7 @@ response = lambda_handler(event, {})
 ### Layer Responsibilities
 
 1. **Lambda Handler Layer**: AWS-specific concerns (authentication, CORS, HTTP responses)
-2. **Business Logic Layer**: Pure Python business logic (orchestration, validation, flow control)  
+2. **Business Logic Layer**: Pure Python business logic (orchestration, validation, flow control)
 3. **Eidolon Library Layer**: Database operations, AWS services, shared utilities
 
 ### Required Structure
@@ -285,7 +282,7 @@ response = lambda_handler(event, {})
 def lambda_handler(event: dict, context: object) -> dict:
     """
     Layer 1: Lambda Handler - AWS-specific concerns only.
-    
+
     CRITICAL: This function must NEVER raise exceptions.
     All exceptions must be caught and converted to HTTP responses.
     """
@@ -313,10 +310,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         # OR
         body = parse_event_body(event)                           # POST
         character_id = body.get("CharacterID")
-        
+
         if not character_id:
             return lambda_response(400, {"Error": "Missing CharacterID"}, event)
-            
+
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
@@ -332,10 +329,10 @@ def lambda_handler(event: dict, context: object) -> dict:
 def business_logic_function(character_id: str, player_id: str) -> dict:
     """
     Layer 2: Business Logic - Pure Python, no AWS dependencies.
-    
+
     This function orchestrates the business process by calling eidolon library
     functions. It handles business rule validation and flow control.
-    
+
     Raises:
         ValueError: For 4xx client errors (validation, not found, forbidden)
         RuntimeError: For 5xx server errors (database failures, system issues)
@@ -347,13 +344,13 @@ def business_logic_function(character_id: str, player_id: str) -> dict:
         # Library handles not found, ownership validation - re-raise for handler
         raise
     except RuntimeError:
-        # Library handles database errors - re-raise for handler  
+        # Library handles database errors - re-raise for handler
         raise
 
     # 2. Business logic validation and orchestration
     if character.get("GameMode") != "None":
         raise ValueError("Character is currently busy in another game mode")
-    
+
     # 3. Execute business operations via eidolon library
     try:
         result = perform_character_operation(character)  # May raise ValueError/RuntimeError
@@ -369,11 +366,11 @@ def business_logic_function(character_id: str, player_id: str) -> dict:
 def character_get(character_id: str, player_id: str) -> dict:
     """
     Layer 3: Eidolon Library - Database operations and AWS services.
-    
+
     Library functions either:
     1. Handle errors locally where appropriate (retries, fallbacks)
     2. Raise appropriate exceptions for business logic layer
-    
+
     Raises:
         ValueError: Client errors - invalid IDs, not found, access denied
         RuntimeError: Server errors - database failures, AWS service issues
@@ -385,18 +382,21 @@ def character_get(character_id: str, player_id: str) -> dict:
 ### Error Handling Flow
 
 **Exception Propagation Pattern:**
+
 1. **Eidolon Library**: Handles retries/fallbacks locally OR raises ValueError (4xx) / RuntimeError (5xx)
 2. **Business Logic**: Re-raises library exceptions OR adds business validation exceptions
 3. **Lambda Handler**: Catches ALL exceptions, converts to appropriate HTTP responses
 
 **HTTP Status Code Mapping:**
+
 - `ValueError` → 400/403/404/409 (client errors)
-- `RuntimeError` → 500 (server errors) 
+- `RuntimeError` → 500 (server errors)
 - `Any other Exception` → 500 (unexpected errors)
 
 **Detailed Status Code Usage:**
+
 - **400 Bad Request**: Invalid parameters, malformed JSON, validation failures
-- **401 Unauthorized**: Missing/invalid JWT token, authentication failures  
+- **401 Unauthorized**: Missing/invalid JWT token, authentication failures
 - **403 Forbidden**: Valid auth but access denied (character not owned, story not available)
 - **404 Not Found**: Resource doesn't exist (character, story, segment not found)
 - **409 Conflict**: Resource state conflict (character busy, decision already made)
@@ -410,22 +410,22 @@ def character_get(character_id: str, player_id: str) -> dict:
 def validate_incremental_gamemode(character: dict, character_id: str) -> None:
     """
     Validate and auto-correct GameMode for Incremental operations.
-    
+
     GameMode States (Atomic):
     - Incremental: Has ActiveStoryID and ActiveSegmentID
-    - MUD: Character logged into MUD session 
+    - MUD: Character logged into MUD session
     - None: Default fail-safe state
-    
+
     Auto-correction: Set to None if inconsistent state detected.
     """
     game_mode = character.get("GameMode", "None")
     active_story_id = character.get("ActiveStoryID")
     active_segment_id = character.get("ActiveSegmentID")
-    
+
     # Check for inconsistent state
     if game_mode == "Incremental" and (not active_story_id or not active_segment_id):
         logger.warning(f"GameMode=Incremental but missing story/segment IDs for {character_id}, correcting to None")
-        
+
         # Auto-correct to fail-safe state
         dynamo.update_item(
             TableName.CHARACTERS,
@@ -434,26 +434,26 @@ def validate_incremental_gamemode(character: dict, character_id: str) -> None:
             ExpressionAttributeValues={":none": "None"}
         )
         raise ValueError("Character was in invalid GameMode, corrected to None")
-    
+
     elif game_mode == "None" and active_story_id and active_segment_id:
         logger.warning(f"GameMode=None but has active story/segment for {character_id}, correcting to Incremental")
-        
+
         # Auto-correct to proper state
         dynamo.update_item(
-            TableName.CHARACTERS, 
+            TableName.CHARACTERS,
             Key={"CharacterID": character_id},
             UpdateExpression="SET GameMode = :incremental",
             ExpressionAttributeValues={":incremental": "Incremental"}
         )
         # Continue processing - state is now correct
-    
+
     elif game_mode not in ["MUD", "Incremental", "None"]:
         logger.error(f"Invalid GameMode '{game_mode}' for {character_id}, correcting to None")
-        
+
         # Auto-correct invalid states to fail-safe
         dynamo.update_item(
             TableName.CHARACTERS,
-            Key={"CharacterID": character_id}, 
+            Key={"CharacterID": character_id},
             UpdateExpression="SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID",
             ExpressionAttributeValues={":none": "None"}
         )
@@ -462,14 +462,15 @@ def validate_incremental_gamemode(character: dict, character_id: str) -> None:
 # Usage in all Incremental Lambda functions:
 def business_logic_function(character_id: str, player_id: str) -> dict:
     character = character_get(character_id, player_id)
-    
+
     # REQUIRED: Validate and auto-correct GameMode
     validate_incremental_gamemode(character, character_id)
-    
+
     # Continue with business logic...
 ```
 
 **Benefits:**
+
 - **Data Integrity**: Prevents corruption by auto-correcting invalid states
 - **Fail-Safe Design**: Always defaults to "None" when state is ambiguous
 - **Atomic Operations**: Each correction is a single database update
@@ -513,12 +514,14 @@ def business_logic_function(character_id: str, player_id: str) -> dict:
 The `lambda_handler` function is the interface between AWS Lambda and your code. It must **ALWAYS** return a valid HTTP response and **NEVER** allow exceptions to escape.
 
 **Why This Is Critical:**
+
 - **API Gateway**: Unhandled exceptions cause generic 500 errors with no useful information
-- **Debugging**: Without proper error handling, production debugging becomes nearly impossible  
+- **Debugging**: Without proper error handling, production debugging becomes nearly impossible
 - **Monitoring**: CloudWatch alarms and metrics depend on proper error logging
 - **User Experience**: Clients need consistent, parseable error responses
 
 **Implementation Pattern:**
+
 ```python
 def lambda_handler(event: dict, context: object) -> dict:
     """
@@ -530,7 +533,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         # All Lambda logic goes inside this try block
         log_lambda_statistics(event, context)
-        
+
         # Handle authentication, parsing, business logic call
         result = business_logic_function(params)
         return lambda_response(200, result, event)
@@ -541,13 +544,14 @@ def lambda_handler(event: dict, context: object) -> dict:
 ```
 
 **Testing the Business Logic Layer:**
+
 ```python
 # Unit test example - no AWS dependencies needed
 def test_business_logic():
     # Mock eidolon library functions
     with patch('eidolon.character_data.character_get') as mock_get:
         mock_get.return_value = {"CharacterID": "test", "GameMode": "None"}
-        
+
         result = business_logic_function("test-char", "test-player")
         assert result["Success"] is True
 ```
@@ -561,7 +565,6 @@ Some Lambda functions apply transformations to data before returning responses:
 The `api_get_character.py` function applies several transformations for client compatibility:
 
 1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
-
    - Database: `{"RightHand": "sword-uuid"}`
    - Response adds: `{"InventoryDetails": {"RightHand": {"ItemID": "sword-uuid", "Name": "Iron Sword", ...}}}`
 

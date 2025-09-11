@@ -87,8 +87,7 @@ Stacks deploy in a specific order based on dependencies:
 9. **API Stack**: API Gateway with Lambda integrations
 10. **Client Stack**: CloudFront, S3, automated portal build
 
-Then (all modes):
-11. **Lambda Function Updates**: Update function code from S3 artifacts
+Then (all modes): 11. **Lambda Function Updates**: Update function code from S3 artifacts
 
 ## Deployment Process
 
@@ -213,8 +212,7 @@ API:
   Subdomain: api # api.darkrelics.net
 
 # CORS configuration for API Gateway
-allowed_cors_origins:
-  [] # Optional list; when empty, API preflight defaults to "*" without credentials
+allowed_cors_origins: [] # Optional list; when empty, API preflight defaults to "*" without credentials
   # When set, API Gateway preflight uses this explicit list and allows credentials
   # ALLOWED_ORIGINS env var is passed to Lambdas as a comma-separated string
 
@@ -524,21 +522,24 @@ lambda_client.delete_layer_version(
 **Each deployment environment uses its own AWS account:**
 
 - **Development**: Separate AWS account for individual developer testing
-- **Staging**: Dedicated AWS account for integration testing  
+- **Staging**: Dedicated AWS account for integration testing
 - **Production**: Isolated AWS account for live system
 
 **Benefits:**
+
 - **Complete Isolation**: No resource name conflicts between environments
 - **Security**: Full account-level separation prevents cross-environment access
 - **Cost Tracking**: Clear cost attribution per environment
 - **IAM Simplicity**: No complex environment-based permissions needed
 
 **Resource Naming:**
+
 - **Same names across accounts**: All environments use identical resource names (`eidolon-api`, `characters`, etc.)
 - **No prefixes needed**: Account isolation eliminates naming conflicts
 - **Consistent configuration**: Same `config.yml` structure across environments
 
 **Flutter Configuration Management:**
+
 ```dart
 // Build-time environment configuration
 const String apiDomain = String.fromEnvironment(
@@ -548,12 +549,13 @@ const String apiDomain = String.fromEnvironment(
 
 // Environment-specific builds:
 // Dev: flutter build web --dart-define=API_DOMAIN=api-dev.darkrelics.net
-// Staging: flutter build web --dart-define=API_DOMAIN=api-staging.darkrelics.net  
+// Staging: flutter build web --dart-define=API_DOMAIN=api-staging.darkrelics.net
 // Prod: flutter build web --dart-define=API_DOMAIN=api.darkrelics.net
 ```
 
 **Deployment Process Per Account:**
-1. **Bootstrap each account**: `cdk bootstrap aws://ACCOUNT-ID/REGION` 
+
+1. **Bootstrap each account**: `cdk bootstrap aws://ACCOUNT-ID/REGION`
 2. **Deploy with same parameters**: Same domain names, resource names, configuration
 3. **Account-specific domains**: Use subdomain routing (api-dev.domain.com vs api.domain.com)
 4. **Consistent resource names**: No prefixes needed due to account isolation
