@@ -13,8 +13,6 @@ phases:
 
       # Generate bloom filter data
       - python3 scripts_python/generate_bloom_filter.py
-      - find python -type d -name '__pycache__' -prune -exec rm -rf {} +
-      - find python -type f -name '*.pyc' -delete
 
       - |
         for func in lambda/*.py; do
