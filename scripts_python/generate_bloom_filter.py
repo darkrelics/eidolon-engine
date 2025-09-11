@@ -78,5 +78,6 @@ def main():
     file_size = os.path.getsize(output_file)
     print(f"Bloom filter saved. File size: {file_size:,} bytes")
 
+
 if __name__ == "__main__":
     main()

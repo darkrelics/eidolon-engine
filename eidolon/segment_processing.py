@@ -203,15 +203,15 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             if outcome in outcomes:
                 overall_outcome = outcome
                 break
-    
+
     # Apply story outcome effects immediately (wounds, room changes, etc.)
     from eidolon.character_story import apply_story_outcome_effects
     from eidolon.segment_core import map_outcome_to_key
-    
+
     outcome_key = map_outcome_to_key(overall_outcome)
     outcome_results = segment_def.get("Results", {}).get(outcome_key, {})
     story_effects = outcome_results.get("Effects", {})
-    
+
     if story_effects:
         character_id = character.get("CharacterID")
         if character_id:
@@ -222,7 +222,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 results["StoryEffects"] = story_effects
             except Exception as err:
                 logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
-    
+
     return overall_outcome, results
 
 
