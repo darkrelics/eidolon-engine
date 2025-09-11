@@ -65,6 +65,9 @@ go.work
 
 **/*.metadata
 
+incremental/ios
+incremental/android
+
 # Claude Code specific files
 CLAUDE.md
 .claude/
