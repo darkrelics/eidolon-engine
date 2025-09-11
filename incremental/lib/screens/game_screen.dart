@@ -9,6 +9,7 @@ import '../services/auth_service.dart';
 import '../services/rate_limiter.dart';
 import '../services/notification_service.dart';
 import '../services/story_polling_service.dart';
+import '../services/story_cache_service.dart';
 import '../utils/error_handler.dart';
 import '../utils/retry.dart';
 import '../widgets/shared/breadcrumb.dart';
@@ -30,6 +31,7 @@ class _GameScreenState extends State<GameScreen> {
   late ApiService _apiService;
   late StoryPollingService _pollingService;
   final GlobalRateLimiter _rateLimiter = GlobalRateLimiter();
+  final StoryCacheService _storyCacheService = StoryCacheService();
   Character? _character;
   CharacterInfo? _characterInfo;
   bool _isLoading = true;
@@ -57,9 +59,11 @@ class _GameScreenState extends State<GameScreen> {
       }
     };
     
-    _pollingService.onStoryCompleted = () {
+    _pollingService.onStoryCompleted = () async {
       debugPrint('GameScreen: Story completed via polling service');
       if (mounted) {
+        // Cache the completed story before reloading character data
+        await _cacheCompletedStoryIfNeeded();
         _loadCharacterData();
         _loadSegmentHistory();
       }
@@ -254,14 +258,35 @@ class _GameScreenState extends State<GameScreen> {
   
   
   Future<void> _loadSegmentHistory() async {
-    if (_character == null || _character!.activeStoryID == null) {
-      // No active story, clear history
+    if (_character == null) {
       setState(() {
         _segmentHistory = [];
       });
       return;
     }
     
+    // Check if we have completed segments in character's storyState
+    final completedSegments = _character!.storyState?['CompletedSegments'] as List<dynamic>?;
+    final hasCompletedSegments = completedSegments != null && completedSegments.isNotEmpty;
+    
+    // If no active story and no completed segments, clear history
+    if (_character!.activeStoryID == null && !hasCompletedSegments) {
+      setState(() {
+        _segmentHistory = [];
+      });
+      return;
+    }
+    
+    // If we have completed segments but no active story, use the completed segments directly
+    if (_character!.activeStoryID == null && hasCompletedSegments) {
+      setState(() {
+        _segmentHistory = completedSegments.cast<Map<String, dynamic>>();
+      });
+      debugPrint('GameScreen: Using ${completedSegments.length} completed segments from character state');
+      return;
+    }
+    
+    // We have an active story, load history from API
     try {
       final history = await _apiService.getSegmentHistory(
         characterId: _character!.id,
@@ -271,11 +296,17 @@ class _GameScreenState extends State<GameScreen> {
         setState(() {
           _segmentHistory = history;
         });
-        debugPrint('GameScreen: Loaded ${history.length} segments from history');
+        debugPrint('GameScreen: Loaded ${history.length} segments from history API');
       }
     } catch (e) {
       debugPrint('GameScreen: Failed to load segment history: $e');
-      // Keep existing history on error
+      // If API fails but we have completed segments, fall back to those
+      if (hasCompletedSegments) {
+        setState(() {
+          _segmentHistory = completedSegments.cast<Map<String, dynamic>>();
+        });
+        debugPrint('GameScreen: Falling back to ${completedSegments.length} completed segments from character state');
+      }
     }
   }
 
@@ -313,7 +344,8 @@ class _GameScreenState extends State<GameScreen> {
           _pollingService.startPolling(_character!.id);
         }
       } else {
-        // No next segment means story completed - need to reload for available stories
+        // No next segment means story completed - cache before reloading
+        await _cacheCompletedStoryIfNeeded();
         await Future.wait([
           _loadCharacterData(),
           _loadSegmentHistory(),
@@ -405,6 +437,9 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _handleReturnToStories() async {
+    // Cache completed story data BEFORE clearing storyState
+    await _cacheCompletedStoryIfNeeded();
+    
     // Clear story state locally and reload to get available stories
     setState(() {
       if (_character != null) {
@@ -417,6 +452,39 @@ class _GameScreenState extends State<GameScreen> {
       _loadCharacterData(),
       _loadSegmentHistory(),
     ]);
+  }
+  
+  /// Cache completed story data before it gets lost
+  Future<void> _cacheCompletedStoryIfNeeded() async {
+    if (_character?.storyState == null) return;
+    
+    try {
+      final storyData = _character!.storyState!['Story'] as Map<String, dynamic>?;
+      final completedSegments = _character!.storyState!['CompletedSegments'] as List<dynamic>?;
+      
+      // Only cache if we have both story data and completed segments
+      if (storyData != null && completedSegments != null && completedSegments.isNotEmpty) {
+        final storyId = storyData['StoryID'] as String? ?? storyData['Title'] as String? ?? 'unknown';
+        
+        // Cache the complete story state
+        await _storyCacheService.cacheCompletedStory(
+          characterId: _character!.id,
+          storyId: storyId,
+          storyState: _character!.storyState!,
+        );
+        
+        debugPrint('GameScreen: Cached completed story: $storyId');
+      }
+    } catch (e) {
+      debugPrint('GameScreen: Failed to cache completed story: $e');
+    }
+  }
+
+  /// Handle completed story selection for viewing
+  Future<void> _handleCompletedStorySelect(String storyId) async {
+    debugPrint('GameScreen: Selected completed story: $storyId');
+    // The StoryPanel will handle the actual viewing logic
+    // This callback is mainly for logging/analytics
   }
 
   Future<void> _handleAbandonStory() async {
@@ -707,6 +775,7 @@ class _GameScreenState extends State<GameScreen> {
                 : null,
             onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
+            onCompletedStorySelect: _handleCompletedStorySelect,
           ),
         ),
         // Inventory Panel (Right)
@@ -747,6 +816,7 @@ class _GameScreenState extends State<GameScreen> {
                 : null,
             onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
+            onCompletedStorySelect: _handleCompletedStorySelect,
           ),
         ),
         // Inventory Panel (Collapsible)
@@ -783,6 +853,7 @@ class _GameScreenState extends State<GameScreen> {
               : null,
           onRestSegment: _handleRestSegment,
           onReturnToStories: _handleReturnToStories,
+          onCompletedStorySelect: _handleCompletedStorySelect,
         );
       case 2:
         return InventoryPanel(
