@@ -4,8 +4,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    assignees:
-      - "dependabot"
     reviewers:
       - "robinje"
     groups:
@@ -25,8 +23,6 @@ updates:
     directory: "/server"
     schedule:
       interval: "weekly"
-    assignees:
-      - "dependabot"
     reviewers:
       - "robinje"
     groups:
@@ -46,8 +42,6 @@ updates:
     directory: "/requirements"
     schedule:
       interval: "weekly"
-    assignees:
-      - "dependabot"
     reviewers:
       - "robinje"
     groups:
@@ -67,8 +61,6 @@ updates:
     directory: "/portal"
     schedule:
       interval: "weekly"
-    assignees:
-      - "dependabot"
     reviewers:
       - "robinje"
     groups:
@@ -88,8 +80,6 @@ updates:
     directory: "/incremental"
     schedule:
       interval: "weekly"
-    assignees:
-      - "dependabot"
     reviewers:
       - "robinje"
     groups:
