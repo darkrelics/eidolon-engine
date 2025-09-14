@@ -9,9 +9,9 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 | Aspect                 | MUD Mode             | Incremental Mode              | Hybrid Mode (Default)         |
 | ---------------------- | -------------------- | ----------------------------- | ----------------------------- |
 | **Frontend Deployed**  | Portal (portal.yml)  | Incremental (incremental.yml) | Incremental (incremental.yml) |
-| **Stack Count**        | 8 stacks             | 7 stacks                      | 9 stacks                      |
+| **Stack Count**        | 9 stacks             | 8 stacks                      | 10 stacks                     |
 | **Excluded Stacks**    | Story Stack          | S3, CloudWatch Stacks         | None (all stacks)             |
-| **Lambda Functions**   | 16 functions         | 16 functions                  | 16 functions                  |
+| **Lambda Functions**   | 15 functions         | 15 functions                  | 15 functions                  |
 | **DynamoDB Tables**    | 14 tables            | 14 tables                     | 14 tables                     |
 | **Story Processing**   | Not available        | SQS, EventBridge, SSM         | SQS, EventBridge, SSM         |
 | **Scripts Support**    | Lua scripts in S3    | Not available                 | Lua scripts in S3             |
@@ -25,12 +25,15 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 ```
 1. CodeBuild    → Build infrastructure and Lambda artifacts
 2. DynamoDB     → 14 tables with managed IAM policy
-3. Lambda       → Layer and 16 functions with execution role
+3. Lambda       → Layer and 15 functions with execution role
 4. Player       → Cognito User Pool with PostConfirmation trigger
-5. S3           → Scripts bucket with Lua upload
-6. CloudWatch   → Log group and metrics namespace
-7. API          → API Gateway with Lambda integrations
-8. Client       → CloudFront, S3, and portal build
+5. Character    → Character-related Lambda resources
+6. S3           → Scripts bucket with Lua upload
+7. CloudWatch   → Log group and metrics namespace
+8. API          → API Gateway with Lambda integrations
+9. Client       → CloudFront, S3, and portal build
+
+Then: Lambda Function Updates → Update function code from S3 artifacts
 ```
 
 ### Incremental Mode
@@ -38,11 +41,14 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 ```
 1. CodeBuild    → Build infrastructure and Lambda artifacts
 2. DynamoDB     → 14 tables with managed IAM policy
-3. Lambda       → Layer and 16 functions with execution role
+3. Lambda       → Layer and 15 functions with execution role
 4. Player       → Cognito User Pool with PostConfirmation trigger
-5. Story        → SSM, SQS queues, EventBridge rule
-6. API          → API Gateway with Lambda integrations
-7. Client       → CloudFront, S3, and incremental build
+5. Character    → Character-related Lambda resources
+6. Story        → SSM, SQS queues, EventBridge rule
+7. API          → API Gateway with Lambda integrations
+8. Client       → CloudFront, S3, and incremental build
+
+Then: Lambda Function Updates → Update function code from S3 artifacts
 ```
 
 ### Hybrid Mode (Default)
@@ -50,13 +56,16 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 ```
 1. CodeBuild    → Build infrastructure and Lambda artifacts
 2. DynamoDB     → 14 tables with managed IAM policy
-3. Lambda       → Layer and 16 functions with execution role
+3. Lambda       → Layer and 15 functions with execution role
 4. Player       → Cognito User Pool with PostConfirmation trigger
-5. Story        → SSM, SQS queues, EventBridge rule
-6. S3           → Scripts bucket with Lua upload
-7. CloudWatch   → Log group and metrics namespace
-8. API          → API Gateway with Lambda integrations
-9. Client       → CloudFront, S3, and incremental build
+5. Character    → Character-related Lambda resources
+6. Story        → SSM, SQS queues, EventBridge rule
+7. S3           → Scripts bucket with Lua upload
+8. CloudWatch   → Log group and metrics namespace
+9. API          → API Gateway with Lambda integrations
+10. Client      → CloudFront, S3, and incremental build
+
+Then: Lambda Function Updates → Update function code from S3 artifacts
 ```
 
 ## Deployment Process
@@ -103,7 +112,7 @@ The selected mode determines:
 
 ## Backend Infrastructure (Shared by All Modes)
 
-### Lambda Functions (16 Total)
+### Lambda Functions (15 Total)
 
 **Character API Functions:**
 

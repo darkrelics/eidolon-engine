@@ -140,14 +140,16 @@ def character_get(character_id: str, player_id: str) -> dict:
     logger.debug(f"Character retrieved successfully: {character_id}")
 
     # Heal expired wounds
-    if character.get("Wounds") and character.get("CharState") != "dead":
+    from eidolon.constants import CharState
+
+    if character.get("Wounds") and character.get("CharState") != CharState.DEAD.value:
         wounds: list = character.get("Wounds", [])
         current_time: datetime = datetime.now(timezone.utc)
 
         remaining_wounds: list = []
 
         for wound in wounds:
-            heal_at: str = wound.get("HealedAt")
+            heal_at: str = wound.get("HealAt")
 
             try:
                 if datetime.fromisoformat(heal_at.replace("Z", "+00:00")) > current_time:
@@ -162,14 +164,14 @@ def character_get(character_id: str, player_id: str) -> dict:
             logger.info("It's a miracle!")
 
             # Update character with healed wounds
-            if character.get("CharState", "standing") == "unconscious":
-                character["CharState"] = "standing"
+            if character.get("CharState", CharState.STANDING.value) == CharState.UNCONSCIOUS.value:
+                character["CharState"] = CharState.STANDING.value
 
             # Update the character's wounds in the database
             update_expression = "SET Wounds = :wounds, CharState = :state, UpdatedAt = :timestamp"
             expression_values: dict = {
                 ":wounds": remaining_wounds,
-                ":state": character.get("CharState", "standing"),
+                ":state": character.get("CharState", CharState.STANDING.value),
                 ":timestamp": datetime.now(timezone.utc).isoformat(),
             }
 
@@ -198,42 +200,6 @@ def character_get(character_id: str, player_id: str) -> dict:
     return character
 
 
-# TODO - Move to Bloom Module
-def check_character_name_availability(character_name: str) -> bool:
-    """
-    Check if a character name is available.
-
-    Args:
-        character_name: Name to check
-
-    Returns:
-        True if name is available, False if taken
-
-    Raises:
-        RuntimeError: If database query fails
-    """
-    logger.info(f"Checking character name availability for {character_name}")
-
-    try:
-        existing_chars = dynamo.query(
-            TableName.CHARACTERS,
-            IndexName="CharacterNameIndex",
-            KeyConditionExpression="CharacterName = :name",
-            ExpressionAttributeValues={":name": character_name},
-            Limit=1,
-        )
-
-        if existing_chars:
-            logger.info(f"Character name already taken for {character_name}")
-            return False
-
-        return True
-
-    except ClientError as err:
-        logger.error(f"Error checking character name availability for {character_name} Error: {err}")
-        raise RuntimeError(f"Failed to check character name availability: {err}") from err
-
-
 def build_character_record(
     character_id: str,
     player_id: str,
@@ -258,6 +224,8 @@ def build_character_record(
     Returns:
         Complete character record dict
     """
+    from eidolon.constants import CharState
+
     return {
         "CharacterID": character_id,
         "PlayerID": player_id,
@@ -274,12 +242,12 @@ def build_character_record(
         "Resources": {},
         "Progress": {},
         "AvailableStories": archetype_data.get("AvailableStories", []),
-        "AbandonedStories": [],
-        "CompletedStories": [],
+        # AbandonedStories and CompletedStories are not initialized here
+        # They will be created as DynamoDB sets when first used via ADD operations
         "ActiveStoryID": None,
         "ActiveSegmentID": None,
         "Hidden": False,
-        "CharState": "standing",
+        "CharState": CharState.STANDING.value,
         "GameMode": "None",
         "CreatedAt": timestamp,
         "UpdatedAt": timestamp,
@@ -348,6 +316,21 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         ValueError: If character name is already taken
         RuntimeError: If database operations fail
     """
+    # Enforce name uniqueness using CharacterNameIndex (per schema)
+    try:
+        existing = dynamo.query(
+            TableName.CHARACTERS,
+            IndexName="CharacterNameIndex",
+            KeyConditionExpression="CharacterName = :name",
+            ExpressionAttributeValues={":name": character_name},
+            ProjectionExpression="CharacterID",
+        )
+        if existing:
+            raise ValueError("Character name is already taken")
+    except ClientError as err:
+        logger.error(f"Failed to check character name uniqueness for '{character_name}' Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to create character: {err}") from err
+
     character_id = generate_character_id()
     timestamp = datetime.now(timezone.utc).isoformat()
 
@@ -454,8 +437,8 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
         update_expressions.append("RoomID = :room")
         expression_values[":room"] = room_id
 
-    # Set common values
-    if expression_values and ":zero" not in expression_values:
+    # Set common values - only add :zero if we have skill or attribute XP updates
+    if (skill_xp or updates.get("AttributeXP")) and ":zero" not in expression_values:
         expression_values[":zero"] = Decimal("0")
 
     # Execute update if there are changes
@@ -465,12 +448,18 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
             update_expression += ", UpdatedAt = :updated_at"
             expression_values[":updated_at"] = datetime.now(timezone.utc).isoformat()
 
+            # Build kwargs to avoid passing None for iterable parameters
+            update_kwargs = {
+                "UpdateExpression": update_expression,
+                "ExpressionAttributeValues": expression_values,
+            }
+            if expression_names:
+                update_kwargs["ExpressionAttributeNames"] = expression_names
+
             dynamo.update_item(
                 TableName.CHARACTERS,
                 Key={"CharacterID": character_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeNames=expression_names if expression_names else None,
-                ExpressionAttributeValues=expression_values,
+                **update_kwargs,
             )
 
             logger.info(f"Character updates applied for {character_id}")

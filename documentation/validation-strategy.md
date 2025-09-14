@@ -13,17 +13,7 @@ The system uses a standardized approach to ensure data consistency:
 
 ## Field Naming Convention
 
-### API Communication
-
-- All API requests and responses use **PascalCase** field names
-- Examples: `CharacterID`, `StoryName`, `TimeRemaining`
-- This matches AWS DynamoDB field naming conventions
-
-### Internal Storage
-
-- Frontend may use camelCase internally for Flutter conventions
-- Backend uses PascalCase consistently
-- Conversion happens at API boundaries
+All field naming follows the standards defined in [Style Guide](style-guide.md#json-field-naming-convention). The validation system enforces these naming conventions at API boundaries.
 
 ## Validation Layers
 
@@ -109,8 +99,8 @@ Located in `eidolon/requests.py`:
 
 ### Backend
 
-- Returns standardized error format: `{"Error": "message"}`
-- HTTP status codes indicate error type
+- Returns error format defined in [API Documentation](incremental-api.md#standardized-error-response-format)
+- HTTP status codes follow documented standards
 - Detailed error logging for troubleshooting
 
 ## Migration Guide

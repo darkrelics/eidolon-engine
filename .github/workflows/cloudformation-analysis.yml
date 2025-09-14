@@ -3,12 +3,14 @@ name: Cloud formation Analysis
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "cloudformation/*.yml"
   pull_request:
-    branches: "**"
+    paths:
+      - "cloudformation/*.yml"
 
 permissions:
-  pull-requests: write
-  contents: write
+  contents: read
 
 jobs:
   evaluate-cloudformation:

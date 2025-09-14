@@ -22,7 +22,7 @@ The deployment will:
 
 1. Check CDK bootstrap status
 2. Collect deployment parameters (mode, domain, etc.)
-3. Deploy 9 CDK stacks in sequence based on selected mode
+3. Deploy 8–10 CDK stacks in sequence based on selected mode
 4. Execute Lambda builds automatically
 5. Update Lambda functions from S3 artifacts
 6. Execute portal build via CodeBuild
@@ -30,9 +30,9 @@ The deployment will:
 
 ## System Architecture
 
-- **9 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Story, S3, CloudWatch, API, Client
+- **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **16 Lambda Functions**: API handlers and operational functions
+- **15 Lambda Functions**: API handlers and operational functions
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **Fixed Logical IDs**: Preventing resource recreation on updates
 - **Post-Deploy Updates**: Lambda functions automatically updated from S3
@@ -46,25 +46,25 @@ The deployment system provides:
 - **AWS Access Isolation**: No AWS API calls during CDK synthesis
 - **Automated End-to-End**: From infrastructure to portal deployment
 - **Post-Deployment Operations**: Lambda updates, layer cleanup, trigger configuration
-- **Production Tested**: All 9 phases deployed and operational
+- **Production Tested**: All phases deployed and operational
 
 ## Deployment Modes
 
-### MUD Mode (8 Stacks)
+### MUD Mode (9 Stacks)
 
 - **Frontend**: Portal app via `buildspec/portal.yml`
 - **Excludes**: Story Stack (no SQS/EventBridge)
 - **Includes**: S3 Scripts, CloudWatch logging
 - **Use Case**: Traditional MUD experience only
 
-### Incremental Mode (7 Stacks)
+### Incremental Mode (8 Stacks)
 
 - **Frontend**: Incremental app via `buildspec/incremental.yml`
 - **Excludes**: S3 Scripts, CloudWatch Stack
 - **Includes**: Story Stack (SQS/EventBridge)
 - **Use Case**: Story-driven incremental gameplay
 
-### Hybrid Mode - Default (9 Stacks)
+### Hybrid Mode - Default (10 Stacks)
 
 - **Frontend**: Incremental app via `buildspec/incremental.yml`
 - **Includes**: All stacks for complete functionality
@@ -78,13 +78,16 @@ Stacks deploy in a specific order based on dependencies:
 
 1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
 2. **DynamoDB Stack**: 14 tables with managed IAM policy
-3. **Lambda Stack**: Layer, 16 functions, shared execution role
+3. **Lambda Stack**: Layer, 15 functions, shared execution role
 4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
-5. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
-6. **S3 Stack** (MUD/Hybrid only): Scripts bucket with Lua upload
-7. **CloudWatch Stack** (MUD/Hybrid only): Logging infrastructure
-8. **API Stack**: API Gateway with Lambda integrations
-9. **Client Stack**: CloudFront, S3, automated portal build
+5. **Character Stack**: Character-related Lambda resources
+6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
+7. **S3 Stack** (MUD/Hybrid only): Scripts bucket with Lua upload
+8. **CloudWatch Stack** (MUD/Hybrid only): Logging infrastructure
+9. **API Stack**: API Gateway with Lambda integrations
+10. **Client Stack**: CloudFront, S3, automated portal build
+
+Then (all modes): 11. **Lambda Function Updates**: Update function code from S3 artifacts
 
 ## Deployment Process
 
@@ -267,7 +270,7 @@ Tracks deployed resources and outputs (gitignored).
 ## Resource Naming
 
 - **DynamoDB Tables** (14): `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`, `story`, `segments`, `active_segments`, `story_history`, `segment_history`, `opponents`
-- **Lambda Functions** (16): `api-*` and `ops-*` prefixed names
+- **Lambda Functions** (15): `api-*` and `ops-*` prefixed names
 - **S3 Buckets**: `eidolon-engine-lambda-{account}`, `eidolon-scripts-{account}`, portal bucket
 - **Cognito Pool**: `eidolon-users`
 - **CloudWatch**: `/eidolon/server` log group
@@ -350,8 +353,8 @@ if current_trigger == lambda_arn:
 
 ### Deployment Statistics
 
-- **Total Stacks**: 9 independent CDK stacks
-- **Lambda Functions**: 16 with shared execution role
+- **Total Stacks**: 10 independent CDK stacks
+- **Lambda Functions**: 15 with shared execution role
 - **DynamoDB Tables**: 14 with RemovalPolicy.RETAIN
 - **Module Size**: 94% under 300 lines, 100% under 1000 lines
 - **Deployment Time**: Full deployment in under 15 minutes
@@ -398,6 +401,7 @@ CodeBuild runs automatically after Client Stack:
 - **dynamodb.py**: DynamoDB stack deployment and validation
 - **codebuild.py**: Build infrastructure with automatic execution
 - **lambda_functions.py**: Lambda deployment with S3 updates
+- **character.py**: Character stack deployment and validation
 - **player.py**: Cognito deployment with trigger configuration
 - **story.py**: SQS/EventBridge deployment (mode-aware)
 - **api.py**: API Gateway deployment
@@ -511,6 +515,51 @@ lambda_client.delete_layer_version(
 )
 ```
 
+## Environment Strategy
+
+### Multi-Account Deployment Architecture
+
+**Each deployment environment uses its own AWS account:**
+
+- **Development**: Separate AWS account for individual developer testing
+- **Staging**: Dedicated AWS account for integration testing
+- **Production**: Isolated AWS account for live system
+
+**Benefits:**
+
+- **Complete Isolation**: No resource name conflicts between environments
+- **Security**: Full account-level separation prevents cross-environment access
+- **Cost Tracking**: Clear cost attribution per environment
+- **IAM Simplicity**: No complex environment-based permissions needed
+
+**Resource Naming:**
+
+- **Same names across accounts**: All environments use identical resource names (`eidolon-api`, `characters`, etc.)
+- **No prefixes needed**: Account isolation eliminates naming conflicts
+- **Consistent configuration**: Same `config.yml` structure across environments
+
+**Flutter Configuration Management:**
+
+```dart
+// Build-time environment configuration
+const String apiDomain = String.fromEnvironment(
+  'API_DOMAIN',
+  defaultValue: 'api.darkrelics.net',  // Production default
+);
+
+// Environment-specific builds:
+// Dev: flutter build web --dart-define=API_DOMAIN=api-dev.darkrelics.net
+// Staging: flutter build web --dart-define=API_DOMAIN=api-staging.darkrelics.net
+// Prod: flutter build web --dart-define=API_DOMAIN=api.darkrelics.net
+```
+
+**Deployment Process Per Account:**
+
+1. **Bootstrap each account**: `cdk bootstrap aws://ACCOUNT-ID/REGION`
+2. **Deploy with same parameters**: Same domain names, resource names, configuration
+3. **Account-specific domains**: Use subdomain routing (api-dev.domain.com vs api.domain.com)
+4. **Consistent resource names**: No prefixes needed due to account isolation
+
 ## Best Practices
 
 ### Architecture Guidelines
@@ -520,6 +569,7 @@ lambda_client.delete_layer_version(
 3. **CDK Context**: Use for all parameter passing
 4. **Stack Isolation**: Separate app file per stack
 5. **Post-Deploy Updates**: Always update Lambdas from S3
+6. **Account Isolation**: Use separate AWS accounts for each environment
 
 ### Deployment Guidelines
 
@@ -547,3 +597,88 @@ The Eidolon Engine deployment system represents a complete transformation from a
 - **140 Lessons Applied**: Best practices throughout
 
 The system demonstrates that complex infrastructure can be managed effectively with proper modularization, fixed logical IDs, and clear separation between CDK synthesis and AWS operations.
+
+## CDK Development Notes
+
+### Critical CDK Synthesis Limitations
+
+Based on extensive production deployment experience, these patterns must be followed:
+
+#### CDK Synthesis Constraints
+
+- **No AWS Access During Synthesis**: CDK synthesis happens without AWS credentials. Any boto3 calls in CDK stack classes will fail. The deployment system uses boto3 in top-level deployment scripts for resource verification before CDK synthesis
+- **Fixed Logical IDs Required**: Use fixed IDs like `"PortalBucket"` not dynamic ones to prevent resource recreation
+- **CDK Tokens vs Strings**: `self.region` returns a token, not a string. Pass actual region values as parameters
+- **No Runtime Imports**: All imports must be at module level. No dynamic imports or module injection
+
+#### Resource Management Patterns
+
+```python
+# CORRECT: Fixed logical ID with RETAIN policy
+bucket = s3.Bucket(
+    self,
+    "ArtifactsBucket",  # Fixed ID - won't change between deployments
+    bucket_name=bucket_name,
+    removal_policy=RemovalPolicy.RETAIN,
+    auto_delete_objects=False,
+)
+
+# WRONG: Dynamic ID causes recreation
+bucket = s3.Bucket(
+    self,
+    f"Bucket-{timestamp}",  # Changes every deployment!
+    bucket_name=bucket_name,
+)
+```
+
+#### Import Pattern for Existing Resources
+
+```python
+# In deployment module (has AWS access)
+def deploy_stack(params):
+    from stacks.stack_utilities import check_s3_bucket_exists
+    bucket_exists = check_s3_bucket_exists(params.bucket, params.region)
+
+    context_args = [
+        "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
+    ]
+    return run_cdk_deploy("stack", params.region, app_command, context_args)
+
+# In CDK stack
+def __init__(self, scope, id, bucket_exists: bool = False, **kwargs):
+    if bucket_exists:
+        bucket = s3.Bucket.from_bucket_name(self, "Bucket", bucket_name)
+    else:
+        bucket = s3.Bucket(self, "Bucket", bucket_name=bucket_name,
+                          removal_policy=RemovalPolicy.RETAIN)
+```
+
+#### Lambda Layer Version Management
+
+```python
+# Post-deployment cleanup of old layer versions
+def update_lambda_layer(layer_name: str, s3_key: str):
+    # Publish new version
+    new_version = lambda_client.publish_layer_version(...)
+
+    # Update all functions to use new version
+    for function in functions:
+        lambda_client.update_function_configuration(
+            FunctionName=function,
+            Layers=[new_version['LayerVersionArn']]
+        )
+
+    # Delete old version
+    lambda_client.delete_layer_version(
+        LayerName=layer_name,
+        VersionNumber=old_version
+    )
+```
+
+#### Common Pitfalls to Avoid
+
+1. **Square Bracket Dictionary Access**: Use `.get()` method for safe access
+2. **Environment Variable Manipulation**: Pass region explicitly, don't rely on CDK environment
+3. **Inline IAM Policies**: Always use managed policies
+4. **Dynamic Resource Naming**: Causes resource recreation on every deployment
+5. **Resource Checks in CDK**: Will always fail during synthesis

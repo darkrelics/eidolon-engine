@@ -9,9 +9,7 @@ from uuid_extension import uuid7
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.models import ClientEvent
 from eidolon.segment_core import extract_character_updates_from_results, validate_segment_outcome_results
-from eidolon.segment_events import challenge_results_to_pascal, combat_state_to_pascal, events_to_pascal
 from eidolon.time_utils import future_unix, now_unix
 
 
@@ -33,15 +31,15 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
     expression_names = {"#outcome": "Outcome"}
     expression_values: dict = {":outcome": outcome, ":proc_status": "processed"}
 
-    challenge_results = results.get("challengeResults")
+    challenge_results = results.get("ChallengeResults")
     if challenge_results:
         update_expression += ", ChallengeResults = :results"
-        expression_values[":results"] = challenge_results_to_pascal(challenge_results)  # type: ignore
+        expression_values[":results"] = challenge_results  # type: ignore
 
-    combat_state = results.get("combatState")
+    combat_state = results.get("CombatState")
     if combat_state:
         update_expression += ", CombatState = :state"
-        expression_values[":state"] = combat_state_to_pascal(combat_state)  # type: ignore
+        expression_values[":state"] = combat_state  # type: ignore
 
     if segment_def:
         character_updates = extract_character_updates_from_results(results, segment_def, outcome)
@@ -58,20 +56,20 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
             if narrative:
                 client_events.append(
-                    ClientEvent(
-                        EventType="narrative",
-                        Title="Outcome",
-                        Description=narrative,
-                    ).model_dump(by_alias=True, exclude_none=True)
+                    {
+                        "EventType": "narrative",
+                        "Title": "Outcome",
+                        "Description": narrative,
+                    }
                 )
         except Exception as err:
             logger.error(f"Failed to get outcome narrative for {active_segment_id} Error: {err}", exc_info=True)
 
     if challenge_results:
         for challenge in challenge_results:
-            skill = challenge.get("skill", "")
-            attribute = challenge.get("attribute", "")
-            passed = challenge.get("passed", False)
+            skill = challenge.get("Skill", "")
+            attribute = challenge.get("Attribute", "")
+            passed = challenge.get("Passed", False)
 
             if passed:
                 title = f"{skill or attribute} Success"
@@ -81,27 +79,27 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
                 description = f"You failed the {skill or attribute} challenge."
 
             client_events.append(
-                ClientEvent(
-                    EventType="skill_check",
-                    Title=title,
-                    Description=description,
-                    Data=challenge,
-                ).model_dump(by_alias=True, exclude_none=True)
+                {
+                    "EventType": "skill_check",
+                    "Title": title,
+                    "Description": description,
+                    "Data": challenge,
+                }
             )
 
     if combat_state:
-        combat_log = combat_state.get("combatLog", [])
+        combat_log = combat_state.get("CombatLog", [])
         for round_data in combat_log[:5]:
             client_events.append(
-                ClientEvent(
-                    EventType="combat",
-                    Title=f"Round {round_data.get('round', 0)}",
-                    Description="Combat round",
-                    Data=round_data,
-                ).model_dump(by_alias=True, exclude_none=True)
+                {
+                    "EventType": "combat",
+                    "Title": f"Round {round_data.get('Round', 0)}",
+                    "Description": "Combat round",
+                    "Data": round_data,
+                }
             )
 
-        victor = combat_state.get("victor")
+        victor = combat_state.get("Victor")
         if victor:
             if victor == "player":
                 title = "Victory!"
@@ -111,16 +109,16 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
                 description = "You have been defeated in combat."
 
             client_events.append(
-                ClientEvent(
-                    EventType="combat_result",
-                    Title=title,
-                    Description=description,
-                ).model_dump(by_alias=True, exclude_none=True)
+                {
+                    "EventType": "combat_result",
+                    "Title": title,
+                    "Description": description,
+                }
             )
 
     if client_events:
         update_expression += ", ClientEvents = :events"
-        expression_values[":events"] = events_to_pascal(client_events)  # type: ignore
+        expression_values[":events"] = client_events  # type: ignore
 
     try:
         dynamo.update_item(
@@ -257,6 +255,40 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
         raise RuntimeError(f"Failed to reset segment processing status: {err}") from err
 
 
+def mark_segment_as_completed(active_segment_id: str) -> None:
+    """
+    Mark a segment as completed.
+
+    Used when advancing a story to mark the current segment as completed
+    before recording history and creating the next segment.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET #status = :completed",
+            ConditionExpression="#status = :active",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={
+                ":completed": "completed",
+                ":active": "active",
+            },
+        )
+        logger.info(f"Marked segment as completed for {active_segment_id}")
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.info(f"Segment {active_segment_id} already completed or abandoned, skipping completion")
+            return  # Non-fatal - segment already in terminal state
+        logger.error(f"Failed to mark segment as completed for {active_segment_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to mark segment as completed: {err}") from err
+
+
 def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
     """
     Mark an exhausted segment as completed with exceptional outcome.
@@ -274,15 +306,20 @@ def mark_segment_as_completed_exceptional(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :proc_status, #status = :status, #outcome = :outcome",
+            UpdateExpression="SET ProcessingStatus = :proc_status, #status = :completed, #outcome = :outcome",
+            ConditionExpression="#status = :active AND ProcessingStatus <> :proc_status",
             ExpressionAttributeNames={"#outcome": "Outcome", "#status": "Status"},
             ExpressionAttributeValues={
                 ":proc_status": "processed",
-                ":status": "completed",
+                ":active": "active",
+                ":completed": "completed",
                 ":outcome": "exceptional",
             },
         )
         logger.info(f"Marked exhausted segment as completed with exceptional outcome for {active_segment_id}")
     except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.info(f"Segment {active_segment_id} already processed or completed, skipping exceptional completion")
+            return  # Non-fatal - segment already in terminal state
         logger.error(f"Failed to mark segment as completed exceptional for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to mark segment as completed exceptional: {err}") from err

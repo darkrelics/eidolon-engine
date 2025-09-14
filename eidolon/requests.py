@@ -78,16 +78,13 @@ def get_header(event: dict, header: str, required: bool = False):
     return None
 
 
-def get_query_parameter_flexible(event: dict, param_pascal: str, param_camel: str = "", required: bool = False):
+def get_query_parameter(event: dict, param: str, required: bool = False):
     """
-    Extract query parameter from API Gateway event with flexible casing.
-
-    Tries PascalCase first, then camelCase if provided.
+    Extract query parameter from API Gateway event.
 
     Args:
         event: API Gateway Lambda event
-        param_pascal: Parameter name in PascalCase (preferred)
-        param_camel: Parameter name in camelCase (fallback)
+        param: Parameter name
         required: Whether parameter is required
 
     Returns:
@@ -97,15 +94,9 @@ def get_query_parameter_flexible(event: dict, param_pascal: str, param_camel: st
         ValueError: If parameter is required but missing
     """
     params = event.get("queryStringParameters") or {}
-
-    # Try PascalCase first
-    value = params.get(param_pascal, "").strip()
-
-    # If not found and camelCase provided, try that
-    if not value and param_camel:
-        value = params.get(param_camel, "").strip()
+    value = params.get(param, "").strip()
 
     if not value and required:
-        raise ValueError(f"Missing required query parameter: {param_pascal}")
+        raise ValueError(f"Missing required query parameter: {param}")
 
     return value if value else None

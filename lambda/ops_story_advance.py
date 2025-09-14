@@ -9,19 +9,19 @@ Triggered by SQS to apply character updates and progress stories.
 
 from eidolon.character_data import get_character
 from eidolon.character_segment import update_character_active_segment
-from eidolon.character_story import apply_story_outcome_effects
+from eidolon.constants import CharState
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome
 from eidolon.polling import update_polling_state
 from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
 from eidolon.segment_history import insert_rest_segment, record_segment_history
-from eidolon.segment_polling import check_active_segments_exist, claim_segment_for_processing, delete_active_segment
+from eidolon.segment_polling import check_active_segments_exist, delete_active_segment
 from eidolon.segment_processing import determine_next_segment, process_decision_segment
-from eidolon.segment_state import create_next_active_segment, update_segment_processing_status
+from eidolon.segment_state import create_next_active_segment, mark_segment_as_completed, update_segment_processing_status
 from eidolon.sqs import send_message
 from eidolon.story_completion import complete_story
-from eidolon.story_history import update_story_history_xp
+from eidolon.story_history import add_segment_to_history, update_story_history_xp
 from eidolon.story_rewards import apply_combat_rewards
 from eidolon.validation import validate_uuid
 
@@ -43,14 +43,12 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # Get active segment first to check its status
     active_segment = get_active_segment(active_segment_id)
 
-    # Check if segment is already completed (e.g., marked as exceptional by poller)
-    if active_segment.get("Status") == "completed":
-        logger.info(f"Segment already completed, skipping advancement for {active_segment_id}")
-        return {"success": True, "skipped": True, "reason": "Segment already completed"}
-
-    # Claim segment for processing
-    if not claim_segment_for_processing(active_segment_id):
-        return {"success": True, "skipped": True, "reason": "Already being processed"}
+    # Segments marked as completed still need to be advanced to create the next segment
+    # Only skip if the segment is abandoned or missing critical data
+    status = active_segment.get("Status")
+    if status == "abandoned":
+        logger.info(f"Segment abandoned, skipping advancement for {active_segment_id}")
+        return {"success": True, "skipped": True, "reason": "Segment abandoned"}
 
     # Extract key data
     character_id = active_segment.get("CharacterID")
@@ -63,9 +61,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Story history should already exist (created when story started)
 
-    # Process simple segments if not already processed
-    processing_status = active_segment.get("ProcessingStatus")
-    if is_simple_segment(segment_type) and processing_status != "processed":  # type: ignore
+    # Handle simple segments (rest/decision) that need their outcome determined
+    if is_simple_segment(segment_type):  # type: ignore
         logger.info(f"Processing simple segment for {active_segment_id}")
 
         # Get segment definition
@@ -107,30 +104,41 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Apply deferred rewards (combat rewards and story outcome effects)
     character_updates = active_segment.get("CharacterUpdates", {})
+    logger.info(f"CharacterUpdates from segment: {character_updates}")
     if character_updates and character_id:
         # Apply combat rewards if present
         combat_rewards = character_updates.get("CombatRewards", {})
-        if combat_rewards and combat_rewards.get("defeated"):
-            opponent_data = combat_rewards.get("opponentData")
+        if combat_rewards and combat_rewards.get("Defeated"):
+            opponent_data = combat_rewards.get("OpponentData")
             if opponent_data:
                 try:
                     apply_combat_rewards(character_id, opponent_data)
                 except Exception as err:
                     logger.error(f"Failed to apply combat rewards for {character_id} Error: {err}", exc_info=True)
 
-        # Apply story outcome effects if present
+        # Story outcome effects are now applied immediately in ops_segment_process
+        # This is kept for backwards compatibility with existing segments that may have effects stored
         story_effects = character_updates.get("StoryEffects", {})
         if story_effects:
-            try:
-                apply_story_outcome_effects(character_id, story_effects)
-            except Exception as err:
-                logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
+            logger.info("Found legacy StoryEffects in CharacterUpdates (already applied by processor)")
+            # Effects should have already been applied by ops_segment_process
+
+    # Mark segment as completed in DynamoDB before recording history
+    try:
+        mark_segment_as_completed(active_segment_id)
+        active_segment["Status"] = "completed"
+    except Exception as err:
+        logger.error(f"Failed to mark segment as completed for {active_segment_id} Error: {err}", exc_info=True)
 
     # Record segment history
     record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
 
-    # Update story history with accumulated XP
+    # Add segment to story history's SegmentHistory array
     story_instance_id = active_segment.get("StoryInstanceID")
+    if story_instance_id:
+        add_segment_to_history(character_id, story_instance_id, segment_id, outcome)  # type: ignore
+
+    # Update story history with accumulated XP
     skill_xp = character_updates.get("SkillXP", {})
     attribute_xp = character_updates.get("AttributeXP", {})
     if (skill_xp or attribute_xp) and story_instance_id:
@@ -144,7 +152,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     logger.info(f"  Has top-level NextSegmentID: {segment_def.get('NextSegmentID') is not None}")
 
     # Check if we need to insert a rest segment for unconscious character
-    if new_character_state == "unconscious":
+    if new_character_state == CharState.UNCONSCIOUS.value:
         try:
             # Insert a rest segment after current segment
             rest_segment_id = insert_rest_segment(

@@ -49,6 +49,12 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
     """
     Update the active segment with the player's decision.
 
+    Uses conditional update to ensure:
+    1. Decision hasn't already been submitted (prevents race conditions)
+    2. Segment is still in 'active' status (prevents late updates)
+
+    Both conditions result in a ValueError that maps to HTTP 409 Conflict.
+
     Args:
         active_segment_id: Active segment UUID
         decision_id: Decision ID chosen by player
@@ -57,15 +63,17 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         Updated active segment data
 
     Raises:
+        ValueError: If decision was already submitted or segment not active (409)
         RuntimeError: If database update fails
     """
     try:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET #decision = :decision, #status = :status",
+            UpdateExpression="SET #decision = :decision, #status = :completed",
             ExpressionAttributeNames={"#decision": "Decision", "#status": "Status"},
-            ExpressionAttributeValues={":decision": decision_id, ":status": "completed"},
+            ExpressionAttributeValues={":decision": decision_id, ":completed": "completed", ":active": "active"},
+            ConditionExpression="attribute_not_exists(#decision) AND #status = :active",
         )
 
         updated_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
@@ -74,6 +82,20 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
 
         return updated_segment
     except ClientError as err:
+        # Check if this was a conditional check failure
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            # Try to determine which condition failed by checking current state
+            current_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
+            if current_segment and current_segment.get("Decision"):
+                logger.warning(f"Decision already submitted for {active_segment_id} (race condition detected)")
+                raise ValueError("Decision already submitted") from err
+            elif current_segment and current_segment.get("Status") != "active":
+                logger.warning(f"Segment {active_segment_id} is no longer active (status: {current_segment.get('Status')})")
+                raise ValueError("Decision already submitted") from err  # Same error for 409 mapping
+            else:
+                logger.warning(f"Conditional check failed for {active_segment_id}")
+                raise ValueError("Decision already submitted") from err
+
         logger.error(f"Failed to update active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update active segment: {err}") from err
 
@@ -194,9 +216,16 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                 response_data["NextSegment"]["DecisionOptions"] = next_segment_def.get("DecisionOptions", {})
                 response_data["NextSegment"]["DefaultDecision"] = next_segment_def.get("DefaultDecision")
 
-            delete_active_segment(active_segment_id)
-
-            logger.info(f"Advanced to next segment after decision and deleted prior segment for {character_id}")
+            # Attempt to delete the old segment, but treat failure as non-fatal
+            # since the story has already successfully advanced
+            try:
+                delete_active_segment(active_segment_id)
+                logger.info(f"Advanced to next segment after decision and deleted prior segment for {character_id}")
+            except Exception as err:
+                # Log warning but don't fail the request - the advancement was successful
+                # and the old segment will be cleaned up by the poller eventually
+                logger.warning(f"Failed to delete old active segment {active_segment_id} after successful advancement: {err}")
+                logger.info(f"Advanced to next segment after decision for {character_id} (old segment cleanup failed)")
 
             if next_segment_def.get("SegmentType") == "mechanical":
                 try:

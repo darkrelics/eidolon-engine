@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Eidolon Engine Incremental Game API
-  description: RESTful API for the Eidolon Engine incremental game mode. All endpoints require authentication via AWS Cognito and return JSON responses with PascalCase keys.
+  description: RESTful API for the Eidolon Engine incremental game mode. All endpoints require authentication via AWS Cognito and return JSON responses.
   version: 1.0.0
   contact:
     name: Jason E. Robinson
@@ -233,14 +233,14 @@ paths:
                         "1": def456-item-uuid
                       InventoryDetails:
                         "0":
-                          itemId: abc123-item-uuid
-                          name: Leather Backpack
-                          description: A sturdy leather backpack
-                          quantity: 1
-                          stackable: false
-                          equipped: true
-                          mass: 2
-                          value: 50
+                          ItemID: abc123-item-uuid
+                          Name: Leather Backpack
+                          Description: A sturdy leather backpack
+                          Quantity: 1
+                          Stackable: false
+                          Equipped: true
+                          Mass: 2
+                          Value: 50
                       Attributes:
                         Strength: 8
                         Agility: 5
@@ -1024,7 +1024,8 @@ components:
           description: List of current wounds
         CharState:
           type: string
-          description: Current character state (e.g., standing, unconscious)
+          description: Current character state
+          enum: [standing, unconscious, dead]
         LeftHandID:
           type: string
           format: uuid
@@ -1077,35 +1078,35 @@ components:
     ItemDetail:
       type: object
       required:
-        - itemId
-        - name
-        - description
-        - quantity
+        - ItemID
+        - Name
+        - Description
+        - Quantity
       properties:
-        itemId:
+        ItemID:
           type: string
           format: uuid
           description: UUID of the item
-        name:
+        Name:
           type: string
           description: Display name of the item
-        description:
+        Description:
           type: string
           description: Item description
-        quantity:
+        Quantity:
           type: integer
           minimum: 1
           description: Number of items in stack
-        stackable:
+        Stackable:
           type: boolean
           description: Whether item can be stacked
-        equipped:
+        Equipped:
           type: boolean
           description: Whether item is currently equipped
-        mass:
+        Mass:
           type: number
           description: Weight of the item
-        value:
+        Value:
           type: integer
           description: Monetary value
 
@@ -1185,7 +1186,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ClientEvent"
-          description: Events to display to client (PascalCase fields)
+          description: Events to display to client.
 
     AvailableStory:
       type: object
@@ -1382,9 +1383,11 @@ components:
             SegmentType:
               type: string
             StartTime:
-              type: integer
+              type: string
+              format: date-time
             EndTime:
-              type: integer
+              type: string
+              format: date-time
             ShortStatus:
               type: string
             Duration:
@@ -1397,7 +1400,8 @@ components:
         Accepted:
           type: boolean
         NextSegmentTime:
-          type: integer
+          type: string
+          format: date-time
           nullable: true
       required: [Accepted]
 
@@ -1439,8 +1443,12 @@ components:
           type: boolean
         TimeRemaining:
           type: integer
+        StartTime:
+          type: string
+          format: date-time
         EndTime:
-          type: integer
+          type: string
+          format: date-time
         Outcome:
           type: string
           nullable: true
@@ -1468,9 +1476,17 @@ components:
         ProcessingStatus:
           type: string
         StartTime:
-          type: integer
+          type: string
+          format: date-time
+          nullable: true
         EndTime:
-          type: integer
+          type: string
+          format: date-time
+          nullable: true
+        CompletedAt:
+          type: string
+          format: date-time
+          nullable: true
         Outcome:
           type: string
         ClientEvents:

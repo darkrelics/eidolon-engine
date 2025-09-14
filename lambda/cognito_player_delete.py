@@ -99,7 +99,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Return appropriate response based on event source
         if "requestContext" in event:
             # API Gateway response format
-            status_code: int = 200 if not results.get("errors", []) else 207
+            status_code: int = 200 if not results.get("Errors", []) else 207
             logger.info(f"Lambda response status_code: {status_code}")
             return lambda_response(status_code, results, event)
         return results

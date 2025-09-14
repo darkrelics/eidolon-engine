@@ -78,15 +78,6 @@ def main():
     file_size = os.path.getsize(output_file)
     print(f"Bloom filter saved. File size: {file_size:,} bytes")
 
-    # Test the filter
-    print("\nTesting bloom filter...")
-    test_names = ["gandalf", "legolas", "validname", "testuser"]
-    for name in test_names:
-        if name.lower() in bloom_filter:
-            print(f"  '{name}' - RESTRICTED")
-        else:
-            print(f"  '{name}' - ALLOWED")
-
 
 if __name__ == "__main__":
     main()

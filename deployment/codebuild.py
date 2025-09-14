@@ -262,7 +262,6 @@ def validate_build_artifacts(bucket_name: str, region: str) -> bool:
         "lambda-layer/lambda-layer.zip",
         # Player Lambda functions
         "cognito-player-new.zip",
-        "cognito-player-delete.zip",
         # Character Lambda functions
         "api-archetype-list.zip",
         "api-character-add.zip",

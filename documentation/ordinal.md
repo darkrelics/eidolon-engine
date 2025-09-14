@@ -1,6 +1,8 @@
-# Ordinal Selection Examples
+# Ordinal Selection System
 
-The ordinal selection utility allows players to specify which item they want when multiple items have the same name.
+## Overview
+
+This document describes the ordinal selection utility system for the Eidolon Engine MUD. The system allows players to disambiguate between multiple items with the same name by using ordinal numbers (first, second, third, etc.), providing an intuitive way to interact with game objects when multiple instances exist in the same context.
 
 ## Usage Examples
 

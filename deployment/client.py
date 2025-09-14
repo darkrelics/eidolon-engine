@@ -36,30 +36,6 @@ def check_bucket_exists(bucket_name: str, region: str) -> bool:
             return False
 
 
-def check_cloudfront_exists(distribution_id: str) -> bool:
-    """Check if a CloudFront distribution exists.
-
-    Args:
-        distribution_id: CloudFront distribution ID
-
-    Returns:
-        True if distribution exists, False otherwise
-    """
-    if not distribution_id:
-        return False
-
-    try:
-        cf_client = boto3.client("cloudfront", region_name="us-east-1")
-        cf_client.get_distribution(Id=distribution_id)
-        return True
-    except ClientError as err:
-        error_code = err.response.get("Error", {}).get("Code", "")
-        if error_code in ["NoSuchDistribution", "DistributionNotFound"]:
-            return False
-        else:
-            return False
-
-
 def validate_codebuild_project(project_name: str, region: str) -> bool:
     """Validate that CodeBuild project exists.
 
@@ -319,7 +295,7 @@ def verify_client_deployment(params, outputs: dict) -> dict:
     }
 
 
-def deploy_client(params, config, state: CDKState, config_path, state_path: Path) -> bool:
+def deploy_client(params, config, state: CDKState, config_path, state_path: Path):
     """Deploy and verify Client stack."""
     phase = get_stack_phase_number("client", params.deployment_mode)
     print("\n" + "=" * 60)
@@ -346,6 +322,7 @@ def deploy_client(params, config, state: CDKState, config_path, state_path: Path
     validation = verify_client_deployment(params, outputs)
 
     # Execute CodeBuild to deploy the portal/incremental app
+    build_success = False
     if validation.get("codebuild_project", False):
         print("\n" + "=" * 60)
         print("Portal Build Phase")
@@ -359,6 +336,7 @@ def deploy_client(params, config, state: CDKState, config_path, state_path: Path
             print("\n  Warning: Portal build encountered issues")
     else:
         print("\n  Skipping portal build - CodeBuild project not available")
+        build_success = True  # Not a failure if we're skipping
 
     if not validation.get("success", False):
         print("\nWarning: Client deployment completed with issues")
@@ -372,7 +350,9 @@ def deploy_client(params, config, state: CDKState, config_path, state_path: Path
         state.mark_stack_deployed("client", result.get("outputs", {}))
         state.save(str(state_path))
 
-    return validation.get("success", False)
+    # Return a tuple: (infrastructure_success, build_success)
+    # This allows the caller to distinguish between infrastructure and build issues
+    return (validation.get("success", False), build_success)
 
 
 def start_portal_build(region: str) -> str:

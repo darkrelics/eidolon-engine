@@ -9,8 +9,11 @@ from botocore.exceptions import ClientError
 
 from eidolon.logger import logger
 
+# Reuse a single client for efficiency in Lambda
+s3_client = boto3.client("s3")
 
-def upload_file(bucket_name: str, file_path: str, object_name=None):
+
+def upload_file(bucket_name: str, file_path: str, object_name=None) -> None:
     """
     Upload a file to an S3 bucket.
 
@@ -31,7 +34,6 @@ def upload_file(bucket_name: str, file_path: str, object_name=None):
     if object_name is None:
         object_name = file_path
 
-    s3_client = boto3.client("s3")
     try:
         s3_client.upload_file(file_path, bucket_name, object_name)
     except ClientError as err:
@@ -41,7 +43,7 @@ def upload_file(bucket_name: str, file_path: str, object_name=None):
     logger.info(f"Successfully uploaded file to S3 for {file_path}")
 
 
-def download_file(bucket_name: str, object_name: str, file_path: str):
+def download_file(bucket_name: str, object_name: str, file_path: str) -> None:
     """
     Download a file from an S3 bucket.
 
@@ -61,7 +63,6 @@ def download_file(bucket_name: str, object_name: str, file_path: str):
     if not file_path:
         raise ValueError("File path cannot be empty")
 
-    s3_client = boto3.client("s3")
     try:
         s3_client.download_file(bucket_name, object_name, file_path)
     except ClientError as err:
@@ -89,21 +90,20 @@ def list_files(bucket_name: str, prefix: str = "") -> list:
     if not bucket_name:
         raise ValueError("Bucket name cannot be empty")
 
-    s3_client = boto3.client("s3")
     try:
         response = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
     except ClientError as err:
         logger.error(f"Failed to list files in S3 bucket for {bucket_name} Error: {err}")
         raise RuntimeError(f"Failed to list files in S3 bucket: {err}") from err
 
-    files = [item.get("Key") for item in response.get("Contents", [])]
+    files = [item.get("Key") for item in response.get("Contents", []) if item.get("Key")]
 
     logger.info(f"Listed files in S3 bucket for {bucket_name}")
 
     return files
 
 
-def delete_file(bucket_name: str, s3_key: str):
+def delete_file(bucket_name: str, s3_key: str) -> None:
     """
     Delete a file from an S3 bucket.
 
@@ -120,7 +120,6 @@ def delete_file(bucket_name: str, s3_key: str):
     if not s3_key:
         raise ValueError("S3 key cannot be empty")
 
-    s3_client = boto3.client("s3")
     try:
         s3_client.delete_object(Bucket=bucket_name, Key=s3_key)
     except ClientError as err:
@@ -130,7 +129,7 @@ def delete_file(bucket_name: str, s3_key: str):
     logger.info(f"Successfully deleted file from S3 for {s3_key}")
 
 
-def validate_s3_bucket(bucket_name: str):
+def validate_s3_bucket(bucket_name: str) -> None:
     """
     Validate that an S3 bucket exists and is accessible.
 
@@ -144,7 +143,6 @@ def validate_s3_bucket(bucket_name: str):
     if not bucket_name:
         raise ValueError("Bucket name cannot be empty")
 
-    s3_client = boto3.client("s3")
     try:
         s3_client.get_bucket_location(Bucket=bucket_name)
     except ClientError as err:

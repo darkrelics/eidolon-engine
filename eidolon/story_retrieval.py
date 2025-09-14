@@ -11,9 +11,35 @@ from botocore.exceptions import ClientError
 from eidolon.character_story import get_story_history
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.schema import normalize_segment_definition
 from eidolon.segment_core import validate_segment_outcome_results
 from eidolon.time_utils import from_unix
+
+
+def get_story(story_id: str) -> dict:
+    """
+    Get story metadata from the STORY table.
+
+    Args:
+        story_id: Story UUID
+
+    Returns:
+        Story data dict
+
+    Raises:
+        ValueError: If story not found
+        RuntimeError: If database query fails
+    """
+    if not story_id:
+        raise ValueError("Story ID cannot be empty")
+
+    try:
+        story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+        if not story:
+            raise ValueError("Story not found")
+        return story
+    except ClientError as err:
+        logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to get story: {err}") from err
 
 
 def get_story_segment(story_id: str, segment_id: str) -> dict:
@@ -40,7 +66,7 @@ def get_story_segment(story_id: str, segment_id: str) -> dict:
         segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": segment_id})
         if not segment:
             raise ValueError("Segment not found")
-        return normalize_segment_definition(segment)
+        return segment
     except ClientError as err:
         logger.error(f"Failed to get segment for {segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get segment: {err}") from err
@@ -250,7 +276,6 @@ def enrich_segment_with_narrative(segment_data: dict, active_segment: dict) -> d
 
             # Get segment definition for narrative
             segment_def = get_story_segment(story_id, segment_id)  # type: ignore
-            segment_def = normalize_segment_definition(segment_def)
 
             if segment_type == "mechanical":
                 outcome = active_segment.get("Outcome", "normal")

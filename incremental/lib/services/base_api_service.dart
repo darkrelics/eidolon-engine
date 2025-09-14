@@ -11,11 +11,10 @@ abstract class BaseApiService {
 
   BaseApiService({
     required AuthService authService,
-    String? baseUrl,
+    required this.baseUrl,
     http.Client? httpClient,
   }) : _authService = authService,
-       _httpClient = httpClient ?? http.Client(),
-       baseUrl = baseUrl ?? 'https://api.darkrelics.net';
+       _httpClient = httpClient ?? http.Client();
 
   /// Get authorization headers
   Future<Map<String, String>> getHeaders() async {

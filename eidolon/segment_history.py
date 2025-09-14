@@ -148,9 +148,9 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         logger.error(f"Failed to get current segment for {current_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get current segment: {err}") from err
 
-    # Get the next segment ID from the current segment's normal outcome
+    # Get the next segment ID from the current segment's Normal outcome
     results = current_segment.get("Results", {})
-    normal_result = results.get("normal", {})
+    normal_result = results.get("Normal", {})
     next_segment_id = normal_result.get("NextSegmentID") if isinstance(normal_result, dict) else None
 
     if not next_segment_id:
@@ -175,17 +175,17 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
             segment_duration = next_segment.get("SegmentDuration", 300)
             if segment_duration >= min_time_required:
                 insertion_point_id = next_segment_id
-                # Get the next segment ID from this segment's normal outcome
+                # Get the next segment ID from this segment's Normal outcome
                 next_results = next_segment.get("Results", {})
-                next_normal = next_results.get("normal", {})
+                next_normal = next_results.get("Normal", {})
                 rest_next_segment_id = next_normal.get("NextSegmentID") if isinstance(next_normal, dict) else None
                 logger.info(f"Inserting rest after segment {next_segment_id} for {story_id}")
                 break
 
             checked_segments.add(next_segment_id)
-            # Get the next segment ID from this segment's normal outcome
+            # Get the next segment ID from this segment's Normal outcome
             next_results = next_segment.get("Results", {})
-            next_normal = next_results.get("normal", {})
+            next_normal = next_results.get("Normal", {})
             next_segment_id = next_normal.get("NextSegmentID") if isinstance(next_normal, dict) else None
         else:
             logger.warning(f"Cannot insert rest - no suitable segment found for {story_id}")
@@ -201,7 +201,7 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         "Title": "Rest and Recovery",
         "Prompt": "You take time to rest and recover from your wounds. Your body slowly heals as you regain your strength.",
         "Results": {
-            "normal": {
+            "Normal": {
                 "Narrative": "Your rest was restorative. You feel refreshed and ready to continue.",
                 "Effects": {},
                 "NextSegmentID": rest_next_segment_id,
@@ -219,16 +219,34 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         raise RuntimeError(f"Failed to create rest segment: {err}") from err
 
     try:
+        # Use conditional update to prevent race conditions
+        # Only update if the NextSegmentID still matches what we expect
         dynamo.update_item(
             TableName.SEGMENTS,
             Key={"StoryID": story_id, "SegmentID": insertion_point_id},
             UpdateExpression="SET Results.#normal.NextSegmentID = :rest_id",
-            ExpressionAttributeNames={"#normal": "normal"},
-            ExpressionAttributeValues={":rest_id": rest_segment_id},
+            ExpressionAttributeNames={"#normal": "Normal"},
+            ExpressionAttributeValues={
+                ":rest_id": rest_segment_id,
+                ":expected_next": rest_next_segment_id,  # The value we read earlier
+            },
+            ConditionExpression="Results.#normal.NextSegmentID = :expected_next",
         )
         logger.info(f"Updated segment normal outcome to point to rest for {insertion_point_id}")
     except ClientError as err:
+        # Check if this was a concurrent modification (race condition)
+        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+            logger.warning(f"Concurrent rest insertion detected for {insertion_point_id} - cleaning up orphaned rest segment")
+            # Clean up the rest segment we created since another request won the race
+            try:
+                dynamo.delete_item(TableName.SEGMENTS, Key={"StoryID": story_id, "SegmentID": rest_segment_id})
+            except ClientError:
+                pass
+            # Raise a specific error that the API can map to 409/422
+            raise ValueError("Rest segment insertion failed - concurrent modification detected") from err
+
         logger.error(f"Failed to update segment to point to rest for {insertion_point_id} Error: {err}", exc_info=True)
+        # Clean up on other errors too
         try:
             dynamo.delete_item(TableName.SEGMENTS, Key={"StoryID": story_id, "SegmentID": rest_segment_id})
         except ClientError:

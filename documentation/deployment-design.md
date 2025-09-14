@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-The Eidolon Engine deployment system provides a modular, CDK-based infrastructure deployment solution that supports multiple game modes while maintaining clean separation of concerns. Successfully replacing a monolithic 1800+ line deployment class, the new architecture features 9 independent CDK stacks, 3 deployment modes, and automated end-to-end deployment from infrastructure provisioning to portal deployment.
+The Eidolon Engine deployment system provides a modular, CDK-based infrastructure deployment solution that supports multiple game modes while maintaining clean separation of concerns. Successfully replacing a monolithic 1800+ line deployment class, the new architecture features 10 independent CDK stacks, 3 deployment modes, and automated end-to-end deployment from infrastructure provisioning to portal deployment.
 
 The system leverages AWS CDK v2 with a clear separation between CDK synthesis and deployment operations, ensuring that AWS API calls only occur during the deployment phase. This architecture enables reliable deployments, efficient resource management, and seamless transitions between different operational modes (MUD, Incremental, and Hybrid).
 
@@ -30,7 +30,7 @@ The Eidolon Engine needed a deployment system that could:
 
 The new modular deployment system addresses these challenges through:
 
-1. **Modular Architecture**: 9 independent CDK stacks with clean separation of concerns, 94% of modules under 300 lines.
+1. **Modular Architecture**: 10 independent CDK stacks with clean separation of concerns, 94% of modules under 300 lines.
 
 2. **Fixed Logical IDs**: Preventing resource recreation by using consistent logical IDs across deployments.
 
@@ -185,7 +185,7 @@ This consolidation follows the codebase principle of "simplicity of code is high
   - Artifacts: `eidolon-engine-lambda-{account_id}`
   - Scripts: `eidolon-scripts-{account_id}`
   - Portal: `portal.{domain}` or custom
-- **Lambda Functions**: 16 functions with fixed logical IDs
+- **Lambda Functions**: 15 functions with fixed logical IDs
 - **Cognito**: `eidolon-users` pool
 - **CloudWatch**: `/eidolon/server` log group
 - **API Gateway**: REST API at `api.{domain}`
@@ -275,7 +275,7 @@ During routine deployment checks:
 
 ### Operational Achievements
 
-- **9 CDK Stacks**: All deployed and operational in production
+- **10 CDK Stacks**: All deployed and operational in production
 - **3 Deployment Modes**: Successfully tested (MUD, Incremental, Hybrid)
 - **140 Lessons Learned**: Documented and applied
 - **Post-Deploy Updates**: Lambda functions automatically updated from S3
@@ -284,8 +284,8 @@ During routine deployment checks:
 ### Key Metrics
 
 - **Module Size**: 94% under 300 lines, 100% under 1000 lines
-- **Stack Count**: 9 independent CDK stacks
-- **Lambda Functions**: 16 functions with shared execution role
+- **Stack Count**: 10 independent CDK stacks
+- **Lambda Functions**: 15 functions with shared execution role
 - **DynamoDB Tables**: 14 tables with managed policy
 - **Deployment Time**: Full deployment in under 15 minutes
 
@@ -301,7 +301,7 @@ During routine deployment checks:
 ### Build Artifact Validation
 
 - Lambda layer zip existence and size
-- All 16 Lambda function zips present
+- All 15 Lambda function zips present
 - Portal build output in S3
 - CloudFront distribution accessibility
 

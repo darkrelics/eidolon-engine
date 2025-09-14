@@ -183,9 +183,9 @@ class DynamoInterface:
             failed = [t.value for t, status in self._connection_status.items() if not status]
 
             if connected:
-                logger.info("Connected to DynamoDB tables")
+                logger.info(f"Connected to DynamoDB tables: {', '.join(connected)}")
             if failed:
-                logger.error("Failed to connect to DynamoDB tables")
+                logger.error(f"Failed to connect to DynamoDB tables: {', '.join(failed)}")
 
     def _connect_table(self, table_enum: TableName) -> bool:
         """
@@ -509,7 +509,7 @@ class DynamoInterface:
                 request[table_name]["AttributesToGet"] = attributes_to_get
 
             try:
-                response = self._resource.batch_get_items(RequestItems=request)  # type: ignore
+                response = self._client.batch_get_item(RequestItems=request)  # type: ignore
             except ClientError as err:
                 logger.error(f"Error in batch get operation for {table_enum.value} Error: {err}")
                 raise

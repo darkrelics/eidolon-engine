@@ -19,6 +19,31 @@ These style guidelines have been validated through production deployment:
 - **Explicit over Implicit**: Make intentions clear in the code
 - **Python3 Compatibility**: Always use `python3` command, not `python`
 
+### Casing Policy
+
+- Use PascalCase keys across the codebase: persistence, in-memory dicts, and API responses.
+- Capitalize well-known abbreviations in keys: `SegmentID`, `OpponentID`, `SkillXP`, `HTTPStatusCode`.
+- Do not write case-conversion helpers or case-tolerant reads; fix producers to emit correct keys.
+
+Example:
+
+```
+{
+  "ChallengeResults": [
+    {
+      "Attribute": "Melee",
+      "Skill": "Parry",
+      "Difficulty": 7,
+      "Attempts": [{"EffectiveScore": 9, "Difficulty": 7, "Sigma": 0.8, "Success": true}],
+      "BestSigma": 0.8,
+      "Passed": true
+    }
+  ],
+  "XPUpdates": {"SkillXP": {"Melee": 0.5}, "AttributeXP": {"Agility": 0.05}},
+  "CombatState": {"Rounds": 3, "PlayerWounds": [], "OpponentWounds": [], "CombatLog": [], "Victor": "player", "OpponentDefeated": true, "OpponentID": "..."}
+}
+```
+
 ## Import Style
 
 ### Use Explicit Imports
@@ -237,21 +262,21 @@ def create_character(name: str) -> dict:
     """
     Returns:
         Dict with:
-            - success: bool
-            - character_id: str (if success)
-            - error: str (if failed)
+            - Success: bool
+            - CharacterID: str (if success)
+            - Error: str (if failed)
     """
     try:
         character_id = generate_id()
         # ... create character ...
         return {
-            "success": True,
-            "character_id": character_id
+            "Success": True,
+            "CharacterID": character_id
         }
     except Exception as err:
         return {
-            "success": False,
-            "error": str(err)
+            "Success": False,
+            "Error": str(err)
         }
 
 # Less preferred
@@ -716,10 +741,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         result = business_logic_function(player_id, body.get("param"))
 
         # 6. Return formatted response
-        if result["success"]:
-            return create_response(200, result["data"])
+        if result["Success"]:
+            return create_response(200, result["Data"])
         else:
-            return error_response(result["error"], result["status_code"])
+            return error_response(result["Error"], result["StatusCode"])
     except ValueError as err:
         logger.error("Request validation failed")
         return error_response(str(err), 400)
@@ -732,14 +757,14 @@ def business_logic_function(player_id: str, param: str) -> dict:
     try:
         # Validate inputs
         if not param:
-            return {"success": False, "error": "Missing param", "status_code": 400}
+            return {"Success": False, "Error": "Missing param", "StatusCode": 400}
 
         # Call eidolon library functions
         data = some_eidolon_function(param)
 
-        return {"success": True, "data": data}
+        return {"Success": True, "Data": data}
     except ValueError as err:
-        return {"success": False, "error": str(err), "status_code": 400}
+        return {"Success": False, "Error": str(err), "StatusCode": 400}
 ```
 
 ## Pydantic Model Guidelines
@@ -984,7 +1009,7 @@ def process_character(character_data: dict) -> dict:
     # Sends notification
     send_email(character_data["email"], "Character created")
 
-    return {"success": True}
+    return {"Success": True}
 
 # Good - separate responsibilities
 def validate_character_data(character_data: dict) -> None:

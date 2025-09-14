@@ -4,7 +4,7 @@ Character story management utilities.
 Provides functions for managing character interactions with stories.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
@@ -96,15 +96,14 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
             return 0  # Failed/died, can retry
 
         if story_type == "daily":
-            # Calculate time until midnight UTC
+            # Calculate time until next midnight UTC
             finished_at = datetime.fromisoformat(history.get("FinishedAt", "").replace("Z", "+00:00"))
             now = datetime.now(timezone.utc)
 
             # Check if completion was today
             if finished_at.date() == now.date():
-                # Calculate seconds until midnight
-                midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                midnight = midnight.replace(day=midnight.day + 1)
+                # Next midnight in UTC (safe across month/year boundaries)
+                midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
                 return int((midnight - now).total_seconds())
 
             return 0  # Completed on a previous day
@@ -189,7 +188,82 @@ def get_stories(character_id: str, player_id: str, available_story_ids: list) ->
             if cooldown == -1:  # Permanently unavailable
                 continue
 
-            # Format story for response with PascalCase
+            formatted_story: dict = {
+                "StoryID": story_id,
+                "Title": story_data.get("Title", "Unknown Story"),
+                "Description": story_data.get("Description", ""),
+                "Type": story_type,
+                "Available": cooldown == 0,
+                "CooldownRemaining": max(0, cooldown) if cooldown is not None else 0,
+                "EstimatedDuration": int(story_data.get("EstimatedDuration", 0)),
+                "Prerequisites": prerequisites,
+                "DifficultyMap": story_data.get("DifficultyMap", {}),
+                "RewardTiers": story_data.get("RewardTiers", {}),
+                "BaseXPMultiplier": float(story_data.get("BaseXPMultiplier", 0.5)),
+            }
+
+            stories.append(formatted_story)
+            logger.debug(f"Story processed for {story_id}")
+
+        except ValueError:
+            logger.warning(f"Story not found for {story_id}")
+            continue
+        except RuntimeError as err:
+            logger.error(f"Error loading story for {story_id} Error: {err}")
+            continue
+
+    return stories
+
+
+def get_stories_with_character(character: dict, available_story_ids: list) -> list:
+    """
+    Get story details for a list of story IDs using an already-loaded character.
+
+    This function avoids reloading the character from the database when the caller
+    already has the character data.
+
+    Args:
+        character: Character dict containing character data
+        available_story_ids: List of story IDs available to the character
+
+    Returns:
+        List of story data dicts with availability information
+
+    Raises:
+        RuntimeError: If database operations fail
+    """
+    if not available_story_ids:
+        return []
+
+    character_id = character.get("CharacterID")
+    if not character_id:
+        logger.error("Character missing CharacterID field")
+        return []
+
+    stories: list = []
+
+    for story_id in available_story_ids:
+        try:
+            story_data = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+            if not story_data:
+                continue
+        except ClientError as err:
+            logger.error(f"Failed to get story for {story_id} Error: {err}", exc_info=True)
+            continue
+
+        try:
+            # Check prerequisites
+            prerequisites = story_data.get("Prerequisites", {})
+            if not check_story_prerequisites(character, prerequisites):
+                continue
+
+            # Check cooldown
+            story_type = story_data.get("StoryType", "repeatable")
+            cooldown = get_story_cooldown(character_id, story_id, story_type)
+
+            if cooldown == -1:  # Permanently unavailable
+                continue
+
             formatted_story: dict = {
                 "StoryID": story_id,
                 "Title": story_data.get("Title", "Unknown Story"),
@@ -258,14 +332,14 @@ def character_get_active_story(character: dict) -> dict:
         character: Character Record dict
 
     Returns:
-        Story dict. Empty dict if no active segment found.
+        Story dict. Empty dict if no active story found.
 
     Raises:
         RuntimeError: If database error occurs
     """
     active_story_id: str = character.get("ActiveStoryID")  # type: ignore
 
-    # First try: If character has ActiveSegmentID, use GetItem
+    # First try: If character has ActiveStoryID, use GetItem
     if active_story_id:
         try:
             active_story: dict = dynamo.get_item(TableName.STORY, key={"StoryID": active_story_id})  # type: ignore
@@ -274,7 +348,7 @@ def character_get_active_story(character: dict) -> dict:
                 logger.debug("Active story found via GetItem")
                 return active_story
             else:
-                logger.warning("Segment found but not valid")
+                logger.warning("Story ID found but story not valid")
                 return {}
         except ClientError as err:
             logger.error(f"Error retrieving story by ID: {err}")
@@ -302,21 +376,24 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
         expression_attribute_values = {}
 
         # Handle room change
-        if "room" in outcome_effects:
+        if "Room" in outcome_effects:
             update_expressions.append("#room = :room")
             expression_attribute_names["#room"] = "RoomID"
-            expression_attribute_values[":room"] = outcome_effects["room"]
+            expression_attribute_values[":room"] = outcome_effects["Room"]
 
         # Handle wounds from story outcomes
-        if "wounds" in outcome_effects:
+        if "Wounds" in outcome_effects:
 
             # Add heal times to wounds
             wounds_with_heal_times = []
-            for wound in outcome_effects["wounds"]:
-                wound_data = wound.copy()
-                if "HealAt" not in wound_data:
-                    damage_type = wound_data.get("DamageType", "lethal")
-                    wound_data["HealAt"] = calculate_heal_time(damage_type)
+            for wound in outcome_effects["Wounds"]:
+                # Handle both string format (from story JSON) and dict format (from combat)
+                if isinstance(wound, str):
+                    wound_data = {"DamageType": wound, "HealAt": calculate_heal_time(wound)}
+                else:
+                    # Wound is already a dict from combat processing
+                    damage_type = wound.get("DamageType", "lethal")
+                    wound_data = {"DamageType": damage_type, "HealAt": wound.get("HealAt", calculate_heal_time(damage_type))}
                 wounds_with_heal_times.append(wound_data)
 
             # Apply wounds through character updates

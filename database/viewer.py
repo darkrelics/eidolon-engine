@@ -8,12 +8,13 @@ Copyright 2024-2025 Jason E. Robinson
 import os
 import sys
 
-# Add parent directory to path to import eidolon modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
+
+# Add parent directory to path to import eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 # Define table names mapping
 TABLE_NAMES = {
@@ -34,6 +35,37 @@ TABLE_NAMES = {
 }
 
 
+def _sort_items_for_display(table_enum: TableName, items: list) -> list:
+    """Sort items by schema primary key for readability when possible."""
+    # Map known primary keys from documentation/schema.md
+    pk_map = {
+        TableName.PLAYERS: "PlayerID",
+        TableName.CHARACTERS: "CharacterID",
+        TableName.ROOMS: "RoomID",
+        TableName.EXITS: "ExitID",
+        TableName.ITEMS: "ItemID",
+        TableName.PROTOTYPES: "PrototypeID",
+        TableName.ARCHETYPES: "ArchetypeName",
+        TableName.MOTD: "MotdID",
+        TableName.STORY: "StoryID",
+        # SEGMENTS has a composite key (StoryID + SegmentID)
+    }
+
+    if table_enum == TableName.SEGMENTS:
+        return sorted(
+            items,
+            key=lambda it: (str(it.get("StoryID", "")), str(it.get("SegmentID", ""))),
+        )
+
+    pk = pk_map.get(table_enum)
+    if pk:
+        try:
+            return sorted(items, key=lambda it: it.get(pk, ""))
+        except Exception:
+            return items
+    return items
+
+
 def view_table(table_name, table_enum):
     """View contents of a DynamoDB table.
 
@@ -42,8 +74,9 @@ def view_table(table_name, table_enum):
         table_enum: TableName enum value
     """
     try:
-        result: dict = dynamo.scan(table_enum)  # type: ignore
-        items = result.get("items", [])
+        # Fetch all items; scan() returns a single page only
+        items: list = dynamo.scan_all(table_enum)  # type: ignore
+        items = _sort_items_for_display(table_enum, items)
         actual_table_name = TABLE_ENV_MAP[table_enum]
 
         print(f"\nContents of table: {table_name} ({actual_table_name})")
@@ -81,5 +114,4 @@ def main():
         sys.exit(1)
 
 
-if __name__ == "__main__":
-    main()
+main()

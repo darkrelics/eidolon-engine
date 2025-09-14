@@ -12,7 +12,7 @@ from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player_character import delete_character
-from eidolon.requests import get_query_parameter_flexible
+from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 
 
@@ -49,9 +49,9 @@ def character_deletion(player_id: str, character_id: str) -> dict:
     logger.info(f"Character deletion completed for {character_id}")
 
     # Check if deletion was successful
-    if not deletion_result.get("character_deleted", False):
+    if not deletion_result.get("CharacterDeleted", False):
         error_msg = "Failed to delete character"
-        errors = deletion_result.get("errors", [])
+        errors = deletion_result.get("Errors", [])
         if errors:
             error_msg = errors[0]
         raise RuntimeError(error_msg)
@@ -82,13 +82,13 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id: str = extract_player_id(event)
     except ValueError as err:
-        logger.error(f"Authentication failed Error: {err}", exc_info=True)
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
         return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
 
-    # Get character ID from query parameters (flexible: CharacterID or characterId)
-    character_id = get_query_parameter_flexible(event, "CharacterID", "characterId")
+    # Get character ID from query parameters
+    character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 
@@ -101,8 +101,8 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "Message": "Character deleted successfully",
                 "CharacterID": character_id,
                 "CharacterName": result.get("character_name", "Unknown"),
-                "ItemsDeleted": result.get("deletion_result", {}).get("items_deleted", 0),
-                "ActiveSegmentsDeleted": result.get("deletion_result", {}).get("active_segments_deleted", 0),
+                "ItemsDeleted": result.get("deletion_result", {}).get("ItemsDeleted", 0),
+                "ActiveSegmentsDeleted": result.get("deletion_result", {}).get("ActiveSegmentsDeleted", 0),
             },
             event,
         )

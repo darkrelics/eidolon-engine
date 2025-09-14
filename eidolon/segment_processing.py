@@ -12,6 +12,7 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.segment_challenges import process_skill_challenges
 from eidolon.segment_combat import process_combat_segment
+from eidolon.segment_core import map_outcome_to_key
 
 
 def route_segment_processing(segment_def: dict, character: dict, active_segment: dict) -> tuple:
@@ -98,7 +99,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     if challenges:
         logger.info(f"Processing skill challenges for {segment_def.get('SegmentID')}")
         challenge_outcome, challenge_results = process_skill_challenges(segment_def, character)
-        results["challengeResults"] = challenge_results
+        results["ChallengeResults"] = challenge_results
         outcomes.append(challenge_outcome)
 
         # Apply skill and attribute XP immediately
@@ -106,17 +107,17 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         attribute_xp = {}
 
         for challenge in challenge_results:
-            skill = challenge.get("skill")
-            attribute = challenge.get("attribute")
-            passed = challenge.get("passed", False)
+            skill = challenge.get("Skill")
+            attribute = challenge.get("Attribute")
+            passed = challenge.get("Passed", False)
 
             # Get the best attempt to calculate variance modifier
-            attempts = challenge.get("attempts", [])
-            best_attempt = max((a for a in attempts if "sigma" in a), key=lambda a: a["sigma"], default=None)
+            attempts = challenge.get("Attempts", [])
+            best_attempt = max((a for a in attempts if "Sigma" in a), key=lambda a: a["Sigma"], default=None)
 
             if best_attempt and (skill or attribute):
-                effective_score = best_attempt.get("effectiveScore", 0)
-                difficulty = best_attempt.get("difficulty", 0)
+                effective_score = best_attempt.get("EffectiveScore", 0)
+                difficulty = best_attempt.get("Difficulty", 0)
 
                 # Calculate variance modifier based on experience.md formula
                 if effective_score > 0 and difficulty > 0:
@@ -158,20 +159,20 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 logger.error(f"Failed to apply XP updates for {character.get('CharacterID')} Error: {err}", exc_info=True)
 
             # Also store XP in results for CharacterUpdates (for client display)
-            results["xpUpdates"] = xp_updates
+            results["XPUpdates"] = xp_updates
 
     # Process combat if present and has an opponent defined
     combat_config = segment_def.get("Combat", {})
-    # Check if combat config exists AND has an OpponentID (either case)
-    has_opponent = combat_config and (combat_config.get("OpponentID") or combat_config.get("opponentId"))
+    # Check if combat config exists AND has an OpponentID
+    has_opponent = combat_config and combat_config.get("OpponentID")
     if has_opponent:
         logger.info(f"Processing combat encounter for {segment_def.get('SegmentID')}")
         combat_outcome, combat_state = process_combat_segment(active_segment, segment_def, character)
-        results["combatState"] = combat_state
+        results["CombatState"] = combat_state
         outcomes.append(combat_outcome)
 
         # Apply wounds immediately to database
-        player_wounds = combat_state.get("playerWounds", [])
+        player_wounds = combat_state.get("PlayerWounds", [])
         if player_wounds:
             wound_updates = {"Wounds": player_wounds}
 
@@ -184,29 +185,45 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 logger.error(f"Failed to apply wounds for {character.get('CharacterID')} Error: {err}", exc_info=True)
 
             # Also store wounds in results for CharacterUpdates (for client display)
-            results["woundUpdates"] = wound_updates
+            results["WoundUpdates"] = wound_updates
 
     # Determine overall outcome
     if not outcomes:
         logger.warning(f"Mechanical segment has no challenges or combat for {segment_def.get('SegmentID')}")
-        return "normal", results
+        overall_outcome = "normal"
+    elif "death" in outcomes:
+        overall_outcome = "death"
+    elif "failure" in outcomes:
+        overall_outcome = "failure"
+    else:
+        # Take the worst non-failure outcome
+        outcome_priority = ["minimal", "normal", "exceptional"]
+        overall_outcome = "normal"
+        for outcome in outcome_priority:
+            if outcome in outcomes:
+                overall_outcome = outcome
+                break
 
-    # If any outcome is death, overall is death
-    if "death" in outcomes:
-        return "death", results
+    # Apply story outcome effects immediately (wounds, room changes, etc.)
+    from eidolon.character_story import apply_story_outcome_effects
+    from eidolon.segment_core import map_outcome_to_key
 
-    # If any outcome is failure, overall is failure
-    if "failure" in outcomes:
-        return "failure", results
+    outcome_key = map_outcome_to_key(overall_outcome)
+    outcome_results = segment_def.get("Results", {}).get(outcome_key, {})
+    story_effects = outcome_results.get("Effects", {})
 
-    # Otherwise, take the worst non-failure outcome
-    outcome_priority = ["minimal", "normal", "exceptional"]
-    for outcome in outcome_priority:
-        if outcome in outcomes:
-            return outcome, results
+    if story_effects:
+        character_id = character.get("CharacterID")
+        if character_id:
+            try:
+                apply_story_outcome_effects(character_id, story_effects)
+                logger.info(f"Applied story outcome effects for {character_id}")
+                # Store effects in results for CharacterUpdates (for client display)
+                results["StoryEffects"] = story_effects
+            except Exception as err:
+                logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
 
-    # Default to normal
-    return "normal", results
+    return overall_outcome, results
 
 
 def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str) -> object:
@@ -253,12 +270,11 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         return None
 
     elif segment_type in ["mechanical", "rest"]:
-        # Rest segments always use normal outcome
+        # Rest segments always use Normal outcome
         if segment_type == "rest":
-            outcome_key = "normal"
+            outcome_key = "Normal"
         else:
-            # Normalize outcome to lowercase for consistent lookup
-            outcome_key = str(outcome).lower() if outcome else "normal"
+            outcome_key = map_outcome_to_key(outcome or "normal")
 
         # Get results dict
         results = segment_def.get("Results", {})

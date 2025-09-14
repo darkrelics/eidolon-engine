@@ -15,7 +15,7 @@ from core.config import Config
 from core.state import CDKState
 from deploy_mode import display_mode_summary, get_deployment_order, validate_deployment_mode
 from dynamodb import deploy_dynamodb
-from lambda_functions import deploy_lambda
+from lambda_functions import deploy_lambda, update_lambda_functions_directly
 from player import deploy_player
 from s3 import deploy_s3
 from story import deploy_story
@@ -125,10 +125,6 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
 
     # S3 Client Bucket (for portal static files)
     client_bucket = cdk_context.get("client_bucket", params.client_bucket)
-    if not client_bucket:
-        # Generate default based on domain and client host
-        if params.domain and params.client_host:
-            client_bucket = f"{params.client_host}-{params.domain.replace('.', '-')}"
     if client_bucket:
         client_input = input(f"S3 Client Bucket [{client_bucket}]: ").strip()
         params.client_bucket = client_input if client_input else client_bucket
@@ -230,8 +226,83 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     return params
 
 
+def update_lambdas_only():
+    """Update Lambda functions only without full deployment."""
+    print("=" * 60)
+    print("Lambda Functions Update")
+    print("=" * 60)
+
+    # Load minimal configuration needed
+    config_path = Path(__file__).parent.parent / "config.yml"
+    config = Config.load(str(config_path))
+
+    # Get account ID and region
+    try:
+        account_id = get_aws_account_id()
+        if not account_id:
+            print("Error: Unable to determine AWS account ID")
+            return 1
+
+        region = validate_region(config.region)
+        if not region:
+            print("Error: Invalid region in configuration")
+            return 1
+
+        # Get S3 bucket from config or user input
+        s3_bucket = getattr(config, "s3_artifacts_bucket", "")
+        if not s3_bucket:
+            s3_bucket = input("S3 Artifacts Bucket: ").strip()
+            if not s3_bucket:
+                print("Error: S3 bucket name is required")
+                return 1
+
+        print(f"\nAccount: {account_id}")
+        print(f"Region: {region}")
+        print(f"S3 Bucket: {s3_bucket}")
+
+        response = input("\nProceed with Lambda updates? [Y/n]: ").strip().lower()
+        if response == "n":
+            print("Lambda update cancelled")
+            return 0
+
+        # Create minimal params object
+        class UpdateParams:
+            def __init__(self, account_id, region):
+                self.account_id = account_id
+                self.region = region
+
+        params = UpdateParams(account_id, region)
+
+        # Run the Lambda update
+        success = update_lambda_functions_directly(params, region, s3_bucket)
+
+        if success:
+            print("\n✓ Lambda functions updated successfully")
+            return 0
+        else:
+            print("\n✗ Lambda function update failed")
+            return 1
+
+    except Exception as err:
+        print(f"\nError during Lambda update: {err}")
+        return 1
+
+
 def main():
     """Main deployment entry point."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Eidolon Engine Infrastructure Deployment")
+    parser.add_argument(
+        "--update-lambdas",
+        action="store_true",
+        help="Only update Lambda functions with latest artifacts (faster than full deployment)",
+    )
+    args = parser.parse_args()
+
+    if args.update_lambdas:
+        return update_lambdas_only()
+
     print("=" * 60)
     print("Eidolon Engine Infrastructure Deployment")
     print("=" * 60)
@@ -315,10 +386,20 @@ def main():
             print(f"\nDeploying {stack_name} stack...")
             deploy_func = deployment_functions[stack_name]
             try:
-                success = deploy_func(params, config, state, config_path, state_path)
-                deployment_results[stack_name] = success
-                if not success:
-                    print(f"WARNING: {stack_name} deployment had issues")
+                result = deploy_func(params, config, state, config_path, state_path)
+
+                # Special handling for client stack which returns a tuple
+                if stack_name == "client" and isinstance(result, tuple):
+                    infra_success, build_success = result
+                    if infra_success and not build_success:
+                        # Infrastructure OK but build failed - mark as warning
+                        deployment_results[stack_name] = "warning"
+                    else:
+                        deployment_results[stack_name] = infra_success
+                else:
+                    deployment_results[stack_name] = result
+                    if not result:
+                        print(f"WARNING: {stack_name} deployment had issues")
             except Exception as e:
                 print(f"\n{'='*60}")
                 print(f"ERROR deploying {stack_name} stack")
@@ -332,6 +413,21 @@ def main():
             print(f"\nSkipping {stack_name} stack (not yet implemented)")
             deployment_results[stack_name] = False
 
+    # Phase 11: Lambda Function Updates
+    # Check if all required stacks for Lambda updates were successful
+    # Incremental mode does not require the S3 stack; only gate on CodeBuild and Lambda
+    required_stacks = ["codebuild", "lambda"]
+    overall_success = all(
+        deployment_results.get(stack, False) and deployment_results.get(stack) != "warning" for stack in required_stacks
+    )
+    lambda_update_success = False
+    if overall_success:
+        lambda_update_success = update_lambda_functions_directly(params, params.region, params.s3_bucket)
+        if not lambda_update_success:
+            print("\nWARNING: Lambda function updates failed")
+    else:
+        print("\nSkipping Lambda function updates due to deployment issues")
+
     # Final summary
     print("\n" + "=" * 60)
     print("Deployment Summary")
@@ -339,10 +435,21 @@ def main():
     print(f"Mode: {params.deployment_mode.upper()}")
     for stack_name in deployment_order:
         if stack_name in deployment_results:
-            status = "OK" if deployment_results[stack_name] else "WARNING"
+            result = deployment_results[stack_name]
+            if result == "warning":
+                status = "WARNING"
+            elif result:
+                status = "OK"
+            else:
+                status = "FAILED"
             print(f"[{status}] {stack_name.capitalize()} Stack")
         else:
             print(f"[SKIPPED] {stack_name.capitalize()} Stack")
+
+    if overall_success:
+        lambda_status = "OK" if lambda_update_success else "WARNING"
+        print(f"[{lambda_status}] Lambda Function Updates")
+
     print("=" * 60)
 
     return 0

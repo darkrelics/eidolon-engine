@@ -59,50 +59,378 @@ All API endpoints are implemented as individual Lambda functions:
 
 All successful responses return HTTP 200 with JSON data using PascalCase keys matching DynamoDB field names.
 
-### Error Response
+#### **Data Type Conversion Standards**
 
-Error responses include an `Error` field with a descriptive message:
+**DynamoDB → API Response Conversion:**
+
+- **Decimal → Float**: All DynamoDB Decimal values automatically converted to JSON floats
+- **Precision**: 64-bit IEEE 754 floats provide sufficient precision for all game values
+- **Integer Semantics**: Values that represent counts (Health, RoomID, Currency) are returned as floats but should be treated as integers by clients
+- **Fractional Values**: Skills, attributes, and XP values are true floats with 2-3 decimal precision
+
+**Value Categories:**
 
 ```json
 {
-  "Error": "Error description"
+  "Health": 12.0, // Integer semantic (display as 12, not 12.0)
+  "Stealth": 5.375, // Fractional semantic (display with precision)
+  "RoomID": 100.0, // Integer semantic (use as 100)
+  "SkillXP": {
+    "fighting": 0.375 // Fractional semantic (preserve precision)
+  }
 }
 ```
 
-Common HTTP status codes:
+**Client Handling Guidelines:**
 
-- `401` - Unauthorized (invalid or missing JWT token)
-- `404` - Resource not found
-- `500` - Internal server error
+- **Flutter**: Receive all numbers as `double`, convert to `int` for display when semantically appropriate
+- **Precision**: No precision loss occurs for game values (0.00-10.00 range)
+- **Display**: Show integer semantics without decimal (12, not 12.0), show fractional with 2-3 decimals (5.38, not 5.375)
+
+### Standardized Error Response Format
+
+**All error responses use this exact format**:
+
+```json
+{
+  "Error": "Descriptive error message"
+}
+```
+
+**Field Naming Rules**:
+
+- Error field is always PascalCase `"Error"` (never `"error"` or `"message"`)
+- Error messages are user-friendly strings
+- No additional error fields unless specifically documented
+
+**HTTP Status Code Standards**:
+
+- `400` - Bad Request: Invalid parameters, malformed JSON, validation failures
+- `401` - Unauthorized: Missing/invalid JWT token, authentication failures
+- `403` - Forbidden: Valid auth but access denied (character not owned, story not available)
+- `404` - Not Found: Resource doesn't exist (character, story, segment not found)
+- `409` - Conflict: Resource state conflict (character busy, decision already made)
+- `500` - Internal Server Error: Database failures, AWS service issues, unexpected errors
 
 ---
 
-## Client Polling Cadence
+## Client Polling Strategy
 
-The client should follow a specific polling cadence to track story progression efficiently while minimizing API calls:
+**CRITICAL PRINCIPLE**: The client follows **server-authoritative design** - all timing and state decisions come from the server. Clients never predict segment completion or implement complex state logic.
 
-### Recommended Polling Flow
+### Server-Authoritative Polling Flow
 
-1. **Start Story** - Call `POST /story/start`
-2. **Wait 60 seconds** - Allow time for server-side processing
-3. **Poll Segment Status** - Call `GET /segment/status`
-   - Check `ProcessingStatus` field
-   - If "processed", segment narrative is available
-   - Calculate segment end time from `TimeRemaining` or `EndTime`
-4. **Wait for Segment Completion** - Wait until `TimeRemaining` reaches 0
-5. **Get Updated Character** - Call `GET /character`
-   - Check `ActiveSegmentID` field
-   - If null, story is complete
-   - If not null, new segment has started
-6. **Repeat** - If story continues, wait 60 seconds for processing and go to step 3
+**Simple 4-Step Loop:**
 
-### Important Notes
+1. **Initial Wait**: Always wait 60 seconds after story start for server processing
+2. **Check Character State**: `GET /character?CharacterID=uuid`
+   - If `ActiveSegmentID == null` → Story complete, stop polling
+3. **Get Server Timing**: `GET /segment/status?CharacterID=uuid`
+   - Use server's `TimeRemaining` value exactly
+4. **Wait Server Time**: Wait the exact seconds server specifies, then repeat from step 2
 
-- **Server Authority**: The server determines all state transitions. Clients should never modify story state locally.
-- **Segment Timing**: Clients can calculate segment end time from `StartTime + Duration` or use the provided `EndTime` field.
-- **Completion Detection**: Story completion is indicated by `ActiveSegmentID == null` in the character response.
-- **Local Display**: Clients may maintain a local segment history for UI display, but this should never be used for state determination.
-- **Error Handling**: Implement exponential backoff (1s, 2s, 4s) for failed requests with a maximum of 3 retries.
+### API Call Pattern
+
+**Per Segment (Normal Case):**
+
+- 1x `GET /character` - Check story completion
+- 1x `GET /segment/status` - Get server timing
+- **Total: 2 API calls maximum**
+
+**Error Cases:**
+
+- Network timeout: Wait 30 seconds, retry same call
+- 404 response: Story complete, stop polling
+- Other errors: Wait 30 seconds, retry same call
+
+### Implementation Requirements
+
+#### **Simple Polling Service (Recommended Pattern)**
+
+```dart
+// File: lib/services/story_polling_service.dart
+import 'dart:async';
+import 'package:flutter/foundation.dart';
+
+class StoryPollingService {
+  final ApiService _apiService;
+  bool _isPolling = false;
+  Timer? _pollTimer;
+
+  // Callbacks for UI updates
+  Function(Character?)? onCharacterUpdated;
+  Function(String)? onPollingError;
+  Function()? onStoryCompleted;
+
+  StoryPollingService({required ApiService apiService})
+      : _apiService = apiService;
+
+  /// Start server-authoritative polling
+  Future<void> startPolling(String characterId) async {
+    if (_isPolling) return;
+    _isPolling = true;
+
+    try {
+      await _runPollingLoop(characterId);
+    } finally {
+      _isPolling = false;
+    }
+  }
+
+  /// Core polling loop following server cadence exactly
+  Future<void> _runPollingLoop(String characterId) async {
+    int consecutiveErrors = 0;
+    const maxConsecutiveErrors = 3;
+
+    // ALWAYS wait 60 seconds initially for server processing
+    await Future.delayed(const Duration(seconds: 60));
+
+    while (_isPolling) {
+      try {
+        // Step 1: Get character state from server
+        final character = await _apiService.getCharacterById(characterId);
+        onCharacterUpdated?.call(character);
+
+        // Step 2: Check if story is complete
+        if (character?.activeSegmentID == null) {
+          onStoryCompleted?.call();
+          break; // Story finished
+        }
+
+        // Step 3: Get segment timing from server
+        final segmentStatus = await _apiService.getSegmentStatus(
+          characterId: characterId
+        );
+
+        // Step 4: Wait exactly what server says
+        final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
+        if (timeRemaining > 0) {
+          await _waitWithCancellation(Duration(seconds: timeRemaining));
+        } else {
+          await _waitWithCancellation(const Duration(seconds: 5));
+        }
+
+        consecutiveErrors = 0; // Reset on success
+
+      } catch (e) {
+        consecutiveErrors++;
+
+        // Handle 404 as story completion
+        if (e.toString().contains('404') ||
+            e.toString().toLowerCase().contains('no active segment')) {
+          onStoryCompleted?.call();
+          break;
+        }
+
+        // Stop after too many errors
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          onPollingError?.call('Connection problems - please refresh');
+          break;
+        }
+
+        // 30-second retry delay
+        await _waitWithCancellation(const Duration(seconds: 30));
+      }
+    }
+  }
+
+  Future<void> _waitWithCancellation(Duration duration) async {
+    final completer = Completer<void>();
+    _pollTimer = Timer(duration, () => completer.complete());
+
+    while (_isPolling && !completer.isCompleted) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    _pollTimer?.cancel();
+  }
+
+  void stopPolling() {
+    _isPolling = false;
+    _pollTimer?.cancel();
+  }
+
+  void dispose() => stopPolling();
+}
+```
+
+#### **Integration with Game Screen**
+
+```dart
+// File: lib/screens/game_screen.dart
+class _GameScreenState extends State<GameScreen> {
+  late StoryPollingService _pollingService;
+  Character? _character;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _pollingService = StoryPollingService(apiService: _apiService);
+    _pollingService.onCharacterUpdated = (character) {
+      if (mounted) setState(() => _character = character);
+    };
+    _pollingService.onStoryCompleted = () {
+      if (mounted) _loadCharacterData(); // Refresh for available stories
+    };
+  }
+
+  @override
+  void dispose() {
+    _pollingService.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleStorySelect(StoryMetadata story) async {
+    await _apiService.startStory(
+      characterId: _character!.id,
+      storyId: story.storyID,
+    );
+
+    // Start polling - replaces all complex polling logic
+    _pollingService.startPolling(_character!.id);
+  }
+
+  // REMOVE these methods completely:
+  // - _runStoryPolling()
+  // - _setupSegmentPolling()
+  // - Complex timing calculations
+  // - Local segment history management
+}
+```
+
+### What NOT to Implement
+
+❌ **Segment Type Logic**: Don't treat decision/mechanical/rest differently  
+❌ **Multiple Polling Loops**: Only one polling process per character  
+❌ **Client-side Timing**: Don't calculate EndTime from StartTime + Duration  
+❌ **Local History Management**: Use server's segment history API only  
+❌ **Complex Error Recovery**: Simple exponential backoff only  
+❌ **Predictive State Updates**: Wait for server state changes
+
+### Error Handling Standards
+
+**Network Errors**:
+
+```dart
+catch (NetworkException e) {
+  await Future.delayed(Duration(seconds: 30));
+  continue; // Retry same operation
+}
+```
+
+**404 Not Found**:
+
+```dart
+catch (NotFoundException e) {
+  break; // Story complete, stop polling
+}
+```
+
+**Rate Limiting**:
+
+```dart
+catch (RateLimitException e) {
+  await Future.delayed(Duration(seconds: e.retryAfterSeconds ?? 60));
+  continue; // Retry same operation
+}
+```
+
+**Maximum Error Protection**:
+
+- Stop polling after 3 consecutive errors
+- Never poll faster than every 30 seconds minimum
+- Use consistent 30-second retry delay for all errors
+
+### Segment Processing Timeout Handling
+
+#### **Server Timeout Behavior by Segment Type**
+
+**Mechanical Segments:**
+
+- **Normal**: Process within 5 minutes, advance at EndTime
+- **Stuck**: Retry if >5 minutes old and >90 seconds remaining
+- **Timeout**: Auto-marked "exceptional" outcome if not processed by EndTime
+- **Client Display**: Show "Processing..." until ProcessingStatus="processed"
+
+**Decision Segments:**
+
+- **Normal**: No processing needed, wait for player input or EndTime
+- **Timeout**: Apply DefaultDecision from segment definition
+- **Client Display**: Show choices until EndTime, then show result
+
+**Rest Segments:**
+
+- **Normal**: No processing needed, advance at EndTime
+- **Timeout**: Normal advancement with healing applied
+- **Client Display**: Show countdown timer until EndTime
+
+#### **Client Timeout Handling**
+
+```dart
+// Handle different processing states in UI
+Widget buildSegmentDisplay(Map<String, dynamic> segmentStatus) {
+  final segmentType = segmentStatus['SegmentType'] as String;
+  final processingStatus = segmentStatus['ProcessingStatus'] as String? ?? 'pending';
+  final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
+  final startTime = segmentStatus['StartTime'] as int? ?? 0;
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+  // Calculate how long segment has been running
+  final elapsedMinutes = (now - startTime) ~/ 60;
+
+  if (segmentType == 'mechanical') {
+    if (processingStatus == 'pending' && elapsedMinutes > 5) {
+      return Text('Processing delayed - retrying...');
+    } else if (processingStatus == 'pending') {
+      return Text('Processing your actions...');
+    } else if (processingStatus == 'processed') {
+      return Text('Ready to advance!');
+    }
+  }
+
+  // For decision/rest, just show normal countdown
+  return Text('Time remaining: ${timeRemaining}s');
+}
+```
+
+#### **Timeout Communication Strategy**
+
+**For Players:**
+
+- **0-5 minutes**: "Processing your actions..."
+- **5-15 minutes**: "Processing delayed - retrying..."
+- **15+ minutes approaching EndTime**: "Resolving automatically..."
+- **After exceptional assignment**: "System protected you - exceptional result!"
+
+**For Developers:**
+
+- **CloudWatch Logs**: All timeouts logged with segment ID and timing
+- **Metrics**: Track exceptional outcomes as potential system health indicator
+- **Monitoring**: Alert on high exceptional outcome rates (indicates processing issues)
+
+---
+
+## API Parameter Standards
+
+### Parameter Placement Rules
+
+**Consistent parameter handling across all endpoints:**
+
+1. **Query Parameters**: Used for GET and DELETE requests only
+   - Example: `GET /character?CharacterID=uuid`
+   - Example: `DELETE /character?CharacterID=uuid`
+
+2. **Request Body (JSON)**: Used for ALL POST and PUT requests
+   - Example: `POST /story/start` with body `{"CharacterID": "uuid", "StoryID": "uuid"}`
+   - Example: `POST /story/abandon` with body `{"CharacterID": "uuid"}`
+
+3. **Field Naming**: Follow PascalCase conventions defined in [Style Guide](style-guide.md#json-field-naming-convention)
+
+### Important: NO Path Parameters for IDs
+
+- **Never use**: `/characters/123` or `/stories/456`
+- **Always use**: Query parameters for GET/DELETE, request body for POST/PUT
 
 ---
 
@@ -446,24 +774,24 @@ Authorization: Bearer <jwt-token>
     },
     "InventoryDetails": {
       "0": {
-        "itemId": "abc123-item-uuid",
-        "name": "Leather Backpack",
-        "description": "A sturdy leather backpack",
-        "quantity": 1,
-        "stackable": false,
-        "equipped": true,
-        "mass": 2,
-        "value": 50
+        "ItemID": "abc123-item-uuid",
+        "Name": "Leather Backpack",
+        "Description": "A sturdy leather backpack",
+        "Quantity": 1,
+        "Stackable": false,
+        "Equipped": true,
+        "Mass": 2,
+        "Value": 50
       },
       "1": {
-        "itemId": "def456-item-uuid",
-        "name": "Iron Sword",
-        "description": "A well-crafted iron sword",
-        "quantity": 1,
-        "stackable": false,
-        "equipped": false,
-        "mass": 3,
-        "value": 100
+        "ItemID": "def456-item-uuid",
+        "Name": "Iron Sword",
+        "Description": "A well-crafted iron sword",
+        "Quantity": 1,
+        "Stackable": false,
+        "Equipped": false,
+        "Mass": 3,
+        "Value": 100
       }
     },
     "Attributes": {
@@ -523,9 +851,8 @@ Authorization: Bearer <jwt-token>
     "Outcome": "normal",
     "ClientEvents": [
       {
-        "eventType": "narrative",
-        "title": "Combat Begins",
-        "description": "A goblin jumps out from the shadows!"
+        "Title": "Combat Begins",
+        "Description": "A goblin jumps out from the shadows!"
       }
     ]
   }
@@ -549,21 +876,21 @@ Contains all character fields as stored in the database, plus:
 | ------------------ | ------ | --------------------------------------------- |
 | `InventoryDetails` | Object | Enriched inventory with full item information |
 
-**InventoryDetails Structure:**
+**InventoryDetails Structure (PascalCase):**
 
 Maps inventory slot numbers to detailed item information:
 
 ```json
 {
-  "slotNumber": {
-    "itemId": "UUID",
-    "name": "Item Name",
-    "description": "Item description",
-    "quantity": 1,
-    "stackable": false,
-    "equipped": false,
-    "mass": 1.5,
-    "value": 100
+  "SlotNumber": {
+    "ItemID": "UUID",
+    "Name": "Item Name",
+    "Description": "Item description",
+    "Quantity": 1,
+    "Stackable": false,
+    "Equipped": false,
+    "Mass": 1.5,
+    "Value": 100
   }
 }
 ```
@@ -731,18 +1058,23 @@ Abandons the current active story for a character. The story cannot be resumed a
 
 **Authentication:** Required
 
-**Query Parameters:**
-
-| Parameter     | Type   | Required | Description           |
-| ------------- | ------ | -------- | --------------------- |
-| `CharacterID` | String | Yes      | UUID of the character |
-
 **Request:**
 
 ```http
-POST /story/abandon?CharacterID=550e8400-e29b-41d4-a716-446655440000 HTTP/1.1
+POST /story/abandon HTTP/1.1
 Authorization: Bearer <jwt-token>
+Content-Type: application/json
+
+{
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000"
+}
 ```
+
+**Request Body:**
+
+| Field         | Type   | Required | Description           |
+| ------------- | ------ | -------- | --------------------- |
+| `CharacterID` | String | Yes      | UUID of the character |
 
 **Response:**
 
@@ -1116,3 +1448,26 @@ The API is deployed at `api.{domain}` with:
 # In client_stack.py
 "API_DOMAIN": f"{api_host}.{domain}"  # Not the full URL
 ```
+
+## Frequently Asked Questions
+
+### System Performance
+
+**Q: What are the actual performance targets?**
+A: 10,000 total users, <5,000 concurrent users, 2,000-4,000 active stories typical, with capability to handle 3,000 concurrent story starts during peak scenarios.
+
+**Q: Why is the system limited to North America?**  
+A: Single region deployment (us-east-1) provides cost optimization and operational simplicity while maintaining acceptable latency (20-80ms) across North America.
+
+### Client Implementation
+
+**Q: How should clients handle network failures during polling?**
+A: Use simple 30-second retry delays. Server-authoritative design means clients can always recover by requesting current state from server.
+
+**Q: What happens if a player force-closes their app during a story?**
+A: Stories continue server-side. Next `api-character-get` call automatically recovers GameMode state. No progress is lost.
+
+### Technical Architecture
+
+**Q: Why use polling instead of WebSockets for story updates?**
+A: Story segments last 1-60 minutes, making real-time updates unnecessary. Polling is more battery-efficient, serverless-compatible, and fault-tolerant for this use case.

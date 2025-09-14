@@ -1,6 +1,7 @@
 """CDK application entry point for Character stack."""
 
 import json
+import sys
 
 import aws_cdk as cdk
 from stacks.character_stack import CharacterStack
@@ -37,6 +38,6 @@ if s3_bucket:  # Only create if S3 bucket is provided
     )
 else:
     print("Error: S3 bucket parameter is required for Character stack")
-    exit(1)
+    sys.exit(1)
 
 app.synth()

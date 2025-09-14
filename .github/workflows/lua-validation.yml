@@ -3,11 +3,10 @@ on:
   push:
     branches: [develop, qa, prod]
     paths:
-      - "scripts_lua/**/*.lua"
+      - "scripts_lua/*.lua"
   pull_request:
-    branches: "**"
     paths:
-      - "scripts_lua/**/*.lua"
+      - "scripts_lua/*.lua"
 
 jobs:
   validate-lua:

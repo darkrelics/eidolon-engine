@@ -319,23 +319,23 @@ The story system supports flexible narrative branching where any outcome can lea
 
 ```json
 "Results": {
-  "death": {
+  "Death": {
     "Narrative": "Your journey ends here...",
     "NextSegmentID": null  // Story ends
   },
-  "failure": {
+  "Failure": {
     "Narrative": "You are captured by guards...",
     "NextSegmentID": "prison-escape-segment"  // Continue in prison
   },
-  "minimal": {
+  "Minimal": {
     "Narrative": "You barely succeed...",
     "NextSegmentID": "next-segment-wounded"  // Different path
   },
-  "normal": {
+  "Normal": {
     "Narrative": "You succeed as expected...",
     "NextSegmentID": "next-segment-standard"  // Standard path
   },
-  "exceptional": {
+  "Exceptional": {
     "Narrative": "Your exceptional performance is noted...",
     "NextSegmentID": "next-segment-bonus"  // Bonus path
   }
@@ -354,7 +354,7 @@ Death outcomes don't always end the story. The system supports:
 Example:
 
 ```json
-"death": {
+"Death": {
   "Narrative": "As darkness takes you, you feel your spirit rise...",
   "NextSegmentID": "ghost-revenge-segment-1",
   "Effects": {
@@ -375,7 +375,7 @@ Failure outcomes can open entirely new storylines:
 Example:
 
 ```json
-"failure": {
+"Failure": {
   "Narrative": "The master shakes his head. 'You need more training.'",
   "NextSegmentID": "training-montage-segment",
   "Effects": {
@@ -451,12 +451,6 @@ All Lambda functions are deployed with:
 - Records player choice in Decision field
 - Sets DecisionMadeAt timestamp
 - Returns confirmation to client
-
-**api-segment-outcome** (Logical ID: `ApiSegmentOutcomeFunction`):
-
-- Retrieves completed segment results
-- Returns narrative and effects
-- Used by client after segment timer expires
 
 **api-story-abandon** (Logical ID: `ApiStoryAbandonFunction`):
 
@@ -650,3 +644,12 @@ The polling system follows this state machine:
 ## Summary
 
 The Eidolon Engine's incremental story system implements a robust state machine architecture that ensures reliable progression through narrative content. The front-loaded processing model calculates all outcomes when segments begin, allowing for predictable client experiences. The distributed Lambda architecture with SQS queuing provides scalability and fault tolerance, while the comprehensive history tracking enables analytics and debugging. The system prioritizes player experience by gracefully handling failures and providing automatic recovery mechanisms.
+
+### Recovery and Fault Tolerance
+
+The system provides automatic recovery through multiple mechanisms:
+
+- EventBridge ensures processing continues even if individual Lambda invocations fail
+- Server-side state authority eliminates client synchronization issues
+- Multiple cleanup paths prevent players from getting permanently stuck
+- All segments guaranteed to eventually process or timeout with player-favorable outcomes
