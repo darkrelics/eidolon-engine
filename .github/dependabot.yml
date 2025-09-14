@@ -4,23 +4,93 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      nonbreaking:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+      major:
+        applies-to: version-updates
+        update-types: ["major"]
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "gomod"
     directory: "/server"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      nonbreaking:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+      major:
+        applies-to: version-updates
+        update-types: ["major"]
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "pip"
     directory: "/requirements"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      nonbreaking:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+      major:
+        applies-to: version-updates
+        update-types: ["major"]
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "pub"
     directory: "/portal"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      nonbreaking:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+      major:
+        applies-to: version-updates
+        update-types: ["major"]
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "pub"
     directory: "/incremental"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      nonbreaking:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+        patterns: ["*"]
+      major:
+        applies-to: version-updates
+        update-types: ["major"]
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
