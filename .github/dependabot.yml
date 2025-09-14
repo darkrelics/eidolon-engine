@@ -71,6 +71,6 @@ updates:
         applies-to: version-updates
         update-types: ["major", "minor", "patch"]
         patterns: ["*"]
-      flutter-incrementl-security:
+      flutter-incremental-security:
         applies-to: security-updates
         patterns: ["*"]
