@@ -4,7 +4,7 @@ Character story management utilities.
 Provides functions for managing character interactions with stories.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
@@ -96,15 +96,14 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
             return 0  # Failed/died, can retry
 
         if story_type == "daily":
-            # Calculate time until midnight UTC
+            # Calculate time until next midnight UTC
             finished_at = datetime.fromisoformat(history.get("FinishedAt", "").replace("Z", "+00:00"))
             now = datetime.now(timezone.utc)
 
             # Check if completion was today
             if finished_at.date() == now.date():
-                # Calculate seconds until midnight
-                midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                midnight = midnight.replace(day=midnight.day + 1)
+                # Next midnight in UTC (safe across month/year boundaries)
+                midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
                 return int((midnight - now).total_seconds())
 
             return 0  # Completed on a previous day
@@ -189,7 +188,6 @@ def get_stories(character_id: str, player_id: str, available_story_ids: list) ->
             if cooldown == -1:  # Permanently unavailable
                 continue
 
-            # Format story for response with PascalCase
             formatted_story: dict = {
                 "StoryID": story_id,
                 "Title": story_data.get("Title", "Unknown Story"),
@@ -266,7 +264,6 @@ def get_stories_with_character(character: dict, available_story_ids: list) -> li
             if cooldown == -1:  # Permanently unavailable
                 continue
 
-            # Format story for response with PascalCase
             formatted_story: dict = {
                 "StoryID": story_id,
                 "Title": story_data.get("Title", "Unknown Story"),
@@ -379,21 +376,24 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
         expression_attribute_values = {}
 
         # Handle room change
-        if "room" in outcome_effects:
+        if "Room" in outcome_effects:
             update_expressions.append("#room = :room")
             expression_attribute_names["#room"] = "RoomID"
-            expression_attribute_values[":room"] = outcome_effects["room"]
+            expression_attribute_values[":room"] = outcome_effects["Room"]
 
         # Handle wounds from story outcomes
-        if "wounds" in outcome_effects:
+        if "Wounds" in outcome_effects:
 
             # Add heal times to wounds
             wounds_with_heal_times = []
-            for wound in outcome_effects["wounds"]:
-                wound_data = wound.copy()
-                if "HealAt" not in wound_data:
-                    damage_type = wound_data.get("DamageType", "lethal")
-                    wound_data["HealAt"] = calculate_heal_time(damage_type)
+            for wound in outcome_effects["Wounds"]:
+                # Handle both string format (from story JSON) and dict format (from combat)
+                if isinstance(wound, str):
+                    wound_data = {"DamageType": wound, "HealAt": calculate_heal_time(wound)}
+                else:
+                    # Wound is already a dict from combat processing
+                    damage_type = wound.get("DamageType", "lethal")
+                    wound_data = {"DamageType": damage_type, "HealAt": wound.get("HealAt", calculate_heal_time(damage_type))}
                 wounds_with_heal_times.append(wound_data)
 
             # Apply wounds through character updates

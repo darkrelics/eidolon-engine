@@ -33,8 +33,8 @@ const (
 
 // Wound represents a single point of damage with its heal time
 type Wound struct {
-	DamageType string    `json:"damage_type" dynamodbav:"damage_type"`
-	HealAt     time.Time `json:"heal_at" dynamodbav:"heal_at"`
+	DamageType string    `json:"DamageType" dynamodbav:"damage_type"`
+	HealAt     time.Time `json:"HealAt" dynamodbav:"heal_at"`
 }
 
 func GetHealingDuration(damageType string) time.Duration {

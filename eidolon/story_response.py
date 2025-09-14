@@ -41,7 +41,7 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         response["ShortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
         combat_config = segment.get("Combat", {})
         if combat_config:
-            opponent_id = combat_config.get("OpponentID") or combat_config.get("opponentId")
+            opponent_id = combat_config.get("OpponentID")
             if opponent_id:
                 response["OpponentID"] = opponent_id
 

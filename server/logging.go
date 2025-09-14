@@ -99,13 +99,13 @@ func (h *CloudWatchHandler) Handle(ctx context.Context, record slog.Record) erro
 
 	// Marshal record to JSON for CloudWatch
 	type logEntry struct {
-		Time    string         `json:"time"`
-		Level   string         `json:"level"`
-		Message string         `json:"message"`
-		Attrs   map[string]any `json:"attrs,omitempty"`
-		File    string         `json:"file,omitempty"`
-		Line    int            `json:"line,omitempty"`
-		Func    string         `json:"function,omitempty"`
+		Time    string         `json:"Time"`
+		Level   string         `json:"Level"`
+		Message string         `json:"Message"`
+		Attrs   map[string]any `json:"Attrs,omitempty"`
+		File    string         `json:"File,omitempty"`
+		Line    int            `json:"Line,omitempty"`
+		Func    string         `json:"Function,omitempty"`
 	}
 
 	entry := logEntry{

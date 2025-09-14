@@ -30,11 +30,10 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
     successes = 0
 
     for challenge in challenges:
-        # Accept both lowercase and PascalCase keys for compatibility
-        attribute = challenge.get("attribute") or challenge.get("Attribute")
-        skill = challenge.get("skill") or challenge.get("Skill")
-        difficulty = challenge.get("difficulty") or challenge.get("Difficulty") or 8
-        attempts = int(challenge.get("attempts") or challenge.get("Attempts") or 1)
+        attribute = challenge.get("Attribute")
+        skill = challenge.get("Skill")
+        difficulty = challenge.get("Difficulty") or 8
+        attempts = int(challenge.get("Attempts") or 1)
 
         # Get character's attribute and skill values
         character_attributes = character.get("Attributes", {})
@@ -42,22 +41,14 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
         # Try multiple casings for attribute/skill names for compatibility
         if attribute:
-            attribute_value = (
-                character_attributes.get(attribute, 0)
-                or character_attributes.get(attribute.capitalize(), 0)
-                or character_attributes.get(attribute.upper(), 0)
-                or 0
-            )
+            # Enforce exact key usage per style guide (no case-tolerant reads)
+            attribute_value = character_attributes.get(attribute, 0)
         else:
             attribute_value = 0
 
         if skill:
-            skill_value = (
-                character_skills.get(skill, 0)
-                or character_skills.get(skill.capitalize(), 0)
-                or character_skills.get(skill.upper(), 0)
-                or 0
-            )
+            # Enforce exact key usage per style guide (no case-tolerant reads)
+            skill_value = character_skills.get(skill, 0)
         else:
             skill_value = 0
 
@@ -88,10 +79,10 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
             challenge_attempts.append(
                 {
-                    "effectiveScore": effective_score,
-                    "difficulty": difficulty,
-                    "sigma": round(sigma, 2),
-                    "success": success,
+                    "EffectiveScore": effective_score,
+                    "Difficulty": difficulty,
+                    "Sigma": round(sigma, 2),
+                    "Success": success,
                 }
             )
 
@@ -112,12 +103,12 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
         challenge_results.append(
             {
-                "attribute": attribute,
-                "skill": skill,
-                "difficulty": difficulty,
-                "attempts": challenge_attempts,
-                "bestSigma": round(best_sigma, 2),
-                "passed": passed,
+                "Attribute": attribute,
+                "Skill": skill,
+                "Difficulty": difficulty,
+                "Attempts": challenge_attempts,
+                "BestSigma": round(best_sigma, 2),
+                "Passed": passed,
             }
         )
 

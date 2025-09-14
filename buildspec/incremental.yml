@@ -2,19 +2,18 @@ version: 0.2
 
 phases:
   install:
-    runtime-versions:
-      nodejs: 22
     commands:
       - apt-get update -y -q
-      - apt-get install -y clang cmake ninja-build libgtk-3-dev -q
-      - git clone https://github.com/flutter/flutter.git -b stable
-      - export PATH="$PATH:`pwd`/flutter/bin"
+      - apt-get install -y clang cmake ninja-build -q
+      - git clone --depth 1 https://github.com/flutter/flutter.git -b stable
+      - export PATH="$PATH:$(pwd)/flutter/bin"
       - flutter config --no-analytics
       - flutter doctor
-      - flutter config --enable-web --no-enable-android --no-enable-ios
+      - flutter config --enable-web
 
   pre_build:
     commands:
+      - export PATH="$PATH:$(pwd)/flutter/bin"
       - cd incremental
       - flutter pub get
       - dart fix --apply

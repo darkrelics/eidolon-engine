@@ -66,7 +66,6 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
     if inventory:
         character["InventoryDetails"] = get_inventory(inventory)
 
-    # Build response data with PascalCase keys
     response_data: dict = {"Character": decimal_to_float(character)}
 
     # Add story if found (already converted by get_active_story_and_segment)

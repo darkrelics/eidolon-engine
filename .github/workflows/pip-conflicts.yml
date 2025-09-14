@@ -3,8 +3,11 @@ name: Check Pip Conflicts
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "requirements/*requirements.txt"
   pull_request:
-    branches: "**"
+    paths:
+      - "requirements/*requirements.txt"
 
 jobs:
   check-pip-conflicts:

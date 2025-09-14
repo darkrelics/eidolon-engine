@@ -9,21 +9,19 @@ Returns segment completion status and any available results.
 
 import time
 
-from eidolon.api_models import SegmentStatusResponse
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
-from eidolon.schema import normalize_segment_definition
 from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
 from eidolon.time_utils import from_unix
 
 
-def get_segment_status_business_logic(character_id: str, player_id: str) -> SegmentStatusResponse:
+def get_segment_status_business_logic(character_id: str, player_id: str) -> dict:
     """
     Business logic for getting segment status.
 
@@ -99,7 +97,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
             try:
                 # Get segment definition for narrative text
                 segment_def = get_story_segment(story_id, segment_id)  # type: ignore
-                segment_def = normalize_segment_definition(segment_def)
 
                 if segment_type == "mechanical":
                     outcome = active_segment.get("Outcome", "normal")
@@ -142,7 +139,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
                 # Add StoryComplete flag
                 next_segment_id = response.get("NextSegmentID")
                 response["StoryComplete"] = next_segment_id is None
-                
+
                 # Add NextSegmentPreview if there's a next segment
                 if next_segment_id and (processing_status == "processed" or active_segment.get("Status") == "completed"):
                     try:
@@ -193,7 +190,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> Segm
 
     logger.debug(f"Segment status retrieved for {character_id}")
 
-    return SegmentStatusResponse.model_validate(response)
+    return response
 
 
 def lambda_handler(event: dict, context: object) -> dict:
@@ -237,8 +234,8 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Call business logic
     try:
-        response_data = get_segment_status_business_logic(character_id, player_id)  # type: ignore
-        return lambda_response(200, response_data.model_dump(by_alias=True), event)
+        response_data = get_segment_status_business_logic(character_id, player_id)
+        return lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(f"Invalid request or not found for {character_id} Error: {err}")
         error_msg = str(err)

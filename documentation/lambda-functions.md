@@ -19,7 +19,7 @@ The Lambda functions are deployed as part of the 9-stack CDK architecture:
 
 ## Current Implementation Status
 
-All 16 Lambda functions are fully implemented and operational in production:
+All 15 Lambda functions are fully implemented and operational in production:
 
 ### Character Management (5 functions)
 
@@ -29,14 +29,13 @@ All 16 Lambda functions are fully implemented and operational in production:
 - `api-character-get` - Get character details with inventory enrichment
 - `api-character-list` - List player's characters
 
-### Story Operations (7 functions)
+### Story Operations (6 functions)
 
 - `api-story-start` - Begin new story
 - `api-story-abandon` - Exit active story
 - `api-segment-decision` - Submit player choice
 - `api-segment-rest` - Initiate healing segment
 - `api-segment-status` - Check segment readiness
-- `api-segment-outcome` - Get segment results
 - `api-segment-history` - Retrieve past segments
 
 ### Processing Functions (3 functions)
@@ -78,7 +77,6 @@ logical_id_map = {
     "api-character-list": "ApiCharacterListFunction",
     "api-segment-decision": "ApiSegmentDecisionFunction",
     "api-segment-history": "ApiSegmentHistoryFunction",
-    "api-segment-outcome": "ApiSegmentOutcomeFunction",
     "api-segment-rest": "ApiSegmentRestFunction",
     "api-segment-status": "ApiSegmentStatusFunction",
     "api-story-abandon": "ApiStoryAbandonFunction",
@@ -270,17 +268,29 @@ response = lambda_handler(event, {})
 
 ## Lambda Function Architecture Pattern
 
-Each Lambda function must have a Lambda handler which handles the event, calls a function with the business logic, then handles the response. The business logic function will call functions from the `./eidolon` library to perform their tasks. None of the database or I/O code should be present in the Lambda function beyond the event feed to the handler and the response back to the API.
+**Three-Layer Architecture**: Every Lambda function follows a strict three-layer pattern for separation of concerns, testability, and maintainability.
+
+### Layer Responsibilities
+
+1. **Lambda Handler Layer**: AWS-specific concerns (authentication, CORS, HTTP responses)
+2. **Business Logic Layer**: Pure Python business logic (orchestration, validation, flow control)
+3. **Eidolon Library Layer**: Database operations, AWS services, shared utilities
 
 ### Required Structure
 
 ```python
 def lambda_handler(event: dict, context: object) -> dict:
-    """Lambda entry point - handles AWS-specific concerns."""
+    """
+    Layer 1: Lambda Handler - AWS-specific concerns only.
+
+    CRITICAL: This function must NEVER raise exceptions.
+    All exceptions must be caught and converted to HTTP responses.
+    """
     # 1. Log invocation
     log_lambda_statistics(context, event)
 
     # 2. Handle CORS preflight
+    preflight_response = cors_handler.handle_preflight(event)
     if preflight_response:
         return preflight_response
 
@@ -288,44 +298,184 @@ def lambda_handler(event: dict, context: object) -> dict:
     try:
         player_id = extract_player_id(event)
     except ValueError as err:
-        logger.error("Authentication failed")
-        return lambda_response(401, {"error": "Unauthorized"}, event)
+        logger.warning(f"Authentication failed: {err}")
+        return lambda_response(401, {"Error": "Unauthorized"}, event)
     except Exception as err:
         return lambda_error(event, err)
 
-    # 4. Validate player exists
+    # 4. Parse request parameters (query/body based on endpoint type)
     try:
-        if not validate_player(player_id):
-            logger.error("Player not found in database")
-            return lambda_response(401, {"error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error("Failed to validate player")
-        return lambda_response(500, {"error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+        # Parse parameters appropriate to endpoint
+        character_id = get_query_parameter(event, "CharacterID")  # GET/DELETE
+        # OR
+        body = parse_event_body(event)                           # POST
+        character_id = body.get("CharacterID")
 
-    # 5. Parse request parameters
-    # 6. Call business logic function
-    # 7. Return response
-    try:
-        result = business_logic_function(param1, param2)
-        return lambda_response(200, result, event)
+        if not character_id:
+            return lambda_response(400, {"Error": "Missing CharacterID"}, event)
+
     except ValueError as err:
-        logger.warning("Business logic error")
-        return lambda_response(400, {"error": str(err)}, event)
-    except RuntimeError as err:
-        logger.error("Database error")
-        return lambda_response(500, {"error": "Internal server error"}, event)
+        return lambda_response(400, {"Error": str(err)}, event)
     except Exception as err:
         return lambda_error(event, err)
 
-def business_logic_function(param1: str, param2: str) -> dict:
-    """Pure business logic - testable and AWS-agnostic."""
-    # 1. Validate business rules
-    # 2. Call eidolon library functions for DB operations
-    # 3. Orchestrate multiple operations as needed
-    # 4. Return success/error dictionary with data
+    # 5. Call business logic function
+    try:
+        result = business_logic_function(character_id, player_id)
+        return lambda_response(200, result, event)
+    except Exception as err:
+        return lambda_error(event, err)
+
+def business_logic_function(character_id: str, player_id: str) -> dict:
+    """
+    Layer 2: Business Logic - Pure Python, no AWS dependencies.
+
+    This function orchestrates the business process by calling eidolon library
+    functions. It handles business rule validation and flow control.
+
+    Raises:
+        ValueError: For 4xx client errors (validation, not found, forbidden)
+        RuntimeError: For 5xx server errors (database failures, system issues)
+    """
+    # 1. Call eidolon library functions for data operations
+    try:
+        character = character_get(character_id, player_id)  # May raise ValueError/RuntimeError
+    except ValueError:
+        # Library handles not found, ownership validation - re-raise for handler
+        raise
+    except RuntimeError:
+        # Library handles database errors - re-raise for handler
+        raise
+
+    # 2. Business logic validation and orchestration
+    if character.get("GameMode") != "None":
+        raise ValueError("Character is currently busy in another game mode")
+
+    # 3. Execute business operations via eidolon library
+    try:
+        result = perform_character_operation(character)  # May raise ValueError/RuntimeError
+        return {"Success": True, "Data": result}
+    except ValueError:
+        # Business rule violations - re-raise for proper HTTP status
+        raise
+    except RuntimeError:
+        # System failures - re-raise for proper HTTP status
+        raise
+
+# Layer 3: Eidolon Library Functions (in /eidolon directory)
+def character_get(character_id: str, player_id: str) -> dict:
+    """
+    Layer 3: Eidolon Library - Database operations and AWS services.
+
+    Library functions either:
+    1. Handle errors locally where appropriate (retries, fallbacks)
+    2. Raise appropriate exceptions for business logic layer
+
+    Raises:
+        ValueError: Client errors - invalid IDs, not found, access denied
+        RuntimeError: Server errors - database failures, AWS service issues
+    """
+    # Handle database operations, retries, error classification
+    # Raise ValueError for 4xx conditions, RuntimeError for 5xx conditions
 ```
+
+### Error Handling Flow
+
+**Exception Propagation Pattern:**
+
+1. **Eidolon Library**: Handles retries/fallbacks locally OR raises ValueError (4xx) / RuntimeError (5xx)
+2. **Business Logic**: Re-raises library exceptions OR adds business validation exceptions
+3. **Lambda Handler**: Catches ALL exceptions, converts to appropriate HTTP responses
+
+**HTTP Status Code Mapping:**
+
+- `ValueError` → 400/403/404/409 (client errors)
+- `RuntimeError` → 500 (server errors)
+- `Any other Exception` → 500 (unexpected errors)
+
+**Detailed Status Code Usage:**
+
+- **400 Bad Request**: Invalid parameters, malformed JSON, validation failures
+- **401 Unauthorized**: Missing/invalid JWT token, authentication failures
+- **403 Forbidden**: Valid auth but access denied (character not owned, story not available)
+- **404 Not Found**: Resource doesn't exist (character, story, segment not found)
+- **409 Conflict**: Resource state conflict (character busy, decision already made)
+- **500 Internal Server Error**: Database failures, AWS service issues, unexpected errors
+
+### GameMode Fail-Safe Pattern
+
+**All Incremental Lambda functions MUST validate GameMode consistency:**
+
+```python
+def validate_incremental_gamemode(character: dict, character_id: str) -> None:
+    """
+    Validate and auto-correct GameMode for Incremental operations.
+
+    GameMode States (Atomic):
+    - Incremental: Has ActiveStoryID and ActiveSegmentID
+    - MUD: Character logged into MUD session
+    - None: Default fail-safe state
+
+    Auto-correction: Set to None if inconsistent state detected.
+    """
+    game_mode = character.get("GameMode", "None")
+    active_story_id = character.get("ActiveStoryID")
+    active_segment_id = character.get("ActiveSegmentID")
+
+    # Check for inconsistent state
+    if game_mode == "Incremental" and (not active_story_id or not active_segment_id):
+        logger.warning(f"GameMode=Incremental but missing story/segment IDs for {character_id}, correcting to None")
+
+        # Auto-correct to fail-safe state
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID",
+            ExpressionAttributeValues={":none": "None"}
+        )
+        raise ValueError("Character was in invalid GameMode, corrected to None")
+
+    elif game_mode == "None" and active_story_id and active_segment_id:
+        logger.warning(f"GameMode=None but has active story/segment for {character_id}, correcting to Incremental")
+
+        # Auto-correct to proper state
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET GameMode = :incremental",
+            ExpressionAttributeValues={":incremental": "Incremental"}
+        )
+        # Continue processing - state is now correct
+
+    elif game_mode not in ["MUD", "Incremental", "None"]:
+        logger.error(f"Invalid GameMode '{game_mode}' for {character_id}, correcting to None")
+
+        # Auto-correct invalid states to fail-safe
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID",
+            ExpressionAttributeValues={":none": "None"}
+        )
+        raise ValueError("Character was in invalid GameMode, corrected to None")
+
+# Usage in all Incremental Lambda functions:
+def business_logic_function(character_id: str, player_id: str) -> dict:
+    character = character_get(character_id, player_id)
+
+    # REQUIRED: Validate and auto-correct GameMode
+    validate_incremental_gamemode(character, character_id)
+
+    # Continue with business logic...
+```
+
+**Benefits:**
+
+- **Data Integrity**: Prevents corruption by auto-correcting invalid states
+- **Fail-Safe Design**: Always defaults to "None" when state is ambiguous
+- **Atomic Operations**: Each correction is a single database update
+- **Self-Healing**: System automatically recovers from inconsistent states
+- **Audit Trail**: All corrections are logged for monitoring
 
 ### Benefits of This Pattern
 
@@ -359,43 +509,52 @@ def business_logic_function(param1: str, param2: str) -> dict:
     - `lambda_response()` - For building responses with CORS
     - `lambda_error()` - For consistent error handling
 
-### Critical: Lambda Handler Exception Handling
+### Critical Rule: Lambda Handler Exception Boundary
 
-The `lambda_handler` function is the interface between AWS Lambda and your code. It must **ALWAYS** return a valid HTTP response and **NEVER** allow exceptions to escape. Here's why this is critical:
+The `lambda_handler` function is the interface between AWS Lambda and your code. It must **ALWAYS** return a valid HTTP response and **NEVER** allow exceptions to escape.
+
+**Why This Is Critical:**
+
+- **API Gateway**: Unhandled exceptions cause generic 500 errors with no useful information
+- **Debugging**: Without proper error handling, production debugging becomes nearly impossible
+- **Monitoring**: CloudWatch alarms and metrics depend on proper error logging
+- **User Experience**: Clients need consistent, parseable error responses
+
+**Implementation Pattern:**
 
 ```python
 def lambda_handler(event: dict, context: object) -> dict:
     """
-    AWS Lambda entry point.
+    AWS Lambda entry point - Layer 1: Infrastructure concerns only.
 
-    CRITICAL: This function must NEVER raise exceptions. All exceptions must be
-    caught and converted to appropriate HTTP responses.
+    CRITICAL RULE: This function must NEVER raise exceptions.
+    All exceptions must be caught and converted to HTTP responses.
     """
     try:
         # All Lambda logic goes inside this try block
-        logger.info("Lambda invoked")
+        log_lambda_statistics(event, context)
 
-        # Your code here...
-
-        return lambda_response(200, {"success": True}, event)
-
-    except ValueError as err:
-        # Handle expected business logic errors
-        logger.error("Validation error")
-        return lambda_response(400, {"error": str(err)}, event)
+        # Handle authentication, parsing, business logic call
+        result = business_logic_function(params)
+        return lambda_response(200, result, event)
 
     except Exception as err:
         # CRITICAL: Catch ALL exceptions to prevent Lambda failures
-        # Use lambda_error for consistent error handling
-        return lambda_error(event, err)
+        return lambda_error(event, err)  # Handles logging and consistent error format
 ```
 
-**Why This Matters:**
+**Testing the Business Logic Layer:**
 
-- **API Gateway**: Unhandled exceptions cause API Gateway to return generic 500 errors with no useful information
-- **Debugging**: Without proper error handling, debugging production issues becomes nearly impossible
-- **Monitoring**: CloudWatch alarms and metrics depend on proper error logging
-- **User Experience**: Clients need consistent, parseable error responses
+```python
+# Unit test example - no AWS dependencies needed
+def test_business_logic():
+    # Mock eidolon library functions
+    with patch('eidolon.character_data.character_get') as mock_get:
+        mock_get.return_value = {"CharacterID": "test", "GameMode": "None"}
+
+        result = business_logic_function("test-char", "test-player")
+        assert result["Success"] is True
+```
 
 ## Data Transformations
 
@@ -407,7 +566,7 @@ The `api_get_character.py` function applies several transformations for client c
 
 1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
    - Database: `{"RightHand": "sword-uuid"}`
-   - Response adds: `{"InventoryDetails": {"RightHand": {"itemId": "sword-uuid", "name": "Iron Sword", ...}}}`
+   - Response adds: `{"InventoryDetails": {"RightHand": {"ItemID": "sword-uuid", "Name": "Iron Sword", ...}}}`
 
 2. **Decimal to Float Conversion**: DynamoDB Decimal types are converted to standard floats
    - Applied to all numeric fields in the response

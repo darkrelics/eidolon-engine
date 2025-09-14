@@ -95,7 +95,7 @@ def get_stack_description(stack_name: str) -> str:
         "dynamodb": "14 tables, 1 IAM policy",
         "lambda": "Shared Lambda layer, shared execution role, logs policy",
         "character": "5 Lambda functions",
-        "story": "10 Lambda functions, 2 SQS queues, EventBridge, SSM, 1 policy",
+        "story": "9 Lambda functions, 2 SQS queues, EventBridge, SSM, 1 policy",
         "player": "Cognito User Pool, client, 1 Lambda function",
         "s3": "1 bucket, 1 IAM policy, Lua scripts upload",
         "cloudwatch": "1 log group, metrics, 1 IAM policy",
@@ -123,8 +123,9 @@ def display_mode_summary(mode: str) -> None:
         description = get_stack_description(stack_name)
         print(f"    {i}. {stack_name.capitalize()}: {description}")
 
-    # Add Phase 11
-    print("    11. Lambda Function Updates: Update function code from S3 artifacts")
+    # Add Lambda code update phase (dynamic numbering)
+    updates_phase = len(deployment_order) + 1
+    print(f"    {updates_phase}. Lambda Function Updates: Update function code from S3 artifacts")
 
     # Show what's excluded
     if mode == "mud":

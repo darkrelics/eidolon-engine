@@ -12,7 +12,7 @@ from eidolon.logger import logger
 
 
 def decimal_to_json_serializable(obj):
-    """Convert Decimal types to JSON serializable format (deep)."""
+    """Convert Decimal types to JSON-serializable format (deep)."""
     if isinstance(obj, Decimal):
         return float(obj)
     if isinstance(obj, list):
@@ -24,7 +24,7 @@ def decimal_to_json_serializable(obj):
 
 def _pydantic_to_jsonable(data):
     """
-    Convert Pydantic BaseModel(s) to JSON-serializable dicts using PascalCase aliases.
+    Convert Pydantic BaseModel(s) to JSON-serializable dicts.
 
     - If Pydantic isn't installed, returns data unchanged.
     - Recurses into lists/dicts and converts any nested BaseModel values.
@@ -55,18 +55,16 @@ def success_response(data=None, status_code: int = 200, headers=None) -> dict:
     Returns:
         API Gateway response dict
     """
-    response_headers = {
-        "Content-Type": "application/json",
-    }
+    response_headers = {"Content-Type": "application/json"}
 
     if headers:
         response_headers.update(headers)
 
     # Handle different data types
     if data is None:
-        body = json.dumps({"success": True})
+        body = json.dumps({"Success": True})
     elif isinstance(data, str):
-        body = json.dumps({"message": data})
+        body = json.dumps({"Message": data})
     else:
         # First convert Pydantic models (if present), then handle Decimals
         data = _pydantic_to_jsonable(data)
@@ -117,7 +115,7 @@ def create_response(status_code: int, body: dict) -> dict:
 
 def error_response(error: str, status_code: int = 400, details=None, headers=None) -> dict:
     """
-    Create standardized error response with PascalCase fields for API Gateway.
+    Create standardized error response for API Gateway.
 
     Args:
         error: Error message
@@ -126,25 +124,16 @@ def error_response(error: str, status_code: int = 400, details=None, headers=Non
         headers: Additional headers to include
 
     Returns:
-        API Gateway response dict with PascalCase error field
+        API Gateway response dict
     """
-    response_headers: dict = {
-        "Content-Type": "application/json",
-    }
+    response_headers: dict = {"Content-Type": "application/json"}
 
     if headers:
         response_headers.update(headers)
 
     error_body: dict = {"Error": error}
-
     if details:
-        # Convert detail keys to PascalCase
-        pascal_details: dict = {}
-        for key, value in details.items():
-            # Simple conversion: capitalize first letter of each word
-            pascal_key: str = "".join(word.capitalize() for word in key.split("_"))
-            pascal_details[pascal_key] = value
-        error_body.update(pascal_details)
+        error_body.update(details)
 
     return {
         "statusCode": status_code,
@@ -163,32 +152,23 @@ def lambda_response(status_code: int, body: dict, event: dict) -> dict:
         event: Lambda event dict
 
     Returns:
-        Formatted response with CORS headers and PascalCase field names
+        Formatted response with CORS headers
     """
     logger.debug(f"Lambda response for status {status_code}")
-
-    # If it's an error response with lowercase "error" key, convert to PascalCase
-    if "error" in body and status_code >= 400:
-
-        error_msg = body.get("error", "")
-        # Remove the error key and treat rest as details
-        details: dict = {k: v for k, v in body.items() if k != "error"}
-        response: dict = error_response(error_msg, status_code, details if details else None)
-        return cors_handler.add_cors_headers(response, event)
 
     return cors_handler.add_cors_headers(create_response(status_code, body), event)
 
 
 def lambda_error(event: dict, err: Exception) -> dict:
     """
-    Handle Lambda function errors with proper logging and CORS response using PascalCase.
+    Handle Lambda function errors with proper logging and CORS response.
 
     Args:
         event: Lambda event dict
         err: Exception that occurred
 
     Returns:
-        Error response with CORS headers and PascalCase fields
+        Error response with CORS headers.
     """
     logger.error(
         f"Unexpected error in lambda_handler {err}",

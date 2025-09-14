@@ -10,7 +10,6 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
-from eidolon.schema import normalize_segment_definition
 
 # Valid segment types for the incremental game
 VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
@@ -72,7 +71,7 @@ def get_active_segment(active_segment_id: str) -> dict:
         if not active_segment:
             raise ValueError(f"Active segment not found: {active_segment_id}")
         # Convert DynamoDB Decimal values to native Python types
-        return decimal_to_float(active_segment) # type: ignore
+        return decimal_to_float(active_segment)  # type: ignore
     except ClientError as err:
         logger.error(f"Failed to get active segment for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get active segment: {err}") from err
@@ -100,11 +99,7 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
         )
         if not segment_def:
             raise ValueError(f"Segment definition not found: {segment_id}")
-        # Normalize mixed-case inputs from content or tools
-        normalized = normalize_segment_definition(segment_def)
-        # Skip Pydantic validation for now to preserve normalized structure
-        # The normalization already handles the key conversions we need
-        results = normalized.get("Results", {})
+        results = segment_def.get("Results", {})
         logger.info(f"Segment {segment_id} normalized Results keys: {list(results.keys())}")
         # Log the structure of one result to debug
         if results and "Normal" in results:
@@ -114,7 +109,7 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
             )
             if isinstance(normal_result, dict) and "NextSegmentID" in normal_result:
                 logger.info(f"  'Normal' NextSegmentID: {normal_result['NextSegmentID']}")
-        return normalized
+        return segment_def
     except ClientError as err:
         logger.error(f"Failed to get segment definition for {segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get segment definition: {err}") from err
@@ -169,7 +164,7 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
         outcome: Outcome string (e.g., "exceptional", "normal", "failure")
 
     Returns:
-        Dict with validated narrative and effects, guaranteed to have PascalCase keys:
+        Dict with validated narrative and effects:
             - Narrative (str): The outcome narrative text
             - Effects (dict): Effects to apply (may be empty)
     """
@@ -185,10 +180,10 @@ def validate_segment_outcome_results(segment: dict, outcome: str) -> dict:
         logger.error(f"Results field is not a dictionary for {segment.get('SegmentID')}")
         return {"Narrative": "", "Effects": {}}
 
-    outcome_key = str(outcome).lower() if outcome else "normal"
+    outcome_key = map_outcome_to_key(outcome or "normal")
     outcome_result = results.get(outcome_key)
 
-    if outcome_result is None:
+    if not outcome_result:
         logger.info(f"No specific result for outcome for {segment.get('SegmentID')}")
         if outcome == "exceptional":
             return {"Narrative": "Your actions exceeded all expectations, achieving extraordinary results.", "Effects": {}}
@@ -228,31 +223,30 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
     """
     updates = {}
 
-    xp_updates = results.get("xpUpdates")
+    xp_updates = results.get("XPUpdates")
     if xp_updates:
         updates.update(xp_updates)
 
-    wound_updates = results.get("woundUpdates")
+    wound_updates = results.get("WoundUpdates")
     if wound_updates:
         updates.update(wound_updates)
 
-    combat_state = results.get("combatState", {})
-    if combat_state.get("opponentDefeated"):
-        opponent_id = combat_state.get("opponentId")
+    combat_state = results.get("CombatState", {})
+    if combat_state.get("OpponentDefeated"):
+        opponent_id = combat_state.get("OpponentID")
         if opponent_id:
             try:
                 opponent_data = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
                 if opponent_data:
                     updates["CombatRewards"] = {
-                        "opponentId": opponent_id,
-                        "defeated": True,
-                        "opponentData": opponent_data,
+                        "OpponentID": opponent_id,
+                        "Defeated": True,
+                        "OpponentData": opponent_data,
                     }
             except Exception as err:
                 logger.error(f"Failed to get opponent data for rewards for {opponent_id} Error: {err}", exc_info=True)
 
     if outcome in ["death", "failure", "minimal", "normal", "exceptional"]:
-        # Map outcome to PascalCase for Results lookup
         outcome_map = {
             "death": "Death",
             "failure": "Failure",
@@ -262,7 +256,7 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
         }
         outcome_key = outcome_map.get(outcome.lower(), outcome)
         outcome_results = segment_def.get("Results", {}).get(outcome_key, {})
-        outcome_effects = outcome_results.get("Effects", {})  # PascalCase Effects
+        outcome_effects = outcome_results.get("Effects", {})
         if outcome_effects:
             updates["StoryEffects"] = outcome_effects
 

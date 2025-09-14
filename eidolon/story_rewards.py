@@ -20,10 +20,9 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
         segments_completed: Number of segments completed
 
     Returns:
-        Dict with calculated rewards (xp, items, etc.)
+        Dict with calculated rewards (items, currency)
     """
     rewards = {
-        "xp": 0,
         "items": [],
         "currency": 0,
     }
@@ -31,7 +30,6 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
     if outcome == "death":
         return rewards
 
-    base_xp_multiplier = float(story_metadata.get("BaseXPMultiplier", 0.5))
     reward_tiers_raw = story_metadata.get("RewardTiers", {})
     reward_tiers: dict = {}
     if isinstance(reward_tiers_raw, dict):
@@ -39,21 +37,7 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
     else:
         reward_tiers = {}
 
-    outcome_multipliers = {
-        "failure": 0.25,
-        "minimal": 0.5,
-        "normal": 1.0,
-        "exceptional": 1.5,
-    }
-
-    outcome_multiplier = outcome_multipliers.get(outcome, 0)
-    base_xp = story_metadata.get("EstimatedDuration", 300) * base_xp_multiplier
-
-    total_segments = story_metadata.get("TotalSegments", 1)
-    completion_ratio = min(1.0, segments_completed / max(1, total_segments))
-
-    rewards["xp"] = int(base_xp * outcome_multiplier * completion_ratio)
-
+    # Get rewards based on outcome tier
     tier_rewards = reward_tiers.get(outcome, {})
     if isinstance(tier_rewards, dict):
         rewards["items"] = tier_rewards.get("items", [])
@@ -77,19 +61,11 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
         RuntimeError: If database operations fail
     """
     try:
-        if rewards.get("xp", 0) > 0:
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression="ADD #skills.#story :xp",
-                ExpressionAttributeNames={
-                    "#skills": "Skills",
-                    "#story": "story",
-                },
-                ExpressionAttributeValues={
-                    ":xp": rewards["xp"],
-                },
-            )
+        # Story rewards currently only handle items and currency
+        # XP is awarded through segment processing for specific skills
+
+        # TODO: Implement item rewards when needed
+        # TODO: Implement currency rewards when needed
 
         logger.info(f"Applied story rewards for {character_id}")
     except ClientError as err:

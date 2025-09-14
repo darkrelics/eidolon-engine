@@ -32,10 +32,14 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
         RuntimeError: If database operations fail
     """
     # Validate character name format - let it raise ValueError
-    validate_character_name(character_name)
+    try:
+        validate_character_name(character_name)
+    except ValueError as err:
+        logger.warning(f"Character name validation failed for '{character_name}': {err}")
+        raise ValueError(f"Invalid character name: {err}") from err
 
-    # Check bloom filter for restricted names
-    if character_name_filter.is_restricted(character_name):
+    # Check bloom filter for restricted names (approve returns True when allowed)
+    if not character_name_filter.approve(character_name.lower()):
         raise ValueError("Character name is not available")
 
     # Check character limit
@@ -108,7 +112,6 @@ def lambda_handler(event: dict, context: object) -> dict:
         logger.error(f"Failed to parse request body: {err}", exc_info=True)
         return lambda_error(event, err)
 
-    # Extract and validate required fields - PascalCase only
     character_name = body.get("CharacterName")
     if not character_name:
         return lambda_response(400, {"Error": "CharacterName is required"}, event)

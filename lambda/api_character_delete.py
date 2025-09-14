@@ -49,9 +49,9 @@ def character_deletion(player_id: str, character_id: str) -> dict:
     logger.info(f"Character deletion completed for {character_id}")
 
     # Check if deletion was successful
-    if not deletion_result.get("character_deleted", False):
+    if not deletion_result.get("CharacterDeleted", False):
         error_msg = "Failed to delete character"
-        errors = deletion_result.get("errors", [])
+        errors = deletion_result.get("Errors", [])
         if errors:
             error_msg = errors[0]
         raise RuntimeError(error_msg)
@@ -101,8 +101,8 @@ def lambda_handler(event: dict, context: object) -> dict:
                 "Message": "Character deleted successfully",
                 "CharacterID": character_id,
                 "CharacterName": result.get("character_name", "Unknown"),
-                "ItemsDeleted": result.get("deletion_result", {}).get("items_deleted", 0),
-                "ActiveSegmentsDeleted": result.get("deletion_result", {}).get("active_segments_deleted", 0),
+                "ItemsDeleted": result.get("deletion_result", {}).get("ItemsDeleted", 0),
+                "ActiveSegmentsDeleted": result.get("deletion_result", {}).get("ActiveSegmentsDeleted", 0),
             },
             event,
         )

@@ -9,7 +9,7 @@ Triggered by SQS to apply character updates and progress stories.
 
 from eidolon.character_data import get_character
 from eidolon.character_segment import update_character_active_segment
-from eidolon.character_story import apply_story_outcome_effects
+from eidolon.constants import CharState
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome
@@ -104,24 +104,24 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Apply deferred rewards (combat rewards and story outcome effects)
     character_updates = active_segment.get("CharacterUpdates", {})
+    logger.info(f"CharacterUpdates from segment: {character_updates}")
     if character_updates and character_id:
         # Apply combat rewards if present
         combat_rewards = character_updates.get("CombatRewards", {})
-        if combat_rewards and combat_rewards.get("defeated"):
-            opponent_data = combat_rewards.get("opponentData")
+        if combat_rewards and combat_rewards.get("Defeated"):
+            opponent_data = combat_rewards.get("OpponentData")
             if opponent_data:
                 try:
                     apply_combat_rewards(character_id, opponent_data)
                 except Exception as err:
                     logger.error(f"Failed to apply combat rewards for {character_id} Error: {err}", exc_info=True)
 
-        # Apply story outcome effects if present
+        # Story outcome effects are now applied immediately in ops_segment_process
+        # This is kept for backwards compatibility with existing segments that may have effects stored
         story_effects = character_updates.get("StoryEffects", {})
         if story_effects:
-            try:
-                apply_story_outcome_effects(character_id, story_effects)
-            except Exception as err:
-                logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
+            logger.info("Found legacy StoryEffects in CharacterUpdates (already applied by processor)")
+            # Effects should have already been applied by ops_segment_process
 
     # Mark segment as completed in DynamoDB before recording history
     try:
@@ -152,7 +152,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     logger.info(f"  Has top-level NextSegmentID: {segment_def.get('NextSegmentID') is not None}")
 
     # Check if we need to insert a rest segment for unconscious character
-    if new_character_state == "unconscious":
+    if new_character_state == CharState.UNCONSCIOUS.value:
         try:
             # Insert a rest segment after current segment
             rest_segment_id = insert_rest_segment(

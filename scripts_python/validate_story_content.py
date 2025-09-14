@@ -1,16 +1,10 @@
 """
-Validates story segment data offline using existing normalization and helpers.
-Ensures all segments in test_story.json conform to expected structure.
+Validates story segment data offline using strict boundary validation.
 """
 
 import json
 import sys
 from pathlib import Path
-
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from eidolon.schema import normalize_segment_definition
 
 
 def validate_mechanical_segment(segment: dict):
@@ -18,10 +12,9 @@ def validate_mechanical_segment(segment: dict):
     errors = []
     warnings = []
 
-    # Check Results if present
     results = segment.get("Results", {})
     if results:
-        for outcome in ["death", "failure", "minimal", "normal", "exceptional"]:
+        for outcome in ["Death", "Failure", "Minimal", "Normal", "Exceptional"]:
             if outcome in results:
                 outcome_data = results[outcome]
 
@@ -41,28 +34,22 @@ def validate_mechanical_segment(segment: dict):
                     if next_id is not None and not (isinstance(next_id, str) and next_id):
                         errors.append(f"  - {outcome} NextSegmentID is not a non-empty string")
 
-    # Check Challenges if present
     challenges = segment.get("Challenges", [])
     for i, challenge in enumerate(challenges):
-        # Check for Attribute/Skill in either case
-        has_attribute = "Attribute" in challenge or "attribute" in challenge
-        has_skill = "Skill" in challenge or "skill" in challenge
-
-        if not has_attribute:
+        if "Attribute" not in challenge:
             errors.append(f"  - Challenge {i+1} missing Attribute field")
-        if not has_skill:
+        if "Skill" not in challenge:
             errors.append(f"  - Challenge {i+1} missing Skill field")
 
         # Check Difficulty is numeric
-        difficulty = challenge.get("Difficulty") or challenge.get("difficulty")
+        difficulty = challenge.get("Difficulty")
         if difficulty is not None and not isinstance(difficulty, (int, float)):
             errors.append(f"  - Challenge {i+1} Difficulty is not numeric")
 
         # Check Attempts is int >= 1
-        attempts = challenge.get("Attempts") or challenge.get("attempts")
-        if attempts is not None:
-            if not isinstance(attempts, int) or attempts < 1:
-                errors.append(f"  - Challenge {i+1} Attempts must be int >= 1")
+        attempts = challenge.get("Attempts")
+        if attempts is not None and (not isinstance(attempts, int) or attempts < 1):
+            errors.append(f"  - Challenge {i+1} Attempts must be int >= 1")
 
     # Check Combat if present and actually has opponent
     combat = segment.get("Combat", {})
@@ -146,24 +133,16 @@ def validate_story_content(story_file: Path) -> bool:
         print(f"\nSegment: {segment_id}")
         print(f"Type: {segment_type}")
 
-        # Normalize the segment
-        try:
-            normalized = normalize_segment_definition(segment)
-        except Exception as err:
-            print(f"  ERROR: Failed to normalize: {err}")
-            total_errors += 1
-            continue
-
         # Validate based on type
         errors = []
         warnings = []
 
         if segment_type == "mechanical":
-            errors, warnings = validate_mechanical_segment(normalized)
+            errors, warnings = validate_mechanical_segment(segment)
         elif segment_type == "decision":
-            errors, warnings = validate_decision_segment(normalized)
+            errors, warnings = validate_decision_segment(segment)
         elif segment_type == "rest":
-            errors, warnings = validate_rest_segment(normalized)
+            errors, warnings = validate_rest_segment(segment)
         else:
             errors.append(f"  - Unknown segment type: {segment_type}")
 

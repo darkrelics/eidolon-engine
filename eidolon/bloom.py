@@ -2,84 +2,74 @@
 Bloom filter utilities for character name validation.
 
 Provides bloom filter functionality for checking restricted character names.
-When the bloom filter file is not available, it gracefully degrades to allow
-all names (returning False for all restriction checks).
+Fail-safe behavior: If the bloom filter file is missing or cannot be loaded,
+or if an error occurs during checking, the module rejects names rather than
+allowing them. This prevents bypassing name restrictions if the filter is
+unavailable.
+
+The pickled payload is produced by the build and is trusted. The in-memory
+result caching is intentional to survive Lambda warm starts and reduce cost
+within a container's lifetime.
 """
 
 import os
 import pickle
+from functools import cache
 
 from eidolon.logger import logger
+
+
+def load_bloom_filter(filter_path: str):
+    """Load and return the bloom filter object from disk.
+
+    Returns the loaded bloom filter object on success, or None if not
+    available or failed to load. Errors are logged and treated as
+    non-fatal; the caller will apply fail-safe restrictive behavior
+    (reject names) when the filter is unavailable.
+    """
+    if not os.path.exists(filter_path):
+        logger.warning(f"Bloom filter file not found at {filter_path} - name restrictions disabled")
+        return None
+
+    try:
+        with open(filter_path, "rb") as f:
+            bloom = pickle.load(f)
+            logger.info(f"Successfully loaded character name bloom filter from {filter_path}")
+            return bloom
+    except pickle.UnpicklingError as err:
+        logger.error(f"Failed to unpickle bloom filter from {filter_path}: {err} - name restrictions disabled")
+        return None
+    except Exception as err:
+        logger.error(f"Unexpected error loading bloom filter: {err} - name restrictions disabled")
+        return None
 
 
 class CharacterNameFilter:
     """Manages bloom filter for restricted character names with graceful degradation."""
 
     def __init__(self, filter_path: str = "character_name_filter.pkl"):
-        """Initialize the character name filter.
-
-        Args:
-            filter_path: Path to the bloom filter pickle file
-        """
-        self.bloom_filter = None
+        """Initialize the character name filter and load the filter payload."""
         self.filter_path = filter_path
-        self.filter_available = False
-        self._load_filter()
+        self.bloom_filter = load_bloom_filter(filter_path)
 
-    def _load_filter(self) -> None:
-        """Load the bloom filter from disk if available.
+    @cache
+    def approve(self, name: str) -> bool:
+        """Return True if the given name is approved (not restricted).
 
-        If the file doesn't exist or can't be loaded, the filter will be
-        disabled and all names will be allowed.
+        The check is cached per normalized name. When the bloom filter is
+        unavailable or an error occurs during checking, names are rejected
+        (fail-safe).
         """
-        # Check if file exists first to avoid unnecessary errors
-        if not os.path.exists(self.filter_path):
-            logger.warning(f"Bloom filter file not found at {self.filter_path} - name restrictions disabled")
-            self.bloom_filter = None
-            self.filter_available = False
-            return
+        normalized = (name or "").lower()
+
+        if not self.bloom_filter:
+            return False  # No filter means all names are rejected
 
         try:
-            with open(self.filter_path, "rb") as f:
-                self.bloom_filter = pickle.load(f)
-                self.filter_available = True
-                logger.info(f"Successfully loaded character name bloom filter from {self.filter_path}")
-        except pickle.UnpicklingError as err:
-            logger.error(f"Failed to unpickle bloom filter from {self.filter_path}: {err} - name restrictions disabled")
-            self.bloom_filter = None
-            self.filter_available = False
+            return normalized not in self.bloom_filter
         except Exception as err:
-            logger.error(f"Unexpected error loading bloom filter: {err} - name restrictions disabled")
-            self.bloom_filter = None
-            self.filter_available = False
-
-    def is_restricted(self, name: str) -> bool:
-        """Check if a character name is restricted.
-
-        Args:
-            name: Character name to check
-
-        Returns:
-            True if the name is restricted, False if allowed or filter unavailable
-        """
-        if not self.bloom_filter or not self.filter_available:
-            # If bloom filter is not available, allow all names
-            return False
-
-        try:
-            return name.lower() in self.bloom_filter
-        except Exception as err:
-            logger.error(f"Error checking name restriction for '{name}': {err}")
-            # On error, be permissive and allow the name
-            return False
-
-    def is_available(self) -> bool:
-        """Check if the bloom filter is loaded and available.
-
-        Returns:
-            True if bloom filter is loaded, False otherwise
-        """
-        return self.filter_available
+            logger.error(f"Error checking name restriction for '{normalized}': {err}")
+            return False  # On error, reject the name
 
 
 # Global instance of the filter - will gracefully handle missing file

@@ -61,7 +61,7 @@ def get_shared_resources(params, state: CDKState) -> dict:
 
 def deploy_story_stack(params, state: CDKState) -> dict:
     """Deploy the Story stack using CDK."""
-    # Get shared resources from Character stack
+    # Get shared resources from Lambda stack
     resources = get_shared_resources(params, state)
 
     # Get config for DynamoDB tables

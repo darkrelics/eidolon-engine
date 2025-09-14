@@ -63,7 +63,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Parse request body (Flutter sends PascalCase)
     try:
         body = parse_event_body(event)
         character_id = body.get("CharacterID")
