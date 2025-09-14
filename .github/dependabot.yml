@@ -7,15 +7,11 @@ updates:
     reviewers:
       - "robinje"
     groups:
-      nonbreaking:
+      git-actions-updates:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
+        update-types: ["major","minor", "patch"]
         patterns: ["*"]
-      major:
-        applies-to: version-updates
-        update-types: ["major"]
-        patterns: ["*"]
-      security:
+      git-action-security:
         applies-to: security-updates
         patterns: ["*"]
 
@@ -26,15 +22,11 @@ updates:
     reviewers:
       - "robinje"
     groups:
-      nonbreaking:
+      go-package-updates:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
+        update-types: ["major","minor", "patch"]
         patterns: ["*"]
-      major:
-        applies-to: version-updates
-        update-types: ["major"]
-        patterns: ["*"]
-      security:
+      go-package-security:
         applies-to: security-updates
         patterns: ["*"]
 
@@ -45,13 +37,9 @@ updates:
     reviewers:
       - "robinje"
     groups:
-      nonbreaking:
+      pip-package-updates:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
-        patterns: ["*"]
-      major:
-        applies-to: version-updates
-        update-types: ["major"]
+        update-types: ["major", "minor", "patch"]
         patterns: ["*"]
       security:
         applies-to: security-updates
@@ -64,15 +52,11 @@ updates:
     reviewers:
       - "robinje"
     groups:
-      nonbreaking:
+      flutter-portal-updates:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
+        update-types: ["major", "minor", "patch"]
         patterns: ["*"]
-      major:
-        applies-to: version-updates
-        update-types: ["major"]
-        patterns: ["*"]
-      security:
+      flutter-portal-security:
         applies-to: security-updates
         patterns: ["*"]
 
@@ -83,14 +67,10 @@ updates:
     reviewers:
       - "robinje"
     groups:
-      nonbreaking:
+      flutter-incremental-updates:
         applies-to: version-updates
-        update-types: ["minor", "patch"]
+        update-types: ["major", "minor", "patch"]
         patterns: ["*"]
-      major:
-        applies-to: version-updates
-        update-types: ["major"]
-        patterns: ["*"]
-      security:
+      flutter-incrementl-security:
         applies-to: security-updates
         patterns: ["*"]
