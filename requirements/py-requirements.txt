@@ -36,7 +36,7 @@ pygments==2.19.1
 pyparsing==3.2.3 
 requests==2.32.4 
 rich==14.1.0 
-setuptools==80.8.0 
+setuptools==80.9.0 
 sortedcontainers==2.4.0 
 stevedore==5.4.1 
 toml==0.10.2 
