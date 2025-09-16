@@ -7,9 +7,6 @@ or if an error occurs during checking, the module rejects names rather than
 allowing them. This prevents bypassing name restrictions if the filter is
 unavailable.
 
-The pickled payload is produced by the build and is trusted. The in-memory
-result caching is intentional to survive Lambda warm starts and reduce cost
-within a container's lifetime.
 """
 
 import os

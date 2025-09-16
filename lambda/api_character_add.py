@@ -43,14 +43,13 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
         raise ValueError("Character name is not available")
 
     # Check character limit
-    limit_result: dict = check_character_limit(player_id)
-    can_create = limit_result.get("can_create", False)
-    current_count = limit_result.get("current_count", 0)
+    can_create = check_character_limit(player_id)
+
 
     logger.debug(f"Character limit check for {player_id}")
 
     if not can_create:
-        raise ValueError(f"Character limit reached ({current_count})")
+        raise ValueError("Character limit reached")
 
     # Validate archetype or use defaults
     archetype_data: dict = {}

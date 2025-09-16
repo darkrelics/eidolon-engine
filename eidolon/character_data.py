@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from botocore.exceptions import ClientError
+from eidolon.constants import CharState
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
@@ -25,10 +26,14 @@ def generate_character_id() -> str:
     Returns:
         A UUID string for the character ID.
     """
-    return str(uuid.uuid4())
+    charater_uuid:str = str(uuid.uuid4())
+
+    logger.debug(f"Generated character ID: {charater_uuid}")
+
+    return charater_uuid
 
 
-def check_character_limit(player_id: str) -> dict:
+def check_character_limit(player_id: str) -> bool:
     """
     Check if player has reached character limit.
 
@@ -36,9 +41,7 @@ def check_character_limit(player_id: str) -> dict:
         player_id: Cognito user ID.
 
     Returns:
-        Dict with:
-            - can_create: bool - Whether player can create more characters
-            - current_count: int - Current number of characters
+        bool: True if player can create more characters, False if limit reached.
 
     Raises:
         ValueError: If player not found
@@ -54,10 +57,7 @@ def check_character_limit(player_id: str) -> dict:
         character_list = player.get("CharacterList", {})
         current_count = len(character_list)
 
-        return {
-            "can_create": current_count < MAX_CHARACTERS_PER_PLAYER,
-            "current_count": current_count,
-        }
+        return current_count < MAX_CHARACTERS_PER_PLAYER
 
     except ClientError as err:
         logger.error(f"Error checking character limit for {player_id} Error: {err}")
@@ -140,7 +140,6 @@ def character_get(character_id: str, player_id: str) -> dict:
     logger.debug(f"Character retrieved successfully: {character_id}")
 
     # Heal expired wounds
-    from eidolon.constants import CharState
 
     if character.get("Wounds") and character.get("CharState") != CharState.DEAD.value:
         wounds: list = character.get("Wounds", [])
@@ -160,8 +159,6 @@ def character_get(character_id: str, player_id: str) -> dict:
 
         if len(remaining_wounds) < len(wounds):
             character["Wounds"] = remaining_wounds
-
-            logger.info("It's a miracle!")
 
             # Update character with healed wounds
             if character.get("CharState", CharState.STANDING.value) == CharState.UNCONSCIOUS.value:
@@ -200,60 +197,6 @@ def character_get(character_id: str, player_id: str) -> dict:
     return character
 
 
-def build_character_record(
-    character_id: str,
-    player_id: str,
-    character_name: str,
-    archetype_name: str,
-    archetype_data: dict,
-    inventory: dict,
-    timestamp: str,
-) -> dict:
-    """
-    Build a character record with all required fields.
-
-    Args:
-        character_id: Generated character UUID
-        player_id: Player UUID
-        character_name: Character name
-        archetype_name: Archetype name
-        archetype_data: Archetype data from database
-        inventory: Inventory items mapping
-        timestamp: ISO format timestamp
-
-    Returns:
-        Complete character record dict
-    """
-    from eidolon.constants import CharState
-
-    return {
-        "CharacterID": character_id,
-        "PlayerID": player_id,
-        "CharacterName": character_name,
-        "Archetype": archetype_name,
-        "Attributes": archetype_data.get("Attributes", {}),
-        "Skills": archetype_data.get("Skills", {}),
-        "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
-        "Essence": archetype_data.get("Essence", DEFAULT_ESSENCE),
-        "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),
-        "Wounds": [],
-        "RoomID": archetype_data.get("StartRoom", 0),
-        "Inventory": inventory,
-        "Resources": {},
-        "Progress": {},
-        "AvailableStories": archetype_data.get("AvailableStories", []),
-        # AbandonedStories and CompletedStories are not initialized here
-        # They will be created as DynamoDB sets when first used via ADD operations
-        "ActiveStoryID": None,
-        "ActiveSegmentID": None,
-        "Hidden": False,
-        "CharState": CharState.STANDING.value,
-        "GameMode": "None",
-        "CreatedAt": timestamp,
-        "UpdatedAt": timestamp,
-        "LastPlayed": timestamp,
-    }
-
 
 def create_character_record(character_item: dict) -> bool:
     """
@@ -281,20 +224,6 @@ def create_character_record(character_item: dict) -> bool:
             raise ValueError("Character name is already taken") from err
         logger.error(f"Failed to create character record for {character_item.get('CharacterName')} Error: {err}")
         raise RuntimeError(f"Failed to create character record: {err}") from err
-
-
-def rollback_character_creation(character_id: str) -> None:
-    """
-    Attempt to rollback a failed character creation.
-
-    Args:
-        character_id: Character UUID to delete
-    """
-    try:
-        dynamo.delete_item(TableName.CHARACTERS, Key={"CharacterID": character_id})
-        logger.info(f"Successfully rolled back character creation for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to rollback character creation for {character_id} Error: {err}")
 
 
 def create_character(player_id: str, character_name: str, archetype_name: str, archetype_data: dict) -> dict:
@@ -344,16 +273,33 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         inventory = create_items_from_prototypes(starting_items, character_id)
         logger.info(f"Starting items created for {character_id}")
 
-    # Build character record
-    character_item = build_character_record(
-        character_id=character_id,
-        player_id=player_id,
-        character_name=character_name,
-        archetype_name=archetype_name,
-        archetype_data=archetype_data,
-        inventory=inventory,
-        timestamp=timestamp,
-    )
+    # Build character record (inlined)
+    character_item = {
+        "CharacterID": character_id,
+        "PlayerID": player_id,
+        "CharacterName": character_name,
+        "Archetype": archetype_name,
+        "Attributes": archetype_data.get("Attributes", {}),
+        "Skills": archetype_data.get("Skills", {}),
+        "MaxHealth": archetype_data.get("Health", DEFAULT_HEALTH),
+        "Essence": archetype_data.get("Essence", DEFAULT_ESSENCE),
+        "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),
+        "Wounds": [],
+        "RoomID": archetype_data.get("StartRoom", 0),
+        "Inventory": inventory,
+        "Resources": {},
+        "Progress": {},
+        "AvailableStories": archetype_data.get("AvailableStories", []),
+        # AbandonedStories and CompletedStories are not initialized here; created later via ADD ops
+        "ActiveStoryID": None,
+        "ActiveSegmentID": None,
+        "Hidden": False,
+        "CharState": CharState.STANDING.value,
+        "GameMode": "None",
+        "CreatedAt": timestamp,
+        "UpdatedAt": timestamp,
+        "LastPlayed": timestamp,
+    }
 
     # Create character record
     try:
@@ -372,8 +318,6 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
             player_id=player_id, character_name=character_name, character_id=character_id, timestamp=timestamp
         )
     except RuntimeError as err:
-        # Rollback character creation
-        rollback_character_creation(character_id)
         raise RuntimeError(f"Failed to create character: {err}") from err
 
     logger.info(f"Character creation completed successfully for {character_name}")
@@ -397,6 +341,8 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
     if not updates:
         logger.info(f"No character updates to apply for {character_id}")
         return
+
+    logger.info(f"Applying character updates for {character_id}: {updates}")
 
     update_expressions = []
     expression_names = {}
@@ -425,11 +371,10 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
             expression_values[f":xp_{safe_attr}"] = Decimal(str(xp_value))
 
     # Apply wounds
-    wounds = updates.get("Wounds", [])
+    wounds = updates.get("Wounds")
     if wounds:
-        update_expressions.append("Wounds = list_append(if_not_exists(Wounds, :empty_list), :new_wounds)")
+        update_expressions.append("Wounds = list_append(Wounds, :new_wounds)")
         expression_values[":new_wounds"] = wounds
-        expression_values[":empty_list"] = []
 
     # Apply room change
     room_id = updates.get("Room")
@@ -481,7 +426,7 @@ def character_clear_story(character_id: str) -> None:
     try:
         # Update the character to clear story fields and reset GameMode
         update_expression = """
-            SET GameMode = :none, 
+            SET GameMode = :none,
                 UpdatedAt = :updated_at
             REMOVE ActiveStoryID, ActiveSegmentID
         """
@@ -500,3 +445,4 @@ def character_clear_story(character_id: str) -> None:
     except ClientError as err:
         logger.error(f"Failed to clear story for character {character_id} Error: {err}", exc_info=True)
         # Don't raise - just log and return
+
