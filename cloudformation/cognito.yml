@@ -6,13 +6,16 @@ Parameters:
     Type: String
     Default: "eidolon"
     Description: "Name of the game"
+
   ReplyEmailAddress:
     Type: String
     Description: "Email address to send notifications from"
-    Default: "noreply@example.com"
+    Default: "noreply@darkrelics.net"
+
   LambdaBucketName:
     Type: String
     Description: "S3 bucket containing Lambda deployment packages"
+
   LambdaZipKey:
     Type: String
     Default: "lambda.zip"
@@ -101,7 +104,6 @@ Resources:
             Priority: 1
       LambdaConfig:
         PostConfirmation: !GetAtt CognitoNewPlayerFunction.Arn
-        PreAuthentication: !GetAtt CognitoDeletePlayerFunction.Arn
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
@@ -183,29 +185,19 @@ Outputs:
   UserPoolId:
     Description: "ID of the Cognito User Pool"
     Value: !Ref CognitoUserPool
-    Export:
-      Name: !Sub "${AWS::StackName}-UserPoolId"
 
   UserPoolArn:
     Description: "ARN of the Cognito User Pool"
     Value: !GetAtt CognitoUserPool.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-UserPoolArn"
 
   UserPoolClientId:
     Description: "ID of the Cognito App Client"
     Value: !Ref CognitoUserPoolClient
-    Export:
-      Name: !Sub "${AWS::StackName}-UserPoolClientId"
 
   IdentityPoolId:
     Description: "ID of the Cognito Identity Pool"
     Value: !Ref CognitoIdentityPool
-    Export:
-      Name: !Sub "${AWS::StackName}-IdentityPoolId"
 
   AuthenticatedRoleArn:
     Description: "ARN of the authenticated IAM role"
     Value: !GetAtt CognitoAuthenticatedRole.Arn
-    Export:
-      Name: !Sub "${AWS::StackName}-AuthenticatedRoleArn"

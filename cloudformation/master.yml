@@ -9,7 +9,7 @@ Parameters:
   ReplyEmailAddress:
     Type: String
     Description: "Email address for Cognito notifications"
-    Default: "noreply@example.com"
+    Default: "noreply@darkrelics.net"
   LambdaBucketName:
     Type: String
     Description: "S3 bucket containing Lambda deployment packages and CloudFormation templates"

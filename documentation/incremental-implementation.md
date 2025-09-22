@@ -1565,7 +1565,7 @@ class IncrementalUser(HttpUser):
         """Login and select character."""
         # Login flow
         response = self.client.post("/auth/login", json={
-            "email": f"test{random.randint(1,1000)}@example.com",
+            "email": f"test{random.randint(1,1000)}@darkrelics.net",
             "password": "TestPassword123!"
         })
         self.token = response.json()['token']
