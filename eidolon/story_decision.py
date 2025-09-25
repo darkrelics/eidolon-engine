@@ -204,10 +204,16 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
             # Return the next segment data so Flutter doesn't need to reload
             response_data["NextSegment"] = {
                 "ActiveSegmentID": next_active_segment_id,
+                "StoryID": story_id,
+                "SegmentID": next_segment_id,
                 "SegmentType": next_segment_def.get("SegmentType"),
+                "Status": "active",
+                "StartTime": now_iso(),
+                "EndTime": future_iso(next_segment_duration),
+                "ProcessingStatus": "pending",
                 "ShortStatus": next_segment_def.get("ShortStatus"),
                 "DefaultStatus": next_segment_def.get("DefaultStatus"),
-                "EndTime": future_iso(next_segment_duration),
+                "Duration": next_segment_duration,
             }
 
             # Add decision-specific fields if next is a decision
