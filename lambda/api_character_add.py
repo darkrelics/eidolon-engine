@@ -45,7 +45,6 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
     # Check character limit
     can_create = check_character_limit(player_id)
 
-
     logger.debug(f"Character limit check for {player_id}")
 
     if not can_create:

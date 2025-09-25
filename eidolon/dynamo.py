@@ -105,11 +105,11 @@ class ExponentialBackoff:
                     success = True
                 except self.expected_errors as err:
                     logger.info(f"DynamoDB expected error, retrying Error: {err}")
-                    sleep(2 ** count / 10)
+                    sleep(2**count / 10)
                     count += 1
                 except tuple(self.expected_error_factory.RETRY_ERRORS) as err:
                     logger.info(f"DynamoDB retry error Error: {err}")
-                    sleep(2 ** count / 10)
+                    sleep(2**count / 10)
                     count += 1
                 except ClientError as err:
                     error_code = err.response.get("Error", {}).get("Code", "")
@@ -120,7 +120,7 @@ class ExponentialBackoff:
                         "InternalServerError",
                     ]:
                         logger.info("DynamoDB throttling error, retrying")
-                        sleep(2 ** count / 10)
+                        sleep(2**count / 10)
                         count += 1
                     else:
                         # Non-retryable client error

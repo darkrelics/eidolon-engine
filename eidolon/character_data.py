@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from botocore.exceptions import ClientError
-from eidolon.constants import CharState
 
+from eidolon.constants import CharState
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes
@@ -26,7 +26,7 @@ def generate_character_id() -> str:
     Returns:
         A UUID string for the character ID.
     """
-    charater_uuid:str = str(uuid.uuid4())
+    charater_uuid: str = str(uuid.uuid4())
 
     logger.debug(f"Generated character ID: {charater_uuid}")
 
@@ -195,7 +195,6 @@ def character_get(character_id: str, player_id: str) -> dict:
     character["Health"] = max_health - len(wounds)
 
     return character
-
 
 
 def create_character_record(character_item: dict) -> bool:
@@ -445,4 +444,3 @@ def character_clear_story(character_id: str) -> None:
     except ClientError as err:
         logger.error(f"Failed to clear story for character {character_id} Error: {err}", exc_info=True)
         # Don't raise - just log and return
-
