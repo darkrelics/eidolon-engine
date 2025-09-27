@@ -141,14 +141,8 @@ class Config:
 
         if "Story" in data:
             story_section = data.get("Story", {})
-            instance.sqs_processing_queue_url = story_section.get(
-                "ProcessingQueueUrl", instance.sqs_processing_queue_url
-            )
-            instance.sqs_advancement_queue_url = story_section.get(
-                "AdvancementQueueUrl", instance.sqs_advancement_queue_url
-            )
-            instance.ssm_story_parameter = story_section.get(
-                "SSMParameter", instance.ssm_story_parameter
-            )
+            instance.sqs_processing_queue_url = story_section.get("ProcessingQueueUrl", instance.sqs_processing_queue_url)
+            instance.sqs_advancement_queue_url = story_section.get("AdvancementQueueUrl", instance.sqs_advancement_queue_url)
+            instance.ssm_story_parameter = story_section.get("SSMParameter", instance.ssm_story_parameter)
 
         return instance
