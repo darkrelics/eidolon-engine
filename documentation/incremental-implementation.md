@@ -1,6 +1,6 @@
 # Eidolon Engine Incremental Game Implementation Guide
 
-This guide provides detailed technical information, code examples, and specific configurations for the production-deployed Incremental Game system. Based on the 9-stack CDK deployment architecture with 16 Lambda functions and 14 DynamoDB tables, this guide reflects the actual implementation deployed to AWS.
+This guide provides detailed technical information, code examples, and specific configurations for the production-deployed Incremental Game system. For the shared deployment architecture (stack counts, Lambda inventory, DynamoDB tables), see the canonical overview in [Deployment Guide](deployment.md#system-architecture).
 
 ## Table of Contents
 
@@ -399,7 +399,7 @@ def process_mechanical_segment(segment):
 
 # Eidolon Engine Incremental Game Implementation Guide
 
-This guide provides detailed technical information, code examples, and specific configurations for the production-deployed Incremental Game system. Based on the 9-stack CDK deployment architecture with 16 Lambda functions and 14 DynamoDB tables, this guide reflects the actual implementation deployed to AWS.
+This guide provides detailed technical information, code examples, and specific configurations for the production-deployed Incremental Game system. For the shared deployment architecture (stack counts, Lambda inventory, DynamoDB tables), see the canonical overview in [Deployment Guide](deployment.md#system-architecture).
 
 ## Table of Contents
 
@@ -3104,7 +3104,7 @@ class Character {
 
 ### 7.1 Production CDK Configuration
 
-The Story Stack (deployed only in Incremental/Hybrid modes) provides SQS queues, EventBridge rule, and SSM parameter. This is part of the 9-stack deployment system.
+The Story Stack (deployed only in Incremental/Hybrid modes) provides SQS queues, EventBridge rule, and SSM parameter, aligning with the shared deployment system outlined in [Deployment Guide](deployment.md#stack-deployment-order).
 
 ```python
 # From app_story.py - actual production configuration
@@ -4401,9 +4401,7 @@ def update_character_with_metrics(character_id, updates):
 
 ### Deployment Metrics
 
-- **9 CDK Stacks**: All operational in production
-- **16 Lambda Functions**: Deployed with fixed logical IDs
-- **14 DynamoDB Tables**: Created with RemovalPolicy.RETAIN
+- Shared infrastructure metrics (stack counts, Lambda inventory, table list) live in [Deployment Guide](deployment.md#system-architecture)
 - **2 SQS Queues**: Processing and advancement queues (Story Stack)
 - **1 EventBridge Rule**: 1-minute polling (disabled by default)
 - **Module Size**: 94% under 300 lines (modular architecture)
@@ -4420,14 +4418,8 @@ def update_character_with_metrics(character_id, updates):
 
 ### Stack Dependencies
 
-1. **CodeBuild Stack**: Provides Lambda artifacts
-2. **DynamoDB Stack**: Tables and managed policy
-3. **Lambda Stack**: Functions and execution role
-4. **Player Stack**: Cognito authentication
-5. **Story Stack**: SQS, EventBridge, SSM (Incremental/Hybrid only)
-6. **API Stack**: API Gateway with Lambda integrations
-7. **Client Stack**: CloudFront and portal deployment
+See [Deployment Guide](deployment.md#stack-deployment-order) for the full stack sequencing across modes.
 
 ## Conclusion
 
-This implementation guide reflects the production-deployed Incremental Game system as part of the Eidolon Engine's 9-stack CDK architecture. All code examples and configurations match the actual deployed infrastructure, providing a reliable reference for maintenance and enhancement.
+This implementation guide reflects the production-deployed Incremental Game system and aligns with the shared infrastructure documented in the Deployment Guide. All code examples and configurations match the actual deployed infrastructure, providing a reliable reference for maintenance and enhancement.

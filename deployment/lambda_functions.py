@@ -274,82 +274,114 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
 
     print(f"\n2. Updating {len(lambda_functions)} Lambda functions...")
 
-    update_results = {}
+    function_states: dict[str, dict[str, bool]] = {
+        function_name: {
+            "code_updated": False,
+            "layer_updated": False,
+            "skipped": False,
+        }
+        for function_name in lambda_functions
+    }
+
     wait_time = 60  # Wait 60 seconds between attempts
     max_attempts = 10  # Try for up to 10 minutes
 
     # Try to update all functions, with retries if they're locked
     for attempt in range(max_attempts):
-        failed_functions = []
+        failed_functions: set[str] = set()
 
         for function_name in lambda_functions:
-            # Skip functions we already updated successfully
-            if function_name in update_results and update_results[function_name] is True:
+            state = function_states[function_name]
+
+            # Skip functions that were never deployed
+            if state["skipped"]:
+                continue
+
+            # Skip functions that already finished successfully
+            if state["code_updated"] and state["layer_updated"]:
                 continue
 
             print(f"  Updating {function_name}...")
 
             try:
-                # Get current configuration first to check layer
                 current_config = lambda_client.get_function_configuration(FunctionName=function_name)
-                current_layers = current_config.get("Layers", [])
-                needs_layer_update = True
-
-                for layer in current_layers:
-                    if layer.get("Arn") == new_layer_arn:
-                        needs_layer_update = False
-                        break
-
-                # Update function code (no waiting, just like the GUI)
-                lambda_client.update_function_code(FunctionName=function_name, S3Bucket=s3_bucket, S3Key=f"{function_name}.zip")
-
-                # Only update configuration if layer is outdated
-                # This might fail if the code update is still processing, but that's OK
-                if needs_layer_update:
-                    try:
-                        lambda_client.update_function_configuration(FunctionName=function_name, Layers=[new_layer_arn])
-                        print(f"    [OK] Updated {function_name} code and layer")
-                    except ClientError as config_err:
-                        if config_err.response.get("Error", {}).get("Code") == "ResourceConflictException":
-                            print(f"    [OK] Updated {function_name} code (layer update pending)")
-                        else:
-                            raise
-                else:
-                    print(f"    [OK] Updated {function_name} code (layer already current)")
-
-                update_results[function_name] = True
-
             except ClientError as err:
                 error_code = err.response.get("Error", {}).get("Code", "")
                 if error_code == "ResourceNotFoundException":
                     print(f"    [SKIP] Function {function_name} doesn't exist yet")
-                    update_results[function_name] = None  # Skip, not an error
-                elif error_code == "ResourceConflictException":
-                    print(f"    [LOCKED] Function {function_name} is still updating")
-                    failed_functions.append(function_name)
+                    state["skipped"] = True
                 else:
-                    print(f"    [ERROR] Failed to update {function_name}: {err}")
-                    update_results[function_name] = False
+                    print(f"    [ERROR] Failed to get configuration for {function_name}: {err}")
+                    failed_functions.add(function_name)
+                continue
 
-        # If no functions failed due to locks, we're done
-        if not failed_functions:
+            current_layers = current_config.get("Layers", [])
+            needs_layer_update = not any(layer.get("Arn") == new_layer_arn for layer in current_layers)
+
+            # Update function code if needed
+            if not state["code_updated"]:
+                try:
+                    lambda_client.update_function_code(
+                        FunctionName=function_name,
+                        S3Bucket=s3_bucket,
+                        S3Key=f"{function_name}.zip",
+                    )
+                    state["code_updated"] = True
+                except ClientError as err:
+                    error_code = err.response.get("Error", {}).get("Code", "")
+                    if error_code == "ResourceConflictException":
+                        print(f"    [LOCKED] {function_name} code update still in progress")
+                        failed_functions.add(function_name)
+                    elif error_code == "ResourceNotFoundException":
+                        print(f"    [SKIP] Function {function_name} doesn't exist yet")
+                        state["skipped"] = True
+                    else:
+                        print(f"    [ERROR] Failed to update {function_name} code: {err}")
+                        failed_functions.add(function_name)
+                    # Skip attempting layer update this round if code didn't update
+                    continue
+
+            # Determine whether we still need to update the layer
+            if not needs_layer_update:
+                state["layer_updated"] = True
+                print(f"    [OK] Updated {function_name} code (layer already current)")
+                continue
+
+            try:
+                lambda_client.update_function_configuration(FunctionName=function_name, Layers=[new_layer_arn])
+                state["layer_updated"] = True
+                print(f"    [OK] Updated {function_name} code and layer")
+            except ClientError as err:
+                error_code = err.response.get("Error", {}).get("Code", "")
+                if error_code == "ResourceConflictException":
+                    print(f"    [LOCKED] {function_name} layer update still in progress")
+                    failed_functions.add(function_name)
+                else:
+                    print(f"    [ERROR] Failed to update {function_name} layer: {err}")
+                    failed_functions.add(function_name)
+
+        retry_candidates = [f for f in failed_functions if not function_states[f]["skipped"]]
+        if not retry_candidates:
             break
 
         # If we still have locked functions and more attempts, wait and retry
         if attempt < max_attempts - 1:
             print(
-                f"  {len(failed_functions)} functions still locked, waiting {wait_time} seconds... (attempt {attempt + 1}/{max_attempts})"
+                f"  {len(retry_candidates)} functions still pending, waiting {wait_time} seconds... (attempt {attempt + 1}/{max_attempts})"
             )
             time.sleep(wait_time)
         else:
-            print(f"  [ERROR] {len(failed_functions)} functions still locked after {max_attempts} attempts")
-            for func in failed_functions:
-                update_results[func] = False
+            print(f"  [ERROR] {len(retry_candidates)} functions still pending after {max_attempts} attempts")
 
     # Summary
-    updated_count = sum(1 for result in update_results.values() if result is True)
-    skipped_count = sum(1 for result in update_results.values() if result is None)
-    failed_count = sum(1 for result in update_results.values() if result is False)
+    updated_count = sum(1 for state in function_states.values() if state["code_updated"] and state["layer_updated"])
+    skipped_count = sum(1 for state in function_states.values() if state["skipped"])
+    failed_functions_final = [
+        function_name
+        for function_name, state in function_states.items()
+        if not state["skipped"] and not (state["code_updated"] and state["layer_updated"])
+    ]
+    failed_count = len(failed_functions_final)
 
     print("\n3. Update Summary:")
     print(f"  [OK] Updated: {updated_count} functions")
@@ -357,6 +389,8 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
         print(f"  [SKIP] Not deployed yet: {skipped_count} functions")
     if failed_count > 0:
         print(f"  [ERROR] Failed: {failed_count} functions")
+        for func in sorted(failed_functions_final):
+            print(f"    - {func}")
         return False
 
     print("\n✓ Lambda function updates completed successfully")

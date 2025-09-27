@@ -55,6 +55,12 @@ DynamoDB:
     SegmentHistory: segment_history
   AccessPolicyArn: "" # deployment-generated
 
+# Story infrastructure (deployment-generated)
+Story:
+  ProcessingQueueUrl: ""
+  AdvancementQueueUrl: ""
+  SSMParameter: ""
+
 # API configuration (required)
 API:
   Domain: "" # REQUIRED - Your domain name

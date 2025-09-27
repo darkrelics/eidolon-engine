@@ -470,12 +470,12 @@ def deploy_story(params, config: Config, state: CDKState, config_path: Path, sta
 
     # Update configuration with queue URLs if available
     if validation.get("processing_queue_url"):
-        config.sqs_processing_queue_url = validation.get("processing_queue_url", "")  # type: ignore
+        config.sqs_processing_queue_url = validation.get("processing_queue_url", "")
     if validation.get("advancement_queue_url"):
-        config.sqs_advancement_queue_url = validation.get("advancement_queue_url", "")  # type: ignore
+        config.sqs_advancement_queue_url = validation.get("advancement_queue_url", "")
 
     # Always save SSM parameter name
-    config.ssm_story_parameter = "/eidolon/story/config"  # type: ignore
+    config.ssm_story_parameter = "/eidolon/story/config"
     config.save(str(config_path))
 
     # Update state

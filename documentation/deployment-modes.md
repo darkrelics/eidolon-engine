@@ -20,64 +20,13 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 
 ## Stack Deployment Order
 
-### MUD Mode
-
-```
-1. CodeBuild    → Build infrastructure and Lambda artifacts
-2. DynamoDB     → 14 tables with managed IAM policy
-3. Lambda       → Layer and 15 functions with execution role
-4. Player       → Cognito User Pool with PostConfirmation trigger
-5. Character    → Character-related Lambda resources
-6. S3           → Scripts bucket with Lua upload
-7. CloudWatch   → Log group and metrics namespace
-8. API          → API Gateway with Lambda integrations
-9. Client       → CloudFront, S3, and portal build
-
-Then: Lambda Function Updates → Update function code from S3 artifacts
-```
-
-### Incremental Mode
-
-```
-1. CodeBuild    → Build infrastructure and Lambda artifacts
-2. DynamoDB     → 14 tables with managed IAM policy
-3. Lambda       → Layer and 15 functions with execution role
-4. Player       → Cognito User Pool with PostConfirmation trigger
-5. Character    → Character-related Lambda resources
-6. Story        → SSM, SQS queues, EventBridge rule
-7. API          → API Gateway with Lambda integrations
-8. Client       → CloudFront, S3, and incremental build
-
-Then: Lambda Function Updates → Update function code from S3 artifacts
-```
-
-### Hybrid Mode (Default)
-
-```
-1. CodeBuild    → Build infrastructure and Lambda artifacts
-2. DynamoDB     → 14 tables with managed IAM policy
-3. Lambda       → Layer and 15 functions with execution role
-4. Player       → Cognito User Pool with PostConfirmation trigger
-5. Character    → Character-related Lambda resources
-6. Story        → SSM, SQS queues, EventBridge rule
-7. S3           → Scripts bucket with Lua upload
-8. CloudWatch   → Log group and metrics namespace
-9. API          → API Gateway with Lambda integrations
-10. Client      → CloudFront, S3, and incremental build
-
-Then: Lambda Function Updates → Update function code from S3 artifacts
-```
+Refer to the canonical sequence in [Deployment Guide](deployment.md#stack-deployment-order); this document focuses on how each mode changes the selection of stacks rather than repeating the step-by-step list.
 
 ## Deployment Process
 
 ### Initial Deployment
 
-```bash
-cd deployment
-python3 deploy.py
-```
-
-During deployment, you'll be prompted to select a mode:
+Start with the commands in [Deployment Guide](deployment.md#quick-start), then select a mode when prompted:
 
 - **1**: MUD Mode - Traditional Multi-User Dungeon
 - **2**: Incremental Mode - Story-driven incremental RPG
@@ -112,67 +61,11 @@ The selected mode determines:
 
 ## Backend Infrastructure (Shared by All Modes)
 
-### Lambda Functions (15 Total)
-
-**Character API Functions:**
-
-- `api-archetype-list` - List available archetypes
-- `api-character-add` - Create new character
-- `api-character-delete` - Delete character
-- `api-character-get` - Get character details
-- `api-character-list` - List player's characters
-
-**Story API Functions:**
-
-- `api-segment-decision` - Submit segment decision
-- `api-segment-history` - Get segment history
-- `api-segment-outcome` - Get segment outcome
-- `api-segment-rest` - Character rest action
-- `api-segment-status` - Get current segment status
-- `api-story-abandon` - Abandon current story
-- `api-story-start` - Start new story
-
-**Operational Functions:**
-
-- `cognito-player-new` - PostConfirmation trigger
-- `ops-segment-poller` - EventBridge polling (Story/Hybrid only)
-- `ops-segment-process` - SQS segment processor (Story/Hybrid only)
-- `ops-story-advance` - SQS story advancement (Story/Hybrid only)
-
-### DynamoDB Tables (14 Total)
-
-- `players` - User accounts
-- `characters` - Character data with GameMode field
-- `rooms`, `exits` - MUD world structure
-- `items`, `prototypes` - Item definitions
-- `archetypes` - Character classes
-- `motd` - Message of the day
-- `story`, `segments`, `active_segments` - Story content
-- `story_history`, `segment_history` - Player progress
-- `opponents` - Combat opponents
+For the definitive Lambda inventory, see [Lambda Functions](lambda-functions.md); for database definitions, see [Database Schema](schema.md). Each deployment mode selects from the same building blocks, enabling consistent APIs regardless of frontend.
 
 ### Mode-Specific Infrastructure
 
-#### Story Stack (Incremental & Hybrid Only)
-
-- **SSM Parameter**: `/eidolon/story/config` for configuration
-- **SQS Queues**:
-  - `eidolon-processing-queue` for segment processing
-  - `eidolon-advancement-queue` for story advancement
-- **EventBridge Rule**: `eidolon-story-poller` (disabled by default)
-- **Lambda Triggers**: SQS events trigger processing functions
-
-#### S3 Stack (MUD & Hybrid Only)
-
-- **Scripts Bucket**: Stores Lua scripts for game logic
-- **Automatic Upload**: Scripts from `/scripts_lua/` deployed automatically
-- **IAM Policy**: Read/write access for server operations
-
-#### CloudWatch Stack (MUD & Hybrid Only)
-
-- **Log Group**: `/eidolon/server` with 1-year retention
-- **Metrics Namespace**: `eidolon/metrics` for custom metrics
-- **IAM Policy**: Managed policy for log and metric operations
+Refer to [Deployment System Design](deployment-design.md) for stack-by-stack details, including which components (Story, S3, CloudWatch) are toggled per mode.
 
 ## Choosing a Deployment Mode
 
@@ -182,23 +75,20 @@ The selected mode determines:
 - You need Lua scripting support for game logic
 - You want comprehensive CloudWatch logging
 - You don't need story-driven incremental features
-- Stack count: 8 (excludes Story)
 
 ### Choose Incremental Mode when:
 
 - You only want story-driven incremental gameplay
 - You need SQS/EventBridge for async processing
 - You don't need Lua scripts or detailed logging
-- You want minimal infrastructure footprint
-- Stack count: 7 (excludes S3, CloudWatch)
+- You want the leanest infrastructure footprint
 
 ### Choose Hybrid Mode when:
 
 - You want the complete feature set
 - You need both MUD and incremental capabilities
 - You want maximum flexibility for future expansion
-- You can support the full infrastructure
-- Stack count: 9 (includes all stacks)
+- You can support the full infrastructure footprint
 
 ## Technical Implementation Details
 

@@ -127,14 +127,7 @@ Modular deployment functions for each stack:
 
 3. **Stack Deployment Order (Mode-Dependent)**
 
-   **Hybrid Mode (Default):**
-   1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. Story → 6. S3 → 7. CloudWatch → 8. API → 9. Client → [Portal Build]
-
-   **MUD Mode:**
-   1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. S3 → 6. CloudWatch → 7. API → 8. Client → [Portal Build]
-
-   **Incremental Mode:**
-   1. CodeBuild → 2. DynamoDB → 3. Lambda → 4. Player → 5. Story → 6. API → 7. Client → [Portal Build]
+   The detailed sequence for each mode is maintained in [Deployment Guide](deployment.md#stack-deployment-order).
 
 4. **CDK Execution**
    - Pass parameters via CDK context (-c flags)
@@ -180,7 +173,7 @@ This consolidation follows the codebase principle of "simplicity of code is high
 
 ### Resource Naming
 
-- **DynamoDB Tables**: `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`, `story`, `segments`, `active_segments`, `story_history`, `segment_history`, `opponents`
+- **DynamoDB Tables**: See [Database Schema](schema.md) for canonical table names and fields
 - **S3 Buckets**:
   - Artifacts: `eidolon-engine-lambda-{account_id}`
   - Scripts: `eidolon-scripts-{account_id}`
@@ -205,23 +198,11 @@ This consolidation follows the codebase principle of "simplicity of code is high
 
 ### Deployment Modes
 
-**MUD Mode**: Traditional Multi-User Dungeon
+**MUD Mode**: Traditional Multi-User Dungeon — see [Deployment Modes](deployment-modes.md) for the full comparison; the legacy portal buildspec is the only frontend asset deployed.
 
-- Stack Order: CodeBuild → DynamoDB → Lambda → Player → S3 → CloudWatch → API → Client
-- Portal Build: Uses `buildspec/portal.yml`
-- Excludes: Story Stack
+**Incremental Mode**: Story-Driven Gameplay — see [Deployment Modes](deployment-modes.md); this mode excludes the Lua scripts and CloudWatch stacks.
 
-**Incremental Mode**: Story-Driven Gameplay
-
-- Stack Order: CodeBuild → DynamoDB → Lambda → Player → Story → API → Client
-- Portal Build: Uses `buildspec/incremental.yml`
-- Excludes: S3 and CloudWatch Stacks
-
-**Hybrid Mode** (Default): Full Feature Set
-
-- Stack Order: CodeBuild → DynamoDB → Lambda → Player → Story → S3 → CloudWatch → API → Client
-- Portal Build: Uses `buildspec/incremental.yml`
-- Includes: All stacks
+**Hybrid Mode** (Default): Full Feature Set — see [Deployment Modes](deployment-modes.md); deploys all stacks with the incremental frontend.
 
 ## Real-World Usage Scenarios
 

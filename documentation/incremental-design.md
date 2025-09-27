@@ -27,13 +27,7 @@
                                                    └─────────────┘
 ```
 
-**Infrastructure Context (9 CDK Stacks):**
-
-- **Lambda Stack**: 16 functions with shared execution role
-- **DynamoDB Stack**: 14 tables with managed IAM policy
-- **Story Stack**: SQS queues, EventBridge rule, SSM parameter
-- **API Stack**: API Gateway with Lambda integrations
-- **Client Stack**: CloudFront and automated portal build
+**Infrastructure Context:** See [Deployment Guide](deployment.md#system-architecture) for the canonical infrastructure summary that all incremental components rely on.
 
 ### 1.2 Processing Architecture
 
@@ -74,21 +68,7 @@ The system uses server-authoritative state with multiple automatic recovery mech
 
 ### 2.1 RESTful Endpoints
 
-All endpoints use the existing API Gateway at `api.{domain}`. Field names follow the JSON naming conventions defined in the [Style Guide](style-guide.md#json-field-naming-convention).
-
-| Method | Endpoint          | Lambda Function      | Purpose                    |
-| ------ | ----------------- | -------------------- | -------------------------- |
-| GET    | /archetype        | api-archetype-list   | List available archetypes  |
-| POST   | /character        | api-character-add    | Create new character       |
-| DELETE | /character        | api-character-delete | Delete character           |
-| GET    | /character        | api-character-get    | Get character details      |
-| GET    | /character/list   | api-character-list   | List player's characters   |
-| POST   | /segment/decision | api-segment-decision | Submit player choice       |
-| GET    | /segment/history  | api-segment-history  | Retrieve processed results |
-| POST   | /segment/rest     | api-segment-rest     | Initiate rest segment      |
-| GET    | /segment/status   | api-segment-status   | Check segment readiness    |
-| POST   | /story/abandon    | api-story-abandon    | Exit current story         |
-| POST   | /story/start      | api-story-start      | Begin a new story          |
+All incremental APIs are catalogued in [Incremental API Documentation](incremental-api.md); this design guide references that contract instead of duplicating endpoint tables. Field names follow the JSON naming conventions defined in the [Style Guide](style-guide.md#json-field-naming-convention).
 
 ### 2.2 Request/Response Examples
 
@@ -730,17 +710,7 @@ CloudWatch metrics:
 
 ### 10.1 CDK Deployment Architecture
 
-The incremental game deploys as part of the 9-stack CDK system:
-
-**Stack Deployment Order (Incremental Mode):**
-
-1. **CodeBuild**: Build infrastructure and Lambda artifacts
-2. **DynamoDB**: 14 tables with managed IAM policy
-3. **Lambda**: Layer and 16 functions with shared execution role
-4. **Player**: Cognito User Pool with PostConfirmation trigger
-5. **Story**: SSM, SQS queues, EventBridge rule (Incremental/Hybrid only)
-6. **API**: API Gateway with Lambda integrations
-7. **Client**: CloudFront, S3, and automated incremental build
+Incremental mode uses the shared deployment system described in [Deployment Guide](deployment.md#stack-deployment-order); this document focuses on design implications rather than repeating the stack list.
 
 **Lambda Stack Implementation:**
 

@@ -30,6 +30,8 @@ The deployment will:
 
 ## System Architecture
 
+This section is the canonical infrastructure overview referenced by other documentation.
+
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
 - **15 Lambda Functions**: API handlers and operational functions
@@ -72,6 +74,8 @@ The deployment system provides:
 
 ## Stack Deployment Order
 
+Refer other documents here rather than duplicating the sequence.
+
 ### Phase-Based Deployment
 
 Stacks deploy in a specific order based on dependencies:
@@ -93,12 +97,7 @@ Then (all modes): 11. **Lambda Function Updates**: Update function code from S3 
 
 ### Initial Setup
 
-```bash
-cd deployment
-python3 deploy.py
-```
-
-You'll be prompted for:
+Follow the command sequence in [Quick Start](#quick-start); the CLI then prompts for:
 
 1. **Deployment Mode**: MUD, Incremental, or Hybrid (default)
 2. **Domain Configuration**: Domain name and Route53 Hosted Zone ID

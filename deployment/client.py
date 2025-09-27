@@ -230,28 +230,56 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
             print(f"  [ERROR] Failed to get distribution details: {err}")
             return False
 
-        # Create bucket policy that allows CloudFront OAI to read objects
-        bucket_policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Sid": "AllowCloudFrontOAIAccess",
-                    "Effect": "Allow",
-                    "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
-                    "Action": "s3:GetObject",
-                    "Resource": f"arn:aws:s3:::{bucket_name}/*",
-                },
-                {
-                    "Sid": "AllowCloudFrontOAIListBucket",
-                    "Effect": "Allow",
-                    "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
-                    "Action": "s3:ListBucket",
-                    "Resource": f"arn:aws:s3:::{bucket_name}",
-                },
-            ],
-        }
+        # Desired statements for CloudFront access
+        desired_statements = [
+            {
+                "Sid": "AllowCloudFrontOAIAccess",
+                "Effect": "Allow",
+                "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
+                "Action": "s3:GetObject",
+                "Resource": f"arn:aws:s3:::{bucket_name}/*",
+            },
+            {
+                "Sid": "AllowCloudFrontOAIListBucket",
+                "Effect": "Allow",
+                "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
+                "Action": "s3:ListBucket",
+                "Resource": f"arn:aws:s3:::{bucket_name}",
+            },
+        ]
 
-        # Apply the bucket policy
+        # Load existing bucket policy (if any) so we do not clobber unrelated statements
+        bucket_policy = {"Version": "2012-10-17", "Statement": []}
+        try:
+            existing_policy = s3_client.get_bucket_policy(Bucket=bucket_name)
+            if existing_policy.get("Policy"):
+                bucket_policy = json.loads(existing_policy["Policy"])
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code")
+            if error_code not in {"NoSuchBucketPolicy", "NoSuchBucket"}:
+                print(f"  [ERROR] Failed to read existing bucket policy: {err}")
+                return False
+
+        # Normalise statements to a list before mutation
+        statements = bucket_policy.get("Statement", [])
+        if isinstance(statements, dict):
+            statements = [statements]
+        elif not isinstance(statements, list):
+            statements = []
+
+        bucket_policy["Version"] = bucket_policy.get("Version", "2012-10-17")
+
+        replacement_sids = {stmt.get("Sid") for stmt in desired_statements}
+
+        # Drop old versions of the CloudFront statements so we can replace them cleanly
+        statements = [stmt for stmt in statements if stmt.get("Sid") not in replacement_sids]
+
+        # Append / merge the desired statements
+        statements.extend(desired_statements)
+
+        bucket_policy["Statement"] = statements
+
+        # Apply the merged bucket policy
         s3_client.put_bucket_policy(Bucket=bucket_name, Policy=json.dumps(bucket_policy))
 
         print("  [OK] Updated bucket policy for CloudFront OAI access")
