@@ -107,18 +107,20 @@ def mark_segment_as_abandoned(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET #status = :abandoned",
-            ConditionExpression="#status = :processing",
-            ExpressionAttributeNames={"#status": "Status"},
+            UpdateExpression="SET #status = :abandoned, ProcessingStatus = :processed, #outcome = :outcome",
+            ConditionExpression="attribute_exists(ActiveSegmentID) AND (#status = :active OR #status = :abandoned)",
+            ExpressionAttributeNames={"#status": "Status", "#outcome": "Outcome"},
             ExpressionAttributeValues={
                 ":abandoned": "abandoned",
-                ":processing": "processing",
+                ":processed": "processed",
+                ":outcome": "abandoned",
+                ":active": "active",
             },
         )
     except ClientError as err:
         if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning(f"Segment {active_segment_id} not in processing state, cannot abandon")
-            raise ValueError("Segment already completed or abandoned") from err
+            logger.info(f"Segment {active_segment_id} already in terminal state, skipping abandonment")
+            return
         logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to mark segment as abandoned: {err}") from err
 

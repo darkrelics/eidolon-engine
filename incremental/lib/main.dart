@@ -21,24 +21,27 @@ void main() {
     debugPrint('===================================');
     FlutterError.presentError(details);
   };
-  
+
   // Catch async errors
-  runZonedGuarded(() {
-    runApp(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => AuthProvider()),
-          ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
-        ],
-        child: const EidolonIncrementalApp(),
-      ),
-    );
-  }, (error, stack) {
-    debugPrint('========== ASYNC ERROR ==========');
-    debugPrint('Error: $error');
-    debugPrint('Stack trace:\n$stack');
-    debugPrint('=================================');
-  });
+  runZonedGuarded(
+    () {
+      runApp(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider(create: (_) => AuthProvider()),
+            ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
+          ],
+          child: const EidolonIncrementalApp(),
+        ),
+      );
+    },
+    (error, stack) {
+      debugPrint('========== ASYNC ERROR ==========');
+      debugPrint('Error: $error');
+      debugPrint('Stack trace:\n$stack');
+      debugPrint('=================================');
+    },
+  );
 }
 
 class EidolonIncrementalApp extends StatelessWidget {

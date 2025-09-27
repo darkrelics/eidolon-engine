@@ -3,9 +3,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 
 /// Display modes for decision widget
 enum DecisionDisplayMode {
-  panel,    // Card-based panel display
-  inline,   // Inline within other content
-  dialog,   // Modal dialog display
+  panel, // Card-based panel display
+  inline, // Inline within other content
+  dialog, // Modal dialog display
 }
 
 /// Unified decision widget that can display in different modes
@@ -86,7 +86,7 @@ class DecisionWidget extends StatefulWidget {
   }
 }
 
-class _DecisionWidgetState extends State<DecisionWidget> 
+class _DecisionWidgetState extends State<DecisionWidget>
     with SingleTickerProviderStateMixin {
   String? _hoveredChoice;
   late AnimationController _animationController;
@@ -118,57 +118,60 @@ class _DecisionWidgetState extends State<DecisionWidget>
 
   Widget _buildPanel(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (widget.title != null) ...[
-              Text(
-                widget.title!,
-                style: theme.textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-            ],
-            if (widget.description != null) ...[
-              Text(
-                widget.description!,
-                style: theme.textTheme.bodyMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (widget.error != null) ...[
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.errorContainer,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  widget.error!,
-                  style: TextStyle(color: theme.colorScheme.onErrorContainer),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (widget.isLoading)
-              const Center(child: CircularProgressIndicator())
-            else
-              _buildChoicesList(context),
-          ],
-        ),
-      ),
-    ).animate(controller: _animationController)
-      .fadeIn()
-      .slideY(begin: 0.1, end: 0);
+          elevation: 4,
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.title != null) ...[
+                  Text(
+                    widget.title!,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                if (widget.description != null) ...[
+                  Text(
+                    widget.description!,
+                    style: theme.textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (widget.error != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      widget.error!,
+                      style: TextStyle(
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                if (widget.isLoading)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  _buildChoicesList(context),
+              ],
+            ),
+          ),
+        )
+        .animate(controller: _animationController)
+        .fadeIn()
+        .slideY(begin: 0.1, end: 0);
   }
 
   Widget _buildInline(BuildContext context) {
@@ -187,98 +190,104 @@ class _DecisionWidgetState extends State<DecisionWidget>
 
   Widget _buildDialog(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Container(
-      constraints: const BoxConstraints(maxWidth: 400),
-      margin: const EdgeInsets.all(24),
-      child: Card(
-        elevation: 8,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              ),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.psychology,
-                    size: 32,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.title ?? 'Make Your Choice',
-                    style: theme.textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
+          constraints: const BoxConstraints(maxWidth: 400),
+          margin: const EdgeInsets.all(24),
+          child: Card(
+            elevation: 8,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(12),
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  if (widget.description != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.description!,
-                      style: theme.textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            // Content
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    if (widget.error != null) ...[
-                      _buildError(context),
-                      const SizedBox(height: 16),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.psychology,
+                        size: 32,
+                        color: theme.colorScheme.primary,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.title ?? 'Make Your Choice',
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      if (widget.description != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.description!,
+                          style: theme.textTheme.bodyMedium,
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ],
-                    if (widget.isLoading)
-                      const Center(child: CircularProgressIndicator())
-                    else
-                      _buildChoicesList(context),
-                  ],
+                  ),
                 ),
-              ),
+                // Content
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      children: [
+                        if (widget.error != null) ...[
+                          _buildError(context),
+                          const SizedBox(height: 16),
+                        ],
+                        if (widget.isLoading)
+                          const Center(child: CircularProgressIndicator())
+                        else
+                          _buildChoicesList(context),
+                      ],
+                    ),
+                  ),
+                ),
+                // Actions
+                if (widget.onCancel != null && !widget.isLoading)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: TextButton(
+                      onPressed: widget.onCancel,
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+              ],
             ),
-            // Actions
-            if (widget.onCancel != null && !widget.isLoading)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: TextButton(
-                  onPressed: widget.onCancel,
-                  child: const Text('Cancel'),
-                ),
-              ),
-          ],
-        ),
-      ),
-    ).animate(controller: _animationController)
-      .fadeIn()
-      .scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1));
+          ),
+        )
+        .animate(controller: _animationController)
+        .fadeIn()
+        .scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1));
   }
 
   Widget _buildChoicesList(BuildContext context) {
     final theme = Theme.of(context);
     final choiceEntries = widget.choices.entries.toList();
-    
+
     return Column(
       children: choiceEntries.map((entry) {
         final choiceId = entry.key;
         final choiceData = entry.value as Map<String, dynamic>?;
-        final choiceText = choiceData?['Text'] ?? choiceData?['text'] ?? choiceId;
-        final difficulty = choiceData?['Difficulty'] ?? choiceData?['difficulty'];
-        final description = choiceData?['Description'] ?? choiceData?['description'];
+        final choiceText =
+            choiceData?['Text'] ?? choiceData?['text'] ?? choiceId;
+        final difficulty =
+            choiceData?['Difficulty'] ?? choiceData?['difficulty'];
+        final description =
+            choiceData?['Description'] ?? choiceData?['description'];
         final isSelected = widget.selectedChoice == choiceId;
         final isHovered = _hoveredChoice == choiceId;
-        
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: MouseRegion(
@@ -289,16 +298,16 @@ class _DecisionWidgetState extends State<DecisionWidget>
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: isSelected 
-                    ? theme.colorScheme.primary 
-                    : isHovered 
+                  color: isSelected
+                      ? theme.colorScheme.primary
+                      : isHovered
                       ? theme.colorScheme.primary.withValues(alpha: 0.5)
                       : Colors.transparent,
                   width: isSelected ? 2 : 1,
                 ),
                 color: isSelected
-                  ? theme.colorScheme.primary.withValues(alpha: 0.1)
-                  : isHovered
+                    ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                    : isHovered
                     ? theme.colorScheme.surfaceContainerHighest
                     : null,
               ),
@@ -306,9 +315,9 @@ class _DecisionWidgetState extends State<DecisionWidget>
                 color: Colors.transparent,
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
-                  onTap: widget.isLoading 
-                    ? null 
-                    : () => widget.onDecisionSelected(choiceId),
+                  onTap: widget.isLoading
+                      ? null
+                      : () => widget.onDecisionSelected(choiceId),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Row(
@@ -333,7 +342,9 @@ class _DecisionWidgetState extends State<DecisionWidget>
                               Text(
                                 choiceText,
                                 style: theme.textTheme.bodyLarge?.copyWith(
-                                  fontWeight: isSelected ? FontWeight.bold : null,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : null,
                                 ),
                               ),
                               if (description != null) ...[
@@ -365,14 +376,14 @@ class _DecisionWidgetState extends State<DecisionWidget>
   Widget _buildDifficultyChip(BuildContext context, dynamic difficulty) {
     final theme = Theme.of(context);
     final difficultyValue = difficulty is int ? difficulty : 0;
-    
+
     final (color, label) = switch (difficultyValue) {
       <= 5 => (Colors.green, 'Easy'),
       <= 10 => (Colors.orange, 'Medium'),
       <= 15 => (Colors.red, 'Hard'),
       _ => (Colors.purple, 'Extreme'),
     };
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -392,7 +403,7 @@ class _DecisionWidgetState extends State<DecisionWidget>
 
   Widget _buildError(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(

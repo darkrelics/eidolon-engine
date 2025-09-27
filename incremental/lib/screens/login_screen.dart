@@ -27,11 +27,17 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      if (args != null && args[NavigationConstants.messageKey] != null && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(args[NavigationConstants.messageKey]), backgroundColor: Colors.green));
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null &&
+          args[NavigationConstants.messageKey] != null &&
+          mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(args[NavigationConstants.messageKey]),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     });
   }
@@ -52,8 +58,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final authProvider = context.read<AuthProvider>();
-      await authProvider.signIn(_emailController.text.trim(), _passwordController.text);
-      
+      await authProvider.signIn(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+
       // Navigate to home after successful login
       if (mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
@@ -62,7 +71,9 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signIn')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'signIn'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -90,9 +101,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Eidolon Incremental', style: Theme.of(context).textTheme.headlineLarge, textAlign: TextAlign.center),
+                  Text(
+                    'Eidolon Incremental',
+                    style: Theme.of(context).textTheme.headlineLarge,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 8),
-                  Text('Sign in to continue', style: Theme.of(context).textTheme.bodyLarge, textAlign: TextAlign.center),
+                  Text(
+                    'Sign in to continue',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 48),
                   TextFormField(
                     controller: _emailController,
@@ -107,7 +126,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -121,7 +142,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          _isPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
                         onPressed: () {
                           setState(() {
                             _isPasswordVisible = !_isPasswordVisible;
@@ -155,7 +180,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   FilledButton(
                     onPressed: _isLoading ? null : _handleSignIn,
                     child: _isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Sign In'),
                   ),
                   const SizedBox(height: 16),

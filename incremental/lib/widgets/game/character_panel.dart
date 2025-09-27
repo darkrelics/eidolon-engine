@@ -6,11 +6,7 @@ class CharacterPanel extends StatelessWidget {
   final Character character;
   final VoidCallback? onRefresh;
 
-  const CharacterPanel({
-    super.key,
-    required this.character,
-    this.onRefresh,
-  });
+  const CharacterPanel({super.key, required this.character, this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
@@ -34,10 +30,7 @@ class CharacterPanel extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.person,
-                  color: colorScheme.onPrimaryContainer,
-                ),
+                Icon(Icons.person, color: colorScheme.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -60,7 +53,7 @@ class CharacterPanel extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Content
           Expanded(
             child: SingleChildScrollView(
@@ -75,7 +68,7 @@ class CharacterPanel extends StatelessWidget {
                     icon: Icons.category,
                   ),
                   const SizedBox(height: 16),
-                  
+
                   // Health Bar
                   _StatBar(
                     label: 'Health',
@@ -85,7 +78,7 @@ class CharacterPanel extends StatelessWidget {
                     icon: Icons.favorite,
                   ),
                   const SizedBox(height: 12),
-                  
+
                   // Essence Bar
                   _StatBar(
                     label: 'Essence',
@@ -95,49 +88,55 @@ class CharacterPanel extends StatelessWidget {
                     icon: Icons.water_drop,
                   ),
                   const SizedBox(height: 20),
-                  
+
                   // Attributes Section
                   _SectionHeader(title: 'Attributes'),
                   const SizedBox(height: 8),
-                  ...character.attributes.entries.map((entry) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _StatRow(
-                      label: _formatStatName(entry.key),
-                      value: entry.value.toStringAsFixed(1),
-                      icon: _getAttributeIcon(entry.key),
-                    ),
-                  )),
-                  const SizedBox(height: 16),
-                  
-                  // Skills Section
-                  if (character.skills.isNotEmpty) ...[
-                    _SectionHeader(title: 'Skills'),
-                    const SizedBox(height: 8),
-                    ...character.skills.entries.map((entry) => Padding(
+                  ...character.attributes.entries.map(
+                    (entry) => Padding(
                       padding: const EdgeInsets.only(bottom: 8),
                       child: _StatRow(
                         label: _formatStatName(entry.key),
                         value: entry.value.toStringAsFixed(1),
-                        icon: _getSkillIcon(entry.key),
+                        icon: _getAttributeIcon(entry.key),
                       ),
-                    )),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Skills Section
+                  if (character.skills.isNotEmpty) ...[
+                    _SectionHeader(title: 'Skills'),
+                    const SizedBox(height: 8),
+                    ...character.skills.entries.map(
+                      (entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _StatRow(
+                          label: _formatStatName(entry.key),
+                          value: entry.value.toStringAsFixed(1),
+                          icon: _getSkillIcon(entry.key),
+                        ),
+                      ),
+                    ),
                     const SizedBox(height: 16),
                   ],
-                  
+
                   // Resources Section
                   if (character.resources.isNotEmpty) ...[
                     _SectionHeader(title: 'Resources'),
                     const SizedBox(height: 8),
-                    ...character.resources.entries.map((entry) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _StatRow(
-                        label: _formatStatName(entry.key),
-                        value: entry.value.toString(),
-                        icon: _getResourceIcon(entry.key),
+                    ...character.resources.entries.map(
+                      (entry) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _StatRow(
+                          label: _formatStatName(entry.key),
+                          value: entry.value.toString(),
+                          icon: _getResourceIcon(entry.key),
+                        ),
                       ),
-                    )),
+                    ),
                   ],
-                  
+
                   // Last Updated
                   const SizedBox(height: 20),
                   Text(
@@ -167,7 +166,7 @@ class CharacterPanel extends StatelessWidget {
   String _formatDateTime(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
-    
+
     if (difference.inMinutes < 1) {
       return 'Just now';
     } else if (difference.inHours < 1) {
@@ -241,15 +240,12 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.primary,
-            width: 2,
-          ),
+          bottom: BorderSide(color: theme.colorScheme.primary, width: 2),
         ),
       ),
       child: Text(
@@ -277,7 +273,7 @@ class _InfoRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Row(
       children: [
         Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
@@ -313,17 +309,12 @@ class _StatRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Row(
       children: [
         Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
         const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.bodyMedium,
-          ),
-        ),
+        Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
@@ -362,7 +353,7 @@ class _StatBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final percentage = max > 0 ? (current / max).clamp(0.0, 1.0) : 0.0;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -370,10 +361,7 @@ class _StatBar extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: color),
             const SizedBox(width: 4),
-            Text(
-              label,
-              style: theme.textTheme.bodySmall,
-            ),
+            Text(label, style: theme.textTheme.bodySmall),
             const Spacer(),
             Text(
               '${current.toStringAsFixed(0)} / ${max.toStringAsFixed(0)}',

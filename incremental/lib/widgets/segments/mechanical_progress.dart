@@ -17,7 +17,8 @@ class MechanicalSegmentProgress extends StatefulWidget {
   });
 
   @override
-  State<MechanicalSegmentProgress> createState() => _MechanicalSegmentProgressState();
+  State<MechanicalSegmentProgress> createState() =>
+      _MechanicalSegmentProgressState();
 }
 
 class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
@@ -41,10 +42,10 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
           _elapsedSeconds++;
           // Calculate progress based on elapsed time vs estimated duration
           final durationSeconds = widget.estimatedDuration.inSeconds;
-          _progress = durationSeconds > 0 
+          _progress = durationSeconds > 0
               ? (_elapsedSeconds / durationSeconds).clamp(0.0, 1.0)
               : 1.0;
-          
+
           // Call onComplete when duration is reached
           if (durationSeconds > 0 && _elapsedSeconds >= durationSeconds) {
             timer.cancel();
@@ -58,7 +59,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
   @override
   void didUpdateWidget(MechanicalSegmentProgress oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.processingStatus == 'processed' && 
+    if (widget.processingStatus == 'processed' &&
         oldWidget.processingStatus == 'processing') {
       _timer?.cancel();
       _progress = 1.0;
@@ -114,11 +115,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
                   color: Colors.orange.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(
-                  Icons.settings,
-                  color: Colors.orange,
-                  size: 24,
-                ),
+                child: Icon(Icons.settings, color: Colors.orange, size: 24),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -135,7 +132,9 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
                     Text(
                       widget.status,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                        color: theme.colorScheme.onPrimaryContainer.withValues(
+                          alpha: 0.8,
+                        ),
                       ),
                     ),
                   ],
@@ -143,7 +142,10 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
               ),
               if (isProcessing)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.orange.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
@@ -184,7 +186,9 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
                   Text(
                     'Progress',
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                      color: theme.colorScheme.onPrimaryContainer.withValues(
+                        alpha: 0.8,
+                      ),
                     ),
                   ),
                   Text(
@@ -202,7 +206,8 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
                 child: LinearProgressIndicator(
                   value: isProcessing ? _progress : 1.0,
                   minHeight: 12,
-                  backgroundColor: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
+                  backgroundColor: theme.colorScheme.onPrimaryContainer
+                      .withValues(alpha: 0.2),
                   valueColor: AlwaysStoppedAnimation<Color>(
                     isProcessing ? Colors.orange : Colors.green,
                   ),
@@ -219,7 +224,10 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
             children: [
               // Elapsed Time
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surface,
                   borderRadius: BorderRadius.circular(8),
@@ -247,7 +255,10 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
               // Status Message
               if (widget.processingStatus == 'processed')
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(8),
@@ -256,11 +267,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.check_circle,
-                        size: 16,
-                        color: Colors.green,
-                      ),
+                      Icon(Icons.check_circle, size: 16, color: Colors.green),
                       const SizedBox(width: 6),
                       Text(
                         'COMPLETE',

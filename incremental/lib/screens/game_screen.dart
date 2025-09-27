@@ -56,7 +56,7 @@ class _GameScreenState extends State<GameScreen> {
 
     // Setup polling service stream listener
     _pollingSubscription = _pollingService.events.listen(
-      (event) {
+      (event) async {
         if (!mounted) return;
 
         switch (event.type) {
@@ -71,17 +71,21 @@ class _GameScreenState extends State<GameScreen> {
             });
 
             // If segment changed, reload history to include the completed segment
-            if (oldSegmentId != null && newSegmentId != null && oldSegmentId != newSegmentId) {
-              debugPrint('GameScreen: Segment changed from $oldSegmentId to $newSegmentId, reloading history');
-              _loadSegmentHistory();
+            if (oldSegmentId != null &&
+                newSegmentId != null &&
+                oldSegmentId != newSegmentId) {
+              debugPrint(
+                'GameScreen: Segment changed from $oldSegmentId to $newSegmentId, reloading history',
+              );
+              await _loadSegmentHistory();
             }
             break;
 
           case PollingEventType.storyCompleted:
             debugPrint('GameScreen: Story completed via polling service');
+            await _loadSegmentHistory();
+            if (!mounted) return;
             _pollingService.stopPolling(); // Ensure polling is stopped
-            // Don't reload data yet - keep the story visible
-            // Just show the completion dialog
             _showStoryCompletionDialog();
             break;
 
@@ -110,15 +114,23 @@ class _GameScreenState extends State<GameScreen> {
     super.didChangeDependencies();
     // Get character info from route arguments
     final args = ModalRoute.of(context)?.settings.arguments;
-    debugPrint('GameScreen: didChangeDependencies called, args type: ${args.runtimeType}');
+    debugPrint(
+      'GameScreen: didChangeDependencies called, args type: ${args.runtimeType}',
+    );
 
     // Handle both Character and CharacterInfo types
     if (args is Character) {
       // Only update if it's a different character or first load
       if (_character == null || _character!.id != args.id) {
-        debugPrint('GameScreen: Got full Character - name: ${args.name}, id: ${args.id}');
+        debugPrint(
+          'GameScreen: Got full Character - name: ${args.name}, id: ${args.id}',
+        );
         _character = args;
-        _characterInfo = CharacterInfo(name: args.name, id: args.id, dead: args.health <= 0);
+        _characterInfo = CharacterInfo(
+          name: args.name,
+          id: args.id,
+          dead: args.health <= 0,
+        );
         // Only call setState if actually changing from loading state
         if (_isLoading && mounted) {
           setState(() {
@@ -130,19 +142,27 @@ class _GameScreenState extends State<GameScreen> {
           _pollingService.startPolling(_character!.id);
         }
       } else {
-        debugPrint('GameScreen: didChangeDependencies called but same character - skipping update');
+        debugPrint(
+          'GameScreen: didChangeDependencies called but same character - skipping update',
+        );
       }
     } else if (args is CharacterInfo) {
       // Only update if it's a different character or first load
       if (_characterInfo == null || _characterInfo!.id != args.id) {
-        debugPrint('GameScreen: Got CharacterInfo - name: ${args.name}, id: ${args.id}');
+        debugPrint(
+          'GameScreen: Got CharacterInfo - name: ${args.name}, id: ${args.id}',
+        );
         _characterInfo = args;
         _loadCharacterData().then((_) => _loadSegmentHistory());
       } else {
-        debugPrint('GameScreen: didChangeDependencies called but same CharacterInfo - skipping update');
+        debugPrint(
+          'GameScreen: didChangeDependencies called but same CharacterInfo - skipping update',
+        );
       }
     } else if (args != null) {
-      debugPrint('GameScreen: didChangeDependencies called with unexpected args type: ${args.runtimeType}');
+      debugPrint(
+        'GameScreen: didChangeDependencies called with unexpected args type: ${args.runtimeType}',
+      );
     }
   }
 
@@ -172,7 +192,9 @@ class _GameScreenState extends State<GameScreen> {
           () => _apiService.getCharacterById(_characterInfo!.id),
         ),
       );
-      debugPrint('GameScreen: Character loaded: ${character != null ? 'success' : 'null'}');
+      debugPrint(
+        'GameScreen: Character loaded: ${character != null ? 'success' : 'null'}',
+      );
 
       if (mounted) {
         setState(() {
@@ -190,7 +212,10 @@ class _GameScreenState extends State<GameScreen> {
       debugPrint('GameScreen: ERROR loading character: $e');
       if (mounted) {
         setState(() {
-          _error = ErrorHandler.getUserFriendlyMessage(e, context: 'loading character');
+          _error = ErrorHandler.getUserFriendlyMessage(
+            e,
+            context: 'loading character',
+          );
           _isLoading = false;
         });
       }
@@ -201,9 +226,15 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _handleStorySelect(StoryMetadata story) async {
     if (!story.available) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(story.cooldownRemaining > 0 ? 'Story on cooldown' : 'Story not available')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            story.cooldownRemaining > 0
+                ? 'Story on cooldown'
+                : 'Story not available',
+          ),
+        ),
+      );
       return;
     }
 
@@ -218,7 +249,10 @@ class _GameScreenState extends State<GameScreen> {
 
       final initialSegment = await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.startStory,
-        () => _apiService.startStory(characterId: _character!.id, storyId: story.storyID),
+        () => _apiService.startStory(
+          characterId: _character!.id,
+          storyId: story.storyID,
+        ),
         throwOnRateLimit: true,
       );
 
@@ -248,7 +282,10 @@ class _GameScreenState extends State<GameScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
         if (mounted) {
           setState(() {
@@ -272,35 +309,41 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Check if we have completed segments in character's storyState
-    final completedSegments = _character!.storyState?['CompletedSegments'] as List<dynamic>?;
-    final hasCompletedSegments = completedSegments != null && completedSegments.isNotEmpty;
+    final completedSegments =
+        _character!.storyState?['CompletedSegments'] as List<dynamic>?;
+    final hasCompletedSegments =
+        completedSegments != null && completedSegments.isNotEmpty;
 
-    // If no active story and no completed segments, clear history
-    if (_character!.activeStoryID == null && !hasCompletedSegments) {
-      setState(() {
-        _segmentHistory = [];
-      });
-      return;
-    }
-
-    // If we have completed segments but no active story, use the completed segments directly
-    if (_character!.activeStoryID == null && hasCompletedSegments) {
-      setState(() {
-        _segmentHistory = completedSegments.cast<Map<String, dynamic>>();
-      });
-      debugPrint('GameScreen: Using ${completedSegments.length} completed segments from character state');
+    if (_character!.activeStoryID == null) {
+      if (hasCompletedSegments) {
+        setState(() {
+          _segmentHistory = completedSegments.cast<Map<String, dynamic>>();
+        });
+        debugPrint(
+          'GameScreen: Using ${completedSegments.length} completed segments from character state',
+        );
+      } else if (_segmentHistory.isEmpty) {
+        // No active story and no local history to show – clear the list once
+        setState(() {
+          _segmentHistory = [];
+        });
+      }
       return;
     }
 
     // We have an active story, load history from API
     try {
-      final history = await _apiService.getSegmentHistory(characterId: _character!.id);
+      final history = await _apiService.getSegmentHistory(
+        characterId: _character!.id,
+      );
 
       if (mounted) {
         setState(() {
           _segmentHistory = history;
         });
-        debugPrint('GameScreen: Loaded ${history.length} segments from history API');
+        debugPrint(
+          'GameScreen: Loaded ${history.length} segments from history API',
+        );
       }
     } catch (e) {
       debugPrint('GameScreen: Failed to load segment history: $e');
@@ -309,7 +352,9 @@ class _GameScreenState extends State<GameScreen> {
         setState(() {
           _segmentHistory = completedSegments.cast<Map<String, dynamic>>();
         });
-        debugPrint('GameScreen: Falling back to ${completedSegments.length} completed segments from character state');
+        debugPrint(
+          'GameScreen: Falling back to ${completedSegments.length} completed segments from character state',
+        );
       }
     }
   }
@@ -328,9 +373,15 @@ class _GameScreenState extends State<GameScreen> {
 
       final response = await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.submitDecision,
-        () => _apiService.submitDecision(characterId: _character!.id, decision: choiceId),
+        () => _apiService.submitDecision(
+          characterId: _character!.id,
+          decision: choiceId,
+        ),
         throwOnRateLimit: true,
       );
+
+      final previousSegment =
+          _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
 
       // Use the next segment from response instead of reloading
       if (response['NextSegment'] != null) {
@@ -339,15 +390,19 @@ class _GameScreenState extends State<GameScreen> {
         if (mounted) {
           setState(() {
             // Update character's active segment locally
+            final updatedStoryState = Map<String, dynamic>.from(
+              _character!.storyState ?? <String, dynamic>{},
+            )..['ActiveSegment'] = nextSegment;
             _character = _character!.copyWith(
               activeSegmentId: nextSegment['ActiveSegmentID'] as String?,
-              storyState: {'ActiveSegment': nextSegment},
+              storyState: updatedStoryState,
             );
           });
         }
 
         // Start polling for the new segment
-        if (nextSegment['ActiveSegmentID'] != null && !_pollingService.isPolling) {
+        if (nextSegment['ActiveSegmentID'] != null &&
+            !_pollingService.isPolling) {
           _pollingService.startPolling(_character!.id);
         }
       } else {
@@ -355,19 +410,38 @@ class _GameScreenState extends State<GameScreen> {
         _showStoryCompletionDialog();
       }
 
-      if (mounted) {
+      if (mounted && previousSegment != null) {
         // Show notification for decision outcome
-        final outcome = _character?.storyState?['ActiveSegment']?['Outcome'];
-        if (outcome != null) {
-          NotificationService.showSegmentComplete(context, segmentType: 'decision', outcome: outcome['Type']);
+        final outcome = previousSegment['Outcome'];
+        String? outcomeType;
+        Map<String, dynamic>? rewards;
 
-          // Show reward notifications
-          final rewards = outcome['Rewards'] as Map<String, dynamic>?;
+        if (outcome is Map<String, dynamic>) {
+          outcomeType = outcome['Type'] as String?;
+          final rawRewards = outcome['Rewards'];
+          if (rawRewards is Map<String, dynamic>) {
+            rewards = rawRewards;
+          }
+        } else if (outcome is String) {
+          outcomeType = outcome;
+        }
+
+        if (outcomeType != null) {
+          NotificationService.showSegmentComplete(
+            context,
+            segmentType: 'decision',
+            outcome: outcomeType,
+          );
+
           if (rewards != null) {
             for (final reward in rewards.entries) {
               await Future.delayed(const Duration(milliseconds: 500));
               if (mounted) {
-                NotificationService.showReward(context, type: reward.key, value: reward.value);
+                NotificationService.showReward(
+                  context,
+                  type: reward.key,
+                  value: reward.value,
+                );
               }
             }
           }
@@ -376,7 +450,10 @@ class _GameScreenState extends State<GameScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
         setState(() {
           _error = ErrorHandler.getUserFriendlyMessage(e);
@@ -413,11 +490,19 @@ class _GameScreenState extends State<GameScreen> {
       await Future.wait([_loadCharacterData(), _loadSegmentHistory()]);
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Resting...'), duration: Duration(seconds: 2)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Resting...'),
+          duration: Duration(seconds: 2),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
         if (mounted) {
           setState(() {
@@ -430,9 +515,18 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _showStoryCompletionDialog() async {
     final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
-    final storyTitle = storyData?['Title'] ?? 'Story';
-    final segmentData = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
-    final outcome = segmentData?['Outcome'] ?? 'completed';
+    final fallbackStoryTitle = _segmentHistory.isNotEmpty
+        ? _segmentHistory.last['StoryTitle'] as String?
+        : null;
+    final storyTitle = storyData?['Title'] ?? fallbackStoryTitle ?? 'Story';
+
+    final segmentData =
+        _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+    final lastSegment = _segmentHistory.isNotEmpty
+        ? _segmentHistory.last
+        : segmentData;
+    final outcome =
+        (lastSegment != null ? lastSegment['Outcome'] : null) ?? 'completed';
 
     await showDialog(
       context: context,
@@ -492,10 +586,15 @@ class _GameScreenState extends State<GameScreen> {
         title: const Text('Abandon Story'),
         content: const Text('Are you sure you want to abandon this story?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Abandon'),
           ),
         ],
@@ -522,7 +621,10 @@ class _GameScreenState extends State<GameScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
         if (mounted) {
           setState(() {
@@ -535,7 +637,9 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('GameScreen: Building with character: ${_character?.name}, loading: $_isLoading, error: $_error}');
+    debugPrint(
+      'GameScreen: Building with character: ${_character?.name}, loading: $_isLoading, error: $_error}',
+    );
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final deviceType = ResponsiveLayout.getDeviceType(context);
@@ -567,12 +671,25 @@ class _GameScreenState extends State<GameScreen> {
                         label: 'Characters',
                         icon: Icons.people,
                         onTap: () {
-                          Navigator.pushReplacementNamed(context, '/character-selection');
+                          Navigator.pushReplacementNamed(
+                            context,
+                            '/character-selection',
+                          );
                         },
                       ),
-                      if (_characterInfo != null) BreadcrumbItem(label: _characterInfo!.name, icon: Icons.person),
-                      if (_character?.storyState != null && _character!.storyState!['Story'] != null)
-                        BreadcrumbItem(label: _character!.storyState!['Story']['Title'] ?? 'Story', icon: Icons.auto_stories),
+                      if (_characterInfo != null)
+                        BreadcrumbItem(
+                          label: _characterInfo!.name,
+                          icon: Icons.person,
+                        ),
+                      if (_character?.storyState != null &&
+                          _character!.storyState!['Story'] != null)
+                        BreadcrumbItem(
+                          label:
+                              _character!.storyState!['Story']['Title'] ??
+                              'Story',
+                          icon: Icons.auto_stories,
+                        ),
                     ],
                   )
                 : Text(_characterInfo?.name ?? 'Game'),
@@ -584,7 +701,11 @@ class _GameScreenState extends State<GameScreen> {
               tooltip: 'Back to Character Selection',
             ),
             actions: [
-              IconButton(icon: const Icon(Icons.refresh), onPressed: _loadCharacterData, tooltip: 'Refresh'),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadCharacterData,
+                tooltip: 'Refresh',
+              ),
               IconButton(
                 icon: const Icon(Icons.settings),
                 onPressed: () {
@@ -613,7 +734,8 @@ class _GameScreenState extends State<GameScreen> {
                 ? _buildNoCharacterWidget()
                 : _buildGameInterface(deviceType),
           ),
-          bottomNavigationBar: deviceType == DeviceType.mobile && _character != null
+          bottomNavigationBar:
+              deviceType == DeviceType.mobile && _character != null
               ? BottomNavigationBar(
                   currentIndex: _selectedPanelIndex,
                   onTap: (index) {
@@ -622,9 +744,18 @@ class _GameScreenState extends State<GameScreen> {
                     });
                   },
                   items: const [
-                    BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Character'),
-                    BottomNavigationBarItem(icon: Icon(Icons.auto_stories), label: 'Story'),
-                    BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Inventory'),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person),
+                      label: 'Character',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.auto_stories),
+                      label: 'Story',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.inventory_2),
+                      label: 'Inventory',
+                    ),
                   ],
                 )
               : null,
@@ -640,20 +771,31 @@ class _GameScreenState extends State<GameScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: 16),
             Text(
               'Error loading character',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               _error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            FilledButton(onPressed: _loadCharacterData, child: const Text('Retry')),
+            FilledButton(
+              onPressed: _loadCharacterData,
+              child: const Text('Retry'),
+            ),
           ],
         ),
       ),
@@ -667,11 +809,23 @@ class _GameScreenState extends State<GameScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_off, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.person_off,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
-            Text('No Character Selected', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              'No Character Selected',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
-            Text('Please select a character to play', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            Text(
+              'Please select a character to play',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: () {
@@ -702,7 +856,10 @@ class _GameScreenState extends State<GameScreen> {
         // Character Panel (Left)
         SizedBox(
           width: 320,
-          child: CharacterPanel(character: _character!, onRefresh: _loadCharacterData),
+          child: CharacterPanel(
+            character: _character!,
+            onRefresh: _loadCharacterData,
+          ),
         ),
         // Story Panel (Center)
         Expanded(
@@ -714,7 +871,9 @@ class _GameScreenState extends State<GameScreen> {
             onRefresh: _loadCharacterData,
             onStorySelect: _handleStorySelect,
             onDecisionSelect: _handleDecisionSelect,
-            onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
+            onAbandonStory: _character!.storyState != null
+                ? _handleAbandonStory
+                : null,
             onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
           ),
@@ -732,7 +891,10 @@ class _GameScreenState extends State<GameScreen> {
         if (_selectedPanelIndex == 0)
           SizedBox(
             width: 280,
-            child: CharacterPanel(character: _character!, onRefresh: _loadCharacterData),
+            child: CharacterPanel(
+              character: _character!,
+              onRefresh: _loadCharacterData,
+            ),
           ),
         // Story Panel (Center - Always visible)
         Expanded(
@@ -744,13 +906,16 @@ class _GameScreenState extends State<GameScreen> {
             onRefresh: _loadCharacterData,
             onStorySelect: _handleStorySelect,
             onDecisionSelect: _handleDecisionSelect,
-            onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
+            onAbandonStory: _character!.storyState != null
+                ? _handleAbandonStory
+                : null,
             onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
           ),
         ),
         // Inventory Panel (Collapsible)
-        if (_selectedPanelIndex == 2) SizedBox(width: 280, child: InventoryPanel(character: _character!)),
+        if (_selectedPanelIndex == 2)
+          SizedBox(width: 280, child: InventoryPanel(character: _character!)),
       ],
     );
   }
@@ -759,7 +924,10 @@ class _GameScreenState extends State<GameScreen> {
     // Show only the selected panel
     switch (_selectedPanelIndex) {
       case 0:
-        return CharacterPanel(character: _character!, onRefresh: _loadCharacterData);
+        return CharacterPanel(
+          character: _character!,
+          onRefresh: _loadCharacterData,
+        );
       case 1:
         return StoryPanel(
           character: _character!,
@@ -769,7 +937,9 @@ class _GameScreenState extends State<GameScreen> {
           onRefresh: _loadCharacterData,
           onStorySelect: _handleStorySelect,
           onDecisionSelect: _handleDecisionSelect,
-          onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
+          onAbandonStory: _character!.storyState != null
+              ? _handleAbandonStory
+              : null,
           onRestSegment: _handleRestSegment,
           onReturnToStories: _handleReturnToStories,
         );

@@ -41,8 +41,12 @@ class Config:
             with open(config_path, "r") as f:
                 existing_config = yaml.safe_load(f) or {}
 
-        # Update deployment mode
+        # Update deployment mode (support both legacy and nested structures)
         existing_config["DeploymentMode"] = self.deployment_mode
+        existing_config.setdefault("Deployment", {})["Mode"] = self.deployment_mode
+
+        # Update AWS region
+        existing_config.setdefault("AWS", {})["Region"] = self.region
 
         # Update DynamoDB section
         existing_config["DynamoDB"] = {"Tables": self.dynamodb_tables}
@@ -101,8 +105,8 @@ class Config:
         with open(config_path, "r") as f:
             data = yaml.safe_load(f) or {}
 
-        # Load deployment mode
-        instance.deployment_mode = data.get("DeploymentMode", instance.deployment_mode)
+        # Load deployment mode (support nested structure)
+        instance.deployment_mode = data.get("DeploymentMode") or data.get("Deployment", {}).get("Mode", instance.deployment_mode)
 
         if "AWS" in data:
             instance.region = data.get("AWS", {}).get("Region", instance.region)

@@ -10,10 +10,7 @@ import 'game_screen.dart';
 class StorySelectionScreen extends StatefulWidget {
   final Character character;
 
-  const StorySelectionScreen({
-    super.key,
-    required this.character,
-  });
+  const StorySelectionScreen({super.key, required this.character});
 
   @override
   State<StorySelectionScreen> createState() => _StorySelectionScreenState();
@@ -44,17 +41,19 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
     } else {
       // Fallback: fetch fresh character data to get stories
       setState(() {
-        _storiesFuture = _apiService.getCharacterById(widget.character.id).then((character) {
-          if (character == null) {
-            throw Exception('Character not found');
-          }
-          if (character.availableStoriesDetails != null) {
-            return character.availableStoriesDetails!
-                .map((story) => StoryMetadata.fromJson(story))
-                .toList();
-          }
-          return <StoryMetadata>[];
-        });
+        _storiesFuture = _apiService.getCharacterById(widget.character.id).then(
+          (character) {
+            if (character == null) {
+              throw Exception('Character not found');
+            }
+            if (character.availableStoriesDetails != null) {
+              return character.availableStoriesDetails!
+                  .map((story) => StoryMetadata.fromJson(story))
+                  .toList();
+            }
+            return <StoryMetadata>[];
+          },
+        );
       });
     }
   }
@@ -226,9 +225,7 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
           if (_isLoading)
             Container(
               color: Colors.black54,
-              child: const Center(
-                child: CircularProgressIndicator(),
-              ),
+              child: const Center(child: CircularProgressIndicator()),
             ),
         ],
       ),
@@ -379,16 +376,9 @@ class _StoryTypeChip extends StatelessWidget {
       label: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            _getTypeIcon(),
-            size: 16,
-            color: color,
-          ),
+          Icon(_getTypeIcon(), size: 16, color: color),
           const SizedBox(width: 4),
-          Text(
-            type,
-            style: TextStyle(color: color),
-          ),
+          Text(type, style: TextStyle(color: color)),
         ],
       ),
       backgroundColor: color.withValues(alpha: 0.1),

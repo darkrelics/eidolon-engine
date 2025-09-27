@@ -5,10 +5,7 @@ import '../services/api_service.dart';
 class SegmentHistoryViewer extends StatefulWidget {
   final String characterId;
 
-  const SegmentHistoryViewer({
-    super.key,
-    required this.characterId,
-  });
+  const SegmentHistoryViewer({super.key, required this.characterId});
 
   @override
   State<SegmentHistoryViewer> createState() => _SegmentHistoryViewerState();
@@ -56,10 +53,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
       appBar: AppBar(
         title: const Text('Adventure History'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadHistory,
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _loadHistory),
         ],
       ),
       body: _buildBody(),
@@ -68,9 +62,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_errorMessage != null) {
@@ -160,10 +152,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
           ListTile(
             leading: CircleAvatar(
               backgroundColor: _getSegmentColor(segmentType, outcome),
-              child: Icon(
-                _getSegmentIcon(segmentType),
-                color: Colors.white,
-              ),
+              child: Icon(_getSegmentIcon(segmentType), color: Colors.white),
             ),
             title: Text(
               storyTitle,
@@ -196,7 +185,9 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
                       _formatOutcome(outcome),
                       style: const TextStyle(fontSize: 12),
                     ),
-                    backgroundColor: _getOutcomeColor(outcome).withValues(alpha: 0.2),
+                    backgroundColor: _getOutcomeColor(
+                      outcome,
+                    ).withValues(alpha: 0.2),
                     side: BorderSide(
                       color: _getOutcomeColor(outcome),
                       width: 1,
@@ -239,9 +230,10 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    ...clientEvents.map((event) => _buildEventSummary(
-                      event as Map<String, dynamic>,
-                    )),
+                    ...clientEvents.map(
+                      (event) =>
+                          _buildEventSummary(event as Map<String, dynamic>),
+                    ),
                   ],
                 ],
               ),
@@ -256,13 +248,8 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '$label: ',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        Expanded(
-          child: Text(value),
-        ),
+        Text('$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+        Expanded(child: Text(value)),
       ],
     );
   }
@@ -276,7 +263,9 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        color: Theme.of(
+          context,
+        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -324,11 +313,11 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
 
   IconData _getEventIcon(String? eventType) {
     if (eventType == null) return Icons.circle;
-    
+
     if (eventType.startsWith('combat')) {
       return Icons.shield;
     }
-    
+
     switch (eventType) {
       case 'skillCheck':
         return Icons.psychology;
@@ -345,7 +334,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
     if (outcome == 'exceptional') {
       return Colors.purple;
     }
-    
+
     switch (segmentType) {
       case 'decision':
         return Colors.blue;

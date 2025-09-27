@@ -54,10 +54,7 @@ class NotificationService {
     );
   }
 
-  static void showError(
-    BuildContext context, {
-    required String message,
-  }) {
+  static void showError(BuildContext context, {required String message}) {
     showCustomNotification(
       context,
       message: 'Error',
@@ -238,10 +235,7 @@ class _NotificationOverlayState extends State<_NotificationOverlay>
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, -1),
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutCubic,
-    ));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
 
     _controller.forward();
 
@@ -306,19 +300,20 @@ class _NotificationOverlayState extends State<_NotificationOverlay>
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: widget.color.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        widget.icon,
-                        color: widget.color,
-                        size: 24,
-                      ),
-                    ).animate()
-                      .scale(delay: 100.ms)
-                      .rotate(delay: 200.ms, duration: 300.ms),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: widget.color.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            widget.icon,
+                            color: widget.color,
+                            size: 24,
+                          ),
+                        )
+                        .animate()
+                        .scale(delay: 100.ms)
+                        .rotate(delay: 200.ms, duration: 300.ms),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
@@ -352,8 +347,7 @@ class _NotificationOverlayState extends State<_NotificationOverlay>
                 ),
               ),
             ),
-          ).animate()
-            .shimmer(delay: 500.ms, duration: 1000.ms),
+          ).animate().shimmer(delay: 500.ms, duration: 1000.ms),
         ),
       ),
     );

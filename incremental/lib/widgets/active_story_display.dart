@@ -30,11 +30,11 @@ class ActiveStoryDisplay extends StatelessWidget {
         // Story Card at top
         _buildStoryCard(theme),
         const SizedBox(height: 16),
-        
+
         // Current Segment with timer and progress
         _buildCurrentSegmentCard(theme),
         const SizedBox(height: 16),
-        
+
         // Previous segments
         if (previousSegments.isNotEmpty) ...[
           Padding(
@@ -47,8 +47,8 @@ class ActiveStoryDisplay extends StatelessWidget {
               ),
             ),
           ),
-          ...previousSegments.reversed.map((segment) => 
-            _buildPreviousSegmentCard(theme, segment)
+          ...previousSegments.reversed.map(
+            (segment) => _buildPreviousSegmentCard(theme, segment),
           ),
         ],
       ],
@@ -66,10 +66,7 @@ class ActiveStoryDisplay extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.auto_stories,
-                  color: theme.colorScheme.primary,
-                ),
+                Icon(Icons.auto_stories, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -82,7 +79,10 @@ class ActiveStoryDisplay extends StatelessWidget {
                 ),
                 // Story type chip
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.primary.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
@@ -100,7 +100,9 @@ class ActiveStoryDisplay extends StatelessWidget {
             Text(
               story['Description'] as String? ?? '',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                color: theme.colorScheme.onPrimaryContainer.withValues(
+                  alpha: 0.8,
+                ),
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
@@ -113,10 +115,11 @@ class ActiveStoryDisplay extends StatelessWidget {
 
   Widget _buildCurrentSegmentCard(ThemeData theme) {
     // Calculate duration from start and end times using ISO 8601 timestamps
-    final duration = TimeUtils.durationBetween(currentSegment.startTime, currentSegment.endTime);
-    final progress = duration > 0 
-        ? 1.0 - (timeRemaining / duration)
-        : 0.0;
+    final duration = TimeUtils.durationBetween(
+      currentSegment.startTime,
+      currentSegment.endTime,
+    );
+    final progress = duration > 0 ? 1.0 - (timeRemaining / duration) : 0.0;
 
     return Card(
       elevation: 8,
@@ -162,7 +165,7 @@ class ActiveStoryDisplay extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Progress bar
           LinearProgressIndicator(
             value: progress,
@@ -172,7 +175,7 @@ class ActiveStoryDisplay extends StatelessWidget {
               theme.colorScheme.primary,
             ),
           ),
-          
+
           // Content
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -185,28 +188,30 @@ class ActiveStoryDisplay extends StatelessWidget {
                   style: theme.textTheme.titleSmall,
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Narrative text or decision options
                 if (currentSegment.segmentType == 'narrative') ...[
                   Text(
                     currentSegment.defaultStatus ?? 'Story continues...',
                     style: theme.textTheme.bodyMedium,
                   ),
-                ] else if (currentSegment.segmentType == 'decision' && 
-                          decisionOptions != null) ...[
+                ] else if (currentSegment.segmentType == 'decision' &&
+                    decisionOptions != null) ...[
                   Text(
                     currentSegment.defaultStatus ?? 'Make a choice:',
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 12),
-                  ...decisionOptions!.entries.map((entry) => 
-                    Padding(
+                  ...decisionOptions!.entries.map(
+                    (entry) => Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
                       child: FilledButton.tonal(
-                        onPressed: timeRemaining > 0 ? () {
-                          // Handle decision selection
-                          if (onDecision != null) onDecision!();
-                        } : null,
+                        onPressed: timeRemaining > 0
+                            ? () {
+                                // Handle decision selection
+                                if (onDecision != null) onDecision!();
+                              }
+                            : null,
                         child: Text(entry.key),
                       ),
                     ),
@@ -225,7 +230,7 @@ class ActiveStoryDisplay extends StatelessWidget {
                     style: theme.textTheme.bodyMedium,
                   ),
                 ],
-                
+
                 // Segment type indicator
                 const SizedBox(height: 12),
                 Row(
@@ -252,13 +257,16 @@ class ActiveStoryDisplay extends StatelessWidget {
     );
   }
 
-  Widget _buildPreviousSegmentCard(ThemeData theme, Map<String, dynamic> segment) {
+  Widget _buildPreviousSegmentCard(
+    ThemeData theme,
+    Map<String, dynamic> segment,
+  ) {
     final segmentType = segment['SegmentType'] as String? ?? 'narrative';
-    
+
     final shortStatus = segment['ShortStatus'] as String? ?? 'Unknown segment';
-    
+
     final outcome = segment['Outcome'] as String?;
-    
+
     final clientEvents = segment['ClientEvents'] as List<dynamic>? ?? [];
 
     return Card(
@@ -282,7 +290,10 @@ class ActiveStoryDisplay extends StatelessWidget {
                 ),
                 if (outcome != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
                       color: _getOutcomeColor(outcome).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
@@ -297,7 +308,7 @@ class ActiveStoryDisplay extends StatelessWidget {
                   ),
               ],
             ),
-            
+
             // Events
             if (clientEvents.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -344,7 +355,7 @@ class ActiveStoryDisplay extends StatelessWidget {
                   ),
                 ),
             ],
-            
+
             // Segment type
             const SizedBox(height: 8),
             Row(
@@ -352,13 +363,17 @@ class ActiveStoryDisplay extends StatelessWidget {
                 Icon(
                   _getSegmentTypeIcon(segmentType),
                   size: 14,
-                  color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                  color: theme.colorScheme.onSurfaceVariant.withValues(
+                    alpha: 0.6,
+                  ),
                 ),
                 const SizedBox(width: 4),
                 Text(
                   _formatSegmentType(segmentType),
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                    color: theme.colorScheme.onSurfaceVariant.withValues(
+                      alpha: 0.6,
+                    ),
                   ),
                 ),
               ],
@@ -410,7 +425,7 @@ class ActiveStoryDisplay extends StatelessWidget {
       final eventType = event['eventType'] as String?;
       final data = event['data'] as Map<String, dynamic>?;
       final description = event['description'] as String?;
-      
+
       if (eventType == 'narrative') {
         return description ?? data?['text'] ?? 'Story continues...';
       } else if (eventType == 'skillCheck' && data != null) {
@@ -420,7 +435,7 @@ class ActiveStoryDisplay extends StatelessWidget {
       } else if (eventType == 'combat' && data != null) {
         return 'Combat encounter';
       }
-      
+
       return eventType ?? 'Unknown event';
     } catch (e) {
       debugPrint('ActiveStoryDisplay: Error formatting event: $e');

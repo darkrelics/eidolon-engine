@@ -21,12 +21,16 @@ class PollingEvent {
 /// eliminating the complex callback setup while maintaining server-authoritative behavior.
 class StoryPollingService {
   final ApiService _apiService;
-  final StreamController<PollingEvent> _eventController = StreamController<PollingEvent>.broadcast();
+  final StreamController<PollingEvent> _eventController =
+      StreamController<PollingEvent>.broadcast();
   Timer? _pollTimer;
   bool _isPolling = false;
   String? _currentCharacterId;
+  Timer? _delayTimer;
+  Completer<void>? _delayCompleter;
 
-  StoryPollingService({required ApiService apiService}) : _apiService = apiService;
+  StoryPollingService({required ApiService apiService})
+    : _apiService = apiService;
 
   /// Stream of polling events
   Stream<PollingEvent> get events => _eventController.stream;
@@ -46,7 +50,9 @@ class StoryPollingService {
     _currentCharacterId = characterId;
     _isPolling = true;
 
-    debugPrint('StoryPollingService: Starting polling for character: $characterId');
+    debugPrint(
+      'StoryPollingService: Starting polling for character: $characterId',
+    );
 
     try {
       await _runPollingLoop(characterId);
@@ -65,6 +71,7 @@ class StoryPollingService {
     _pollTimer?.cancel();
     _pollTimer = null;
     _currentCharacterId = null;
+    _cancelActiveDelay();
   }
 
   /// Core polling loop following server cadence exactly
@@ -87,22 +94,30 @@ class StoryPollingService {
 
         if (character == null) {
           debugPrint('StoryPollingService: Character not found');
-          _eventController.add(PollingEvent(PollingEventType.error, 'Character not found'));
+          _eventController.add(
+            PollingEvent(PollingEventType.error, 'Character not found'),
+          );
           break;
         }
 
         // Update UI with latest character data
-        _eventController.add(PollingEvent(PollingEventType.characterUpdated, character));
+        _eventController.add(
+          PollingEvent(PollingEventType.characterUpdated, character),
+        );
 
         // If no active segment, story is complete
         if (character.activeSegmentID == null) {
-          debugPrint('StoryPollingService: Story completed - no active segment');
+          debugPrint(
+            'StoryPollingService: Story completed - no active segment',
+          );
           _eventController.add(PollingEvent(PollingEventType.storyCompleted));
           break;
         }
 
         // Step 3: Get server timing for current segment
-        final segmentStatus = await _apiService.getSegmentStatus(characterId: characterId);
+        final segmentStatus = await _apiService.getSegmentStatus(
+          characterId: characterId,
+        );
 
         // Check if polling was stopped during the await
         if (!_isPolling) break;
@@ -110,26 +125,31 @@ class StoryPollingService {
         // Step 4: Wait server-specified time exactly
         final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
 
-        debugPrint('StoryPollingService: Server says wait $timeRemaining seconds');
+        debugPrint(
+          'StoryPollingService: Server says wait $timeRemaining seconds',
+        );
 
         if (timeRemaining > 0 && _isPolling) {
           // Wait the server-specified time before next poll
-          await Future.delayed(Duration(seconds: timeRemaining));
+          await _waitFor(Duration(seconds: timeRemaining));
         } else if (_isPolling) {
           // If timeRemaining is 0 or negative, wait a small delay before next poll
-          await Future.delayed(const Duration(seconds: 5));
+          await _waitFor(const Duration(seconds: 5));
         }
 
         // Reset consecutive errors on successful poll cycle
         consecutiveErrors = 0;
       } catch (e) {
         consecutiveErrors++;
-        debugPrint('StoryPollingService: Polling error ($consecutiveErrors/$maxConsecutiveErrors): $e');
+        debugPrint(
+          'StoryPollingService: Polling error ($consecutiveErrors/$maxConsecutiveErrors): $e',
+        );
 
         // Handle specific error cases as documented
         final errorStr = e.toString().toLowerCase();
 
-        if (errorStr.contains('404') || errorStr.contains('no active segment')) {
+        if (errorStr.contains('404') ||
+            errorStr.contains('no active segment')) {
           // Story completed
           debugPrint('StoryPollingService: Story completed (404 response)');
           _eventController.add(PollingEvent(PollingEventType.storyCompleted));
@@ -137,14 +157,21 @@ class StoryPollingService {
         }
 
         if (consecutiveErrors >= maxConsecutiveErrors) {
-          debugPrint('StoryPollingService: Too many consecutive errors, stopping');
-          _eventController.add(PollingEvent(PollingEventType.error, 'Connection failed after $maxConsecutiveErrors attempts'));
+          debugPrint(
+            'StoryPollingService: Too many consecutive errors, stopping',
+          );
+          _eventController.add(
+            PollingEvent(
+              PollingEventType.error,
+              'Connection failed after $maxConsecutiveErrors attempts',
+            ),
+          );
           break;
         }
 
         // Wait 30 seconds before retry as documented
         if (_isPolling) {
-          await Future.delayed(const Duration(seconds: 30));
+          await _waitFor(const Duration(seconds: 30));
         }
       }
     }
@@ -156,5 +183,43 @@ class StoryPollingService {
   void dispose() {
     stopPolling();
     _eventController.close();
+  }
+
+  Future<void> _waitFor(Duration duration) {
+    if (duration.isNegative || duration == Duration.zero) {
+      return Future.value();
+    }
+
+    _cancelActiveDelay();
+
+    final completer = Completer<void>();
+    _delayCompleter = completer;
+    _delayTimer = Timer(duration, () {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+      _clearDelayTimer();
+      if (identical(_delayCompleter, completer)) {
+        _delayCompleter = null;
+      }
+    });
+
+    return completer.future;
+  }
+
+  void _cancelActiveDelay() {
+    if (_delayTimer != null || _delayCompleter != null) {
+      _clearDelayTimer();
+      final completer = _delayCompleter;
+      _delayCompleter = null;
+      if (completer != null && !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+  }
+
+  void _clearDelayTimer() {
+    _delayTimer?.cancel();
+    _delayTimer = null;
   }
 }

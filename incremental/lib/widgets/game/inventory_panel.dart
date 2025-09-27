@@ -6,11 +6,7 @@ class InventoryPanel extends StatelessWidget {
   final Character character;
   final Function(String itemId)? onItemTap;
 
-  const InventoryPanel({
-    super.key,
-    required this.character,
-    this.onItemTap,
-  });
+  const InventoryPanel({super.key, required this.character, this.onItemTap});
 
   @override
   Widget build(BuildContext context) {
@@ -34,10 +30,7 @@ class InventoryPanel extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.inventory_2,
-                  color: colorScheme.onPrimaryContainer,
-                ),
+                Icon(Icons.inventory_2, color: colorScheme.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Text(
                   'Inventory',
@@ -49,9 +42,14 @@ class InventoryPanel extends StatelessWidget {
                 const Spacer(),
                 if (character.inventory.isNotEmpty)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
+                      color: colorScheme.onPrimaryContainer.withValues(
+                        alpha: 0.2,
+                      ),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -64,7 +62,7 @@ class InventoryPanel extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Content
           Expanded(
             child: character.inventory.isEmpty
@@ -79,7 +77,7 @@ class InventoryPanel extends StatelessWidget {
   Widget _buildEmptyInventory(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -112,7 +110,7 @@ class InventoryPanel extends StatelessWidget {
     // Group items by slot type
     final equippedItems = <String, MapEntry<String, String>>{};
     final unequippedItems = <MapEntry<String, String>>[];
-    
+
     for (final entry in character.inventory.entries) {
       if (_isEquipmentSlot(entry.key)) {
         equippedItems[entry.key] = entry;
@@ -120,7 +118,7 @@ class InventoryPanel extends StatelessWidget {
         unequippedItems.add(entry);
       }
     }
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -130,21 +128,23 @@ class InventoryPanel extends StatelessWidget {
           if (equippedItems.isNotEmpty) ...[
             _SectionHeader(title: 'Equipped'),
             const SizedBox(height: 12),
-            ...equippedItems.entries.map((equipped) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _InventorySlot(
-                slot: equipped.key,
-                itemId: equipped.value.value,
-                itemDetails: _getItemDetails(equipped.value.value),
-                isEquipped: true,
-                onTap: onItemTap != null 
-                    ? () => onItemTap!(equipped.value.value)
-                    : null,
+            ...equippedItems.entries.map(
+              (equipped) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _InventorySlot(
+                  slot: equipped.key,
+                  itemId: equipped.value.value,
+                  itemDetails: _getItemDetails(equipped.value.value),
+                  isEquipped: true,
+                  onTap: onItemTap != null
+                      ? () => onItemTap!(equipped.value.value)
+                      : null,
+                ),
               ),
-            )),
+            ),
             const SizedBox(height: 20),
           ],
-          
+
           // Bag/Unequipped Items Section
           if (unequippedItems.isNotEmpty) ...[
             _SectionHeader(title: 'Bag'),
@@ -164,7 +164,7 @@ class InventoryPanel extends StatelessWidget {
                 return _InventoryGridItem(
                   itemId: item.value,
                   itemDetails: _getItemDetails(item.value),
-                  onTap: onItemTap != null 
+                  onTap: onItemTap != null
                       ? () => onItemTap!(item.value)
                       : null,
                 );
@@ -178,16 +178,32 @@ class InventoryPanel extends StatelessWidget {
 
   bool _isEquipmentSlot(String slot) {
     const equipmentSlots = [
-      'head', 'helmet',
-      'chest', 'armor', 'body',
-      'legs', 'pants',
-      'feet', 'boots', 'shoes',
-      'hands', 'gloves',
-      'weapon', 'main_hand', 'mainhand',
-      'off_hand', 'offhand', 'shield',
-      'neck', 'amulet',
-      'ring', 'ring1', 'ring2',
-      'back', 'cloak', 'cape',
+      'head',
+      'helmet',
+      'chest',
+      'armor',
+      'body',
+      'legs',
+      'pants',
+      'feet',
+      'boots',
+      'shoes',
+      'hands',
+      'gloves',
+      'weapon',
+      'main_hand',
+      'mainhand',
+      'off_hand',
+      'offhand',
+      'shield',
+      'neck',
+      'amulet',
+      'ring',
+      'ring1',
+      'ring2',
+      'back',
+      'cloak',
+      'cape',
     ];
     return equipmentSlots.contains(slot.toLowerCase());
   }
@@ -196,8 +212,7 @@ class InventoryPanel extends StatelessWidget {
     // Get item details from inventoryDetails if available
     if (character.inventoryDetails.isNotEmpty) {
       for (final details in character.inventoryDetails.values) {
-        if (details is Map<String, dynamic> && 
-            details['ItemID'] == itemId) {
+        if (details is Map<String, dynamic> && details['ItemID'] == itemId) {
           return details;
         }
       }
@@ -214,15 +229,12 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.primary,
-            width: 2,
-          ),
+          bottom: BorderSide(color: theme.colorScheme.primary, width: 2),
         ),
       ),
       child: Text(
@@ -255,17 +267,17 @@ class _InventorySlot extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     final itemName = itemDetails?['Name'] ?? itemId;
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
-    
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isEquipped 
+          color: isEquipped
               ? colorScheme.primaryContainer.withValues(alpha: 0.3)
               : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
@@ -300,11 +312,7 @@ class _InventorySlot extends StatelessWidget {
               ),
             ),
             if (isEquipped)
-              Icon(
-                Icons.check_circle,
-                size: 16,
-                color: colorScheme.primary,
-              ),
+              Icon(Icons.check_circle, size: 16, color: colorScheme.primary),
           ],
         ),
       ),
@@ -380,10 +388,10 @@ class _InventoryGridItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
     final itemQuantity = itemDetails?['Quantity'] ?? 1;
-    
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),

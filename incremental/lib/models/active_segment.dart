@@ -49,10 +49,12 @@ class ActiveSegment {
       segmentType: json['SegmentType'] as String,
       status: json['Status'] as String,
       defaultStatus: json['DefaultStatus'] as String?,
-      startTime: json['StartTime'] as String,
-      endTime: json['EndTime'] as String,
+      startTime: _normalizeIsoTimestamp(json['StartTime']),
+      endTime: _normalizeIsoTimestamp(json['EndTime']),
       challengeResults: json['ChallengeResults'] as List<dynamic>?,
-      outcome: json['Outcome'] is Map ? (json['Outcome']['Type'] as String?) : json['Outcome'] as String?,
+      outcome: json['Outcome'] is Map
+          ? (json['Outcome']['Type'] as String?)
+          : json['Outcome'] as String?,
       decision: json['Decision'] as String?,
       decisionOptions: json['DecisionOptions'] as Map<String, dynamic>?,
       combatState: json['CombatState'] as Map<String, dynamic>?,
@@ -91,4 +93,16 @@ class ActiveSegment {
 
   /// Check if segment timer has expired
   bool get isExpired => TimeUtils.isPast(endTime);
+}
+
+String _normalizeIsoTimestamp(dynamic value) {
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+
+  if (value is num) {
+    return TimeUtils.fromUnix(value.toInt());
+  }
+
+  return TimeUtils.nowIso();
 }

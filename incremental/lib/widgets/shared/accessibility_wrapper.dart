@@ -25,9 +25,7 @@ class AccessibilityWrapper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (excludeSemantics) {
-      return ExcludeSemantics(
-        child: child,
-      );
+      return ExcludeSemantics(child: child);
     }
 
     return Semantics(
@@ -72,10 +70,7 @@ class AccessibleHealthBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall,
-              ),
+              Text(label, style: theme.textTheme.bodySmall),
               Text(
                 '${value.toInt()} / ${maxValue.toInt()}',
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -89,8 +84,8 @@ class AccessibleHealthBar extends StatelessWidget {
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
               value: value / maxValue,
-              backgroundColor: backgroundColor ?? 
-                  theme.colorScheme.surfaceContainerHighest,
+              backgroundColor:
+                  backgroundColor ?? theme.colorScheme.surfaceContainerHighest,
               valueColor: AlwaysStoppedAnimation<Color>(
                 color ?? theme.colorScheme.primary,
               ),
@@ -165,7 +160,7 @@ class _AccessibleCardState extends State<AccessibleCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Semantics(
       label: widget.semanticLabel,
       button: widget.onTap != null,
@@ -197,10 +192,10 @@ class _AccessibleCardState extends State<AccessibleCard> {
                 color: _focused
                     ? theme.colorScheme.primary
                     : _hovered
-                        ? theme.colorScheme.primary.withValues(alpha: 0.5)
-                        : widget.selected
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.outline.withValues(alpha: 0.3),
+                    ? theme.colorScheme.primary.withValues(alpha: 0.5)
+                    : widget.selected
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outline.withValues(alpha: 0.3),
                 width: _focused ? 2 : 1,
               ),
               boxShadow: [
@@ -267,11 +262,7 @@ class FocusTrap extends StatefulWidget {
   final Widget child;
   final bool enabled;
 
-  const FocusTrap({
-    super.key,
-    required this.child,
-    this.enabled = true,
-  });
+  const FocusTrap({super.key, required this.child, this.enabled = true});
 
   @override
   State<FocusTrap> createState() => _FocusTrapState();
@@ -292,9 +283,6 @@ class _FocusTrapState extends State<FocusTrap> {
       return widget.child;
     }
 
-    return FocusScope(
-      node: _focusScopeNode,
-      child: widget.child,
-    );
+    return FocusScope(node: _focusScopeNode, child: widget.child);
   }
 }

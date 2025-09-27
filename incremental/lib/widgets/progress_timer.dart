@@ -25,14 +25,11 @@ class ProgressTimer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Time Remaining',
-          style: theme.textTheme.titleMedium,
-        ),
+        Text('Time Remaining', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         Stack(
           alignment: Alignment.center,

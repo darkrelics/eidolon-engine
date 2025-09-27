@@ -138,11 +138,10 @@ Each stack has its own app file (`app_*.py`) to prevent output contamination.
 
 After CDK deployment, the system:
 
-1. **Updates Lambda functions** from S3 artifacts
-2. **Publishes new layer version** if changed
-3. **Updates all functions** to use new layer
-4. **Deletes old layer versions** to prevent accumulation
-5. **Configures Cognito triggers** for imported User Pools
+1. **Updates Lambda function code** from the latest S3 artifacts
+2. **Re-associates each function** with the most recent published layer when needed
+3. **Skips not-yet-deployed functions safely**, logging a warning instead of failing the deployment
+4. **Configures Cognito triggers** for imported User Pools
 
 ### Portal Build Automation
 
@@ -152,6 +151,29 @@ The Client Stack automatically:
 2. **Monitors build progress** with phase updates
 3. **Syncs to S3** and invalidates CloudFront
 4. **Displays portal URL** on completion
+
+## Database Utilities
+
+The repository includes lightweight scripts for seeding and inspecting DynamoDB tables during development. Run them from the repo root; use `--region` to target a specific AWS account when needed.
+
+- `database/data_loader.py` — Loads the JSON fixtures in `data/` (rooms, exits, archetypes, prototypes, opponents, stories) into DynamoDB. Defaults to `us-east-1`:
+  ```bash
+  python database/data_loader.py --region us-west-2
+  ```
+- `database/viewer.py` — Dumps table contents (default region `us-east-1`). Pass logical table names (e.g., `characters`, `story_history`) to limit the output:
+  ```bash
+  python database/viewer.py --region us-west-2 characters archetypes
+  ```
+- `database/motd.py` — Adds a Message of the Day entry (region default `us-east-1`):
+  ```bash
+  python database/motd.py "Welcome to Eidolon" --region us-west-2
+  ```
+- `database/create_item.py` — Interactive helper that clones an item prototype into the `items` table (region default `us-east-1`):
+  ```bash
+  python database/create_item.py --region us-west-2
+  ```
+
+Sample fixtures live under `data/` (`test_rooms.json`, `test_story.json`, etc.) and match the schemas described in `schema.md`.
 
 ## Critical Implementation Details
 
@@ -503,17 +525,9 @@ The system now validates LOG_LEVEL:
 LOG_LEVEL = _validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
 ```
 
-### Layer Version Accumulation
+### Layer Version Management
 
-Old layer versions are automatically deleted:
-
-```python
-# Keeps only current version
-lambda_client.delete_layer_version(
-    LayerName=layer_name,
-    VersionNumber=old_version
-)
-```
+Phase 11 reuses the most recent published `eidolon-dependencies` layer. It does **not** publish new versions or prune historical ones; remove stale layer versions manually through the AWS console or CLI if needed.
 
 ## Environment Strategy
 
@@ -655,25 +669,7 @@ def __init__(self, scope, id, bucket_exists: bool = False, **kwargs):
 
 #### Lambda Layer Version Management
 
-```python
-# Post-deployment cleanup of old layer versions
-def update_lambda_layer(layer_name: str, s3_key: str):
-    # Publish new version
-    new_version = lambda_client.publish_layer_version(...)
-
-    # Update all functions to use new version
-    for function in functions:
-        lambda_client.update_function_configuration(
-            FunctionName=function,
-            Layers=[new_version['LayerVersionArn']]
-        )
-
-    # Delete old version
-    lambda_client.delete_layer_version(
-        LayerName=layer_name,
-        VersionNumber=old_version
-    )
-```
+Automated deployments reuse the latest published `eidolon-dependencies` layer but do not publish new versions or prune historical ones. When you intentionally roll a new layer, publish it manually (e.g. via the `lambda-layer` CodeBuild project) and delete obsolete versions through the console/CLI to stay within the 75-version limit.
 
 #### Common Pitfalls to Avoid
 

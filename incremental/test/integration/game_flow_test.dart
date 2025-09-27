@@ -11,7 +11,6 @@ void main() {
     late Character testCharacter;
 
     setUp(() {
-      
       testCharacter = Character(
         id: 'test-char',
         name: 'Test Hero',
@@ -21,23 +20,10 @@ void main() {
         maxHealth: 100,
         essence: 50,
         maxEssence: 50,
-        attributes: {
-          'Strength': 15.0,
-          'Agility': 12.0,
-          'Intelligence': 10.0,
-        },
-        skills: {
-          'Melee': 3.0,
-          'Arcane': 2.0,
-        },
-        resources: {
-          'gold': 500,
-          'supplies': 10,
-        },
-        inventory: {
-          'weapon': 'sword-01',
-          'armor': 'plate-01',
-        },
+        attributes: {'Strength': 15.0, 'Agility': 12.0, 'Intelligence': 10.0},
+        skills: {'Melee': 3.0, 'Arcane': 2.0},
+        resources: {'gold': 500, 'supplies': 10},
+        inventory: {'weapon': 'sword-01', 'armor': 'plate-01'},
         inventoryDetails: {
           'weapon': {
             'ItemID': 'sword-01',
@@ -90,11 +76,9 @@ void main() {
               return MaterialPageRoute(
                 builder: (context) => const GameScreen(),
                 settings: RouteSettings(
-                  arguments: character ?? CharacterInfo(
-                    name: 'Test',
-                    id: 'test-id',
-                    dead: false,
-                  ),
+                  arguments:
+                      character ??
+                      CharacterInfo(name: 'Test', id: 'test-id', dead: false),
                 ),
               );
             }
@@ -104,22 +88,24 @@ void main() {
       );
     }
 
-    testWidgets('Game screen loads with character data',
-        (WidgetTester tester) async {
+    testWidgets('Game screen loads with character data', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(createTestApp(character: testCharacter));
       await tester.pumpAndSettle();
 
       // Check that character name appears
       expect(find.text('Test Hero'), findsOneWidget);
-      
+
       // Check that panels are present
       expect(find.text('Character'), findsOneWidget);
       expect(find.text('Story'), findsOneWidget);
       expect(find.text('Inventory'), findsOneWidget);
     });
 
-    testWidgets('Navigation between panels works correctly',
-        (WidgetTester tester) async {
+    testWidgets('Navigation between panels works correctly', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(createTestApp(character: testCharacter));
       await tester.pumpAndSettle();
 
@@ -140,8 +126,7 @@ void main() {
       }
     });
 
-    testWidgets('Story selection flow works',
-        (WidgetTester tester) async {
+    testWidgets('Story selection flow works', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp(character: testCharacter));
       await tester.pumpAndSettle();
 
@@ -153,8 +138,7 @@ void main() {
       }
     });
 
-    testWidgets('Theme toggle changes appearance',
-        (WidgetTester tester) async {
+    testWidgets('Theme toggle changes appearance', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp(character: testCharacter));
       await tester.pumpAndSettle();
 
@@ -162,7 +146,9 @@ void main() {
       final themeButton = find.byIcon(Icons.settings_brightness);
       if (themeButton.evaluate().isNotEmpty) {
         // Get initial theme
-        final BuildContext context = tester.element(find.byType(Scaffold).first);
+        final BuildContext context = tester.element(
+          find.byType(Scaffold).first,
+        );
         final initialBrightness = Theme.of(context).brightness;
 
         // Toggle theme
@@ -179,8 +165,9 @@ void main() {
       }
     });
 
-    testWidgets('Error handling displays error widget',
-        (WidgetTester tester) async {
+    testWidgets('Error handling displays error widget', (
+      WidgetTester tester,
+    ) async {
       final characterWithError = Character(
         id: 'error-char',
         name: 'Error Test',
@@ -212,8 +199,7 @@ void main() {
       expect(find.byType(GameScreen), findsOneWidget);
     });
 
-    testWidgets('Keyboard shortcuts dialog opens',
-        (WidgetTester tester) async {
+    testWidgets('Keyboard shortcuts dialog opens', (WidgetTester tester) async {
       await tester.pumpWidget(createTestApp(character: testCharacter));
       await tester.pumpAndSettle();
 
@@ -234,8 +220,9 @@ void main() {
       }
     });
 
-    testWidgets('Refresh button triggers data reload',
-        (WidgetTester tester) async {
+    testWidgets('Refresh button triggers data reload', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(createTestApp(character: testCharacter));
       await tester.pumpAndSettle();
 
@@ -250,14 +237,12 @@ void main() {
       }
     });
 
-    testWidgets('Active story state displays correctly',
-        (WidgetTester tester) async {
+    testWidgets('Active story state displays correctly', (
+      WidgetTester tester,
+    ) async {
       final characterWithStory = testCharacter.copyWith(
         storyState: {
-          'Story': {
-            'Title': 'Active Adventure',
-            'Type': 'main',
-          },
+          'Story': {'Title': 'Active Adventure', 'Type': 'main'},
           'ActiveSegment': {
             'SegmentType': 'mechanical',
             'ShortStatus': 'Processing actions...',

@@ -42,12 +42,9 @@ class LoadingDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return AlertDialog(
-      title: Text(
-        title,
-        style: theme.textTheme.headlineSmall,
-      ),
+      title: Text(title, style: theme.textTheme.headlineSmall),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -102,10 +99,7 @@ class _ProgressLoadingDialogState extends State<ProgressLoadingDialog> {
     final theme = Theme.of(context);
 
     return AlertDialog(
-      title: Text(
-        widget.title,
-        style: theme.textTheme.headlineSmall,
-      ),
+      title: Text(widget.title, style: theme.textTheme.headlineSmall),
       content: StreamBuilder<LoadingProgress>(
         stream: widget.progressStream,
         initialData: _currentProgress,
@@ -118,9 +112,7 @@ class _ProgressLoadingDialogState extends State<ProgressLoadingDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (_currentProgress.progress != null)
-                LinearProgressIndicator(
-                  value: _currentProgress.progress,
-                )
+                LinearProgressIndicator(value: _currentProgress.progress)
               else
                 const CircularProgressIndicator(),
               const SizedBox(height: 24),
@@ -161,9 +153,5 @@ class LoadingProgress {
   final String? subtitle;
   final double? progress; // 0.0 to 1.0, null for indeterminate
 
-  LoadingProgress({
-    required this.message,
-    this.subtitle,
-    this.progress,
-  });
+  LoadingProgress({required this.message, this.subtitle, this.progress});
 }

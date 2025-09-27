@@ -29,7 +29,8 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay> {
     final type = widget.outcome['Type'] ?? 'unknown';
     final description = widget.outcome['Description'] ?? '';
     final rewards = widget.outcome['Rewards'] as Map<String, dynamic>?;
-    final consequences = widget.outcome['Consequences'] as Map<String, dynamic>?;
+    final consequences =
+        widget.outcome['Consequences'] as Map<String, dynamic>?;
 
     return Container(
       margin: const EdgeInsets.all(16),
@@ -73,7 +74,9 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay> {
           ],
 
           // Consequences Section
-          if (_showDetails && consequences != null && consequences.isNotEmpty) ...[
+          if (_showDetails &&
+              consequences != null &&
+              consequences.isNotEmpty) ...[
             const SizedBox(height: 16),
             _ConsequencesSection(consequences: consequences),
           ],
@@ -86,7 +89,10 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay> {
               icon: const Icon(Icons.chevron_right),
               label: const Text('Continue'),
               style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
               ),
             ),
           ],
@@ -162,11 +168,7 @@ class _OutcomeIcon extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(
-        icon,
-        size: 50,
-        color: color,
-      ),
+      child: Icon(icon, size: 50, color: color),
     );
   }
 
@@ -228,9 +230,7 @@ class _RewardsSection extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.green.withValues(alpha: 0.3),
-        ),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -238,11 +238,7 @@ class _RewardsSection extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.card_giftcard,
-                color: Colors.green,
-                size: 20,
-              ),
+              Icon(Icons.card_giftcard, color: Colors.green, size: 20),
               const SizedBox(width: 8),
               Text(
                 'Rewards',
@@ -259,10 +255,7 @@ class _RewardsSection extends StatelessWidget {
             spacing: 12,
             runSpacing: 8,
             children: rewards.entries.map((entry) {
-              return _RewardChip(
-                type: entry.key,
-                value: entry.value,
-              );
+              return _RewardChip(type: entry.key, value: entry.value);
             }).toList(),
           ),
         ],
@@ -275,10 +268,7 @@ class _RewardChip extends StatelessWidget {
   final String type;
   final dynamic value;
 
-  const _RewardChip({
-    required this.type,
-    required this.value,
-  });
+  const _RewardChip({required this.type, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -306,12 +296,7 @@ class _RewardChip extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
-          Text(
-            type,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: color,
-            ),
-          ),
+          Text(type, style: theme.textTheme.bodySmall?.copyWith(color: color)),
         ],
       ),
     );
@@ -395,25 +380,23 @@ class _ConsequencesSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          ...consequences.entries.map((entry) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.remove,
-                      size: 16,
+          ...consequences.entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Icon(Icons.remove, size: 16, color: theme.colorScheme.error),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${entry.key}: ${entry.value}',
+                    style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.error,
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${entry.key}: ${entry.value}',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.error,
-                      ),
-                    ),
-                  ],
-                ),
-              )),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );

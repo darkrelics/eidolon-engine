@@ -35,7 +35,8 @@ class ErrorHandler {
       return 'Request timed out. Please try again.';
     }
 
-    if (errorString.toLowerCase().contains('permission') || errorString.toLowerCase().contains('forbidden')) {
+    if (errorString.toLowerCase().contains('permission') ||
+        errorString.toLowerCase().contains('forbidden')) {
       return 'You don\'t have permission to perform this action.';
     }
 

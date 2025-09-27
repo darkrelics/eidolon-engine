@@ -18,7 +18,8 @@ class MiniJsonSchema {
     // Handle object properties
     if (schema['type'] == 'object') {
       final props = (schema['properties'] ?? {}) as Map<String, dynamic>;
-      final required = (schema['required'] ?? const <dynamic>[]) as List<dynamic>;
+      final required =
+          (schema['required'] ?? const <dynamic>[]) as List<dynamic>;
       if (data is! Map) {
         throw TestFailure('$path: expected object');
       }
@@ -91,7 +92,9 @@ class MiniJsonSchema {
       default:
         ok = true; // types like null/any are ignored
     }
-    if (!ok) throw TestFailure('$path: expected $type, got ${data.runtimeType}');
+    if (!ok) {
+      throw TestFailure('$path: expected $type, got ${data.runtimeType}');
+    }
   }
 }
 

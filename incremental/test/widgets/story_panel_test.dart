@@ -17,11 +17,7 @@ void main() {
         maxHealth: 100,
         essence: 50,
         maxEssence: 50,
-        attributes: {
-          'Strength': 10.0,
-          'Agility': 8.0,
-          'Intelligence': 12.0,
-        },
+        attributes: {'Strength': 10.0, 'Agility': 8.0, 'Intelligence': 12.0},
         skills: {},
         resources: {'gold': 100},
         inventory: {},
@@ -55,15 +51,12 @@ void main() {
       );
     });
 
-    testWidgets('displays available stories when no active story',
-        (WidgetTester tester) async {
+    testWidgets('displays available stories when no active story', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: StoryPanel(
-              character: mockCharacter,
-            ),
-          ),
+          home: Scaffold(body: StoryPanel(character: mockCharacter)),
         ),
       );
 
@@ -72,8 +65,9 @@ void main() {
       expect(find.text('Daily Quest'), findsOneWidget);
     });
 
-    testWidgets('displays active story when story state exists',
-        (WidgetTester tester) async {
+    testWidgets('displays active story when story state exists', (
+      WidgetTester tester,
+    ) async {
       final characterWithStory = mockCharacter.copyWith(
         storyState: {
           'Story': {
@@ -102,11 +96,7 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: StoryPanel(
-              character: characterWithStory,
-            ),
-          ),
+          home: Scaffold(body: StoryPanel(character: characterWithStory)),
         ),
       );
 
@@ -114,15 +104,13 @@ void main() {
       expect(find.text('Choose your path'), findsOneWidget);
     });
 
-    testWidgets('shows loading indicator when isLoading is true',
-        (WidgetTester tester) async {
+    testWidgets('shows loading indicator when isLoading is true', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: StoryPanel(
-              character: mockCharacter,
-              isLoading: true,
-            ),
+            body: StoryPanel(character: mockCharacter, isLoading: true),
           ),
         ),
       );
@@ -131,8 +119,9 @@ void main() {
       expect(find.text('Loading stories...'), findsOneWidget);
     });
 
-    testWidgets('displays error message when error is provided',
-        (WidgetTester tester) async {
+    testWidgets('displays error message when error is provided', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -149,8 +138,9 @@ void main() {
       expect(find.byIcon(Icons.error_outline), findsOneWidget);
     });
 
-    testWidgets('calls onRefresh when refresh button is pressed',
-        (WidgetTester tester) async {
+    testWidgets('calls onRefresh when refresh button is pressed', (
+      WidgetTester tester,
+    ) async {
       bool refreshCalled = false;
 
       await tester.pumpWidget(
@@ -172,19 +162,16 @@ void main() {
       expect(refreshCalled, isTrue);
     });
 
-    testWidgets('toggles between available stories and history',
-        (WidgetTester tester) async {
+    testWidgets('toggles between available stories and history', (
+      WidgetTester tester,
+    ) async {
       final characterWithHistory = mockCharacter.copyWith(
         completedStories: ['completed-story-1', 'completed-story-2'],
       );
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: StoryPanel(
-              character: characterWithHistory,
-            ),
-          ),
+          home: Scaffold(body: StoryPanel(character: characterWithHistory)),
         ),
       );
 

@@ -130,7 +130,7 @@ Active → Abandoned
     - Clear ActiveStoryID and ActiveSegmentID
     - Set GameMode = "None"
     - Update StoryHistory with FinalOutcome = "abandoned"
-    - Delete ActiveSegment record
+    - Mark current ActiveSegment Status="abandoned" and ProcessingStatus="processed" so pollers ignore it (record retained for audit)
   Note: Only player-initiated quits count as abandoned, not story failures
 ```
 

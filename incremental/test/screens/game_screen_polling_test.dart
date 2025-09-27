@@ -9,9 +9,7 @@ import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/screens/game_screen.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 
-@GenerateNiceMocks([
-  MockSpec<ApiService>(),
-])
+@GenerateNiceMocks([MockSpec<ApiService>()])
 import 'game_screen_polling_test.mocks.dart';
 
 void main() {
@@ -21,7 +19,7 @@ void main() {
 
     setUp(() {
       mockApiService = MockApiService();
-      
+
       testCharacter = Character(
         id: 'test-char-1',
         name: 'Test Character',
@@ -47,7 +45,7 @@ void main() {
             'SegmentType': 'mechanical',
             'TimeRemaining': 120,
             'IsComplete': false,
-          }
+          },
         },
       );
     });
@@ -55,23 +53,23 @@ void main() {
     Widget createTestWidget() {
       return MultiProvider(
         providers: [
-          ChangeNotifierProvider<AuthProvider>(
-            create: (_) => AuthProvider(),
-          ),
+          ChangeNotifierProvider<AuthProvider>(create: (_) => AuthProvider()),
         ],
-        child: MaterialApp(
-          home: GameScreen(),
-        ),
+        child: MaterialApp(home: GameScreen()),
       );
     }
 
-    testWidgets('should start polling when character has active segment', (tester) async {
+    testWidgets('should start polling when character has active segment', (
+      tester,
+    ) async {
       // Set up mock responses
-      when(mockApiService.getCharacterById(any)).thenAnswer(
-        (_) async => testCharacter,
-      );
-      
-      when(mockApiService.getSegmentStatus(characterId: anyNamed('characterId'))).thenAnswer(
+      when(
+        mockApiService.getCharacterById(any),
+      ).thenAnswer((_) async => testCharacter);
+
+      when(
+        mockApiService.getSegmentStatus(characterId: anyNamed('characterId')),
+      ).thenAnswer(
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 60,
@@ -81,20 +79,22 @@ void main() {
       );
 
       await tester.pumpWidget(createTestWidget());
-      
+
       // Navigate to game screen with character
       await tester.pumpAndSettle();
 
       // Should start polling automatically
       // Note: In real implementation, we'd need to inject the mock service
       // This is a conceptual test showing the expected behavior
-      
+
       expect(find.byType(GameScreen), findsOneWidget);
     });
 
     testWidgets('should handle segment completion correctly', (tester) async {
       // Set up segment completion scenario
-      when(mockApiService.getSegmentStatus(characterId: anyNamed('characterId'))).thenAnswer(
+      when(
+        mockApiService.getSegmentStatus(characterId: anyNamed('characterId')),
+      ).thenAnswer(
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 0,
@@ -105,9 +105,7 @@ void main() {
 
       // After completion, return new segment
       when(mockApiService.getCharacterById(any)).thenAnswer(
-        (_) async => testCharacter.copyWith(
-          activeSegmentId: 'test-segment-2',
-        ),
+        (_) async => testCharacter.copyWith(activeSegmentId: 'test-segment-2'),
       );
 
       await tester.pumpWidget(createTestWidget());
@@ -119,7 +117,9 @@ void main() {
 
     testWidgets('should handle story completion', (tester) async {
       // Set up story completion scenario
-      when(mockApiService.getSegmentStatus(characterId: anyNamed('characterId'))).thenAnswer(
+      when(
+        mockApiService.getSegmentStatus(characterId: anyNamed('characterId')),
+      ).thenAnswer(
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 0,
@@ -129,9 +129,9 @@ void main() {
       );
 
       // After story completion, no active segment
-      when(mockApiService.getCharacterById(any)).thenAnswer(
-        (_) async => testCharacter.copyWith(activeSegmentId: null),
-      );
+      when(
+        mockApiService.getCharacterById(any),
+      ).thenAnswer((_) async => testCharacter.copyWith(activeSegmentId: null));
 
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();
@@ -142,13 +142,13 @@ void main() {
 
     testWidgets('should handle 404 errors gracefully', (tester) async {
       // Simulate 404 error (story completed)
-      when(mockApiService.getSegmentStatus(characterId: any)).thenThrow(
-        Exception('404: No active segment found'),
-      );
+      when(
+        mockApiService.getSegmentStatus(characterId: any),
+      ).thenThrow(Exception('404: No active segment found'));
 
-      when(mockApiService.getCharacterById(any)).thenAnswer(
-        (_) async => testCharacter.copyWith(activeSegmentId: null),
-      );
+      when(
+        mockApiService.getCharacterById(any),
+      ).thenAnswer((_) async => testCharacter.copyWith(activeSegmentId: null));
 
       await tester.pumpWidget(createTestWidget());
       await tester.pumpAndSettle();

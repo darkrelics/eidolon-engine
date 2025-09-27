@@ -36,10 +36,12 @@ class StoryMetadata {
       cooldownRemaining: json['CooldownRemaining'] as int? ?? 0,
       estimatedDuration: json['EstimatedDuration'] as int? ?? 0,
       prerequisites: json['Prerequisites'] as Map<String, dynamic>? ?? {},
-      difficultyMap: (json['DifficultyMap'] as Map<String, dynamic>? ?? {})
-          .map((key, value) => MapEntry(key, (value as num).toDouble())),
-      rewardTiers: (json['RewardTiers'] as Map<String, dynamic>? ?? {})
-          .map((key, value) => MapEntry(key, value.toString())),
+      difficultyMap: (json['DifficultyMap'] as Map<String, dynamic>? ?? {}).map(
+        (key, value) => MapEntry(key, (value as num).toDouble()),
+      ),
+      rewardTiers: (json['RewardTiers'] as Map<String, dynamic>? ?? {}).map(
+        (key, value) => MapEntry(key, value.toString()),
+      ),
       baseXPMultiplier: (json['BaseXPMultiplier'] as num? ?? 0.5).toDouble(),
     );
   }
@@ -107,10 +109,7 @@ class SegmentOption {
   final String id;
   final String text;
 
-  SegmentOption({
-    required this.id,
-    required this.text,
-  });
+  SegmentOption({required this.id, required this.text});
 
   factory SegmentOption.fromJson(Map<String, dynamic> json) {
     return SegmentOption(

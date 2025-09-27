@@ -7,11 +7,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Configuration class for AWS Cognito authentication settings.
-/// 
+///
 /// This class manages the Cognito User Pool and Client IDs needed for authentication.
 /// In production, these values MUST be provided via environment variables during build.
 /// In development mode (kDebugMode), placeholder values are used as fallbacks to simplify local testing.
-/// 
+///
 /// The environment variables USER_POOL_ID and CLIENT_ID are injected at compile time
 /// using the --dart-define flags during the Flutter build process.
 class CognitoConfig {
@@ -23,18 +23,21 @@ class CognitoConfig {
   /// without requiring actual AWS Cognito configuration.
   /// NEVER use these in production - they are intentionally invalid.
   static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
-  static String get _devClientId => kDebugMode ? '1example2client3id4567890abc' : '';
+  static String get _devClientId =>
+      kDebugMode ? '1example2client3id4567890abc' : '';
 
   /// Returns the User Pool ID with fallback to development value in debug mode
-  static String get userPoolIdWithFallback => userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
+  static String get userPoolIdWithFallback =>
+      userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
 
   /// Returns the Client ID with fallback to development value in debug mode
-  static String get clientIdWithFallback => clientId.isNotEmpty ? clientId : _devClientId;
+  static String get clientIdWithFallback =>
+      clientId.isNotEmpty ? clientId : _devClientId;
 
   /// Validates that the Cognito configuration is properly set.
   /// In production (release mode), this ensures environment variables are provided.
   /// In development (debug mode), this allows fallback values to be used.
-  /// 
+  ///
   /// This should be called during app initialization to fail fast on configuration issues.
   static void validateConfiguration() {
     final effectiveUserPoolId = userPoolIdWithFallback;
@@ -44,27 +47,27 @@ class CognitoConfig {
     if (kReleaseMode && (userPoolId.isEmpty || clientId.isEmpty)) {
       throw ConfigurationException(
         'Production build is missing required environment variables. '
-        'Ensure USER_POOL_ID and CLIENT_ID are provided via --dart-define during build.'
+        'Ensure USER_POOL_ID and CLIENT_ID are provided via --dart-define during build.',
       );
     }
 
     // Basic validation - user pool ID must have the correct format
     if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
       throw ConfigurationException(
-        'Invalid User Pool ID format. Expected format: "region_poolId" (e.g., "us-east-1_abcd1234")'
+        'Invalid User Pool ID format. Expected format: "region_poolId" (e.g., "us-east-1_abcd1234")',
       );
     }
 
     // Client ID must be present and have reasonable length
     if (effectiveClientId.isEmpty) {
       throw ConfigurationException(
-        'Client ID is missing. Ensure CLIENT_ID environment variable is set.'
+        'Client ID is missing. Ensure CLIENT_ID environment variable is set.',
       );
     }
-    
+
     if (effectiveClientId.length < 10) {
       throw ConfigurationException(
-        'Client ID appears invalid (too short). Expected a valid Cognito Client ID.'
+        'Client ID appears invalid (too short). Expected a valid Cognito Client ID.',
       );
     }
   }
@@ -73,7 +76,7 @@ class CognitoConfig {
   /// This ensures configuration issues are caught early in the app lifecycle.
   // ignore: unused_field
   static final bool _isValidated = _performEarlyValidation();
-  
+
   static bool _performEarlyValidation() {
     // Only validate automatically in release mode to catch production issues early
     if (kReleaseMode) {
@@ -110,7 +113,9 @@ class AuthExceptionMapper {
       // Log the error code in debug mode to help diagnose issues
       if (kDebugMode) {
         debugPrint('AuthExceptionMapper: Cognito error code: ${error.code}');
-        debugPrint('AuthExceptionMapper: Cognito error message: ${error.message}');
+        debugPrint(
+          'AuthExceptionMapper: Cognito error message: ${error.message}',
+        );
       }
 
       switch (error.code) {
@@ -136,9 +141,12 @@ class AuthExceptionMapper {
           return 'Verification code has expired. Please request a new one';
         default:
           // Check if the error message contains username exists indication
-          if (error.message?.toLowerCase().contains('username exists') == true ||
-              error.message?.toLowerCase().contains('user already exists') == true ||
-              error.message?.toLowerCase().contains('already registered') == true) {
+          if (error.message?.toLowerCase().contains('username exists') ==
+                  true ||
+              error.message?.toLowerCase().contains('user already exists') ==
+                  true ||
+              error.message?.toLowerCase().contains('already registered') ==
+                  true) {
             return 'The Player Account already exists.';
           }
           return 'An error occurred. Please try again';
@@ -221,7 +229,9 @@ class AuthService {
 
       return signUpResult;
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Account creation failed', err);
       rethrow;
@@ -240,7 +250,9 @@ class AuthService {
       final user = CognitoUser(email, userPool);
       return await user.confirmRegistration(code);
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Account verification failed', err);
       rethrow;
@@ -267,7 +279,10 @@ class AuthService {
       }
 
       final user = CognitoUser(email, userPool);
-      final authDetails = AuthenticationDetails(username: email, password: password);
+      final authDetails = AuthenticationDetails(
+        username: email,
+        password: password,
+      );
 
       try {
         _session = await user.authenticateUser(authDetails);
@@ -277,7 +292,10 @@ class AuthService {
             err.message?.contains('USER_SRP_AUTH is not enabled') == true) {
           user.setAuthenticationFlowType('USER_PASSWORD_AUTH');
 
-          final passwordAuth = AuthenticationDetails(username: email, password: password);
+          final passwordAuth = AuthenticationDetails(
+            username: email,
+            password: password,
+          );
 
           _session = await user.authenticateUser(passwordAuth);
         } else {
@@ -290,7 +308,9 @@ class AuthService {
 
       return user;
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Sign in failed', err);
       rethrow;
@@ -318,7 +338,9 @@ class AuthService {
       _session = null;
       final cleared = await _clearTokens();
       if (!cleared) {
-        throw AuthSignOutException('Sign-out partially failed. Please try again.');
+        throw AuthSignOutException(
+          'Sign-out partially failed. Please try again.',
+        );
       }
     }
   }
@@ -386,7 +408,9 @@ class AuthService {
       final user = CognitoUser(email, userPool);
       await user.resendConfirmationCode();
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Failed to send verification code', err);
       rethrow;
@@ -405,7 +429,9 @@ class AuthService {
       final user = CognitoUser(email, userPool);
       await user.forgotPassword();
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Failed to initiate password reset', err);
       rethrow;
@@ -413,7 +439,11 @@ class AuthService {
   }
 
   /// Confirms password reset with code and new password
-  Future<void> confirmPassword(String email, String code, String newPassword) async {
+  Future<void> confirmPassword(
+    String email,
+    String code,
+    String newPassword,
+  ) async {
     await _ensureInitialized();
 
     try {
@@ -434,7 +464,9 @@ class AuthService {
       final user = CognitoUser(email, userPool);
       await user.confirmPassword(code, newPassword);
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Failed to reset password', err);
       rethrow;
@@ -447,7 +479,9 @@ class AuthService {
 
     try {
       if (_currentUser == null || _session == null) {
-        throw CognitoClientException('User must be signed in to delete account');
+        throw CognitoClientException(
+          'User must be signed in to delete account',
+        );
       }
 
       if (!_session!.isValid()) {
@@ -463,7 +497,9 @@ class AuthService {
       _session = null;
       await _clearTokens();
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Account deletion failed', err);
       rethrow;
@@ -473,9 +509,18 @@ class AuthService {
   /// Persists authentication tokens
   Future<bool> _persistTokens(CognitoUserSession session, String email) async {
     try {
-      await _secureStorage.write(key: _accessTokenKey, value: session.getAccessToken().getJwtToken());
-      await _secureStorage.write(key: _idTokenKey, value: session.getIdToken().getJwtToken());
-      await _secureStorage.write(key: _refreshTokenKey, value: session.getRefreshToken()?.getToken());
+      await _secureStorage.write(
+        key: _accessTokenKey,
+        value: session.getAccessToken().getJwtToken(),
+      );
+      await _secureStorage.write(
+        key: _idTokenKey,
+        value: session.getIdToken().getJwtToken(),
+      );
+      await _secureStorage.write(
+        key: _refreshTokenKey,
+        value: session.getRefreshToken()?.getToken(),
+      );
       await _secureStorage.write(key: _userEmailKey, value: email);
       return true;
     } catch (err) {
@@ -496,10 +541,16 @@ class AuthService {
 
       final accessTokenValue = await _secureStorage.read(key: _accessTokenKey);
       final idTokenValue = await _secureStorage.read(key: _idTokenKey);
-      final refreshTokenValue = await _secureStorage.read(key: _refreshTokenKey);
+      final refreshTokenValue = await _secureStorage.read(
+        key: _refreshTokenKey,
+      );
       final emailValue = await _secureStorage.read(key: _userEmailKey);
 
-      final allNull = accessTokenValue == null && idTokenValue == null && refreshTokenValue == null && emailValue == null;
+      final allNull =
+          accessTokenValue == null &&
+          idTokenValue == null &&
+          refreshTokenValue == null &&
+          emailValue == null;
 
       return allNull;
     } catch (err) {
@@ -574,7 +625,9 @@ class AuthService {
   bool _validatePassword(String password) {
     if (password.length < 8) return false;
 
-    return RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$').hasMatch(password);
+    return RegExp(
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$',
+    ).hasMatch(password);
   }
 
   /// Logs errors in a secure way without exposing sensitive information
@@ -601,5 +654,6 @@ class AuthService {
   CognitoUserSession? get session => _session;
 
   /// Gets the current user's email
-  Future<String?> get currentUserEmail async => await _secureStorage.read(key: _userEmailKey);
+  Future<String?> get currentUserEmail async =>
+      await _secureStorage.read(key: _userEmailKey);
 }

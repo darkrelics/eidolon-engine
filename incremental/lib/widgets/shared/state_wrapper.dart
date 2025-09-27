@@ -51,12 +51,7 @@ class StateWrapper extends StatelessWidget {
 
     // Show content with optional loading overlay
     if (showLoadingOverlay && isLoading) {
-      return Stack(
-        children: [
-          child,
-          _buildLoadingOverlay(context),
-        ],
-      );
+      return Stack(children: [child, _buildLoadingOverlay(context)]);
     }
 
     // Show content
@@ -65,25 +60,27 @@ class StateWrapper extends StatelessWidget {
 
   Widget _buildDefaultLoading(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(),
-          const SizedBox(height: 16),
-          Text(
-            'Loading...',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ],
-      ).animate()
-        .fadeIn(duration: 300.ms)
-        .scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1)),
+      child:
+          Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Loading...',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              )
+              .animate()
+              .fadeIn(duration: 300.ms)
+              .scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1)),
     );
   }
 
   Widget _buildDefaultError(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Center(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
@@ -91,13 +88,10 @@ class StateWrapper extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: theme.colorScheme.error,
-            ).animate()
-              .fadeIn()
-              .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
+            Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error)
+                .animate()
+                .fadeIn()
+                .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
             const SizedBox(height: 16),
             Text(
               'Something went wrong',
@@ -121,16 +115,14 @@ class StateWrapper extends StatelessWidget {
               ),
             ],
           ],
-        ).animate()
-          .fadeIn(duration: 300.ms)
-          .slideY(begin: 0.1, end: 0),
+        ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.1, end: 0),
       ),
     );
   }
 
   Widget _buildDefaultEmpty(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Center(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
@@ -142,9 +134,10 @@ class StateWrapper extends StatelessWidget {
               emptyIcon ?? Icons.inbox,
               size: 64,
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-            ).animate()
-              .fadeIn()
-              .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
+            ).animate().fadeIn().scale(
+              begin: const Offset(0.8, 0.8),
+              end: const Offset(1, 1),
+            ),
             const SizedBox(height: 16),
             Text(
               emptyTitle ?? 'No Data',
@@ -170,9 +163,7 @@ class StateWrapper extends StatelessWidget {
               ),
             ],
           ],
-        ).animate()
-          .fadeIn(duration: 300.ms)
-          .slideY(begin: 0.1, end: 0),
+        ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.1, end: 0),
       ),
     );
   }
@@ -182,24 +173,26 @@ class StateWrapper extends StatelessWidget {
       child: Container(
         color: Colors.black.withValues(alpha: 0.3),
         child: Center(
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Please wait...',
-                    style: Theme.of(context).textTheme.bodyMedium,
+          child:
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Please wait...',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ).animate().fadeIn().scale(
+                begin: const Offset(0.9, 0.9),
+                end: const Offset(1, 1),
               ),
-            ),
-          ).animate()
-            .fadeIn()
-            .scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1)),
         ),
       ),
     );
@@ -241,29 +234,29 @@ class StateWrapperBuilder<T> extends StatelessWidget {
         future: future,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return loadingBuilder?.call(context) ?? 
-                   const Center(child: CircularProgressIndicator());
+            return loadingBuilder?.call(context) ??
+                const Center(child: CircularProgressIndicator());
           }
-          
+
           if (snapshot.hasError) {
             return errorBuilder?.call(context, snapshot.error.toString()) ??
-                   StateWrapper(
-                     error: snapshot.error.toString(),
-                     onRetry: onRetry,
-                     child: const SizedBox(),
-                   );
+                StateWrapper(
+                  error: snapshot.error.toString(),
+                  onRetry: onRetry,
+                  child: const SizedBox(),
+                );
           }
-          
+
           final data = snapshot.data;
           if (data == null || (isEmpty?.call(data) ?? false)) {
             return emptyBuilder?.call(context) ??
-                   StateWrapper(
-                     isEmpty: true,
-                     onRetry: onRetry,
-                     child: const SizedBox(),
-                   );
+                StateWrapper(
+                  isEmpty: true,
+                  onRetry: onRetry,
+                  child: const SizedBox(),
+                );
           }
-          
+
           return builder(context, data);
         },
       );
@@ -272,26 +265,22 @@ class StateWrapperBuilder<T> extends StatelessWidget {
     // Use provided state
     if (error != null) {
       return errorBuilder?.call(context, error!) ??
-             StateWrapper(
-               error: error,
-               onRetry: onRetry,
-               child: const SizedBox(),
-             );
+          StateWrapper(error: error, onRetry: onRetry, child: const SizedBox());
     }
 
     if (isLoading) {
-      return loadingBuilder?.call(context) ?? 
-             const Center(child: CircularProgressIndicator());
+      return loadingBuilder?.call(context) ??
+          const Center(child: CircularProgressIndicator());
     }
 
     final currentData = data;
     if (currentData == null || (isEmpty?.call(currentData) ?? false)) {
       return emptyBuilder?.call(context) ??
-             StateWrapper(
-               isEmpty: true,
-               onRetry: onRetry,
-               child: const SizedBox(),
-             );
+          StateWrapper(
+            isEmpty: true,
+            onRetry: onRetry,
+            child: const SizedBox(),
+          );
     }
 
     return builder(context, currentData);

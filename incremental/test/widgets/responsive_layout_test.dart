@@ -22,8 +22,9 @@ void main() {
       );
     }
 
-    testWidgets('shows mobile layout on small screens',
-        (WidgetTester tester) async {
+    testWidgets('shows mobile layout on small screens', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         createTestWidget(
           mobile: const Text('Mobile'),
@@ -38,8 +39,9 @@ void main() {
       expect(find.text('Desktop'), findsNothing);
     });
 
-    testWidgets('shows tablet layout on medium screens',
-        (WidgetTester tester) async {
+    testWidgets('shows tablet layout on medium screens', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         createTestWidget(
           mobile: const Text('Mobile'),
@@ -54,8 +56,9 @@ void main() {
       expect(find.text('Desktop'), findsNothing);
     });
 
-    testWidgets('shows desktop layout on large screens',
-        (WidgetTester tester) async {
+    testWidgets('shows desktop layout on large screens', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         createTestWidget(
           mobile: const Text('Mobile'),
@@ -72,34 +75,17 @@ void main() {
 
     test('getDeviceType returns correct device type', () {
       // Test context with different screen widths
-      expect(
-        getDeviceTypeFromWidth(400),
-        equals(DeviceType.mobile),
-      );
-      expect(
-        getDeviceTypeFromWidth(767),
-        equals(DeviceType.mobile),
-      );
-      expect(
-        getDeviceTypeFromWidth(768),
-        equals(DeviceType.tablet),
-      );
-      expect(
-        getDeviceTypeFromWidth(1199),
-        equals(DeviceType.tablet),
-      );
-      expect(
-        getDeviceTypeFromWidth(1200),
-        equals(DeviceType.desktop),
-      );
-      expect(
-        getDeviceTypeFromWidth(1920),
-        equals(DeviceType.desktop),
-      );
+      expect(getDeviceTypeFromWidth(400), equals(DeviceType.mobile));
+      expect(getDeviceTypeFromWidth(767), equals(DeviceType.mobile));
+      expect(getDeviceTypeFromWidth(768), equals(DeviceType.tablet));
+      expect(getDeviceTypeFromWidth(1199), equals(DeviceType.tablet));
+      expect(getDeviceTypeFromWidth(1200), equals(DeviceType.desktop));
+      expect(getDeviceTypeFromWidth(1920), equals(DeviceType.desktop));
     });
 
-    testWidgets('responsive layout works with different builders',
-        (WidgetTester tester) async {
+    testWidgets('responsive layout works with different builders', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: MediaQuery(
@@ -124,8 +110,9 @@ void main() {
       expect(find.text('Tablet View'), findsOneWidget);
     });
 
-    testWidgets('layout transitions smoothly between breakpoints',
-        (WidgetTester tester) async {
+    testWidgets('layout transitions smoothly between breakpoints', (
+      WidgetTester tester,
+    ) async {
       // Start with mobile
       await tester.pumpWidget(
         createTestWidget(
@@ -162,8 +149,9 @@ void main() {
       expect(find.text('Desktop'), findsOneWidget);
     });
 
-    testWidgets('handles edge cases at breakpoints',
-        (WidgetTester tester) async {
+    testWidgets('handles edge cases at breakpoints', (
+      WidgetTester tester,
+    ) async {
       // Test at exact breakpoint (768)
       await tester.pumpWidget(
         createTestWidget(

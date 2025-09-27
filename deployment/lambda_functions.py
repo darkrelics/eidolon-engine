@@ -259,6 +259,7 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
         "api-archetype-list",
         # Player functions
         "cognito-player-new",
+        "cognito-player-delete",
         # Story functions
         "api-story-start",
         "api-story-abandon",

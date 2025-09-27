@@ -4,8 +4,9 @@ import 'package:eidolon_incremental/widgets/shared/accessibility_wrapper.dart';
 
 void main() {
   group('Accessibility Tests', () {
-    testWidgets('AccessibilityWrapper adds semantic labels',
-        (WidgetTester tester) async {
+    testWidgets('AccessibilityWrapper adds semantic labels', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -13,11 +14,7 @@ void main() {
               label: 'Test Button',
               hint: 'Tap to perform action',
               isButton: true,
-              child: Container(
-                width: 100,
-                height: 50,
-                color: Colors.blue,
-              ),
+              child: Container(width: 100, height: 50, color: Colors.blue),
             ),
           ),
         ),
@@ -31,8 +28,9 @@ void main() {
       // expect(semantics.hasFlag(SemanticsFlag.isButton), isTrue);
     });
 
-    testWidgets('AccessibleHealthBar renders without errors',
-        (WidgetTester tester) async {
+    testWidgets('AccessibleHealthBar renders without errors', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -49,10 +47,11 @@ void main() {
       expect(find.byType(AccessibleHealthBar), findsOneWidget);
     });
 
-    testWidgets('AccessibleIconButton has proper semantics',
-        (WidgetTester tester) async {
+    testWidgets('AccessibleIconButton has proper semantics', (
+      WidgetTester tester,
+    ) async {
       bool tapped = false;
-      
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -69,8 +68,9 @@ void main() {
       expect(tapped, isTrue);
     });
 
-    testWidgets('AccessibleCard shows focus and hover states',
-        (WidgetTester tester) async {
+    testWidgets('AccessibleCard shows focus and hover states', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -87,8 +87,9 @@ void main() {
       expect(find.text('Card Content'), findsOneWidget);
     });
 
-    testWidgets('Screen reader announcements work',
-        (WidgetTester tester) async {
+    testWidgets('Screen reader announcements work', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -113,8 +114,9 @@ void main() {
       // This ensures the code runs without errors
     });
 
-    testWidgets('Widgets are traversable with keyboard',
-        (WidgetTester tester) async {
+    testWidgets('Widgets are traversable with keyboard', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -145,8 +147,9 @@ void main() {
       expect(find.byType(IconButton), findsNWidgets(3));
     });
 
-    testWidgets('Semantic labels are descriptive and helpful',
-        (WidgetTester tester) async {
+    testWidgets('Semantic labels are descriptive and helpful', (
+      WidgetTester tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

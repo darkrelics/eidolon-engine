@@ -37,7 +37,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signOut')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'signOut'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -70,14 +72,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         Navigator.pushReplacementNamed(
           context,
           '/login',
-          arguments: {NavigationConstants.messageKey: 'Your account has been deleted'},
+          arguments: {
+            NavigationConstants.messageKey: 'Your account has been deleted',
+          },
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteAccount')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'deleteAccount'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -102,10 +108,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently lost.',
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
                   child: const Text('Delete'),
                 ),
               ],
@@ -126,10 +137,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 'This is your last chance. Your account and all associated data will be permanently deleted. Are you absolutely sure?',
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
                   child: const Text('Yes, Delete My Account'),
                 ),
               ],
@@ -171,7 +187,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.brightness_6),
                     title: const Text('Theme'),
-                    subtitle: const Text('Choose between light, dark, or system theme'),
+                    subtitle: const Text(
+                      'Choose between light, dark, or system theme',
+                    ),
                     trailing: const ThemeModeSelector(),
                   ),
                 ],
@@ -225,15 +243,28 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(Icons.warning, color: Theme.of(context).colorScheme.error),
+                    leading: Icon(
+                      Icons.warning,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                     title: const Text('Danger Zone'),
                     subtitle: const Text('Irreversible actions'),
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
-                    title: Text('Delete Account', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    subtitle: const Text('Permanently delete your account and all data'),
+                    leading: Icon(
+                      Icons.delete_forever,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    title: Text(
+                      'Delete Account',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Permanently delete your account and all data',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: _isLoading ? null : _handleDeleteAccount,
                   ),
@@ -246,7 +277,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 onPressed: _isLoading ? null : _handleSignOut,
                 icon: const Icon(Icons.logout),
                 label: _isLoading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Sign Out'),
               ),
             ),

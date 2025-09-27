@@ -1,14 +1,4 @@
-"""
-Eidolon Engine
-
-Copyright 2024-2025 Jason E. Robinson
-
-Utility to load game data from JSON files and store it in DynamoDB tables.
-
-This script loads test data for rooms, exits, archetypes, item prototypes, and stories
-from JSON files and stores them in the corresponding DynamoDB tables. It also provides
-functionality to read the data back from DynamoDB and display it for verification.
-"""
+"""Utility to load game data from JSON files into DynamoDB tables."""
 
 import argparse
 import json
@@ -16,13 +6,13 @@ import logging
 import os
 import sys
 
+# Ensure repo root is importable for eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.validation import validate_character_name
-
-# Add parent directory to path to import eidolon modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def load_json(file_path):
@@ -879,6 +869,9 @@ def main():
 
     logger.info("Starting data loader for Eidolon Engine")
     logger.info(f"Loading data files from: {os.path.dirname(args.exits)}")
+
+    if args.region:
+        dynamo.set_region(args.region)
 
     # Load and store exits
     try:

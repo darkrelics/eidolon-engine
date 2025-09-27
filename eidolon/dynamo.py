@@ -218,6 +218,34 @@ class DynamoInterface:
             self._connection_status[table_enum] = False
             return False
 
+    def set_region(self, region: str) -> None:
+        """Reinitialize the DynamoDB client for a specific AWS region."""
+
+        sanitized = (region or "").strip().lower()
+        if not sanitized:
+            return
+
+        current_region = getattr(self._client, "meta", None)
+        current_region = getattr(current_region, "region_name", None)
+        if current_region == sanitized:
+            return
+
+        logger.info(f"Reinitializing DynamoDB interface for region {sanitized}")
+
+        self._resource = resource("dynamodb", region_name=sanitized)
+        self._client = self._resource.meta.client  # type: ignore
+        self._tables = {}
+        self._connection_status = {}
+
+        ExpectedDynamoErrors.RETRY_ERRORS = [
+            self._client.exceptions.ProvisionedThroughputExceededException,
+            self._client.exceptions.RequestLimitExceeded,
+            self._client.exceptions.InternalServerError,
+        ]
+
+        for table_enum in TableName:
+            self._connect_table(table_enum)
+
     def get_table(self, table_enum: TableName):
         """
         Get a connected table resource.

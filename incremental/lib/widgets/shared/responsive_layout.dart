@@ -7,11 +7,7 @@ class Breakpoints {
 }
 
 /// Device type based on screen width
-enum DeviceType {
-  mobile,
-  tablet,
-  desktop,
-}
+enum DeviceType { mobile, tablet, desktop }
 
 /// Responsive layout widget that adapts to different screen sizes
 class ResponsiveLayout extends StatelessWidget {
@@ -28,7 +24,7 @@ class ResponsiveLayout extends StatelessWidget {
 
   static DeviceType getDeviceType(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    
+
     if (width < Breakpoints.mobile) {
       return DeviceType.mobile;
     } else if (width < Breakpoints.tablet) {
@@ -84,7 +80,7 @@ class ResponsivePadding extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     EdgeInsets padding;
-    
+
     switch (ResponsiveLayout.getDeviceType(context)) {
       case DeviceType.mobile:
         padding = mobilePadding ?? const EdgeInsets.all(8.0);
@@ -96,11 +92,8 @@ class ResponsivePadding extends StatelessWidget {
         padding = desktopPadding ?? const EdgeInsets.all(24.0);
         break;
     }
-    
-    return Padding(
-      padding: padding,
-      child: child,
-    );
+
+    return Padding(padding: padding, child: child);
   }
 }
 
@@ -122,7 +115,7 @@ class ResponsiveConstraints extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     double? maxWidth;
-    
+
     switch (ResponsiveLayout.getDeviceType(context)) {
       case DeviceType.mobile:
         maxWidth = mobileMaxWidth;
@@ -134,7 +127,7 @@ class ResponsiveConstraints extends StatelessWidget {
         maxWidth = desktopMaxWidth ?? 1400;
         break;
     }
-    
+
     if (maxWidth != null) {
       return Center(
         child: ConstrainedBox(
@@ -143,7 +136,7 @@ class ResponsiveConstraints extends StatelessWidget {
         ),
       );
     }
-    
+
     return child;
   }
 }
@@ -170,7 +163,7 @@ class ResponsiveGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     int columns;
-    
+
     switch (ResponsiveLayout.getDeviceType(context)) {
       case DeviceType.mobile:
         columns = mobileColumns;
@@ -182,7 +175,7 @@ class ResponsiveGrid extends StatelessWidget {
         columns = desktopColumns;
         break;
     }
-    
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
