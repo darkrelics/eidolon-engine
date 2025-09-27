@@ -1,4 +1,4 @@
-#Required 
+#Required
 jupyter==1.1.1
 matplotlib==3.10.1
 networkx==3.4.2
@@ -6,7 +6,6 @@ notebook==7.4.5
 numpy==2.2.4
 pyyaml==6.0.2
 voila==0.5.11
-
 #Dependancies
 anyio==4.10.0
 argon2-cffi==25.1.0
@@ -53,7 +52,7 @@ jupyter-events==0.12.0
 jupyter-lsp==2.3.0
 jupyter-server==2.17.0
 jupyter-server-terminals==0.5.3
-jupyterlab==4.4.7
+jupyterlab==4.4.8
 jupyterlab-pygments==0.3.0
 jupyterlab-server==2.27.3
 jupyterlab-widgets==3.0.15

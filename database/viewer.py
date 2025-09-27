@@ -4,12 +4,12 @@ import argparse
 import os
 import sys
 
-# Ensure eidolon modules can be imported when run as a script
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
+
+# Ensure eidolon modules can be imported when run as a script
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 # Define table names mapping

@@ -5,13 +5,13 @@ import os
 import sys
 from datetime import datetime, timezone
 
-# Ensure eidolon modules can be imported when running as a script
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
 from eidolon.dynamo import TableName, dynamo
+
+# Ensure eidolon modules can be imported when running as a script
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def add_or_update_motd(message: str, active: bool = True) -> dict:

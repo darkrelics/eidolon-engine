@@ -6,10 +6,10 @@ import sys
 import uuid
 from decimal import Decimal
 
+from eidolon.dynamo import TableName, dynamo
+
 # Ensure repo root is on path before importing eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from eidolon.dynamo import TableName, dynamo
 
 
 def display_prototypes() -> list:
@@ -160,5 +160,7 @@ def main(args: argparse.Namespace) -> None:
         except Exception as err:
             print(f"Unexpected error: {err}")
             continue
+
+
 if __name__ == "__main__":
     main(parse_args())

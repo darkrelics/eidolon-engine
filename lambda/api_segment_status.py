@@ -74,11 +74,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     if start_time_unix is None:
         start_time_unix = int(now)
 
-    raw_duration = (
-        active_segment.get("Duration")
-        or active_segment.get("SegmentDuration")
-        or active_segment.get("ExpectedDuration")
-    )
+    raw_duration = active_segment.get("Duration") or active_segment.get("SegmentDuration") or active_segment.get("ExpectedDuration")
     try:
         duration = int(raw_duration)
     except (TypeError, ValueError):
