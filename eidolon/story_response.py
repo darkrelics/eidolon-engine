@@ -30,9 +30,7 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         "TimeRemaining": time_remaining,
     }
 
-    response["SegmentActivity"] = segment.get(
-        "SegmentActivity", "Progressing through the story..."
-    )
+    response["SegmentActivity"] = segment.get("SegmentActivity", "Progressing through the story...")
     response["SegmentTitle"] = segment.get("SegmentTitle", "Current segment")
 
     if segment_type == "decision":

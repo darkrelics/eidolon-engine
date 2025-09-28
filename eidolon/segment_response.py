@@ -42,12 +42,8 @@ def new_segment_response(active_segment: dict, segment: dict) -> dict:
         "EndTime": end_time,
         "ProcessingStatus": active_segment.get("ProcessingStatus", "pending"),
         "SegmentType": segment.get("SegmentType", "mechanical"),
-        "SegmentActivity": active_segment.get(
-            "SegmentActivity", segment.get("SegmentActivity", "Starting your adventure...")
-        ),
-        "SegmentTitle": active_segment.get(
-            "SegmentTitle", segment.get("SegmentTitle", "Processing...")
-        ),
+        "SegmentActivity": active_segment.get("SegmentActivity", segment.get("SegmentActivity", "Starting your adventure...")),
+        "SegmentTitle": active_segment.get("SegmentTitle", segment.get("SegmentTitle", "Processing...")),
         "Duration": duration,
     }
 
