@@ -10,6 +10,7 @@ Returns segment completion status and any available results.
 import time
 from typing import Optional
 
+from eidolon.character_story import calculate_story_progress
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
@@ -19,7 +20,6 @@ from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
-from eidolon.character_story import calculate_story_progress
 from eidolon.time_utils import from_unix
 
 

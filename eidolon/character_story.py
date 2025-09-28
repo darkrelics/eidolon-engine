@@ -100,9 +100,7 @@ def calculate_story_progress(
                 if segment_id:
                     completed_segment_ids.add(segment_id)
     except ClientError as err:
-        logger.warning(
-            f"Failed to load story history for progress calculation for {character_id} Error: {err}"
-        )
+        logger.warning(f"Failed to load story history for progress calculation for {character_id} Error: {err}")
 
     completed_count = len(completed_segment_entries)
 
