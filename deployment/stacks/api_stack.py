@@ -150,6 +150,10 @@ class ApiStack(Stack):
                 abandon_resource = story_resource.add_resource("abandon")
                 self._add_lambda_integration(abandon_resource, "POST", "api-story-abandon", authorizer)
 
+            if "api-story-history" in self.lambda_arns:
+                history_resource = story_resource.add_resource("history")
+                self._add_lambda_integration(history_resource, "GET", "api-story-history", authorizer)
+
             # Segment endpoints
             segment_resource = api.root.add_resource("segment")
 
@@ -294,6 +298,7 @@ class ApiStack(Stack):
             "api-segment-rest": "ImportApiSegmentRest",
             "api-segment-status": "ImportApiSegmentStatus",
             "api-story-abandon": "ImportApiStoryAbandon",
+            "api-story-history": "ImportApiStoryHistory",
             "api-story-start": "ImportApiStoryStart",
         }
         return logical_id_map.get(function_name, "Import" + function_name.replace("-", "").title())

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../utils/outcome_colors.dart';
+
 /// Display for segment outcomes
 class AnimatedOutcomeDisplay extends StatefulWidget {
   final Map<String, dynamic> outcome;
@@ -46,7 +48,7 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay> {
           Text(
             _getOutcomeTitle(type),
             style: theme.textTheme.headlineMedium?.copyWith(
-              color: _getOutcomeColor(type),
+              color: outcomeAccentColor(theme, type),
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -118,24 +120,6 @@ class _AnimatedOutcomeDisplayState extends State<AnimatedOutcomeDisplay> {
         return 'Outcome';
     }
   }
-
-  Color _getOutcomeColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'success':
-      case 'exceptional':
-        return Colors.green;
-      case 'normal':
-        return Colors.blue;
-      case 'minimal':
-        return Colors.orange;
-      case 'failure':
-        return Colors.red;
-      case 'death':
-        return Colors.red.shade900;
-      default:
-        return Colors.grey;
-    }
-  }
 }
 
 class _OutcomeIcon extends StatelessWidget {
@@ -145,7 +129,8 @@ class _OutcomeIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _getColor();
+    final theme = Theme.of(context);
+    final color = outcomeAccentColor(theme, type);
     final icon = _getIcon();
 
     return Container(
@@ -170,24 +155,6 @@ class _OutcomeIcon extends StatelessWidget {
       ),
       child: Icon(icon, size: 50, color: color),
     );
-  }
-
-  Color _getColor() {
-    switch (type.toLowerCase()) {
-      case 'success':
-      case 'exceptional':
-        return Colors.green;
-      case 'normal':
-        return Colors.blue;
-      case 'minimal':
-        return Colors.orange;
-      case 'failure':
-        return Colors.red;
-      case 'death':
-        return Colors.red.shade900;
-      default:
-        return Colors.grey;
-    }
   }
 
   IconData _getIcon() {

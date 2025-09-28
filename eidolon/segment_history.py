@@ -30,6 +30,54 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
 
     update_expressions = []
     expression_values = {}
+    expression_names: dict = {}
+
+    story_id_value = segment_data.get("StoryID") or story_id
+    story_instance_id = segment_data.get("StoryInstanceID")
+    segment_id_value = segment_data.get("SegmentID")
+    segment_type = segment_data.get("SegmentType")
+    start_time = segment_data.get("StartTime")
+    end_time = segment_data.get("EndTime")
+    player_id = segment_data.get("PlayerID")
+    status = segment_data.get("Status")
+    processing_status = segment_data.get("ProcessingStatus")
+
+    if story_id_value:
+        update_expressions.append("StoryID = :story_id")
+        expression_values[":story_id"] = story_id_value
+
+    if story_instance_id:
+        update_expressions.append("StoryInstanceID = :story_instance_id")
+        expression_values[":story_instance_id"] = story_instance_id
+
+    if segment_id_value:
+        update_expressions.append("SegmentID = :segment_id")
+        expression_values[":segment_id"] = segment_id_value
+
+    if segment_type:
+        update_expressions.append("SegmentType = :segment_type")
+        expression_values[":segment_type"] = segment_type
+
+    if start_time is not None:
+        update_expressions.append("StartTime = :start_time")
+        expression_values[":start_time"] = start_time
+
+    if end_time is not None:
+        update_expressions.append("EndTime = :end_time")
+        expression_values[":end_time"] = end_time
+
+    if player_id:
+        update_expressions.append("PlayerID = :player_id")
+        expression_values[":player_id"] = player_id
+
+    if status:
+        update_expressions.append("#status = :status")
+        expression_values[":status"] = status
+        expression_names["#status"] = "Status"
+
+    if processing_status:
+        update_expressions.append("ProcessingStatus = :processing_status")
+        expression_values[":processing_status"] = processing_status
 
     update_expressions.append("CompletedAt = :completed_at")
     expression_values[":completed_at"] = now_unix()
@@ -65,12 +113,16 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
         expression_values[":decision_made_at"] = segment_data["DecisionMadeAt"]
 
     try:
-        dynamo.update_item(
-            TableName.SEGMENT_HISTORY,
-            Key={"CharacterID": character_id, "ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET " + ", ".join(update_expressions),
-            ExpressionAttributeValues=expression_values,
-        )
+        update_kwargs = {
+            "Key": {"CharacterID": character_id, "ActiveSegmentID": active_segment_id},
+            "UpdateExpression": "SET " + ", ".join(update_expressions),
+            "ExpressionAttributeValues": expression_values,
+        }
+
+        if expression_names:
+            update_kwargs["ExpressionAttributeNames"] = expression_names
+
+        dynamo.update_item(TableName.SEGMENT_HISTORY, **update_kwargs)
 
         logger.info(f"Segment history recorded for {character_id}")
     except ClientError as err:

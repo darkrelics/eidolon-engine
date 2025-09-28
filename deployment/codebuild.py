@@ -274,6 +274,7 @@ def validate_build_artifacts(bucket_name: str, region: str) -> bool:
         "api-segment-rest.zip",
         "api-segment-status.zip",
         "api-story-abandon.zip",
+        "api-story-history.zip",
         "api-story-start.zip",
         "ops-segment-poller.zip",
         "ops-segment-process.zip",

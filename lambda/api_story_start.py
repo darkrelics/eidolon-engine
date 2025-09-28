@@ -17,7 +17,7 @@ from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_response import new_segment_response
 from eidolon.sqs import queue_segment_for_processing
-from eidolon.story_active import rollback_story_start, story_update_character
+from eidolon.story_active import story_update_character
 from eidolon.story_history import create_story_history_entry
 from eidolon.story_retrieval import get_story_and_first_segment
 from eidolon.story_segment import create_active_segment
@@ -86,7 +86,7 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
         raise RuntimeError("Active segment creation failed - no ActiveSegmentID")
 
     try:
-        story_update_character(character_id, story_id, active_segment_id)
+        story_update_character(character_id, story_id, active_segment_id, story_instance_id)
     except (ValueError, RuntimeError) as err:
         # Let ops_segment_poller handle cleanup of orphaned segments
         logger.error(f"Failed to update character state, segment {active_segment_id} will be cleaned up by poller: {err}")
@@ -97,9 +97,7 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
         try:
             queue_segment_for_processing(active_segment_id)
         except RuntimeError as err:
-            # SQS failure - rollback the story start
-            logger.error(f"Failed to queue segment {active_segment_id}, rolling back story start: {err}")
-            rollback_story_start(character_id, active_segment_id, story_instance_id)
+            logger.error(f"Failed to queue segment {active_segment_id}: {err}")
             raise ValueError("Unable to start story - processing queue unavailable. Please try again later.") from err
 
     # Enable polling

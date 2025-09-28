@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../models/character.dart';
+import '../../utils/outcome_colors.dart';
 
 /// Widget displaying the active story with segments
 class ActiveStoryWidget extends StatefulWidget {
@@ -413,30 +414,6 @@ class _SimpleSegmentCard extends StatelessWidget {
         'You are searching for signs of the troublesome gremlin';
     const gremlinStatus = 'Tracking the gremlin';
 
-    final shortMentionsGremlin =
-        rawShortStatus?.toLowerCase().contains('gremlin') ?? false;
-    final defaultMentionsGremlin =
-        rawDefaultStatus?.toLowerCase().contains('gremlin') ?? false;
-
-    final shouldApplyGremlinCopy =
-        (usesPlaceholderShortStatus ||
-            usesPlaceholderDefaultStatus ||
-            rawShortStatus == gremlinStatus ||
-            shortMentionsGremlin ||
-            defaultMentionsGremlin) &&
-        segmentType == 'mechanical';
-
-    final shortStatus = shouldApplyGremlinCopy
-        ? gremlinTitle
-        : (rawShortStatus != null && rawShortStatus.isNotEmpty
-              ? rawShortStatus
-              : 'Processing...');
-    final defaultStatus = shouldApplyGremlinCopy
-        ? gremlinStatus
-        : (rawDefaultStatus ?? '');
-    final processingIndicatorText = shouldApplyGremlinCopy
-        ? gremlinStatus
-        : 'Processing...';
     final outcome = segment['Outcome'];
     final endTimeStr = segment['EndTime']?.toString();
     final processingStatus =
@@ -492,33 +469,39 @@ class _SimpleSegmentCard extends StatelessWidget {
         (processingStatus == 'processed' && hasTimerExpired);
     final bool waitingOnTimer = isActive && !shouldRevealResults;
 
+    final normalizedShortStatus = rawShortStatus?.toLowerCase();
+    final normalizedDefaultStatus = rawDefaultStatus?.toLowerCase();
+    final bool shouldApplyGremlinCopy =
+        segmentType == 'mechanical' &&
+        !shouldRevealResults &&
+        (usesPlaceholderShortStatus ||
+            usesPlaceholderDefaultStatus ||
+            normalizedShortStatus == gremlinStatus.toLowerCase() ||
+            normalizedDefaultStatus == gremlinStatus.toLowerCase());
+
+    final shortStatus = shouldApplyGremlinCopy
+        ? gremlinTitle
+        : (rawShortStatus != null && rawShortStatus.isNotEmpty
+              ? rawShortStatus
+              : 'Processing...');
+    final defaultStatus = shouldApplyGremlinCopy
+        ? gremlinStatus
+        : (rawDefaultStatus ?? '');
+    final showDefaultStatusOnCard =
+        defaultStatus.isNotEmpty && !shouldApplyGremlinCopy;
+    final processingIndicatorText = shouldApplyGremlinCopy
+        ? gremlinStatus
+        : 'Processing...';
+
     // Determine card color based on outcome
     Color cardColor;
     IconData icon;
     Color backgroundColor;
 
-    // Check outcome for color, but only for processed segments
-    final outcomeStr = outcome is String ? outcome : outcome?['Type'];
-    if (shouldRevealResults && outcomeStr != null) {
-      // Completed segment - show outcome-based colors
-      switch (outcomeStr.toLowerCase()) {
-        case 'death':
-          cardColor = Colors.black;
-          backgroundColor = Colors.black.withValues(alpha: 0.15);
-          icon = Icons.dangerous;
-          break;
-        case 'failure':
-        case 'failed':
-          cardColor = Colors.red;
-          backgroundColor = Colors.red.withValues(alpha: 0.1);
-          icon = Icons.cancel;
-          break;
-        default:
-          // All other outcomes (exceptional, normal, minimal, etc.) are green
-          cardColor = Colors.green;
-          backgroundColor = Colors.green.withValues(alpha: 0.1);
-          icon = Icons.check_circle;
-      }
+    if (shouldRevealResults && outcome != null) {
+      cardColor = outcomeAccentColor(theme, outcome);
+      backgroundColor = outcomeBackgroundColor(theme, outcome);
+      icon = _resolveOutcomeIcon(outcome);
     } else {
       // Segment not processed yet or no outcome - use neutral colors
       cardColor = theme.colorScheme.primary;
@@ -623,7 +606,7 @@ class _SimpleSegmentCard extends StatelessWidget {
                 duration: segment['SegmentDuration'] ?? segment['Duration'],
                 onTimeout: onTimeout,
               ),
-              if (defaultStatus.isNotEmpty) ...[
+              if (showDefaultStatusOnCard) ...[
                 const SizedBox(height: 8),
                 Text(
                   defaultStatus,
@@ -637,7 +620,7 @@ class _SimpleSegmentCard extends StatelessWidget {
             if (isActive &&
                 endTime == null &&
                 waitingOnTimer &&
-                defaultStatus.isNotEmpty) ...[
+                showDefaultStatusOnCard) ...[
               const SizedBox(height: 12),
               Text(
                 defaultStatus,
@@ -683,7 +666,7 @@ class _SimpleSegmentCard extends StatelessWidget {
 
                   // Only show if we have text to display
                   if (displayText.isEmpty) {
-                    if (waitingOnTimer && defaultStatus.isNotEmpty) {
+                    if (waitingOnTimer && showDefaultStatusOnCard) {
                       displayText = defaultStatus;
                     } else {
                       return const SizedBox();
@@ -740,37 +723,17 @@ class _SimpleSegmentCard extends StatelessWidget {
                   Icon(
                     Icons.workspace_premium,
                     size: 16,
-                    color: _getOutcomeColor(outcome),
+                    color: outcomeAccentColor(theme, outcome),
                   ),
                   const SizedBox(width: 4),
                   Text(
                     'Outcome: ${_formatOutcome(outcome)}',
                     style: TextStyle(
-                      color: _getOutcomeColor(outcome),
+                      color: outcomeAccentColor(theme, outcome),
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ],
-              ),
-            ],
-
-            // Show effects ONLY for processed segments
-            if (shouldRevealResults &&
-                segment['Effects'] != null &&
-                (segment['Effects'] as Map).isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Effects:',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 4),
-              ...(segment['Effects'] as Map).entries.map(
-                (entry) => Text(
-                  '• ${entry.key}: ${entry.value}',
-                  style: theme.textTheme.bodySmall,
-                ),
               ),
             ],
 
@@ -798,29 +761,23 @@ class _SimpleSegmentCard extends StatelessWidget {
     );
   }
 
-  Color _getOutcomeColor(dynamic outcome) {
-    final outcomeStr = outcome is String
-        ? outcome
-        : outcome['Type'] ?? 'normal';
-    switch (outcomeStr.toLowerCase()) {
-      case 'exceptional':
-        return Colors.purple;
-      case 'normal':
-        return Colors.green;
-      case 'minimal':
-        return Colors.orange;
-      case 'failure':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
   String _formatOutcome(dynamic outcome) {
     final outcomeStr = outcome is String
         ? outcome
         : outcome['Type'] ?? 'normal';
     return outcomeStr[0].toUpperCase() + outcomeStr.substring(1);
+  }
+
+  IconData _resolveOutcomeIcon(dynamic outcome) {
+    switch (normalizedOutcomeType(outcome)) {
+      case 'death':
+        return Icons.dangerous;
+      case 'failure':
+      case 'failed':
+        return Icons.cancel;
+      default:
+        return Icons.check_circle;
+    }
   }
 }
 

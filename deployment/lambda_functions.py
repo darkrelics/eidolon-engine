@@ -263,6 +263,7 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
         # Story functions
         "api-story-start",
         "api-story-abandon",
+        "api-story-history",
         "api-segment-decision",
         "api-segment-history",
         "api-segment-rest",

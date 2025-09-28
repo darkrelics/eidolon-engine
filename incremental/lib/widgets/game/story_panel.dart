@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../models/character.dart';
 import '../../models/story.dart';
+import '../../utils/outcome_colors.dart';
 import '../story/active_story_widget.dart';
 import '../story/available_stories_widget.dart';
 import '../story/story_history_widget.dart';
@@ -421,18 +423,14 @@ class _StoryPanelState extends State<StoryPanel> {
         'You are searching for signs of the troublesome gremlin';
     const gremlinStatus = 'Tracking the gremlin';
 
-    final shortMentionsGremlin =
-        rawShortStatus?.toLowerCase().contains('gremlin') ?? false;
-    final defaultMentionsGremlin =
-        rawDefaultStatus?.toLowerCase().contains('gremlin') ?? false;
-
+    final normalizedShortStatus = rawShortStatus?.toLowerCase();
+    final normalizedDefaultStatus = rawDefaultStatus?.toLowerCase();
     final shouldApplyGremlinCopy =
+        segmentType == 'mechanical' &&
         (usesPlaceholderShortStatus ||
             usesPlaceholderDefaultStatus ||
-            rawShortStatus == gremlinStatus ||
-            shortMentionsGremlin ||
-            defaultMentionsGremlin) &&
-        segmentType == 'mechanical';
+            normalizedShortStatus == gremlinStatus.toLowerCase() ||
+            normalizedDefaultStatus == gremlinStatus.toLowerCase());
 
     final title = shouldApplyGremlinCopy
         ? gremlinTitle
@@ -448,32 +446,9 @@ class _StoryPanelState extends State<StoryPanel> {
         : (rawDefaultStatus ?? '');
 
     final outcome = segment['Outcome'];
-    final outcomeStr = _outcomeToString(outcome);
-
-    Color cardColor;
-    Color backgroundColor;
-    IconData icon;
-
-    switch (outcomeStr) {
-      case 'death':
-        cardColor = Colors.black;
-        backgroundColor = Colors.black.withValues(alpha: 0.15);
-        icon = Icons.dangerous;
-        break;
-      case 'failure':
-      case 'failed':
-        cardColor = Colors.red;
-        backgroundColor = Colors.red.withValues(alpha: 0.1);
-        icon = Icons.cancel;
-        break;
-      default:
-        cardColor = _getOutcomeColor(outcome);
-        backgroundColor = cardColor.withValues(alpha: 0.1);
-        icon = Icons.check_circle;
-        break;
-    }
-
-    final effects = segment['Effects'] as Map<dynamic, dynamic>?;
+    final cardColor = outcomeAccentColor(theme, outcome);
+    final backgroundColor = outcomeBackgroundColor(theme, outcome);
+    final icon = _resolveOutcomeIcon(outcome);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -549,22 +524,6 @@ class _StoryPanelState extends State<StoryPanel> {
                   ),
                 ],
               ),
-              if (effects != null && effects.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Effects:',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                ...effects.entries.map(
-                  (entry) => Text(
-                    '• ${entry.key}: ${_formatEffectValue(entry.value)}',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ),
-              ],
             ],
           ),
         ),
@@ -651,23 +610,6 @@ class _StoryPanelState extends State<StoryPanel> {
     return 'normal';
   }
 
-  Color _getOutcomeColor(dynamic outcome) {
-    final outcomeStr = _outcomeToString(outcome);
-    switch (outcomeStr) {
-      case 'exceptional':
-        return Colors.purple;
-      case 'minimal':
-        return Colors.orange;
-      case 'failure':
-      case 'failed':
-        return Colors.red;
-      case 'death':
-        return Colors.black;
-      default:
-        return Colors.green;
-    }
-  }
-
   String _formatOutcome(dynamic outcome) {
     final outcomeStr = _outcomeToString(outcome);
     if (outcomeStr.isEmpty) {
@@ -676,15 +618,15 @@ class _StoryPanelState extends State<StoryPanel> {
     return outcomeStr[0].toUpperCase() + outcomeStr.substring(1);
   }
 
-  String _formatEffectValue(dynamic value) {
-    if (value is List) {
-      return value.map((item) => item.toString()).join(', ');
+  IconData _resolveOutcomeIcon(dynamic outcome) {
+    switch (normalizedOutcomeType(outcome)) {
+      case 'death':
+        return Icons.dangerous;
+      case 'failure':
+      case 'failed':
+        return Icons.cancel;
+      default:
+        return Icons.check_circle;
     }
-    if (value is Map) {
-      return value.entries
-          .map((entry) => '${entry.key}: ${entry.value}')
-          .join(', ');
-    }
-    return value.toString();
   }
 }

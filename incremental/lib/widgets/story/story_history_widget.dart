@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/character.dart';
+import '../../utils/outcome_colors.dart';
 
 /// Widget displaying completed story history
 class StoryHistoryWidget extends StatefulWidget {
@@ -493,17 +494,12 @@ class _StatisticsSummary extends StatelessWidget {
     final successRate = totalStories > 0
         ? ((successCount / totalStories) * 100).clamp(0, 100).toStringAsFixed(0)
         : '0';
-    final totalXP = entries.fold<int>(
-      0,
-      (sum, e) => sum + (e.rewards['XP'] ?? 0),
-    );
-    final totalGold = entries.fold<int>(
-      0,
-      (sum, e) => sum + (e.rewards['Gold'] ?? 0),
-    );
     final totalTime = entries.fold<Duration>(
       Duration.zero,
       (sum, e) => sum + e.duration,
+    );
+    final averageDuration = Duration(
+      minutes: totalStories > 0 ? totalTime.inMinutes ~/ totalStories : 0,
     );
 
     return Container(
@@ -567,39 +563,13 @@ class _StatisticsSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.trending_up,
-                  label: 'Total XP',
-                  value: _formatNumber(totalXP),
-                  color: Colors.purple,
-                ),
-              ),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.monetization_on,
-                  label: 'Total Gold',
-                  value: _formatNumber(totalGold),
-                  color: Colors.orange,
-                ),
-              ),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.insights,
-                  label: 'Avg Duration',
-                  value: _formatDuration(
-                    Duration(
-                      minutes: totalStories > 0
-                          ? totalTime.inMinutes ~/ totalStories
-                          : 0,
-                    ),
-                  ),
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ],
+          Center(
+            child: _StatItem(
+              icon: Icons.insights,
+              label: 'Avg Duration',
+              value: _formatDuration(averageDuration),
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
           ),
         ],
       ),
@@ -611,15 +581,6 @@ class _StatisticsSummary extends StatelessWidget {
       return '${duration.inHours}h ${duration.inMinutes % 60}m';
     }
     return '${duration.inMinutes}m';
-  }
-
-  String _formatNumber(int number) {
-    if (number >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}M';
-    } else if (number >= 1000) {
-      return '${(number / 1000).toStringAsFixed(1)}K';
-    }
-    return number.toString();
   }
 }
 
@@ -781,28 +742,22 @@ class _OutcomeIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final category = entry.outcomeCategory;
-    IconData icon;
-    Color color;
+    final theme = Theme.of(context);
+    final outcomeType = normalizedOutcomeType(entry.outcome) ?? 'unknown';
+    final color = outcomeAccentColor(theme, entry.outcome);
 
-    switch (category) {
-      case 'success':
-        icon = Icons.workspace_premium;
-        color = Colors.green;
-        break;
-      case 'normal':
-        icon = Icons.check_circle;
-        color = Colors.blue;
+    IconData icon;
+    switch (outcomeType) {
+      case 'death':
+        icon = Icons.dangerous;
         break;
       case 'failure':
-        icon = entry.outcome.toLowerCase() == 'death'
-            ? Icons.dangerous
-            : Icons.cancel;
-        color = Colors.red;
+      case 'failed':
+        icon = Icons.cancel;
         break;
       default:
-        icon = Icons.help_outline;
-        color = Colors.grey;
+        icon = Icons.check_circle;
+        break;
     }
 
     return Container(
@@ -823,22 +778,8 @@ class _OutcomeBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final category = entry.outcomeCategory;
-
-    Color color;
-    switch (category) {
-      case 'success':
-        color = Colors.green;
-        break;
-      case 'normal':
-        color = Colors.blue;
-        break;
-      case 'failure':
-        color = Colors.red;
-        break;
-      default:
-        color = Colors.grey;
-    }
+    final theme = Theme.of(context);
+    final color = outcomeAccentColor(theme, entry.outcome);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../utils/outcome_colors.dart';
+
 class StoryHistoryDisplay extends StatelessWidget {
   final List<Map<String, dynamic>> completedStories;
   final Function(Map<String, dynamic>) onStorySelected;
@@ -76,12 +78,15 @@ class StoryHistoryDisplay extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: _getOutcomeColor(outcome).withValues(alpha: 0.2),
+                  color: outcomeAccentColor(
+                    theme,
+                    outcome,
+                  ).withValues(alpha: 0.2),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   _getOutcomeIcon(outcome),
-                  color: _getOutcomeColor(outcome),
+                  color: outcomeAccentColor(theme, outcome),
                   size: 24,
                 ),
               ),
@@ -126,37 +131,15 @@ class StoryHistoryDisplay extends StatelessWidget {
     );
   }
 
-  Color _getOutcomeColor(String outcome) {
-    switch (outcome.toLowerCase()) {
-      case 'exceptional':
-        return Colors.amber;
-      case 'normal':
-        return Colors.green;
-      case 'minimal':
-        return Colors.blue;
-      case 'failure':
-        return Colors.orange;
-      case 'death':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
   IconData _getOutcomeIcon(String outcome) {
-    switch (outcome.toLowerCase()) {
-      case 'exceptional':
-        return Icons.star;
-      case 'normal':
-        return Icons.check_circle;
-      case 'minimal':
-        return Icons.remove_circle;
-      case 'failure':
-        return Icons.warning;
+    switch (normalizedOutcomeType(outcome)) {
       case 'death':
         return Icons.dangerous;
+      case 'failure':
+      case 'failed':
+        return Icons.warning;
       default:
-        return Icons.help_outline;
+        return Icons.check_circle;
     }
   }
 

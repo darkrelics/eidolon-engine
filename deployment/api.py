@@ -60,6 +60,7 @@ def get_lambda_function_arns(region: str) -> dict:
         "api-character-list",
         "api-story-start",
         "api-story-abandon",
+        "api-story-history",
         "api-segment-decision",
         "api-segment-status",
         "api-segment-history",

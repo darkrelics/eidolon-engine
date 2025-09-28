@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/active_segment.dart';
+import '../utils/outcome_colors.dart';
 import '../utils/time_utils.dart';
 
 class ActiveStoryDisplay extends StatelessWidget {
@@ -295,13 +296,16 @@ class ActiveStoryDisplay extends StatelessWidget {
                       vertical: 2,
                     ),
                     decoration: BoxDecoration(
-                      color: _getOutcomeColor(outcome).withValues(alpha: 0.2),
+                      color: outcomeAccentColor(
+                        theme,
+                        outcome,
+                      ).withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       outcome,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: _getOutcomeColor(outcome),
+                        color: outcomeAccentColor(theme, outcome),
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -441,23 +445,6 @@ class ActiveStoryDisplay extends StatelessWidget {
       debugPrint('ActiveStoryDisplay: Error formatting event: $e');
       debugPrint('ActiveStoryDisplay: Event data: $event');
       return 'Event processing error';
-    }
-  }
-
-  Color _getOutcomeColor(String outcome) {
-    switch (outcome.toLowerCase()) {
-      case 'exceptional':
-        return Colors.amber;
-      case 'normal':
-        return Colors.green;
-      case 'minimal':
-        return Colors.blue;
-      case 'failure':
-        return Colors.orange;
-      case 'death':
-        return Colors.red;
-      default:
-        return Colors.grey;
     }
   }
 

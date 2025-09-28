@@ -361,6 +361,7 @@ def update_lambda_environments(params, processing_queue_url: str, advancement_qu
         # API functions - all need all 4 environment variables
         ("api-story-start", story_env_vars),
         ("api-story-abandon", story_env_vars),
+        ("api-story-history", story_env_vars),
         ("api-segment-decision", story_env_vars),
         ("api-segment-history", story_env_vars),
         ("api-segment-rest", story_env_vars),

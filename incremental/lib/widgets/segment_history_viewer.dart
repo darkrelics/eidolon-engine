@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../services/api_service.dart';
+import '../utils/outcome_colors.dart';
 
 class SegmentHistoryViewer extends StatefulWidget {
   final String characterId;
@@ -185,11 +187,12 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
                       _formatOutcome(outcome),
                       style: const TextStyle(fontSize: 12),
                     ),
-                    backgroundColor: _getOutcomeColor(
+                    backgroundColor: outcomeAccentColor(
+                      theme,
                       outcome,
                     ).withValues(alpha: 0.2),
                     side: BorderSide(
-                      color: _getOutcomeColor(outcome),
+                      color: outcomeAccentColor(theme, outcome),
                       width: 1,
                     ),
                   ),
@@ -342,19 +345,6 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
         return Colors.orange;
       case 'rest':
         return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Color _getOutcomeColor(String outcome) {
-    switch (outcome) {
-      case 'success':
-        return Colors.green;
-      case 'failure':
-        return Colors.red;
-      case 'exceptional':
-        return Colors.purple;
       default:
         return Colors.grey;
     }

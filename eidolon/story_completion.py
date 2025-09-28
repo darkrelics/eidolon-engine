@@ -89,17 +89,6 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
 
     story_type = story_metadata.get("StoryType", "repeatable")
     logger.info(f"Story {story_id} completed for {character_id} (type={story_type})")
-    # Track completion for analytics and UI even if the story is repeatable.
-    try:
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="ADD CompletedStories :story",
-            ExpressionAttributeValues={":story": {story_id}},
-        )
-        logger.info(f"Recorded completion of story {story_id} for character {character_id}")
-    except ClientError as err:
-        logger.warning(f"Failed to add story {story_id} to CompletedStories for {character_id}: {err}")
 
     if story_instance_id:
         history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryInstanceID": story_instance_id})
