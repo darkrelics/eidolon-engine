@@ -28,9 +28,18 @@ class ActiveStoryWidget extends StatefulWidget {
 }
 
 class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
+  late List<Map<String, dynamic>> _orderedHistory;
+
   @override
   void initState() {
     super.initState();
+    _orderedHistory = _buildOrderedHistory(widget.segmentHistory);
+  }
+
+  @override
+  void didUpdateWidget(covariant ActiveStoryWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _orderedHistory = _buildOrderedHistory(widget.segmentHistory);
   }
 
   @override
@@ -95,7 +104,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
           ],
 
           // Previous Segments (show in reverse order - newest first)
-          if (widget.segmentHistory.isNotEmpty) ...[
+          if (_orderedHistory.isNotEmpty) ...[
             Text(
               'Previous Segments',
               style: theme.textTheme.titleMedium?.copyWith(
@@ -103,16 +112,29 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               ),
             ),
             const SizedBox(height: 12),
-            ...widget.segmentHistory.reversed.map(
-              (segment) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _SimpleSegmentCard(segment: segment, isActive: false),
-              ),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _orderedHistory.length,
+              separatorBuilder: (context, _) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final segment = _orderedHistory[index];
+                return _SimpleSegmentCard(segment: segment, isActive: false);
+              },
             ),
           ],
         ],
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _buildOrderedHistory(
+    List<Map<String, dynamic>> history,
+  ) {
+    final copied = history
+        .map((segment) => Map<String, dynamic>.from(segment))
+        .toList();
+    return copied.reversed.toList(growable: false);
   }
 }
 
