@@ -14,14 +14,12 @@ if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
 
-
 try:
     from eidolon.dynamo import TableName, dynamo
     from eidolon.validation import validate_character_name
 except ModuleNotFoundError as err:
     raise ModuleNotFoundError(
-        "Unable to import the 'eidolon' package. Run this script from the repository "
-        "root or set PYTHONPATH to include it."
+        "Unable to import the 'eidolon' package. Run this script from the repository " "root or set PYTHONPATH to include it."
     ) from err
 
 
