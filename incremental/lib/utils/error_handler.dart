@@ -20,6 +20,7 @@ class ErrorHandler {
 
     // Check if the error already has a user-friendly message
     final errorString = error.toString();
+    final normalizedError = errorString.toLowerCase();
 
     // If it's already a user-friendly message (doesn't contain technical jargon), return it
     if (_isUserFriendlyMessage(errorString)) {
@@ -27,49 +28,57 @@ class ErrorHandler {
     }
 
     // Map specific error types to user-friendly messages
-    if (errorString.toLowerCase().contains('network')) {
+    if (normalizedError.contains('usernameexists') ||
+        normalizedError.contains('username exists') ||
+        normalizedError.contains('user already exists') ||
+        normalizedError.contains('email already exists') ||
+        normalizedError.contains('already registered')) {
+      return 'The Player Account already exists.';
+    }
+
+    if (normalizedError.contains('network')) {
       return 'Network error. Please check your connection and try again.';
     }
 
-    if (errorString.toLowerCase().contains('timeout')) {
+    if (normalizedError.contains('timeout')) {
       return 'Request timed out. Please try again.';
     }
 
-    if (errorString.toLowerCase().contains('permission') ||
-        errorString.toLowerCase().contains('forbidden')) {
+    if (normalizedError.contains('permission') ||
+        normalizedError.contains('forbidden')) {
       return 'You don\'t have permission to perform this action.';
     }
 
-    if (errorString.toLowerCase().contains('not found')) {
+    if (normalizedError.contains('not found')) {
       return 'The requested resource was not found.';
     }
 
     // Story-specific errors
-    if (errorString.toLowerCase().contains('story not available')) {
+    if (normalizedError.contains('story not available')) {
       return 'This story is not available. It may be on cooldown or require certain prerequisites.';
     }
 
-    if (errorString.toLowerCase().contains('already in a story')) {
+    if (normalizedError.contains('already in a story')) {
       return 'Your character is already in an active story. Complete or abandon it first.';
     }
 
-    if (errorString.toLowerCase().contains('segment not found')) {
+    if (normalizedError.contains('segment not found')) {
       return 'Unable to find the current segment. Please refresh.';
     }
 
-    if (errorString.toLowerCase().contains('decision already')) {
+    if (normalizedError.contains('decision already')) {
       return 'You have already made a decision for this segment.';
     }
 
-    if (errorString.toLowerCase().contains('not authenticated')) {
+    if (normalizedError.contains('not authenticated')) {
       return 'Your session has expired. Please log in again.';
     }
 
-    if (errorString.toLowerCase().contains('character is dead')) {
+    if (normalizedError.contains('character is dead')) {
       return 'Your character has died. You must resurrect before continuing.';
     }
 
-    if (errorString.toLowerCase().contains('overloaded')) {
+    if (normalizedError.contains('overloaded')) {
       return 'The server is busy. Please wait a moment and try again.';
     }
 

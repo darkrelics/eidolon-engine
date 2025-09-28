@@ -8,11 +8,21 @@ import sys
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import TableName, dynamo
-from eidolon.validation import validate_character_name
+# Ensure repo root is importable for eidolon modules before local imports
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
 
-# Ensure repo root is importable for eidolon modules
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+try:
+    from eidolon.dynamo import TableName, dynamo
+    from eidolon.validation import validate_character_name
+except ModuleNotFoundError as err:
+    raise ModuleNotFoundError(
+        "Unable to import the 'eidolon' package. Run this script from the repository "
+        "root or set PYTHONPATH to include it."
+    ) from err
 
 
 def load_json(file_path):

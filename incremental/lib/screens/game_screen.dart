@@ -37,6 +37,8 @@ class _GameScreenState extends State<GameScreen> {
   bool _isLoading = true;
   String? _error;
   bool _isSubmittingDecision = false;
+  bool _storyCompletionNotified = false;
+  Future<void>? _activeCharacterLoad;
 
   // Segment history for the current story display
   List<Map<String, dynamic>> _segmentHistory = [];
@@ -83,10 +85,7 @@ class _GameScreenState extends State<GameScreen> {
 
           case PollingEventType.storyCompleted:
             debugPrint('GameScreen: Story completed via polling service');
-            await _loadSegmentHistory();
-            if (!mounted) return;
-            _pollingService.stopPolling(); // Ensure polling is stopped
-            _showStoryCompletionDialog();
+            await _handleStoryCompletion(showMessage: true);
             break;
 
           case PollingEventType.error:
@@ -173,7 +172,19 @@ class _GameScreenState extends State<GameScreen> {
     super.dispose();
   }
 
-  Future<void> _loadCharacterData() async {
+  Future<void> _loadCharacterData() {
+    if (_activeCharacterLoad != null) {
+      return _activeCharacterLoad!;
+    }
+
+    final future = _loadCharacterDataInternal();
+    _activeCharacterLoad = future;
+    return future.whenComplete(() {
+      _activeCharacterLoad = null;
+    });
+  }
+
+  Future<void> _loadCharacterDataInternal() async {
     debugPrint('GameScreen: Loading character data');
     if (_characterInfo == null) return;
 
@@ -201,6 +212,9 @@ class _GameScreenState extends State<GameScreen> {
           _character = character;
           _isLoading = false;
           _error = null;
+          if (character?.activeSegmentID != null) {
+            _storyCompletionNotified = false;
+          }
         });
 
         // Start polling if there's an active story
@@ -244,6 +258,7 @@ class _GameScreenState extends State<GameScreen> {
           _isLoading = true;
           // Clear segment history when starting a new story
           _segmentHistory = [];
+          _storyCompletionNotified = false;
         });
       }
 
@@ -406,8 +421,8 @@ class _GameScreenState extends State<GameScreen> {
           _pollingService.startPolling(_character!.id);
         }
       } else {
-        // No next segment means story completed - show completion dialog
-        _showStoryCompletionDialog();
+        // No next segment means the story has finished
+        await _handleStoryCompletion(refreshCharacter: true);
       }
 
       if (mounted && previousSegment != null) {
@@ -513,50 +528,46 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  Future<void> _showStoryCompletionDialog() async {
-    final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
-    final fallbackStoryTitle = _segmentHistory.isNotEmpty
-        ? _segmentHistory.last['StoryTitle'] as String?
-        : null;
-    final storyTitle = storyData?['Title'] ?? fallbackStoryTitle ?? 'Story';
+  Future<void> _handleStoryCompletion({
+    bool refreshCharacter = false,
+    bool showMessage = true,
+  }) async {
+    debugPrint('GameScreen: Handling story completion');
+    _pollingService.stopPolling();
 
-    final segmentData =
-        _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
-    final lastSegment = _segmentHistory.isNotEmpty
-        ? _segmentHistory.last
-        : segmentData;
-    final outcome =
-        (lastSegment != null ? lastSegment['Outcome'] : null) ?? 'completed';
+    try {
+      if (refreshCharacter) {
+        await _loadCharacterData();
+      }
 
-    await showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: Text('$storyTitle Complete!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('You have completed the story with outcome: $outcome'),
-            const SizedBox(height: 16),
-            if (_segmentHistory.isNotEmpty) ...[
-              Text('Total segments completed: ${_segmentHistory.length}'),
-              const SizedBox(height: 8),
-            ],
-            const Text('Would you like to continue to available stories?'),
-          ],
+      await _loadSegmentHistory();
+    } catch (e) {
+      debugPrint('GameScreen: Error updating state after story completion: $e');
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (showMessage && !_storyCompletionNotified) {
+      final storyData =
+          _character?.storyState?['Story'] as Map<String, dynamic>?;
+      final fallbackStoryTitle = _segmentHistory.isNotEmpty
+          ? _segmentHistory.last['StoryTitle'] as String?
+          : null;
+      final storyTitle = storyData?['Title'] ?? fallbackStoryTitle ?? 'Story';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$storyTitle complete'),
+          duration: const Duration(seconds: 4),
         ),
-        actions: [
-          FilledButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _handleReturnToStories();
-            },
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
+      );
+
+      _storyCompletionNotified = true;
+    }
   }
 
   Future<void> _handleReturnToStories() async {
@@ -575,6 +586,7 @@ class _GameScreenState extends State<GameScreen> {
     if (mounted) {
       setState(() {
         _segmentHistory = [];
+        _storyCompletionNotified = false;
       });
     }
   }
