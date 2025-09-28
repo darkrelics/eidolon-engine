@@ -395,24 +395,52 @@ class _SimpleSegmentCard extends StatelessWidget {
         normalized == 'processing your actions...';
   }
 
+  static String _pickSegmentText(
+    List<String?> candidates, {
+    String? exclude,
+    bool allowPlaceholders = false,
+  }) {
+    final normalizedExclude = exclude?.trim().toLowerCase();
+    for (final candidate in candidates) {
+      if (candidate == null) continue;
+      final trimmed = candidate.trim();
+      if (trimmed.isEmpty) continue;
+      if (!allowPlaceholders && _isProcessingPlaceholder(trimmed)) {
+        continue;
+      }
+      if (normalizedExclude != null &&
+          trimmed.toLowerCase() == normalizedExclude) {
+        continue;
+      }
+      return trimmed;
+    }
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final rawSegmentType = segment['SegmentType']?.toString() ?? 'mechanical';
     final segmentType = rawSegmentType.toLowerCase();
-    final rawShortStatus = segment['ShortStatus']?.toString().trim();
-    final rawDefaultStatus = segment['DefaultStatus']?.toString().trim();
-    final usesPlaceholderShortStatus =
-        _isProcessingPlaceholder(rawShortStatus) ||
-        rawShortStatus == null ||
-        rawShortStatus.isEmpty;
-    final usesPlaceholderDefaultStatus = _isProcessingPlaceholder(
-      rawDefaultStatus,
-    );
+    final rawShortStatus = segment['ShortStatus']?.toString();
+    final rawDefaultStatus = segment['DefaultStatus']?.toString();
+    final prompt = segment['Prompt']?.toString();
 
-    const gremlinTitle =
-        'You are searching for signs of the troublesome gremlin';
-    const gremlinStatus = 'Tracking the gremlin';
+    var shortStatus = _pickSegmentText([
+      rawShortStatus,
+      rawDefaultStatus,
+      prompt,
+    ]);
+    if (shortStatus.isEmpty) {
+      shortStatus = 'Processing...';
+    }
+
+    final supplementalStatus = _pickSegmentText([
+      rawDefaultStatus,
+      prompt,
+      rawShortStatus,
+    ], exclude: shortStatus);
+    final showSupplementalStatus = supplementalStatus.isNotEmpty;
 
     final outcome = segment['Outcome'];
     final endTimeStr = segment['EndTime']?.toString();
@@ -469,29 +497,18 @@ class _SimpleSegmentCard extends StatelessWidget {
         (processingStatus == 'processed' && hasTimerExpired);
     final bool waitingOnTimer = isActive && !shouldRevealResults;
 
-    final normalizedShortStatus = rawShortStatus?.toLowerCase();
-    final normalizedDefaultStatus = rawDefaultStatus?.toLowerCase();
-    final bool shouldApplyGremlinCopy =
-        segmentType == 'mechanical' &&
-        !shouldRevealResults &&
-        (usesPlaceholderShortStatus ||
-            usesPlaceholderDefaultStatus ||
-            normalizedShortStatus == gremlinStatus.toLowerCase() ||
-            normalizedDefaultStatus == gremlinStatus.toLowerCase());
-
-    final shortStatus = shouldApplyGremlinCopy
-        ? gremlinTitle
-        : (rawShortStatus != null && rawShortStatus.isNotEmpty
-              ? rawShortStatus
-              : 'Processing...');
-    final defaultStatus = shouldApplyGremlinCopy
-        ? gremlinStatus
-        : (rawDefaultStatus ?? '');
-    final showDefaultStatusOnCard =
-        defaultStatus.isNotEmpty && !shouldApplyGremlinCopy;
-    final processingIndicatorText = shouldApplyGremlinCopy
-        ? gremlinStatus
-        : 'Processing...';
+    var processingIndicatorText = '';
+    if (waitingOnTimer) {
+      final candidate = _pickSegmentText(
+        [rawShortStatus, rawDefaultStatus, prompt],
+        allowPlaceholders: true,
+        exclude: shortStatus,
+      );
+      processingIndicatorText =
+          candidate.isEmpty || _isProcessingPlaceholder(candidate)
+          ? 'Processing...'
+          : candidate;
+    }
 
     // Determine card color based on outcome
     Color cardColor;
@@ -606,10 +623,10 @@ class _SimpleSegmentCard extends StatelessWidget {
                 duration: segment['SegmentDuration'] ?? segment['Duration'],
                 onTimeout: onTimeout,
               ),
-              if (showDefaultStatusOnCard) ...[
+              if (showSupplementalStatus) ...[
                 const SizedBox(height: 8),
                 Text(
-                  defaultStatus,
+                  supplementalStatus,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -620,10 +637,10 @@ class _SimpleSegmentCard extends StatelessWidget {
             if (isActive &&
                 endTime == null &&
                 waitingOnTimer &&
-                showDefaultStatusOnCard) ...[
+                showSupplementalStatus) ...[
               const SizedBox(height: 12),
               Text(
-                defaultStatus,
+                supplementalStatus,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -640,7 +657,7 @@ class _SimpleSegmentCard extends StatelessWidget {
               Builder(
                 builder: (context) {
                   final narrative = segment['Narrative']?.toString() ?? '';
-                  final prompt = segment['Prompt']?.toString() ?? '';
+                  final promptText = segment['Prompt']?.toString() ?? '';
                   final clientEvents =
                       segment['ClientEvents'] as List<dynamic>?;
 
@@ -661,13 +678,13 @@ class _SimpleSegmentCard extends StatelessWidget {
                       displayText = narrative;
                     }
                   } else {
-                    displayText = prompt;
+                    displayText = promptText;
                   }
 
                   // Only show if we have text to display
                   if (displayText.isEmpty) {
-                    if (waitingOnTimer && showDefaultStatusOnCard) {
-                      displayText = defaultStatus;
+                    if (waitingOnTimer && showSupplementalStatus) {
+                      displayText = supplementalStatus;
                     } else {
                       return const SizedBox();
                     }
@@ -693,7 +710,7 @@ class _SimpleSegmentCard extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (waitingOnTimer && prompt.isNotEmpty)
+                        if (waitingOnTimer && promptText.isNotEmpty)
                           Text(
                             'Current Activity:',
                             style: theme.textTheme.labelMedium?.copyWith(
@@ -701,7 +718,7 @@ class _SimpleSegmentCard extends StatelessWidget {
                               color: theme.colorScheme.primary,
                             ),
                           ),
-                        if (waitingOnTimer && prompt.isNotEmpty)
+                        if (waitingOnTimer && promptText.isNotEmpty)
                           const SizedBox(height: 4),
                         Text(
                           displayText,

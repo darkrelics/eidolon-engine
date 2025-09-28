@@ -28,6 +28,8 @@ class GameScreen extends StatefulWidget {
   State<GameScreen> createState() => _GameScreenState();
 }
 
+enum CharacterLoadRateLimitStrategy { automated, humanDriven, immediate }
+
 class _GameScreenState extends State<GameScreen> {
   late ApiService _apiService;
   late StoryPollingService _pollingService;
@@ -146,17 +148,10 @@ class _GameScreenState extends State<GameScreen> {
     super.didChangeDependencies();
     // Get character info from route arguments
     final args = ModalRoute.of(context)?.settings.arguments;
-    debugPrint(
-      'GameScreen: didChangeDependencies called, args type: ${args.runtimeType}',
-    );
-
     // Handle both Character and CharacterInfo types
     if (args is Character) {
       // Only update if it's a different character or first load
       if (_character == null || _character!.id != args.id) {
-        debugPrint(
-          'GameScreen: Got full Character - name: ${args.name}, id: ${args.id}',
-        );
         _character = args;
         _characterInfo = CharacterInfo(
           name: args.name,
@@ -173,28 +168,17 @@ class _GameScreenState extends State<GameScreen> {
         if (_character?.activeSegmentID != null && !_pollingService.isPolling) {
           _pollingService.startPolling(_character!.id);
         }
-      } else {
-        debugPrint(
-          'GameScreen: didChangeDependencies called but same character - skipping update',
-        );
       }
     } else if (args is CharacterInfo) {
       // Only update if it's a different character or first load
       if (_characterInfo == null || _characterInfo!.id != args.id) {
-        debugPrint(
-          'GameScreen: Got CharacterInfo - name: ${args.name}, id: ${args.id}',
-        );
         _characterInfo = args;
-        _loadCharacterData().then((_) => _loadSegmentHistory());
-      } else {
-        debugPrint(
-          'GameScreen: didChangeDependencies called but same CharacterInfo - skipping update',
-        );
+        _loadCharacterData(
+          strategy: CharacterLoadRateLimitStrategy.immediate,
+        ).then((_) => _loadSegmentHistory());
       }
     } else if (args != null) {
-      debugPrint(
-        'GameScreen: didChangeDependencies called with unexpected args type: ${args.runtimeType}',
-      );
+      // Unexpected argument type provided via navigation; ignoring.
     }
   }
 
@@ -205,19 +189,29 @@ class _GameScreenState extends State<GameScreen> {
     super.dispose();
   }
 
-  Future<void> _loadCharacterData() {
-    if (_activeCharacterLoad != null) {
-      return _activeCharacterLoad!;
+  Future<void> _loadCharacterData({
+    CharacterLoadRateLimitStrategy strategy =
+        CharacterLoadRateLimitStrategy.automated,
+  }) {
+    final activeLoad = _activeCharacterLoad;
+    if (activeLoad != null) {
+      return activeLoad;
     }
 
-    final future = _loadCharacterDataInternal();
+    final future = _loadCharacterDataInternal(strategy: strategy);
     _activeCharacterLoad = future;
-    return future.whenComplete(() {
-      _activeCharacterLoad = null;
+    future.whenComplete(() {
+      if (identical(_activeCharacterLoad, future)) {
+        _activeCharacterLoad = null;
+      }
     });
+
+    return future;
   }
 
-  Future<void> _loadCharacterDataInternal() async {
+  Future<void> _loadCharacterDataInternal({
+    required CharacterLoadRateLimitStrategy strategy,
+  }) async {
     debugPrint('GameScreen: Loading character data');
     if (_characterInfo == null) return;
 
@@ -229,12 +223,8 @@ class _GameScreenState extends State<GameScreen> {
         });
       }
 
-      // Always use automated rate limiting for character loads
       final character = await retryWithBackoff(
-        () => _rateLimiter.limiter.executeAutomated(
-          GlobalRateLimiter.getCharacter,
-          () => _apiService.getCharacterById(_characterInfo!.id),
-        ),
+        () => _executeCharacterLoad(strategy),
       );
       debugPrint(
         'GameScreen: Character loaded: ${character != null ? 'success' : 'null'}',
@@ -277,6 +267,36 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  Future<Character?> _executeCharacterLoad(
+    CharacterLoadRateLimitStrategy strategy,
+  ) {
+    switch (strategy) {
+      case CharacterLoadRateLimitStrategy.immediate:
+        return _apiService.getCharacterById(_characterInfo!.id).then((
+          character,
+        ) {
+          _rateLimiter.limiter.recordCall(GlobalRateLimiter.getCharacter);
+          return character;
+        });
+      case CharacterLoadRateLimitStrategy.humanDriven:
+        return _rateLimiter.limiter.executeHumanDriven(
+          GlobalRateLimiter.getCharacter,
+          () => _apiService.getCharacterById(_characterInfo!.id),
+        );
+      case CharacterLoadRateLimitStrategy.automated:
+        return _rateLimiter.limiter.executeAutomated(
+          GlobalRateLimiter.getCharacter,
+          () => _apiService.getCharacterById(_characterInfo!.id),
+        );
+    }
+  }
+
+  Future<void> _refreshCharacterImmediate() {
+    return _loadCharacterData(
+      strategy: CharacterLoadRateLimitStrategy.immediate,
+    );
+  }
+
   // Removed old polling methods - now using StoryPollingService
 
   Future<void> _handleStorySelect(StoryMetadata story) async {
@@ -313,7 +333,10 @@ class _GameScreenState extends State<GameScreen> {
       );
 
       // Reload character to get the new story state and history
-      await Future.wait([_loadCharacterData(), _loadSegmentHistory()]);
+      await Future.wait([
+        _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate),
+        _loadSegmentHistory(),
+      ]);
 
       // Store the initial segment with the character's story state
       if (mounted && _character != null && _character!.storyState != null) {
@@ -675,7 +698,10 @@ class _GameScreenState extends State<GameScreen> {
       );
 
       // Reload character data and history
-      await Future.wait([_loadCharacterData(), _loadSegmentHistory()]);
+      await Future.wait([
+        _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate),
+        _loadSegmentHistory(),
+      ]);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -710,7 +736,9 @@ class _GameScreenState extends State<GameScreen> {
 
     try {
       if (refreshCharacter) {
-        await _loadCharacterData();
+        await _loadCharacterData(
+          strategy: CharacterLoadRateLimitStrategy.immediate,
+        );
       }
 
       await _loadSegmentHistory(mergeWithExisting: true);
@@ -757,7 +785,9 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Reload character to get available stories
-    await _loadCharacterData();
+    await _loadCharacterData(
+      strategy: CharacterLoadRateLimitStrategy.immediate,
+    );
     // Clear segment history after story completion
     if (mounted) {
       setState(() {
@@ -806,7 +836,10 @@ class _GameScreenState extends State<GameScreen> {
       );
 
       // Reload character to clear story state and history
-      await Future.wait([_loadCharacterData(), _loadSegmentHistory()]);
+      await Future.wait([
+        _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate),
+        _loadSegmentHistory(),
+      ]);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -839,7 +872,7 @@ class _GameScreenState extends State<GameScreen> {
         debugPrint('GameScreen: Error details: ${details.exception}');
       },
       child: GameKeyboardShortcuts(
-        onRefresh: _loadCharacterData,
+        onRefresh: _refreshCharacterImmediate,
         onEscape: () {
           Navigator.pushReplacementNamed(context, '/character-selection');
         },
@@ -892,7 +925,7 @@ class _GameScreenState extends State<GameScreen> {
             actions: [
               IconButton(
                 icon: const Icon(Icons.refresh),
-                onPressed: _loadCharacterData,
+                onPressed: _refreshCharacterImmediate,
                 tooltip: 'Refresh',
               ),
               IconButton(
@@ -982,7 +1015,7 @@ class _GameScreenState extends State<GameScreen> {
             ),
             const SizedBox(height: 24),
             FilledButton(
-              onPressed: _loadCharacterData,
+              onPressed: _refreshCharacterImmediate,
               child: const Text('Retry'),
             ),
           ],
@@ -1047,7 +1080,7 @@ class _GameScreenState extends State<GameScreen> {
           width: 320,
           child: CharacterPanel(
             character: _character!,
-            onRefresh: _loadCharacterData,
+            onRefresh: _refreshCharacterImmediate,
           ),
         ),
         // Story Panel (Center)
@@ -1058,7 +1091,7 @@ class _GameScreenState extends State<GameScreen> {
             storyHistoryArchive: _storyHistoryArchive,
             isLoading: _isLoading,
             error: _error,
-            onRefresh: _loadCharacterData,
+            onRefresh: _refreshCharacterImmediate,
             onStorySelect: _handleStorySelect,
             onDecisionSelect: _handleDecisionSelect,
             onAbandonStory: _character!.storyState != null
@@ -1083,7 +1116,7 @@ class _GameScreenState extends State<GameScreen> {
             width: 280,
             child: CharacterPanel(
               character: _character!,
-              onRefresh: _loadCharacterData,
+              onRefresh: _refreshCharacterImmediate,
             ),
           ),
         // Story Panel (Center - Always visible)
@@ -1094,7 +1127,7 @@ class _GameScreenState extends State<GameScreen> {
             storyHistoryArchive: _storyHistoryArchive,
             isLoading: _isLoading,
             error: _error,
-            onRefresh: _loadCharacterData,
+            onRefresh: _refreshCharacterImmediate,
             onStorySelect: _handleStorySelect,
             onDecisionSelect: _handleDecisionSelect,
             onAbandonStory: _character!.storyState != null
@@ -1117,7 +1150,7 @@ class _GameScreenState extends State<GameScreen> {
       case 0:
         return CharacterPanel(
           character: _character!,
-          onRefresh: _loadCharacterData,
+          onRefresh: _refreshCharacterImmediate,
         );
       case 1:
         return StoryPanel(
@@ -1126,7 +1159,7 @@ class _GameScreenState extends State<GameScreen> {
           storyHistoryArchive: _storyHistoryArchive,
           isLoading: _isLoading,
           error: _error,
-          onRefresh: _loadCharacterData,
+          onRefresh: _refreshCharacterImmediate,
           onStorySelect: _handleStorySelect,
           onDecisionSelect: _handleDecisionSelect,
           onAbandonStory: _character!.storyState != null

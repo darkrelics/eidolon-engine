@@ -79,11 +79,6 @@ class StoryPollingService {
     int consecutiveErrors = 0;
     const maxConsecutiveErrors = 3;
 
-    // ALWAYS wait 60 seconds initially for server processing
-    if (_isPolling) {
-      await Future.delayed(const Duration(seconds: 60));
-    }
-
     while (_isPolling) {
       try {
         // Step 2: Check character state for story completion
@@ -122,19 +117,17 @@ class StoryPollingService {
         // Check if polling was stopped during the await
         if (!_isPolling) break;
 
-        // Step 4: Wait server-specified time exactly
-        final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
+        // Step 4: Wait server-specified time, accounting for clock skew
+        final waitDuration = _determineWaitDuration(segmentStatus);
+        final rawRemaining = segmentStatus['TimeRemaining'];
 
         debugPrint(
-          'StoryPollingService: Server says wait $timeRemaining seconds',
+          'StoryPollingService: Waiting ${waitDuration.inSeconds}s '
+          '(server TimeRemaining: $rawRemaining)',
         );
 
-        if (timeRemaining > 0 && _isPolling) {
-          // Wait the server-specified time before next poll
-          await _waitFor(Duration(seconds: timeRemaining));
-        } else if (_isPolling) {
-          // If timeRemaining is 0 or negative, wait a small delay before next poll
-          await _waitFor(const Duration(seconds: 5));
+        if (_isPolling) {
+          await _waitFor(waitDuration);
         }
 
         // Reset consecutive errors on successful poll cycle
@@ -183,6 +176,50 @@ class StoryPollingService {
   void dispose() {
     stopPolling();
     _eventController.close();
+  }
+
+  Duration _determineWaitDuration(Map<String, dynamic> segmentStatus) {
+    const minWait = Duration(seconds: 1);
+    const networkPadding = Duration(seconds: 1);
+
+    Duration? timeRemaining;
+    final rawRemaining = segmentStatus['TimeRemaining'];
+    if (rawRemaining is num) {
+      final seconds = rawRemaining.floor();
+      timeRemaining = Duration(seconds: seconds < 0 ? 0 : seconds);
+    }
+
+    Duration? endTimeRemaining;
+    final endTimeString = segmentStatus['EndTime'] as String?;
+    if (endTimeString != null) {
+      final endTime = DateTime.tryParse(endTimeString);
+      if (endTime != null) {
+        endTimeRemaining = endTime.difference(DateTime.now().toUtc());
+      }
+    }
+
+    Duration? calculated;
+    if (timeRemaining != null && endTimeRemaining != null) {
+      calculated = timeRemaining < endTimeRemaining
+          ? timeRemaining
+          : endTimeRemaining;
+    } else {
+      calculated = timeRemaining ?? endTimeRemaining;
+    }
+
+    var waitDuration = calculated ?? const Duration(seconds: 5);
+
+    if (waitDuration.isNegative) {
+      waitDuration = minWait;
+    } else if (waitDuration > networkPadding) {
+      waitDuration -= networkPadding;
+    }
+
+    if (waitDuration < minWait) {
+      waitDuration = minWait;
+    }
+
+    return waitDuration;
   }
 
   Future<void> _waitFor(Duration duration) {

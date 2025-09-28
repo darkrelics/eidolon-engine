@@ -403,47 +403,33 @@ class _StoryPanelState extends State<StoryPanel> {
     ThemeData theme,
   ) {
     final segmentTypeRaw = segment['SegmentType']?.toString() ?? 'mechanical';
-    final segmentType = segmentTypeRaw.toLowerCase();
     final segmentTypeLabel = segmentTypeRaw.isNotEmpty
         ? '${segmentTypeRaw[0].toUpperCase()}${segmentTypeRaw.substring(1)}'
         : 'Unknown';
     final rawShortStatus = segment['ShortStatus']?.toString().trim();
     final rawDefaultStatus = segment['DefaultStatus']?.toString().trim();
+    final rawProcessingStatus = segment['ProcessingStatus']
+        ?.toString()
+        .toLowerCase();
+    final isProcessed = rawProcessingStatus == 'processed';
     final narrative = _extractSegmentNarrative(segment);
 
-    final usesPlaceholderShortStatus =
-        _isProcessingPlaceholder(rawShortStatus) ||
-        rawShortStatus == null ||
-        rawShortStatus.isEmpty;
-    final usesPlaceholderDefaultStatus = _isProcessingPlaceholder(
+    final prompt = segment['Prompt']?.toString();
+
+    final title = _resolveCompletedSegmentTitle(
+      rawShortStatus,
+      narrative,
       rawDefaultStatus,
+      prompt,
     );
 
-    const gremlinTitle =
-        'You are searching for signs of the troublesome gremlin';
-    const gremlinStatus = 'Tracking the gremlin';
-
-    final normalizedShortStatus = rawShortStatus?.toLowerCase();
-    final normalizedDefaultStatus = rawDefaultStatus?.toLowerCase();
-    final shouldApplyGremlinCopy =
-        segmentType == 'mechanical' &&
-        (usesPlaceholderShortStatus ||
-            usesPlaceholderDefaultStatus ||
-            normalizedShortStatus == gremlinStatus.toLowerCase() ||
-            normalizedDefaultStatus == gremlinStatus.toLowerCase());
-
-    final title = shouldApplyGremlinCopy
-        ? gremlinTitle
-        : _resolveCompletedSegmentTitle(
-            rawShortStatus,
-            narrative,
-            rawDefaultStatus,
-            segment['Prompt']?.toString(),
-          );
-
-    final subtitle = shouldApplyGremlinCopy
-        ? gremlinStatus
-        : (rawDefaultStatus ?? '');
+    final subtitle = _resolveCompletedSegmentSubtitle(
+      rawShortStatus,
+      rawDefaultStatus,
+      prompt,
+      title,
+      isProcessed: isProcessed,
+    );
 
     final outcome = segment['Outcome'];
     final cardColor = outcomeAccentColor(theme, outcome);
@@ -486,9 +472,7 @@ class _StoryPanelState extends State<StoryPanel> {
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
-                        if (subtitle.isNotEmpty &&
-                            subtitle != title &&
-                            !shouldApplyGremlinCopy) ...[
+                        if (subtitle.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
                             subtitle,
@@ -569,6 +553,41 @@ class _StoryPanelState extends State<StoryPanel> {
     }
 
     return 'Segment';
+  }
+
+  String _resolveCompletedSegmentSubtitle(
+    String? rawShortStatus,
+    String? defaultStatus,
+    String? prompt,
+    String title, {
+    required bool isProcessed,
+  }) {
+    final candidates = <String?>[rawShortStatus, defaultStatus, prompt];
+
+    final normalizedTitle = title.trim().toLowerCase();
+
+    for (final candidate in candidates) {
+      if (candidate == null) continue;
+      final trimmed = candidate.trim();
+      if (trimmed.isEmpty) continue;
+      if (_isProcessingPlaceholder(trimmed)) {
+        // Skip placeholders and generic copy once a segment is completed.
+        continue;
+      }
+      if (trimmed.toLowerCase() == normalizedTitle) continue;
+      return trimmed;
+    }
+
+    // If nothing else is suitable and the short status was a placeholder
+    // while the segment is still processing, fall back to a generic label.
+    if (!isProcessed &&
+        rawShortStatus != null &&
+        rawShortStatus.trim().isNotEmpty &&
+        !_isProcessingPlaceholder(rawShortStatus)) {
+      return rawShortStatus.trim();
+    }
+
+    return '';
   }
 
   String _extractSegmentNarrative(Map<String, dynamic> segment) {
