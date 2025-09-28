@@ -162,6 +162,8 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
             "ActiveSegmentID": segment.get("ActiveSegmentID"),
             "SegmentID": segment.get("SegmentID"),
             "SegmentType": segment.get("SegmentType"),
+            "SegmentTitle": segment.get("SegmentTitle"),
+            "SegmentActivity": segment.get("SegmentActivity"),
             "StartTime": from_unix(start_time_unix) if start_time_unix else None,
             "EndTime": from_unix(end_time_unix) if end_time_unix else None,
             "StoryTitle": story_title,

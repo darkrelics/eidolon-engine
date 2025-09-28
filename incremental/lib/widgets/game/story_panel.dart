@@ -402,10 +402,6 @@ class _StoryPanelState extends State<StoryPanel> {
     Map<String, dynamic> segment,
     ThemeData theme,
   ) {
-    final segmentTypeRaw = segment['SegmentType']?.toString() ?? 'mechanical';
-    final segmentTypeLabel = segmentTypeRaw.isNotEmpty
-        ? '${segmentTypeRaw[0].toUpperCase()}${segmentTypeRaw.substring(1)}'
-        : 'Unknown';
     final rawSegmentActivity = segment['SegmentActivity']?.toString().trim();
     final rawSegmentTitle = segment['SegmentTitle']?.toString().trim();
     final rawProcessingStatus = segment['ProcessingStatus']
@@ -466,12 +462,6 @@ class _StoryPanelState extends State<StoryPanel> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          'Type: $segmentTypeLabel',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
                         if (subtitle.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
@@ -518,8 +508,9 @@ class _StoryPanelState extends State<StoryPanel> {
   static bool _isProcessingPlaceholder(String? value) {
     if (value == null) return false;
     final normalized = value.trim().toLowerCase();
-    return normalized == 'processing...' ||
-        normalized == '...processing...' ||
+    if (normalized.isEmpty) return false;
+    if (normalized.startsWith('processing')) return true;
+    return normalized == '...processing...' ||
         normalized == 'processing your actions...';
   }
 

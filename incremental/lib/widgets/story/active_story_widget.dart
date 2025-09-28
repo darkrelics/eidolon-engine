@@ -390,8 +390,9 @@ class _SimpleSegmentCard extends StatelessWidget {
   static bool _isProcessingPlaceholder(String? value) {
     if (value == null) return false;
     final normalized = value.trim().toLowerCase();
-    return normalized == 'processing...' ||
-        normalized == '...processing...' ||
+    if (normalized.isEmpty) return false;
+    if (normalized.startsWith('processing')) return true;
+    return normalized == '...processing...' ||
         normalized == 'processing your actions...';
   }
 

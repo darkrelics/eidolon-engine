@@ -157,6 +157,19 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
 
     active_segment_id = str(uuid7())
 
+    segment_title = segment.get("SegmentTitle")
+    segment_activity = segment.get("SegmentActivity")
+
+    if not segment_title and segment_activity:
+        segment_title = segment_activity
+    if not segment_activity and segment_title:
+        segment_activity = segment_title
+
+    if not segment_title:
+        segment_title = "Processing..."
+    if not segment_activity:
+        segment_activity = "Processing..."
+
     active_segment = {
         "ActiveSegmentID": active_segment_id,
         "CharacterID": character_id,
@@ -170,6 +183,9 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         "EndTime": end_time,
         "Status": "active",
     }
+
+    active_segment["SegmentTitle"] = segment_title
+    active_segment["SegmentActivity"] = segment_activity
 
     if segment_type == "decision":
         active_segment["Decision"] = None

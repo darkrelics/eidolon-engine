@@ -58,6 +58,16 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
         update_expressions.append("SegmentType = :segment_type")
         expression_values[":segment_type"] = segment_type
 
+    segment_title = segment_data.get("SegmentTitle")
+    if segment_title is not None:
+        update_expressions.append("SegmentTitle = :segment_title")
+        expression_values[":segment_title"] = segment_title
+
+    segment_activity = segment_data.get("SegmentActivity")
+    if segment_activity is not None:
+        update_expressions.append("SegmentActivity = :segment_activity")
+        expression_values[":segment_activity"] = segment_activity
+
     if start_time is not None:
         update_expressions.append("StartTime = :start_time")
         expression_values[":start_time"] = start_time
@@ -150,6 +160,8 @@ def record_abandoned_segment_history(character_id: str, story_id: str, active_se
             "StoryInstanceID": active_segment.get("StoryInstanceID"),
             "SegmentID": active_segment.get("SegmentID"),
             "SegmentType": active_segment.get("SegmentType"),
+            "SegmentTitle": active_segment.get("SegmentTitle"),
+            "SegmentActivity": active_segment.get("SegmentActivity"),
             "StartTime": active_segment.get("StartTime"),
             "EndTime": active_segment.get("EndTime"),
             "ProcessedAt": active_segment.get("ProcessedAt"),

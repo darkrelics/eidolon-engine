@@ -19,6 +19,7 @@ from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
+from eidolon.character_story import calculate_story_progress
 from eidolon.time_utils import from_unix
 
 
@@ -115,6 +116,19 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     story_id = active_segment.get("StoryID")
     segment_id = active_segment.get("SegmentID")
 
+    story_progress = None
+    try:
+        story_progress = calculate_story_progress(
+            character_id,
+            story_id,
+            active_segment.get("StoryInstanceID"),
+            active_segment,
+        )
+    except Exception as err:
+        logger.debug(f"Unable to compute story progress for {character_id}: {err}")
+
+    segment_def = None
+
     if segment_type != "mechanical" or processing_status == "processed":
         # Include narrative and events for display
         response["SegmentTitle"] = active_segment.get("SegmentTitle")
@@ -197,6 +211,15 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         response["SegmentTitle"] = response.get("SegmentTitle") or "Processing..."
         response.setdefault("SegmentActivity", "")
 
+    if (not response.get("SegmentTitle") or not response.get("SegmentActivity")) and story_id and segment_id:
+        try:
+            if segment_def is None:
+                segment_def = get_story_segment(story_id, segment_id)  # type: ignore
+            response["SegmentTitle"] = response.get("SegmentTitle") or segment_def.get("SegmentTitle", "Processing...")
+            response["SegmentActivity"] = response.get("SegmentActivity") or segment_def.get("SegmentActivity", "")
+        except Exception as err:
+            logger.debug(f"Could not enrich segment metadata for {segment_id}: {err}")
+
     # Include decision-specific data
     if segment_type == "decision":
         response["Decision"] = active_segment.get("Decision")
@@ -217,9 +240,14 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                     "Type": story_data.get("StoryType", ""),
                     "StoryID": story_id,
                 }
+                if story_progress:
+                    response["Story"]["Progress"] = story_progress
         except Exception as err:
             logger.debug(f"Could not fetch story data: {err}")
             # Not critical, continue without story data
+    elif story_progress:
+        # Ensure progress is exposed even if story metadata could not be fetched
+        response["Story"] = {"StoryID": story_id, "Progress": story_progress}
 
     logger.debug(f"Segment status retrieved for {character_id}")
 
