@@ -233,4 +233,3 @@ def story_update_character(
         raise RuntimeError(f"Failed to update character state: {err}") from err
 
     return response  # type: ignore
-

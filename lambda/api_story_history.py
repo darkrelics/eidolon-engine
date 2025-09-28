@@ -68,10 +68,7 @@ def get_story_history_entries(character_id: str, story_instance_ids: List[str]) 
     if not story_instance_ids:
         return {"CharacterID": character_id, "Stories": [], "Missing": []}
 
-    keys = [
-        {"CharacterID": character_id, "StoryInstanceID": story_instance_id}
-        for story_instance_id in story_instance_ids
-    ]
+    keys = [{"CharacterID": character_id, "StoryInstanceID": story_instance_id} for story_instance_id in story_instance_ids]
 
     try:
         items = dynamo.batch_get_items(TableName.STORY_HISTORY, keys)
@@ -82,9 +79,7 @@ def get_story_history_entries(character_id: str, story_instance_ids: List[str]) 
         )
         raise RuntimeError(f"Failed to retrieve story history: {err}") from err
 
-    stories_by_instance = {
-        item.get("StoryInstanceID"): item for item in items if item.get("StoryInstanceID")
-    }
+    stories_by_instance = {item.get("StoryInstanceID"): item for item in items if item.get("StoryInstanceID")}
 
     ordered_results = []
     missing = []
@@ -166,4 +161,3 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
-
