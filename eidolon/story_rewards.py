@@ -6,7 +6,6 @@ Provides functions for calculating and applying story rewards.
 
 from botocore.exceptions import ClientError
 
-from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 
 
@@ -85,24 +84,15 @@ def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
         RuntimeError: If database operations fail
     """
     try:
-        xp_reward = opponent_data.get("XPReward", 10)
-        if xp_reward > 0:
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression="ADD #skills.#combat :xp",
-                ExpressionAttributeNames={
-                    "#skills": "Skills",
-                    "#combat": "combat",
-                },
-                ExpressionAttributeValues={
-                    ":xp": xp_reward,
-                },
+        # Segment processing already applied skill/attribute XP.
+        # Additional combat rewards must come from segment/story data; none are applied here.
+        loot_table = opponent_data.get("LootTable", [])
+        if loot_table:
+            logger.info(
+                "Loot rewards are defined on the opponent but segment/story data must trigger distribution; skipping Dynamo writes"
             )
 
-        _ = opponent_data.get("LootTable", [])
-
-        logger.info(f"Applied combat rewards for {character_id}")
+        logger.info(f"No additional combat rewards applied for {character_id}")
     except ClientError as err:
         logger.error(f"Failed to apply combat rewards for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply combat rewards: {err}") from err

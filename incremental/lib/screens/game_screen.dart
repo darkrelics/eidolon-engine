@@ -42,6 +42,8 @@ class _GameScreenState extends State<GameScreen> {
 
   // Segment history for the current story display
   List<Map<String, dynamic>> _segmentHistory = [];
+  final List<Map<String, dynamic>> _storyHistoryArchive = [];
+  final Set<String> _storyHistoryKeys = <String>{};
   Map<String, dynamic>? _lastStoryDetails;
 
   // Panel visibility for mobile/tablet
@@ -485,6 +487,46 @@ class _GameScreenState extends State<GameScreen> {
     return updated;
   }
 
+  void _archiveCurrentStorySegments() {
+    if (_segmentHistory.isEmpty) {
+      return;
+    }
+
+    bool added = false;
+    for (final segment in _segmentHistory) {
+      final key = _archiveKeyForSegment(segment);
+      if (_storyHistoryKeys.contains(key)) {
+        continue;
+      }
+
+      _storyHistoryKeys.add(key);
+      _storyHistoryArchive.add(Map<String, dynamic>.from(segment));
+      added = true;
+    }
+
+    if (added) {
+      debugPrint(
+        'GameScreen: Archived ${_segmentHistory.length} segments for story history',
+      );
+    }
+  }
+
+  String _archiveKeyForSegment(Map<String, dynamic> segment) {
+    final activeId = segment['ActiveSegmentID']?.toString();
+    if (activeId != null && activeId.isNotEmpty) {
+      return 'active:$activeId';
+    }
+
+    final storyInstance = segment['StoryInstanceID']?.toString() ?? '';
+    final segmentId = segment['SegmentID']?.toString() ?? '';
+    final completedAt =
+        segment['CompletedAt']?.toString() ??
+        segment['EndTime']?.toString() ??
+        '';
+
+    return 'seg:$segmentId|instance:$storyInstance|time:$completedAt';
+  }
+
   void _synchronizeStoryCompletionState() {
     if (_character == null || _segmentHistory.isEmpty) {
       return;
@@ -679,6 +721,7 @@ class _GameScreenState extends State<GameScreen> {
     if (!mounted) return;
 
     setState(() {
+      _archiveCurrentStorySegments();
       _isLoading = false;
     });
 
@@ -709,6 +752,7 @@ class _GameScreenState extends State<GameScreen> {
           _character!.storyState = null;
         }
         _lastStoryDetails = null;
+        _archiveCurrentStorySegments();
       });
     }
 
@@ -1011,6 +1055,7 @@ class _GameScreenState extends State<GameScreen> {
           child: StoryPanel(
             character: _character!,
             segmentHistory: _segmentHistory,
+            storyHistoryArchive: _storyHistoryArchive,
             isLoading: _isLoading,
             error: _error,
             onRefresh: _loadCharacterData,
@@ -1046,6 +1091,7 @@ class _GameScreenState extends State<GameScreen> {
           child: StoryPanel(
             character: _character!,
             segmentHistory: _segmentHistory,
+            storyHistoryArchive: _storyHistoryArchive,
             isLoading: _isLoading,
             error: _error,
             onRefresh: _loadCharacterData,
@@ -1077,6 +1123,7 @@ class _GameScreenState extends State<GameScreen> {
         return StoryPanel(
           character: _character!,
           segmentHistory: _segmentHistory,
+          storyHistoryArchive: _storyHistoryArchive,
           isLoading: _isLoading,
           error: _error,
           onRefresh: _loadCharacterData,

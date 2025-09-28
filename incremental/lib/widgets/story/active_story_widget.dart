@@ -386,12 +386,57 @@ class _SimpleSegmentCard extends StatelessWidget {
     this.onTimeout,
   });
 
+  static bool _isProcessingPlaceholder(String? value) {
+    if (value == null) return false;
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'processing...' ||
+        normalized == '...processing...' ||
+        normalized == 'processing your actions...';
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final segmentType = segment['SegmentType'] ?? 'mechanical';
-    final shortStatus = segment['ShortStatus'] ?? 'Processing...';
-    final defaultStatus = segment['DefaultStatus'] ?? '';
+    final rawSegmentType = segment['SegmentType']?.toString() ?? 'mechanical';
+    final segmentType = rawSegmentType.toLowerCase();
+    final rawShortStatus = segment['ShortStatus']?.toString().trim();
+    final rawDefaultStatus = segment['DefaultStatus']?.toString().trim();
+    final usesPlaceholderShortStatus =
+        _isProcessingPlaceholder(rawShortStatus) ||
+        rawShortStatus == null ||
+        rawShortStatus.isEmpty;
+    final usesPlaceholderDefaultStatus = _isProcessingPlaceholder(
+      rawDefaultStatus,
+    );
+
+    const gremlinTitle =
+        'You are searching for signs of the troublesome gremlin';
+    const gremlinStatus = 'Tracking the gremlin';
+
+    final shortMentionsGremlin =
+        rawShortStatus?.toLowerCase().contains('gremlin') ?? false;
+    final defaultMentionsGremlin =
+        rawDefaultStatus?.toLowerCase().contains('gremlin') ?? false;
+
+    final shouldApplyGremlinCopy =
+        (usesPlaceholderShortStatus ||
+            usesPlaceholderDefaultStatus ||
+            rawShortStatus == gremlinStatus ||
+            shortMentionsGremlin ||
+            defaultMentionsGremlin) &&
+        segmentType == 'mechanical';
+
+    final shortStatus = shouldApplyGremlinCopy
+        ? gremlinTitle
+        : (rawShortStatus != null && rawShortStatus.isNotEmpty
+              ? rawShortStatus
+              : 'Processing...');
+    final defaultStatus = shouldApplyGremlinCopy
+        ? gremlinStatus
+        : (rawDefaultStatus ?? '');
+    final processingIndicatorText = shouldApplyGremlinCopy
+        ? gremlinStatus
+        : 'Processing...';
     final outcome = segment['Outcome'];
     final endTimeStr = segment['EndTime']?.toString();
     final processingStatus =
@@ -558,7 +603,7 @@ class _SimpleSegmentCard extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      'Processing...',
+                      processingIndicatorText,
                       style: TextStyle(
                         color: theme.colorScheme.tertiary,
                         fontWeight: FontWeight.bold,
@@ -643,6 +688,14 @@ class _SimpleSegmentCard extends StatelessWidget {
                     } else {
                       return const SizedBox();
                     }
+                  }
+
+                  if (shouldRevealResults) {
+                    return Text(
+                      displayText,
+                      style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.justify,
+                    );
                   }
 
                   return Container(

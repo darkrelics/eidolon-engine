@@ -9,6 +9,7 @@ import '../story/story_history_widget.dart';
 class StoryPanel extends StatefulWidget {
   final Character character;
   final List<Map<String, dynamic>> segmentHistory;
+  final List<Map<String, dynamic>> storyHistoryArchive;
   final bool isLoading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -22,6 +23,7 @@ class StoryPanel extends StatefulWidget {
     super.key,
     required this.character,
     this.segmentHistory = const [],
+    this.storyHistoryArchive = const [],
     this.isLoading = false,
     this.error,
     this.onRefresh,
@@ -93,7 +95,8 @@ class _StoryPanelState extends State<StoryPanel> {
                 const Spacer(),
                 // History toggle button
                 if (!_hasActiveStory() &&
-                    widget.character.completedStories.isNotEmpty)
+                    (widget.character.completedStories.isNotEmpty ||
+                        widget.storyHistoryArchive.isNotEmpty))
                   IconButton(
                     icon: Icon(
                       _showHistory ? Icons.library_books : Icons.history,
@@ -246,7 +249,7 @@ class _StoryPanelState extends State<StoryPanel> {
     return StoryHistoryWidget(
       key: const ValueKey('story_history'),
       character: widget.character,
-      segmentHistory: widget.segmentHistory,
+      segmentHistory: widget.storyHistoryArchive,
     );
   }
 
@@ -367,62 +370,10 @@ class _StoryPanelState extends State<StoryPanel> {
           ),
           const SizedBox(height: 8),
 
-          // Display segments in reverse order
-          ...completedSegments.reversed.map((segmentMap) {
-            final outcome = segmentMap['Outcome'] ?? 'normal';
-            final segmentType = segmentMap['SegmentType'] ?? 'mechanical';
-            final shortStatus = segmentMap['ShortStatus'] ?? 'Segment';
-
-            // Determine color based on outcome
-            Color segmentColor;
-            Color backgroundColor;
-            IconData icon;
-
-            if (outcome == 'death') {
-              segmentColor = Colors.black;
-              backgroundColor = Colors.black.withValues(alpha: 0.1);
-              icon = Icons.dangerous;
-            } else if (outcome == 'failure' || outcome == 'failed') {
-              segmentColor = Colors.red;
-              backgroundColor = Colors.red.withValues(alpha: 0.1);
-              icon = Icons.cancel;
-            } else {
-              // Success (exceptional, normal, minimal, etc.)
-              segmentColor = Colors.green;
-              backgroundColor = Colors.green.withValues(alpha: 0.1);
-              icon = Icons.check_circle;
-            }
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Card(
-                color: backgroundColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color: segmentColor.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: ListTile(
-                  leading: Icon(icon, color: segmentColor),
-                  title: Text(
-                    shortStatus,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: segmentColor,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Type: $segmentType | Outcome: $outcome',
-                    style: TextStyle(
-                      color: segmentColor.withValues(alpha: 0.8),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
+          // Display segments in reverse order with full details
+          ...completedSegments.reversed.map(
+            (segmentMap) => _buildCompletedSegmentCard(segmentMap, theme),
+          ),
 
           const SizedBox(height: 24),
 
@@ -443,5 +394,297 @@ class _StoryPanelState extends State<StoryPanel> {
         ],
       ),
     );
+  }
+
+  Widget _buildCompletedSegmentCard(
+    Map<String, dynamic> segment,
+    ThemeData theme,
+  ) {
+    final segmentTypeRaw = segment['SegmentType']?.toString() ?? 'mechanical';
+    final segmentType = segmentTypeRaw.toLowerCase();
+    final segmentTypeLabel = segmentTypeRaw.isNotEmpty
+        ? '${segmentTypeRaw[0].toUpperCase()}${segmentTypeRaw.substring(1)}'
+        : 'Unknown';
+    final rawShortStatus = segment['ShortStatus']?.toString().trim();
+    final rawDefaultStatus = segment['DefaultStatus']?.toString().trim();
+    final narrative = _extractSegmentNarrative(segment);
+
+    final usesPlaceholderShortStatus =
+        _isProcessingPlaceholder(rawShortStatus) ||
+        rawShortStatus == null ||
+        rawShortStatus.isEmpty;
+    final usesPlaceholderDefaultStatus = _isProcessingPlaceholder(
+      rawDefaultStatus,
+    );
+
+    const gremlinTitle =
+        'You are searching for signs of the troublesome gremlin';
+    const gremlinStatus = 'Tracking the gremlin';
+
+    final shortMentionsGremlin =
+        rawShortStatus?.toLowerCase().contains('gremlin') ?? false;
+    final defaultMentionsGremlin =
+        rawDefaultStatus?.toLowerCase().contains('gremlin') ?? false;
+
+    final shouldApplyGremlinCopy =
+        (usesPlaceholderShortStatus ||
+            usesPlaceholderDefaultStatus ||
+            rawShortStatus == gremlinStatus ||
+            shortMentionsGremlin ||
+            defaultMentionsGremlin) &&
+        segmentType == 'mechanical';
+
+    final title = shouldApplyGremlinCopy
+        ? gremlinTitle
+        : _resolveCompletedSegmentTitle(
+            rawShortStatus,
+            narrative,
+            rawDefaultStatus,
+            segment['Prompt']?.toString(),
+          );
+
+    final subtitle = shouldApplyGremlinCopy
+        ? gremlinStatus
+        : (rawDefaultStatus ?? '');
+
+    final outcome = segment['Outcome'];
+    final outcomeStr = _outcomeToString(outcome);
+
+    Color cardColor;
+    Color backgroundColor;
+    IconData icon;
+
+    switch (outcomeStr) {
+      case 'death':
+        cardColor = Colors.black;
+        backgroundColor = Colors.black.withValues(alpha: 0.15);
+        icon = Icons.dangerous;
+        break;
+      case 'failure':
+      case 'failed':
+        cardColor = Colors.red;
+        backgroundColor = Colors.red.withValues(alpha: 0.1);
+        icon = Icons.cancel;
+        break;
+      default:
+        cardColor = _getOutcomeColor(outcome);
+        backgroundColor = cardColor.withValues(alpha: 0.1);
+        icon = Icons.check_circle;
+        break;
+    }
+
+    final effects = segment['Effects'] as Map<dynamic, dynamic>?;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Card(
+        color: backgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: cardColor.withValues(alpha: 0.3), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, color: cardColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: cardColor,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Type: $segmentTypeLabel',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        if (subtitle.isNotEmpty &&
+                            subtitle != title &&
+                            !shouldApplyGremlinCopy) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            subtitle,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (narrative.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  narrative,
+                  style: theme.textTheme.bodyMedium,
+                  textAlign: TextAlign.justify,
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.workspace_premium, size: 16, color: cardColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Outcome: ${_formatOutcome(outcome)}',
+                    style: TextStyle(
+                      color: cardColor,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              if (effects != null && effects.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Effects:',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...effects.entries.map(
+                  (entry) => Text(
+                    '• ${entry.key}: ${_formatEffectValue(entry.value)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static bool _isProcessingPlaceholder(String? value) {
+    if (value == null) return false;
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'processing...' ||
+        normalized == '...processing...' ||
+        normalized == 'processing your actions...';
+  }
+
+  String _resolveCompletedSegmentTitle(
+    String? rawShortStatus,
+    String narrative,
+    String? defaultStatus,
+    String? prompt,
+  ) {
+    if (rawShortStatus != null &&
+        rawShortStatus.isNotEmpty &&
+        !_isProcessingPlaceholder(rawShortStatus)) {
+      return rawShortStatus;
+    }
+
+    if (narrative.isNotEmpty) {
+      final trimmedNarrative = narrative.trim();
+      final sentenceBreak = trimmedNarrative.indexOf(RegExp(r'[.!?]'));
+      if (sentenceBreak > 0) {
+        return trimmedNarrative.substring(0, sentenceBreak + 1).trim();
+      }
+      return trimmedNarrative;
+    }
+
+    if (defaultStatus != null && defaultStatus.trim().isNotEmpty) {
+      return defaultStatus.trim();
+    }
+
+    if (prompt != null && prompt.trim().isNotEmpty) {
+      return prompt.trim();
+    }
+
+    return 'Segment';
+  }
+
+  String _extractSegmentNarrative(Map<String, dynamic> segment) {
+    final clientEvents = segment['ClientEvents'] as List<dynamic>?;
+    if (clientEvents != null && clientEvents.isNotEmpty) {
+      final descriptions = clientEvents
+          .map(
+            (event) => event is Map
+                ? event['Description']?.toString() ?? ''
+                : event.toString(),
+          )
+          .where((text) => text.trim().isNotEmpty)
+          .toList();
+      if (descriptions.isNotEmpty) {
+        return descriptions.join('\n\n');
+      }
+    }
+
+    final narrative = segment['Narrative']?.toString() ?? '';
+    if (narrative.trim().isNotEmpty) {
+      return narrative.trim();
+    }
+
+    final defaultStatus = segment['DefaultStatus']?.toString() ?? '';
+    if (defaultStatus.trim().isNotEmpty) {
+      return defaultStatus.trim();
+    }
+
+    return '';
+  }
+
+  String _outcomeToString(dynamic outcome) {
+    if (outcome is String) {
+      return outcome.toLowerCase();
+    }
+    if (outcome is Map && outcome['Type'] is String) {
+      return (outcome['Type'] as String).toLowerCase();
+    }
+    return 'normal';
+  }
+
+  Color _getOutcomeColor(dynamic outcome) {
+    final outcomeStr = _outcomeToString(outcome);
+    switch (outcomeStr) {
+      case 'exceptional':
+        return Colors.purple;
+      case 'minimal':
+        return Colors.orange;
+      case 'failure':
+      case 'failed':
+        return Colors.red;
+      case 'death':
+        return Colors.black;
+      default:
+        return Colors.green;
+    }
+  }
+
+  String _formatOutcome(dynamic outcome) {
+    final outcomeStr = _outcomeToString(outcome);
+    if (outcomeStr.isEmpty) {
+      return 'Unknown';
+    }
+    return outcomeStr[0].toUpperCase() + outcomeStr.substring(1);
+  }
+
+  String _formatEffectValue(dynamic value) {
+    if (value is List) {
+      return value.map((item) => item.toString()).join(', ');
+    }
+    if (value is Map) {
+      return value.entries
+          .map((entry) => '${entry.key}: ${entry.value}')
+          .join(', ');
+    }
+    return value.toString();
   }
 }
