@@ -406,8 +406,8 @@ class _StoryPanelState extends State<StoryPanel> {
     final segmentTypeLabel = segmentTypeRaw.isNotEmpty
         ? '${segmentTypeRaw[0].toUpperCase()}${segmentTypeRaw.substring(1)}'
         : 'Unknown';
-    final rawShortStatus = segment['ShortStatus']?.toString().trim();
-    final rawDefaultStatus = segment['DefaultStatus']?.toString().trim();
+    final rawSegmentActivity = segment['SegmentActivity']?.toString().trim();
+    final rawSegmentTitle = segment['SegmentTitle']?.toString().trim();
     final rawProcessingStatus = segment['ProcessingStatus']
         ?.toString()
         .toLowerCase();
@@ -417,15 +417,15 @@ class _StoryPanelState extends State<StoryPanel> {
     final prompt = segment['Prompt']?.toString();
 
     final title = _resolveCompletedSegmentTitle(
-      rawShortStatus,
+      rawSegmentTitle,
       narrative,
-      rawDefaultStatus,
+      rawSegmentActivity,
       prompt,
     );
 
     final subtitle = _resolveCompletedSegmentSubtitle(
-      rawShortStatus,
-      rawDefaultStatus,
+      rawSegmentActivity,
+      rawSegmentTitle,
       prompt,
       title,
       isProcessed: isProcessed,
@@ -524,15 +524,15 @@ class _StoryPanelState extends State<StoryPanel> {
   }
 
   String _resolveCompletedSegmentTitle(
-    String? rawShortStatus,
+    String? rawSegmentTitle,
     String narrative,
-    String? defaultStatus,
+    String? segmentActivity,
     String? prompt,
   ) {
-    if (rawShortStatus != null &&
-        rawShortStatus.isNotEmpty &&
-        !_isProcessingPlaceholder(rawShortStatus)) {
-      return rawShortStatus;
+    if (rawSegmentTitle != null &&
+        rawSegmentTitle.isNotEmpty &&
+        !_isProcessingPlaceholder(rawSegmentTitle)) {
+      return rawSegmentTitle;
     }
 
     if (narrative.isNotEmpty) {
@@ -544,8 +544,8 @@ class _StoryPanelState extends State<StoryPanel> {
       return trimmedNarrative;
     }
 
-    if (defaultStatus != null && defaultStatus.trim().isNotEmpty) {
-      return defaultStatus.trim();
+    if (segmentActivity != null && segmentActivity.trim().isNotEmpty) {
+      return segmentActivity.trim();
     }
 
     if (prompt != null && prompt.trim().isNotEmpty) {
@@ -556,13 +556,13 @@ class _StoryPanelState extends State<StoryPanel> {
   }
 
   String _resolveCompletedSegmentSubtitle(
-    String? rawShortStatus,
-    String? defaultStatus,
+    String? rawSegmentActivity,
+    String? segmentTitle,
     String? prompt,
     String title, {
     required bool isProcessed,
   }) {
-    final candidates = <String?>[rawShortStatus, defaultStatus, prompt];
+    final candidates = <String?>[rawSegmentActivity, segmentTitle, prompt];
 
     final normalizedTitle = title.trim().toLowerCase();
 
@@ -581,10 +581,10 @@ class _StoryPanelState extends State<StoryPanel> {
     // If nothing else is suitable and the short status was a placeholder
     // while the segment is still processing, fall back to a generic label.
     if (!isProcessed &&
-        rawShortStatus != null &&
-        rawShortStatus.trim().isNotEmpty &&
-        !_isProcessingPlaceholder(rawShortStatus)) {
-      return rawShortStatus.trim();
+        rawSegmentActivity != null &&
+        rawSegmentActivity.trim().isNotEmpty &&
+        !_isProcessingPlaceholder(rawSegmentActivity)) {
+      return rawSegmentActivity.trim();
     }
 
     return '';
@@ -611,9 +611,9 @@ class _StoryPanelState extends State<StoryPanel> {
       return narrative.trim();
     }
 
-    final defaultStatus = segment['DefaultStatus']?.toString() ?? '';
-    if (defaultStatus.trim().isNotEmpty) {
-      return defaultStatus.trim();
+    final segmentTitle = segment['SegmentTitle']?.toString() ?? '';
+    if (segmentTitle.trim().isNotEmpty) {
+      return segmentTitle.trim();
     }
 
     return '';

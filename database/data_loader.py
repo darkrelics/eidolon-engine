@@ -505,8 +505,8 @@ def store_story(story_data):
                     "StoryID": segment["StoryID"],
                     "SegmentID": segment["SegmentID"],
                     "SegmentType": segment["SegmentType"],
-                    "ShortStatus": segment["ShortStatus"],
-                    "DefaultStatus": segment.get("DefaultStatus", ""),
+                    "SegmentActivity": segment["SegmentActivity"],
+                    "SegmentTitle": segment.get("SegmentTitle", ""),
                     "SegmentDuration": segment["SegmentDuration"],
                 }
 
@@ -792,7 +792,7 @@ def display_story(story_data):
         for segment in segments:
             print(f"  Segment ID: {segment.get('SegmentID')}")
             print(f"    Type: {segment.get('SegmentType')}")
-            print(f"    Status: {segment.get('ShortStatus')}")
+            print(f"    Status: {segment.get('SegmentActivity')}")
             print(f"    Duration: {segment.get('SegmentDuration')} seconds")
 
             if segment.get("SegmentType") == "decision":

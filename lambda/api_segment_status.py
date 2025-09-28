@@ -104,7 +104,8 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         "EndTime": from_unix(end_time_unix),
         "ProcessingStatus": processing_status,
         "SegmentType": active_segment.get("SegmentType"),
-        "ShortStatus": active_segment.get("ShortStatus", active_segment.get("DefaultStatus", "")),
+        "SegmentActivity": active_segment.get("SegmentActivity", ""),
+        "SegmentTitle": active_segment.get("SegmentTitle", ""),
         "Duration": duration,
     }
 
@@ -116,7 +117,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
     if segment_type != "mechanical" or processing_status == "processed":
         # Include narrative and events for display
-        response["DefaultStatus"] = active_segment.get("DefaultStatus")
+        response["SegmentTitle"] = active_segment.get("SegmentTitle")
         response["ClientEvents"] = active_segment.get("ClientEvents", [])
         response["ChallengeResults"] = active_segment.get("ChallengeResults", [])
         response["Outcome"] = active_segment.get("Outcome")
@@ -179,7 +180,8 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                                 "SegmentID": next_segment_id,
                                 "SegmentType": next_segment_def.get("SegmentType", "mechanical"),
                                 "SegmentDuration": next_segment_def.get("SegmentDuration", 60),
-                                "DefaultStatus": next_segment_def.get("DefaultStatus", "Processing..."),
+                                "SegmentTitle": next_segment_def.get("SegmentTitle", "Processing..."),
+                                "SegmentActivity": next_segment_def.get("SegmentActivity", ""),
                             }
                     except Exception as preview_err:
                         logger.debug(f"Could not fetch next segment preview: {preview_err}")
@@ -192,7 +194,8 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                 # Continue without narrative - not critical
     else:
         # Segment is still processing - just return basic status
-        response["DefaultStatus"] = "Processing..."
+        response["SegmentTitle"] = response.get("SegmentTitle") or "Processing..."
+        response.setdefault("SegmentActivity", "")
 
     # Include decision-specific data
     if segment_type == "decision":

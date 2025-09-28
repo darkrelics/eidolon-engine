@@ -490,8 +490,8 @@ paths:
                       StartTime: "2025-01-15T14:25:00Z"
                       EndTime: "2025-01-15T14:30:00Z"
                       ProcessingStatus: "pending"
-                      ShortStatus: "Fighting the goblin"
-                      DefaultStatus: "Preparing for combat"
+                      SegmentActivity: "Fighting the goblin"
+                      SegmentTitle: "Preparing for combat"
                       Duration: 300
         "400":
           description: Bad request
@@ -1406,7 +1406,7 @@ components:
             EndTime:
               type: string
               format: date-time
-            ShortStatus:
+            SegmentActivity:
               type: string
             Duration:
               type: integer
@@ -1443,9 +1443,9 @@ components:
               format: date-time
             ProcessingStatus:
               type: string
-            ShortStatus:
+            SegmentActivity:
               type: string
-            DefaultStatus:
+            SegmentTitle:
               type: string
             Duration:
               type: integer

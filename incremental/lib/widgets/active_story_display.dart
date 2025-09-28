@@ -185,7 +185,7 @@ class ActiveStoryDisplay extends StatelessWidget {
               children: [
                 // Status
                 Text(
-                  currentSegment.defaultStatus ?? 'Processing...',
+                  currentSegment.segmentTitle ?? 'Processing...',
                   style: theme.textTheme.titleSmall,
                 ),
                 const SizedBox(height: 8),
@@ -193,13 +193,13 @@ class ActiveStoryDisplay extends StatelessWidget {
                 // Narrative text or decision options
                 if (currentSegment.segmentType == 'narrative') ...[
                   Text(
-                    currentSegment.defaultStatus ?? 'Story continues...',
+                    currentSegment.segmentTitle ?? 'Story continues...',
                     style: theme.textTheme.bodyMedium,
                   ),
                 ] else if (currentSegment.segmentType == 'decision' &&
                     decisionOptions != null) ...[
                   Text(
-                    currentSegment.defaultStatus ?? 'Make a choice:',
+                    currentSegment.segmentTitle ?? 'Make a choice:',
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 12),
@@ -227,7 +227,7 @@ class ActiveStoryDisplay extends StatelessWidget {
                     ),
                 ] else ...[
                   Text(
-                    currentSegment.defaultStatus ?? '',
+                    currentSegment.segmentTitle ?? '',
                     style: theme.textTheme.bodyMedium,
                   ),
                 ],
@@ -264,7 +264,7 @@ class ActiveStoryDisplay extends StatelessWidget {
   ) {
     final segmentType = segment['SegmentType'] as String? ?? 'narrative';
 
-    final shortStatus = segment['ShortStatus'] as String? ?? 'Unknown segment';
+    final segmentTitle = segment['SegmentTitle'] as String? ?? 'Unknown segment';
 
     final outcome = segment['Outcome'] as String?;
 
@@ -283,7 +283,7 @@ class ActiveStoryDisplay extends StatelessWidget {
               children: [
                 Expanded(
                   child: Text(
-                    shortStatus,
+                    segmentTitle,
                     style: theme.textTheme.titleSmall,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

@@ -264,7 +264,7 @@ Starts a new story for the specified character.
     "SegmentType": "mechanical",
     "StartTime": "2024-01-10T12:00:00Z",
     "EndTime": "2024-01-10T12:05:00Z",
-    "ShortStatus": "Starting your adventure...",
+    "SegmentActivity": "Starting your adventure...",
     "Duration": 300,
     "ProcessingStatus": "pending"
   }
@@ -324,7 +324,7 @@ Submits a player decision for the current active segment.
   "NextSegment": {
     "ActiveSegmentID": "550e8400-e29b-41d4-a716-446655440001",
     "SegmentType": "mechanical",
-    "ShortStatus": "Fighting the goblin",
+    "SegmentActivity": "Fighting the goblin",
     "EndTime": "2024-03-14T10:25:00Z"
   }
 }
@@ -354,7 +354,7 @@ Gets the current status of an active segment, including timing information.
   "EndTime": "2025-01-15T14:30:00Z",
   "ProcessingStatus": "processed",
   "SegmentType": "mechanical",
-  "DefaultStatus": "Walking through the forest"
+  "SegmentTitle": "Walking through the forest"
 }
 ```
 

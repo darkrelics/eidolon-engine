@@ -71,7 +71,8 @@ class StorySegment {
   final int timeRemaining;
   final String? content;
   final List<SegmentOption>? options;
-  final String? shortStatus;
+  final String? segmentTitle;
+  final String? segmentActivity;
   final String? narrative;
   final String? opponentID;
 
@@ -82,7 +83,8 @@ class StorySegment {
     required this.timeRemaining,
     this.content,
     this.options,
-    this.shortStatus,
+    this.segmentTitle,
+    this.segmentActivity,
     this.narrative,
     this.opponentID,
   });
@@ -97,7 +99,8 @@ class StorySegment {
       options: (json['Options'] as List<dynamic>?)
           ?.map((o) => SegmentOption.fromJson(o as Map<String, dynamic>))
           .toList(),
-      shortStatus: json['ShortStatus'] as String?,
+      segmentTitle: json['SegmentTitle'] as String?,
+      segmentActivity: json['SegmentActivity'] as String?,
       narrative: json['Narrative'] as String?,
       opponentID: json['OpponentID'] as String?,
     );

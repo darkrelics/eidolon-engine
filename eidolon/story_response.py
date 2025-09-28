@@ -30,6 +30,11 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
         "TimeRemaining": time_remaining,
     }
 
+    response["SegmentActivity"] = segment.get(
+        "SegmentActivity", "Progressing through the story..."
+    )
+    response["SegmentTitle"] = segment.get("SegmentTitle", "Current segment")
+
     if segment_type == "decision":
         response["Content"] = segment.get("DecisionText", "")
         decision_options = segment.get("DecisionOptions", {})
@@ -38,7 +43,6 @@ def format_segment_response(segment: dict, active_segment: dict) -> dict:
             options.append({"Id": option_id, "Text": option_id.replace("-", " ").title()})
         response["Options"] = options
     elif segment_type == "mechanical":
-        response["ShortStatus"] = segment.get("ShortStatus", "Progressing through the story...")
         combat_config = segment.get("Combat", {})
         if combat_config:
             opponent_id = combat_config.get("OpponentID")
@@ -75,7 +79,8 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
         "Segment": {
             "SegmentID": active_segment.get("SegmentID"),
             "SegmentType": segment_data.get("SegmentType", ""),
-            "ShortStatus": segment_data.get("ShortStatus", ""),
+            "SegmentActivity": segment_data.get("SegmentActivity", ""),
+            "SegmentTitle": segment_data.get("SegmentTitle", ""),
             "Description": "",
             "Duration": segment_data.get("SegmentDuration", 0),
             "TimeRemaining": time_remaining,

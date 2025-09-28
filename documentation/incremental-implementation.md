@@ -36,7 +36,7 @@ This complete example shows how segment processing results are stored, including
   "StoryTitle": "The Whispering Woods",
   "SegmentID": "seg-forest-002a",
   "SegmentType": "mechanical",
-  "DefaultStatus": "Walking through the dark forest",
+  "SegmentTitle": "Walking through the dark forest",
   "StartTime": 1737000300,
   "EndTime": 1737003900,
   "ProcessedAt": 1737000305,
@@ -85,8 +85,8 @@ Mechanical segments can contain both skill challenges and combat encounters. Thi
   "StoryID": "forest-adventure-001",
   "SegmentID": "seg-combat-goblin-001",
   "SegmentType": "mechanical",
-  "ShortStatus": "Fighting the goblin scout",
-  "DefaultStatus": "Engaged in combat",
+  "SegmentActivity": "Fighting the goblin scout",
+  "SegmentTitle": "Engaged in combat",
   "SegmentDuration": 120,
   "NextSegmentID": "seg-forest-004",
   "Combat": {
@@ -2563,8 +2563,8 @@ A rest segment in the Segments table:
   "StoryID": "forest-adventure-001",
   "SegmentID": "seg-rest-001",
   "SegmentType": "rest",
-  "ShortStatus": "Resting at the campfire",
-  "DefaultStatus": "You rest by the warm campfire, tending to your wounds",
+  "SegmentActivity": "Resting at the campfire",
+  "SegmentTitle": "You rest by the warm campfire, tending to your wounds",
   "SegmentDuration": 600, // 10 minutes
   "RestSegment": true,
   "NextSegmentID": "seg-forest-003"

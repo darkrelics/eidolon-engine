@@ -28,8 +28,6 @@
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
           "SegmentType": "mechanical",
-          "ShortStatus": "Entering the forest",
-          "DefaultStatus": "You are making your way through the dense forest undergrowth",
           "SegmentDuration": 2400,
           "Challenges": [
             {
@@ -51,7 +49,9 @@
             "Failure": {
               "Narrative": "The forest proves too dense and disorienting. You retreat to your camp, your investigation incomplete.",
               "Effects": {
-                "Wounds": ["bashing"],
+                "Wounds": [
+                  "bashing"
+                ],
                 "Room": 1
               },
               "NextSegmentID": null
@@ -59,7 +59,9 @@
             "Minimal": {
               "Narrative": "You push through the undergrowth with difficulty, finding only vague traces of recent activity.",
               "Effects": {
-                "Wounds": ["bashing"],
+                "Wounds": [
+                  "bashing"
+                ],
                 "Room": 2
               },
               "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
@@ -78,28 +80,28 @@
               },
               "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
             }
-          }
+          },
+          "SegmentActivity": "Entering the forest",
+          "SegmentTitle": "You are making your way through the dense forest undergrowth"
         },
         {
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
           "SegmentType": "decision",
-          "ShortStatus": "Choosing your path",
-          "DefaultStatus": "You stand at the fork in the path, considering your options",
           "SegmentDuration": 600,
           "DecisionText": "The forest path splits into two directions. To the left, you can hear the sound of running water - likely the babbling brook. To the right, the path seems to lead toward denser vegetation. Which way do you go?",
           "DecisionOptions": {
             "Left": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
             "Right": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a"
           },
-          "DefaultDecision": "Right"
+          "DefaultDecision": "Right",
+          "SegmentActivity": "Choosing your path",
+          "SegmentTitle": "You stand at the fork in the path, considering your options"
         },
         {
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
           "SegmentType": "mechanical",
-          "ShortStatus": "Following the brook",
-          "DefaultStatus": "You carefully follow the sound of water through the underbrush",
           "SegmentDuration": 1200,
           "Challenges": [
             {
@@ -121,7 +123,9 @@
             "Failure": {
               "Narrative": "Your clumsy movements alert every creature within earshot. You hear goblin war cries approaching rapidly.",
               "Effects": {
-                "Wounds": ["lethal"],
+                "Wounds": [
+                  "lethal"
+                ],
                 "Room": 5
               },
               "NextSegmentID": null
@@ -129,7 +133,9 @@
             "Minimal": {
               "Narrative": "You move quietly enough to avoid immediate danger, though twigs snap underfoot at crucial moments.",
               "Effects": {
-                "Wounds": ["bashing"],
+                "Wounds": [
+                  "bashing"
+                ],
                 "Room": 5
               },
               "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
@@ -148,14 +154,14 @@
               },
               "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
             }
-          }
+          },
+          "SegmentActivity": "Following the brook",
+          "SegmentTitle": "You carefully follow the sound of water through the underbrush"
         },
         {
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
           "SegmentType": "mechanical",
-          "ShortStatus": "Pushing through the thicket",
-          "DefaultStatus": "You struggle against the dense vegetation, thorns catching at your clothing",
           "SegmentDuration": 1200,
           "Challenges": [
             {
@@ -177,7 +183,10 @@
             "Failure": {
               "Narrative": "Bloodied by thorns and exhausted, you're forced to turn back and find another route.",
               "Effects": {
-                "Wounds": ["lethal", "bashing"],
+                "Wounds": [
+                  "lethal",
+                  "bashing"
+                ],
                 "Room": 5
               },
               "NextSegmentID": null
@@ -185,7 +194,10 @@
             "Minimal": {
               "Narrative": "You force your way through, clothes torn and skin scratched, but you emerge on the other side.",
               "Effects": {
-                "Wounds": ["bashing", "bashing"],
+                "Wounds": [
+                  "bashing",
+                  "bashing"
+                ],
                 "Room": 6
               },
               "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
@@ -201,18 +213,20 @@
               "Narrative": "Your strength makes short work of the obstacles. You even find an old adventurer's pack tangled in the vines!",
               "Effects": {
                 "Room": 6,
-                "Items": ["a47ac10b-58cc-4372-a567-0e02b2c3d484"]
+                "Items": [
+                  "a47ac10b-58cc-4372-a567-0e02b2c3d484"
+                ]
               },
               "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
             }
-          }
+          },
+          "SegmentActivity": "Pushing through the thicket",
+          "SegmentTitle": "You struggle against the dense vegetation, thorns catching at your clothing"
         },
         {
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
           "SegmentType": "mechanical",
-          "ShortStatus": "Fighting the goblin scout",
-          "DefaultStatus": "You are locked in combat with the goblin scout",
           "SegmentDuration": 1200,
           "Combat": {
             "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
@@ -246,7 +260,9 @@
               "Narrative": "After a fierce battle, you defeat the goblin scout. It flees, dropping a small pouch in its haste.",
               "Effects": {
                 "Room": 6,
-                "Items": ["a47ac10b-58cc-4372-a567-0e02b2c3d484"]
+                "Items": [
+                  "a47ac10b-58cc-4372-a567-0e02b2c3d484"
+                ]
               },
               "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
             },
@@ -257,28 +273,28 @@
               },
               "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
             }
-          }
+          },
+          "SegmentActivity": "Fighting the goblin scout",
+          "SegmentTitle": "You are locked in combat with the goblin scout"
         },
         {
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
           "SegmentType": "decision",
-          "ShortStatus": "Following the goblin's trail",
-          "DefaultStatus": "You study the tracks in the dirt, weighing your options",
           "SegmentDuration": 600,
           "DecisionText": "After the encounter with the goblin, you notice tracks leading deeper into the forest. You could follow them to investigate further, or you could take a safer path around through the fern gully. What do you do?",
           "DecisionOptions": {
             "Follow": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
             "Around": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e"
           },
-          "DefaultDecision": "Around"
+          "DefaultDecision": "Around",
+          "SegmentActivity": "Following the goblin's trail",
+          "SegmentTitle": "You study the tracks in the dirt, weighing your options"
         },
         {
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
           "SegmentType": "mechanical",
-          "ShortStatus": "Fighting the goblin warrior in the dark",
-          "DefaultStatus": "You battle the armored goblin warrior in the dim light and treacherous footing",
           "SegmentDuration": 1200,
           "Combat": {
             "OpponentID": "b8c9d0e1-2f3a-4b5c-6d7e8f9a0b1c2d3e",
@@ -318,18 +334,20 @@
               "Narrative": "Your legendary combat display defeats the warrior utterly! You claim its enchanted armor as your prize.",
               "Effects": {
                 "Room": 8,
-                "Items": ["c47ac10b-58cc-4372-a567-0e02b2c3d482"]
+                "Items": [
+                  "c47ac10b-58cc-4372-a567-0e02b2c3d482"
+                ]
               },
               "NextSegmentID": null
             }
-          }
+          },
+          "SegmentActivity": "Fighting the goblin warrior in the dark",
+          "SegmentTitle": "You battle the armored goblin warrior in the dim light and treacherous footing"
         },
         {
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
           "SegmentType": "mechanical",
-          "ShortStatus": "Taking the long way around",
-          "DefaultStatus": "You navigate carefully through the fern gully, avoiding the goblin patrols",
           "SegmentDuration": 2400,
           "Challenges": [
             {
@@ -357,7 +375,10 @@
             "Failure": {
               "Narrative": "The detour proves too challenging. Tired and hungry, you abandon your quest and return to civilization.",
               "Effects": {
-                "Wounds": ["bashing", "bashing"],
+                "Wounds": [
+                  "bashing",
+                  "bashing"
+                ],
                 "Room": 1
               },
               "NextSegmentID": null
@@ -365,7 +386,9 @@
             "Minimal": {
               "Narrative": "You navigate the gully successfully, though the journey leaves you weary and your supplies depleted.",
               "Effects": {
-                "Wounds": ["bashing"],
+                "Wounds": [
+                  "bashing"
+                ],
                 "Room": 9
               },
               "NextSegmentID": null
@@ -380,12 +403,17 @@
             "Exceptional": {
               "Narrative": "Your masterful woodcraft reveals hidden treasures! You discover a cache of supplies left by previous adventurers.",
               "Effects": {
-                "Items": ["947ac10b-58cc-4372-a567-0e02b2c3d485", "f47ac10b-58cc-4372-a567-0e02b2c3d479"],
+                "Items": [
+                  "947ac10b-58cc-4372-a567-0e02b2c3d485",
+                  "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                ],
                 "Room": 9
               },
               "NextSegmentID": null
             }
-          }
+          },
+          "SegmentActivity": "Taking the long way around",
+          "SegmentTitle": "You navigate carefully through the fern gully, avoiding the goblin patrols"
         }
       ]
     },
@@ -417,8 +445,6 @@
           "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
           "SegmentID": "d9857bfc-50ba-4954-a38c-f64c30882ba8",
           "SegmentType": "mechanical",
-          "ShortStatus": "Tracking the gremlin",
-          "DefaultStatus": "You are searching for signs of the troublesome gremlin",
           "SegmentDuration": 180,
           "Challenges": [
             {
@@ -465,14 +491,14 @@
               },
               "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
             }
-          }
+          },
+          "SegmentActivity": "Tracking the gremlin",
+          "SegmentTitle": "You are searching for signs of the troublesome gremlin"
         },
         {
           "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
           "SegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af",
           "SegmentType": "mechanical",
-          "ShortStatus": "Cornering the gremlin",
-          "DefaultStatus": "You attempt to corner the elusive gremlin",
           "SegmentDuration": 180,
           "Challenges": [
             {
@@ -494,7 +520,9 @@
             "Failure": {
               "Narrative": "The nimble gremlin escapes through a tiny gap in the undergrowth. You've lost it completely.",
               "Effects": {
-                "Wounds": ["bashing"],
+                "Wounds": [
+                  "bashing"
+                ],
                 "Room": 1
               },
               "NextSegmentID": null
@@ -502,7 +530,9 @@
             "Minimal": {
               "Narrative": "You dodge most of the debris the gremlin throws at you, though a few rocks leave bruises. You've got it cornered now!",
               "Effects": {
-                "Wounds": ["bashing"],
+                "Wounds": [
+                  "bashing"
+                ],
                 "Room": 3
               },
               "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
@@ -521,14 +551,14 @@
               },
               "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
             }
-          }
+          },
+          "SegmentActivity": "Cornering the gremlin",
+          "SegmentTitle": "You attempt to corner the elusive gremlin"
         },
         {
           "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
           "SegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037",
           "SegmentType": "mechanical",
-          "ShortStatus": "Fighting the gremlin",
-          "DefaultStatus": "You are in combat with the cornered gremlin",
           "SegmentDuration": 240,
           "Combat": {
             "OpponentID": "51eadb06-e05c-4515-84a7-1e415d6b88e1",
@@ -562,7 +592,9 @@
               "Narrative": "You successfully subdue the gremlin with minimal injury. It scampers away defeated, dropping a small shiny trinket in its haste to escape.",
               "Effects": {
                 "Room": 1,
-                "Items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483"]
+                "Items": [
+                  "b47ac10b-58cc-4372-a567-0e02b2c3d483"
+                ]
               },
               "NextSegmentID": null
             },
@@ -570,11 +602,16 @@
               "Narrative": "You dispatch the gremlin with impressive efficiency! It surrenders completely, offering you its collected 'treasures' before fleeing. The village is safe once more!",
               "Effects": {
                 "Room": 1,
-                "Items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "d47ac10b-58cc-4372-a567-0e02b2c3d481"]
+                "Items": [
+                  "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+                  "d47ac10b-58cc-4372-a567-0e02b2c3d481"
+                ]
               },
               "NextSegmentID": null
             }
-          }
+          },
+          "SegmentActivity": "Fighting the gremlin",
+          "SegmentTitle": "You are in combat with the cornered gremlin"
         }
       ]
     }

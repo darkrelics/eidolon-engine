@@ -35,7 +35,7 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
     _startCountdown();
 
     // Set initial narrative
-    _currentNarrative = widget.segment.defaultStatus ?? widget.segment.status;
+    _currentNarrative = widget.segment.segmentTitle ?? widget.segment.status;
 
     // If segment is already processed, show all events immediately
     if (widget.segment.processingStatus == 'processed' &&
@@ -171,7 +171,7 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
               Duration(milliseconds: (segmentDuration * 0.7).round());
           timeline.add({
             'time': idleTime,
-            'narrative': widget.segment.defaultStatus ?? widget.segment.status,
+            'narrative': widget.segment.segmentTitle ?? widget.segment.status,
             'isDefault': true,
             'eventIndex': null,
           });

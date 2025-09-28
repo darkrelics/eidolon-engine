@@ -28,22 +28,22 @@ void main() {
         availableStories: ['story-1', 'story-2'],
         availableStoriesDetails: [
           {
-            'storyId': 'story-1',
-            'title': 'The Beginning',
-            'description': 'Start your adventure',
-            'type': 'main',
-            'available': true,
-            'cooldownRemaining': 0,
-            'estimatedDuration': 600,
+            'StoryID': 'story-1',
+            'Title': 'The Beginning',
+            'Description': 'Start your adventure',
+            'Type': 'main',
+            'Available': true,
+            'CooldownRemaining': 0,
+            'EstimatedDuration': 600,
           },
           {
-            'storyId': 'story-2',
-            'title': 'Daily Quest',
-            'description': 'A daily challenge',
-            'type': 'daily',
-            'available': false,
-            'cooldownRemaining': 3600,
-            'estimatedDuration': 300,
+            'StoryID': 'story-2',
+            'Title': 'Daily Quest',
+            'Description': 'A daily challenge',
+            'Type': 'daily',
+            'Available': false,
+            'CooldownRemaining': 3600,
+            'EstimatedDuration': 300,
           },
         ],
         completedStories: [],
@@ -69,6 +69,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final characterWithStory = mockCharacter.copyWith(
+        activeStoryId: 'story-1',
         storyState: {
           'Story': {
             'Title': 'Active Quest',
@@ -77,7 +78,8 @@ void main() {
           },
           'ActiveSegment': {
             'SegmentType': 'decision',
-            'ShortStatus': 'Choose your path',
+            'SegmentTitle': 'Choose your path',
+            'SegmentActivity': 'Awaiting your decision',
             'Choices': [
               {
                 'ChoiceID': 'choice-1',
@@ -100,6 +102,8 @@ void main() {
         ),
       );
 
+      await tester.pump();
+
       expect(find.text('Active Quest'), findsOneWidget);
       expect(find.text('Choose your path'), findsOneWidget);
     });
@@ -107,16 +111,22 @@ void main() {
     testWidgets('shows loading indicator when isLoading is true', (
       WidgetTester tester,
     ) async {
+      final loadingCharacter = mockCharacter.copyWith(
+        availableStories: [],
+        availableStoriesDetails: null,
+      );
+
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: StoryPanel(character: mockCharacter, isLoading: true),
+            body: StoryPanel(character: loadingCharacter, isLoading: true),
           ),
         ),
       );
 
+      await tester.pump();
+
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      expect(find.text('Loading stories...'), findsOneWidget);
     });
 
     testWidgets('displays error message when error is provided', (

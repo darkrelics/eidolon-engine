@@ -309,8 +309,8 @@ In this example:
 | `StoryID`         | `STRING`  | **HASH**  | UUID of the parent story.                                                 |
 | `SegmentID`       | `STRING`  | **RANGE** | UUID of the segment.                                                      |
 | `SegmentType`     | `STRING`  |           | Type: decision, mechanical, or rest.                                      |
-| `ShortStatus`     | `STRING`  |           | Brief status text shown during segment.                                   |
-| `DefaultStatus`   | `STRING`  |           | Status message shown between events (e.g., "Walking through the forest"). |
+| `SegmentActivity`     | `STRING`  |           | Activity indicator text shown while the segment is active.                |
+| `SegmentTitle`   | `STRING`  |           | Title text displayed on the segment card (e.g., "Walking through the forest"). |
 | `SegmentDuration` | `NUMBER`  |           | Time in seconds for this segment.                                         |
 | `DecisionText`    | `STRING`  |           | For decision segments: the choice presented.                              |
 | `DecisionOptions` | `MAP`     |           | For decision segments: map of option ID to next segment ID.               |
@@ -359,7 +359,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 | `StoryInstanceID`  | `STRING` |          | UUIDv7 of the story instance for history tracking.                          |
 | `SegmentID`        | `STRING` |          | UUID of the current segment definition.                                     |
 | `SegmentType`      | `STRING` |          | Type of segment: decision, mechanical, or rest.                             |
-| `DefaultStatus`    | `STRING` |          | Cached status message shown between events.                                 |
+| `SegmentTitle`    | `STRING` |          | Title text cached for the segment card header.                               |
 | `Status`           | `STRING` |          | Segment status: active, completed, or abandoned.                            |
 | `StartTime`        | `NUMBER` |          | Unix timestamp when segment started.                                        |
 | `EndTime`          | `NUMBER` | **GSI**  | Unix timestamp when segment will complete.                                  |

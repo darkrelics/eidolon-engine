@@ -422,24 +422,24 @@ class _SimpleSegmentCard extends StatelessWidget {
     final theme = Theme.of(context);
     final rawSegmentType = segment['SegmentType']?.toString() ?? 'mechanical';
     final segmentType = rawSegmentType.toLowerCase();
-    final rawShortStatus = segment['ShortStatus']?.toString();
-    final rawDefaultStatus = segment['DefaultStatus']?.toString();
+    final rawSegmentActivity = segment['SegmentActivity']?.toString();
+    final rawSegmentTitle = segment['SegmentTitle']?.toString();
     final prompt = segment['Prompt']?.toString();
 
-    var shortStatus = _pickSegmentText([
-      rawShortStatus,
-      rawDefaultStatus,
+    var segmentTitle = _pickSegmentText([
+      rawSegmentTitle,
+      rawSegmentActivity,
       prompt,
     ]);
-    if (shortStatus.isEmpty) {
-      shortStatus = 'Processing...';
+    if (segmentTitle.isEmpty) {
+      segmentTitle = 'Processing...';
     }
 
     final supplementalStatus = _pickSegmentText([
-      rawDefaultStatus,
+      rawSegmentActivity,
       prompt,
-      rawShortStatus,
-    ], exclude: shortStatus);
+      rawSegmentTitle,
+    ], exclude: segmentTitle);
     final showSupplementalStatus = supplementalStatus.isNotEmpty;
 
     final outcome = segment['Outcome'];
@@ -500,14 +500,14 @@ class _SimpleSegmentCard extends StatelessWidget {
     var processingIndicatorText = '';
     if (waitingOnTimer) {
       final candidate = _pickSegmentText(
-        [rawShortStatus, rawDefaultStatus, prompt],
+        [rawSegmentActivity, prompt, rawSegmentTitle],
         allowPlaceholders: true,
-        exclude: shortStatus,
+        exclude: segmentTitle,
       );
       processingIndicatorText =
           candidate.isEmpty || _isProcessingPlaceholder(candidate)
-          ? 'Processing...'
-          : candidate;
+              ? 'Processing...'
+              : candidate;
     }
 
     // Determine card color based on outcome
@@ -552,7 +552,7 @@ class _SimpleSegmentCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header row with ShortStatus as title
+            // Header row with SegmentTitle as title
             Row(
               children: [
                 Icon(
@@ -564,7 +564,7 @@ class _SimpleSegmentCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    shortStatus,
+                    segmentTitle,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: isActive ? cardColor : null,
@@ -614,7 +614,7 @@ class _SimpleSegmentCard extends StatelessWidget {
               ),
             ],
 
-            // Show timer and DefaultStatus for active segments
+            // Show timer and SegmentActivity for active segments
             if (isActive && endTime != null) ...[
               const SizedBox(height: 12),
               _SegmentTimer(

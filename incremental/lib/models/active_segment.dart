@@ -8,7 +8,8 @@ class ActiveSegment {
   final String segmentID;
   final String segmentType;
   final String status;
-  final String? defaultStatus;
+  final String? segmentTitle;
+  final String? segmentActivity;
   final String startTime;
   final String endTime;
   final List<dynamic>? challengeResults;
@@ -27,7 +28,8 @@ class ActiveSegment {
     required this.segmentID,
     required this.segmentType,
     required this.status,
-    this.defaultStatus,
+    this.segmentTitle,
+    this.segmentActivity,
     required this.startTime,
     required this.endTime,
     this.challengeResults,
@@ -48,7 +50,8 @@ class ActiveSegment {
       segmentID: json['SegmentID'] as String,
       segmentType: json['SegmentType'] as String,
       status: json['Status'] as String,
-      defaultStatus: json['DefaultStatus'] as String?,
+      segmentTitle: json['SegmentTitle'] as String?,
+      segmentActivity: json['SegmentActivity'] as String?,
       startTime: _normalizeIsoTimestamp(json['StartTime']),
       endTime: _normalizeIsoTimestamp(json['EndTime']),
       challengeResults: json['ChallengeResults'] as List<dynamic>?,
@@ -72,7 +75,8 @@ class ActiveSegment {
       'SegmentID': segmentID,
       'SegmentType': segmentType,
       'Status': status,
-      if (defaultStatus != null) 'DefaultStatus': defaultStatus,
+      if (segmentTitle != null) 'SegmentTitle': segmentTitle,
+      if (segmentActivity != null) 'SegmentActivity': segmentActivity,
       'StartTime': startTime,
       'EndTime': endTime,
       if (challengeResults != null) 'ChallengeResults': challengeResults,

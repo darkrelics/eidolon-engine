@@ -42,15 +42,17 @@ def new_segment_response(active_segment: dict, segment: dict) -> dict:
         "EndTime": end_time,
         "ProcessingStatus": active_segment.get("ProcessingStatus", "pending"),
         "SegmentType": segment.get("SegmentType", "mechanical"),
-        "ShortStatus": segment.get("ShortStatus", "Starting your adventure..."),
+        "SegmentActivity": active_segment.get(
+            "SegmentActivity", segment.get("SegmentActivity", "Starting your adventure...")
+        ),
+        "SegmentTitle": active_segment.get(
+            "SegmentTitle", segment.get("SegmentTitle", "Processing...")
+        ),
         "Duration": duration,
     }
 
     # Include segment-specific data
     segment_type = segment.get("SegmentType", "").lower()
-
-    # Always include default status
-    response["DefaultStatus"] = segment.get("DefaultStatus", "Processing...")
 
     # Include decision options for decision segments
     if segment_type == "decision":

@@ -211,8 +211,8 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                 "StartTime": now_iso(),
                 "EndTime": future_iso(next_segment_duration),
                 "ProcessingStatus": "pending",
-                "ShortStatus": next_segment_def.get("ShortStatus"),
-                "DefaultStatus": next_segment_def.get("DefaultStatus"),
+                "SegmentActivity": next_segment_def.get("SegmentActivity"),
+                "SegmentTitle": next_segment_def.get("SegmentTitle"),
                 "Duration": next_segment_duration,
             }
 

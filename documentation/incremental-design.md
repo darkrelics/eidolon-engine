@@ -94,7 +94,7 @@ POST /story/start
     "SegmentType": "decision",
     "StartTime": 1737000000,
     "EndTime": 1737000300,
-    "ShortStatus": "Choosing your path",
+    "SegmentActivity": "Choosing your path",
     "Duration": 300
   }
 }

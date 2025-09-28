@@ -245,7 +245,8 @@ void main() {
           'Story': {'Title': 'Active Adventure', 'Type': 'main'},
           'ActiveSegment': {
             'SegmentType': 'mechanical',
-            'ShortStatus': 'Processing actions...',
+            'SegmentTitle': 'Processing actions...',
+            'SegmentActivity': 'Processing actions...',
             'ProcessingStatus': 'processing',
           },
         },
