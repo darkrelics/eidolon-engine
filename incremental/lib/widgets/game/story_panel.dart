@@ -5,7 +5,7 @@ import '../../models/story.dart';
 import '../../utils/outcome_colors.dart';
 import '../story/active_story_widget.dart';
 import '../story/available_stories_widget.dart';
-import '../story/story_history_widget.dart';
+import '../story/simplified_story_history_widget.dart';
 
 /// Center panel that displays story content dynamically
 class StoryPanel extends StatefulWidget {
@@ -220,11 +220,7 @@ class _StoryPanelState extends State<StoryPanel> {
   }
 
   Widget _buildHistoryWidget() {
-    return StoryHistoryWidget(
-      key: const ValueKey('story_history'),
-      character: widget.character,
-      segmentHistory: widget.storyHistoryArchive,
-    );
+    return SimplifiedStoryHistoryWidget(key: const ValueKey('story_history'), segmentHistory: widget.storyHistoryArchive);
   }
 
   Widget _buildStoryCompleteWidget() {
