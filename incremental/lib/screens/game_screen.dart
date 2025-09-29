@@ -405,13 +405,16 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _handleDecisionSelect(String choiceId) async {
-    // Prevent double submissions
+    // Prevent double submissions with atomic check-and-set
     if (_isSubmittingDecision) return;
+
+    // Set flag IMMEDIATELY before any async operations to prevent race condition
+    // This must happen synchronously before any await to be atomic
+    _isSubmittingDecision = true;
 
     try {
       if (mounted) {
         setState(() {
-          _isSubmittingDecision = true;
           _error = null;
         });
       }
