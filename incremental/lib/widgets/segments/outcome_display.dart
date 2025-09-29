@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../utils/outcome_colors.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 /// Display for segment outcomes
 class AnimatedOutcomeDisplay extends StatefulWidget {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../models/character.dart';
+import 'package:eidolon_incremental/models/character.dart';
 
 /// Right panel displaying character inventory
 class InventoryPanel extends StatelessWidget {

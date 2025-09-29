@@ -3,23 +3,24 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/character.dart';
-import '../models/story.dart';
-import '../providers/auth_provider.dart';
-import '../services/api_service.dart';
-import '../services/auth_service.dart';
-import '../services/notification_service.dart';
-import '../services/rate_limiter.dart';
-import '../services/story_polling_service.dart';
-import '../utils/error_handler.dart';
-import '../utils/retry.dart';
-import '../widgets/game/character_panel.dart';
-import '../widgets/game/inventory_panel.dart';
-import '../widgets/game/story_panel.dart';
-import '../widgets/shared/breadcrumb.dart';
-import '../widgets/shared/error_boundary.dart';
-import '../widgets/shared/keyboard_shortcuts.dart';
-import '../widgets/shared/responsive_layout.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/models/story.dart';
+import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
+import 'package:eidolon_incremental/services/auth_service.dart';
+import 'package:eidolon_incremental/services/notification_service.dart';
+import 'package:eidolon_incremental/services/rate_limiter.dart';
+import 'package:eidolon_incremental/services/story_polling_service.dart';
+import 'package:eidolon_incremental/utils/debounce.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
+import 'package:eidolon_incremental/utils/retry.dart';
+import 'package:eidolon_incremental/widgets/game/character_panel.dart';
+import 'package:eidolon_incremental/widgets/game/inventory_panel.dart';
+import 'package:eidolon_incremental/widgets/game/story_panel.dart';
+import 'package:eidolon_incremental/widgets/shared/breadcrumb.dart';
+import 'package:eidolon_incremental/widgets/shared/error_boundary.dart';
+import 'package:eidolon_incremental/widgets/shared/keyboard_shortcuts.dart';
+import 'package:eidolon_incremental/widgets/shared/responsive_layout.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -52,12 +53,18 @@ class _GameScreenState extends State<GameScreen> {
   // Track last orchestrated segment to avoid duplicate starts
   String? _orchestratedSegmentId;
 
+  // Debouncers for user actions
+  late Debouncer _decisionDebouncer;
+  late Debouncer _refreshDebouncer;
+
   @override
   void initState() {
     super.initState();
     debugPrint('GameScreen: initState called');
     _apiService = ApiService(authService: AuthService.instance);
     _runtime = StoryPollingService(apiService: _apiService);
+    _decisionDebouncer = Debouncer(delay: const Duration(milliseconds: 300));
+    _refreshDebouncer = Debouncer(delay: const Duration(milliseconds: 500));
   }
 
   @override
@@ -101,6 +108,8 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void dispose() {
     _runtime.dispose();
+    _decisionDebouncer.dispose();
+    _refreshDebouncer.dispose();
     super.dispose();
   }
 
@@ -187,6 +196,16 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _refreshCharacterImmediate() {
+    // Debounce refresh to prevent spam clicking
+    if (_refreshDebouncer.isActive) {
+      debugPrint('Refresh blocked: debounce cooldown active');
+      return Future.value();
+    }
+
+    _refreshDebouncer.runImmediate(() {
+      // Empty callback - we just want the cooldown timer
+    });
+
     return _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
   }
 
@@ -405,12 +424,30 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _handleDecisionSelect(String choiceId) async {
-    // Prevent double submissions with atomic check-and-set
-    if (_isSubmittingDecision) return;
+    // Multi-layer protection against double submissions:
+    // 1. Atomic flag check-and-set (prevents race conditions)
+    // 2. Debouncer (ignores rapid clicks within 300ms)
+    // 3. Rate limiter (15s cooldown between submissions)
+    // 4. Backend conditional update (ultimate protection)
+
+    if (_isSubmittingDecision) {
+      debugPrint('Decision submission blocked: already processing');
+      return;
+    }
+
+    // Check debouncer cooldown
+    if (_decisionDebouncer.isActive) {
+      debugPrint('Decision submission blocked: debounce cooldown active');
+      return;
+    }
 
     // Set flag IMMEDIATELY before any async operations to prevent race condition
-    // This must happen synchronously before any await to be atomic
     _isSubmittingDecision = true;
+
+    // Start debounce cooldown
+    _decisionDebouncer.runImmediate(() {
+      // Empty callback - we just want the cooldown timer
+    });
 
     try {
       if (mounted) {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../utils/outcome_colors.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 class StoryHistoryDisplay extends StatelessWidget {
   final List<Map<String, dynamic>> completedStories;

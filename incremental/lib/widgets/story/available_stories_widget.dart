@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../models/story.dart';
-import '../../models/character.dart';
+import 'package:eidolon_incremental/models/story.dart';
+import 'package:eidolon_incremental/models/character.dart';
 
 /// Widget displaying available stories for selection
 class AvailableStoriesWidget extends StatefulWidget {

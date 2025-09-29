@@ -5,8 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/auth_provider.dart';
-import '../utils/error_handler.dart';
+import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
 
 class PasswordResetConfirmScreen extends StatefulWidget {
   const PasswordResetConfirmScreen({super.key});

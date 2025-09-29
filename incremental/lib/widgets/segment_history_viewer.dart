@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
-import '../services/auth_service.dart';
-import '../utils/outcome_colors.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
+import 'package:eidolon_incremental/services/auth_service.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 class SegmentHistoryViewer extends StatefulWidget {
   final String characterId;

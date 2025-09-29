@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/api_service.dart';
-import '../providers/segment_provider.dart';
-import '../models/story.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
+import 'package:eidolon_incremental/providers/segment_provider.dart';
+import 'package:eidolon_incremental/models/story.dart';
 
 class StoryCompletionScreen extends StatefulWidget {
   final String characterId;

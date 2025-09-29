@@ -1,4 +1,4 @@
-import '../models/story_history.dart';
+import 'package:eidolon_incremental/models/story_history.dart';
 
 /// Service for processing and managing story history data
 class StoryHistoryService {

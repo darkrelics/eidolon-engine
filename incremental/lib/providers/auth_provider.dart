@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-import '../services/auth_service.dart';
+import 'package:eidolon_incremental/services/auth_service.dart';
 
 enum AuthStatus { uninitialized, authenticated, unauthenticated, loading }
 

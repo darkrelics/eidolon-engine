@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../models/active_segment.dart';
-import '../services/api_service.dart';
+import 'package:eidolon_incremental/models/active_segment.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
 
 /// Provider to manage segment state and handle mechanical segment processing
 class SegmentProvider extends ChangeNotifier {

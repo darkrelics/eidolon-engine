@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
-import '../models/character.dart';
-import '../utils/api_parser.dart';
-import '../utils/api_validation.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/utils/api_parser.dart';
+import 'package:eidolon_incremental/utils/api_validation.dart';
 import 'base_api_service.dart';
 
 /// Character info for listing

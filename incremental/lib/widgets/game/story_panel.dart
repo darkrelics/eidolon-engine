@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../models/character.dart';
-import '../../models/story.dart';
-import '../../utils/outcome_colors.dart';
-import '../story/active_story_widget.dart';
-import '../story/available_stories_widget.dart';
-import '../story/story_history_widget.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/models/story.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
+import 'package:eidolon_incremental/widgets/story/active_story_widget.dart';
+import 'package:eidolon_incremental/widgets/story/available_stories_widget.dart';
+import 'package:eidolon_incremental/widgets/story/story_history_widget.dart';
 
 /// Center panel that displays story content dynamically
 class StoryPanel extends StatefulWidget {

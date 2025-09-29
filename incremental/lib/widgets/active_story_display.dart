@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/active_segment.dart';
-import '../utils/outcome_colors.dart';
-import '../utils/time_utils.dart';
+import 'package:eidolon_incremental/models/active_segment.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
+import 'package:eidolon_incremental/utils/time_utils.dart';
 
 class ActiveStoryDisplay extends StatelessWidget {
   final Map<String, dynamic> story;

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../models/active_segment.dart';
-import '../utils/time_utils.dart';
+import 'package:eidolon_incremental/models/active_segment.dart';
+import 'package:eidolon_incremental/utils/time_utils.dart';
 
 /// Widget to display mechanical segment events progressively
 class MechanicalSegmentDisplay extends StatefulWidget {

@@ -5,11 +5,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/auth_provider.dart';
-import '../services/api_service.dart';
-import '../services/auth_service.dart';
-import '../utils/error_handler.dart';
-import '../widgets/shared/loading_dialog.dart';
+import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
+import 'package:eidolon_incremental/services/auth_service.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
+import 'package:eidolon_incremental/widgets/shared/loading_dialog.dart';
 
 class CharacterScreen extends StatefulWidget {
   const CharacterScreen({super.key});

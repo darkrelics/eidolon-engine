@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../models/character.dart';
-import '../models/story.dart';
-import '../services/api_service.dart';
-import '../services/auth_service.dart';
-import '../utils/error_handler.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/models/story.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
+import 'package:eidolon_incremental/services/auth_service.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
 import 'game_screen.dart';
 
 /// Screen for selecting available stories

@@ -1,4 +1,4 @@
-import '../utils/time_utils.dart';
+import 'package:eidolon_incremental/utils/time_utils.dart';
 
 /// Active segment data from API
 class ActiveSegment {

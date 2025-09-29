@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../models/character.dart';
+import 'package:eidolon_incremental/models/character.dart';
 import 'api_service.dart';
 
 /// Coordinates the network cadence for story segments:

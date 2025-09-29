@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/character.dart';
-import '../../providers/timer_provider.dart';
-import '../../utils/outcome_colors.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/providers/timer_provider.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 /// Widget displaying the active story with segments
 class ActiveStoryWidget extends StatefulWidget {

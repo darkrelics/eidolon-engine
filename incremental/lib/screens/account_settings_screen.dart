@@ -5,11 +5,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../constants/navigation_constants.dart';
-import '../providers/auth_provider.dart';
-import '../providers/theme_provider.dart';
-import '../utils/error_handler.dart';
-import '../widgets/shared/keyboard_shortcuts.dart';
+import 'package:eidolon_incremental/constants/navigation_constants.dart';
+import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/providers/theme_provider.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
+import 'package:eidolon_incremental/widgets/shared/keyboard_shortcuts.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});

@@ -2,8 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../models/character.dart';
-import '../../utils/outcome_colors.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 /// Widget displaying completed story history
 class StoryHistoryWidget extends StatefulWidget {

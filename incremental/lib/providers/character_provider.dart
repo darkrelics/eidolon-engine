@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../models/character.dart';
-import '../models/active_segment.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/models/active_segment.dart';
 import 'base_provider.dart';
 
 /// Provider for character state management

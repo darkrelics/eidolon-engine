@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/character.dart';
+import 'package:eidolon_incremental/models/character.dart';
 
 enum DifficultyLevel { trivial, easy, moderate, hard, extreme }
 
