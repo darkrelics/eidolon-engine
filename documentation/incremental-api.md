@@ -445,3 +445,10 @@ Initiates a rest segment for character healing.
   }
 }
 ```
+Client Cadence (Incremental mode)
+
+- After `POST /story/start`, the client updates the UI with the first segment immediately.
+- First `GET /segment/status` occurs 60 seconds after `StartTime`.
+- If the segment is still unprocessed, the client calls `GET /segment/status` every 30 seconds until processed.
+- At `EndTime`, the client calls `GET /character` to load the next segment or completion state.
+- Only if segments fail to process are there additional status calls beyond the first.

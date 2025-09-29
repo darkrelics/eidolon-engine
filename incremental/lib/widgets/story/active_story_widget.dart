@@ -78,13 +78,8 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               onDecisionSelect: widget.onDecisionSelect,
               onTimeout: () {
                 if (!mounted) return;
-
+                // Allow UI to refresh timer visuals; network orchestration is handled elsewhere
                 setState(() {});
-
-                final segmentType = segmentData['SegmentType']?.toString().toLowerCase() ?? '';
-                if (segmentType == 'decision') {
-                  widget.onRefresh?.call();
-                }
               },
             ),
             const SizedBox(height: 20),
@@ -329,7 +324,7 @@ class _SimpleSegmentCard extends StatelessWidget {
     }
 
     final statusStr = segment['Status']?.toString().toLowerCase();
-    final isCompleteFlag = segment['IsComplete'] == true || segment['StoryComplete'] == true || statusStr == 'complete';
+    final isCompleteFlag = segment['IsComplete'] == true || segment['StoryComplete'] == true || statusStr == 'complete' || statusStr == 'completed';
 
     final dynamic timeRemainingValue = segment['TimeRemaining'];
     int? timeRemaining;

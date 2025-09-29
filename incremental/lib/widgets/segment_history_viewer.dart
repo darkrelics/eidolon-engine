@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../utils/outcome_colors.dart';
 
 class SegmentHistoryViewer extends StatefulWidget {
@@ -32,7 +31,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
     });
 
     try {
-      final apiService = context.read<ApiService>();
+      final apiService = ApiService(authService: AuthService.instance);
       final history = await apiService.getSegmentHistory(
         characterId: widget.characterId,
       );

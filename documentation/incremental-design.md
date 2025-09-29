@@ -631,9 +631,21 @@ void _startPollingForProcessing(String characterId) {
   });
 }
 
-// AFTER: Single simple service
+// AFTER: Single, cadence-driven orchestration
 final pollingService = StoryPollingService(apiService: apiService);
-pollingService.startPolling(characterId); // Done
+// Start after POST /story/start updates UI with first segment
+pollingService.start(
+  character: character,
+  onCharacterReloaded: (updated) { /* setState(updated) */ },
+  onStatusUpdated: (status) { /* merge status into ActiveSegment for reveal */ },
+  onStoryComplete: (_) { /* show completion and load /segment/history */ },
+  onError: (err) { /* optional toast + retry affordance */ },
+);
+
+// Cadence
+// - First status at T+60s from segment StartTime
+// - If unprocessed, repeat status every 30s
+// - At EndTime, GET /character to load next segment or completion
 ```
 
 **Benefits of Correct Implementation**:

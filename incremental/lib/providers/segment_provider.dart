@@ -76,7 +76,7 @@ class SegmentProvider extends ChangeNotifier {
     }
   }
 
-  // Removed polling logic - now handled by GameScreen
+  
 
   /// Handle segment completion
   Future<void> completeSegment(String characterId) async {

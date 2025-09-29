@@ -284,7 +284,7 @@ class _MechanicalSegmentProgressState extends State<MechanicalSegmentProgress> {
             ],
           ),
 
-          // Processing indicator removed for performance
+          // Avoid redundant spinners; progress bar and status label are sufficient
         ],
       ),
     );
