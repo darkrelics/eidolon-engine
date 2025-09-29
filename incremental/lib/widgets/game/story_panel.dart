@@ -49,18 +49,21 @@ class _StoryPanelState extends State<StoryPanel> {
   }
 
   bool _isStoryComplete() {
-    if (_hasActiveStory()) {
+    final char = widget.character;
+
+    // If character has an active story, it's not complete
+    if (char.activeStoryID != null) {
       return false;
     }
 
-    // Prefer the history tracked by the screen, fall back to any story state data
-    if (widget.segmentHistory.isNotEmpty) {
-      return true;
-    }
+    // Story is complete if:
+    // 1. No active story ID (cleared by server on completion)
+    // 2. AND we have either segment history or completed segments in story state
+    final hasSegmentHistory = widget.segmentHistory.isNotEmpty;
+    final stateSegments = char.storyState?['CompletedSegments'] as List<dynamic>?;
+    final hasCompletedSegments = stateSegments != null && stateSegments.isNotEmpty;
 
-    final stateSegments =
-        widget.character.storyState?['CompletedSegments'] as List<dynamic>?;
-    return stateSegments != null && stateSegments.isNotEmpty;
+    return hasSegmentHistory || hasCompletedSegments;
   }
 
   @override
@@ -78,10 +81,7 @@ class _StoryPanelState extends State<StoryPanel> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: colorScheme.primaryContainer,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
             ),
             child: Row(
               children: [
@@ -89,36 +89,23 @@ class _StoryPanelState extends State<StoryPanel> {
                 const SizedBox(width: 8),
                 Text(
                   _getHeaderTitle(),
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 // History toggle button
-                if (!_hasActiveStory() &&
-                    (widget.character.completedStories.isNotEmpty ||
-                        widget.storyHistoryArchive.isNotEmpty))
+                if (!_hasActiveStory() && (widget.character.completedStories.isNotEmpty || widget.storyHistoryArchive.isNotEmpty))
                   IconButton(
-                    icon: Icon(
-                      _showHistory ? Icons.library_books : Icons.history,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
+                    icon: Icon(_showHistory ? Icons.library_books : Icons.history, color: colorScheme.onPrimaryContainer),
                     onPressed: () {
                       setState(() {
                         _showHistory = !_showHistory;
                       });
                     },
-                    tooltip: _showHistory
-                        ? 'Show Available Stories'
-                        : 'Show History',
+                    tooltip: _showHistory ? 'Show Available Stories' : 'Show History',
                   ),
                 if (widget.onRefresh != null)
                   IconButton(
-                    icon: Icon(
-                      Icons.refresh,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
+                    icon: Icon(Icons.refresh, color: colorScheme.onPrimaryContainer),
                     onPressed: widget.onRefresh,
                     tooltip: 'Refresh',
                   ),
@@ -147,9 +134,7 @@ class _StoryPanelState extends State<StoryPanel> {
 
   Widget _buildContent() {
     // Don't show loading if we already have content
-    if (widget.isLoading &&
-        !_hasActiveStory() &&
-        widget.character.availableStoriesDetails == null) {
+    if (widget.isLoading && !_hasActiveStory() && widget.character.availableStoriesDetails == null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -158,9 +143,7 @@ class _StoryPanelState extends State<StoryPanel> {
             const SizedBox(height: 16),
             Text(
               'Loading stories...',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -198,27 +181,16 @@ class _StoryPanelState extends State<StoryPanel> {
           children: [
             Icon(Icons.error_outline, size: 64, color: colorScheme.error),
             const SizedBox(height: 16),
-            Text(
-              'Error Loading Stories',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: colorScheme.error,
-              ),
-            ),
+            Text('Error Loading Stories', style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.error)),
             const SizedBox(height: 8),
             Text(
               widget.error!,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+              style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
             if (widget.onRefresh != null) ...[
               const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: widget.onRefresh,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              ),
+              FilledButton.icon(onPressed: widget.onRefresh, icon: const Icon(Icons.refresh), label: const Text('Retry')),
             ],
           ],
         ),
@@ -260,23 +232,16 @@ class _StoryPanelState extends State<StoryPanel> {
     final colorScheme = theme.colorScheme;
 
     // Get story data and completed segments (prefer provided history from parent)
-    final storyData =
-        widget.character.storyState?['Story'] as Map<String, dynamic>?;
+    final storyData = widget.character.storyState?['Story'] as Map<String, dynamic>?;
     final completedSegmentsDynamic = widget.segmentHistory.isNotEmpty
         ? widget.segmentHistory
-        : (widget.character.storyState?['CompletedSegments']
-                  as List<dynamic>? ??
-              const []);
+        : (widget.character.storyState?['CompletedSegments'] as List<dynamic>? ?? const []);
 
-    final completedSegments = completedSegmentsDynamic
-        .map((segment) => segment as Map<String, dynamic>)
-        .toList();
+    final completedSegments = completedSegmentsDynamic.map((segment) => segment as Map<String, dynamic>).toList();
 
     if (completedSegments.isEmpty) {
       // Attempt to infer story information from history if available
-      final storyTitle = widget.segmentHistory.isNotEmpty
-          ? widget.segmentHistory.last['StoryTitle'] as String?
-          : null;
+      final storyTitle = widget.segmentHistory.isNotEmpty ? widget.segmentHistory.last['StoryTitle'] as String? : null;
       // Fallback to simple completion screen
       return Center(
         child: Column(
@@ -287,11 +252,7 @@ class _StoryPanelState extends State<StoryPanel> {
             Text('Story Complete', style: theme.textTheme.headlineMedium),
             if (storyTitle != null) ...[
               const SizedBox(height: 8),
-              Text(
-                storyTitle,
-                style: theme.textTheme.titleMedium,
-                textAlign: TextAlign.center,
-              ),
+              Text(storyTitle, style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
             ],
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -329,9 +290,7 @@ class _StoryPanelState extends State<StoryPanel> {
           if (effectiveStoryData != null) ...[
             Card(
               elevation: 2,
-              color: storyFailed
-                  ? Colors.red.withValues(alpha: 0.1)
-                  : Colors.green.withValues(alpha: 0.1),
+              color: storyFailed ? Colors.red.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -344,9 +303,7 @@ class _StoryPanelState extends State<StoryPanel> {
                     const SizedBox(height: 8),
                     Text(
                       effectiveStoryData['Title'] ?? 'Story',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -364,18 +321,11 @@ class _StoryPanelState extends State<StoryPanel> {
           ],
 
           // Segment History - Reverse order (newest first)
-          Text(
-            'Story Segments',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text('Story Segments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
 
           // Display segments in reverse order with full details
-          ...completedSegments.reversed.map(
-            (segmentMap) => _buildCompletedSegmentCard(segmentMap, theme),
-          ),
+          ...completedSegments.reversed.map((segmentMap) => _buildCompletedSegmentCard(segmentMap, theme)),
 
           const SizedBox(height: 24),
 
@@ -385,12 +335,7 @@ class _StoryPanelState extends State<StoryPanel> {
               onPressed: widget.onReturnToStories,
               icon: const Icon(Icons.chevron_left),
               label: const Text('Return to Stories'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-              ),
+              style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
             ),
           ),
         ],
@@ -398,34 +343,18 @@ class _StoryPanelState extends State<StoryPanel> {
     );
   }
 
-  Widget _buildCompletedSegmentCard(
-    Map<String, dynamic> segment,
-    ThemeData theme,
-  ) {
+  Widget _buildCompletedSegmentCard(Map<String, dynamic> segment, ThemeData theme) {
     final rawSegmentActivity = segment['SegmentActivity']?.toString().trim();
     final rawSegmentTitle = segment['SegmentTitle']?.toString().trim();
-    final rawProcessingStatus = segment['ProcessingStatus']
-        ?.toString()
-        .toLowerCase();
+    final rawProcessingStatus = segment['ProcessingStatus']?.toString().toLowerCase();
     final isProcessed = rawProcessingStatus == 'processed';
     final narrative = _extractSegmentNarrative(segment);
 
     final prompt = segment['Prompt']?.toString();
 
-    final title = _resolveCompletedSegmentTitle(
-      rawSegmentTitle,
-      narrative,
-      rawSegmentActivity,
-      prompt,
-    );
+    final title = _resolveCompletedSegmentTitle(rawSegmentTitle, narrative, rawSegmentActivity, prompt);
 
-    final subtitle = _resolveCompletedSegmentSubtitle(
-      rawSegmentActivity,
-      rawSegmentTitle,
-      prompt,
-      title,
-      isProcessed: isProcessed,
-    );
+    final subtitle = _resolveCompletedSegmentSubtitle(rawSegmentActivity, rawSegmentTitle, prompt, title, isProcessed: isProcessed);
 
     final outcome = segment['Outcome'];
     final cardColor = outcomeAccentColor(theme, outcome);
@@ -456,20 +385,12 @@ class _StoryPanelState extends State<StoryPanel> {
                       children: [
                         Text(
                           title,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: cardColor,
-                          ),
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: cardColor),
                         ),
                         const SizedBox(height: 4),
                         if (subtitle.isNotEmpty) ...[
                           const SizedBox(height: 4),
-                          Text(
-                            subtitle,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
+                          Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
                         ],
                       ],
                     ),
@@ -478,11 +399,7 @@ class _StoryPanelState extends State<StoryPanel> {
               ),
               if (narrative.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Text(
-                  narrative,
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.justify,
-                ),
+                Text(narrative, style: theme.textTheme.bodyMedium, textAlign: TextAlign.justify),
               ],
               const SizedBox(height: 12),
               Row(
@@ -491,10 +408,7 @@ class _StoryPanelState extends State<StoryPanel> {
                   const SizedBox(width: 4),
                   Text(
                     'Outcome: ${_formatOutcome(outcome)}',
-                    style: TextStyle(
-                      color: cardColor,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(color: cardColor, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
@@ -510,19 +424,11 @@ class _StoryPanelState extends State<StoryPanel> {
     final normalized = value.trim().toLowerCase();
     if (normalized.isEmpty) return false;
     if (normalized.startsWith('processing')) return true;
-    return normalized == '...processing...' ||
-        normalized == 'processing your actions...';
+    return normalized == '...processing...' || normalized == 'processing your actions...';
   }
 
-  String _resolveCompletedSegmentTitle(
-    String? rawSegmentTitle,
-    String narrative,
-    String? segmentActivity,
-    String? prompt,
-  ) {
-    if (rawSegmentTitle != null &&
-        rawSegmentTitle.isNotEmpty &&
-        !_isProcessingPlaceholder(rawSegmentTitle)) {
+  String _resolveCompletedSegmentTitle(String? rawSegmentTitle, String narrative, String? segmentActivity, String? prompt) {
+    if (rawSegmentTitle != null && rawSegmentTitle.isNotEmpty && !_isProcessingPlaceholder(rawSegmentTitle)) {
       return rawSegmentTitle;
     }
 
@@ -585,11 +491,7 @@ class _StoryPanelState extends State<StoryPanel> {
     final clientEvents = segment['ClientEvents'] as List<dynamic>?;
     if (clientEvents != null && clientEvents.isNotEmpty) {
       final descriptions = clientEvents
-          .map(
-            (event) => event is Map
-                ? event['Description']?.toString() ?? ''
-                : event.toString(),
-          )
+          .map((event) => event is Map ? event['Description']?.toString() ?? '' : event.toString())
           .where((text) => text.trim().isNotEmpty)
           .toList();
       if (descriptions.isNotEmpty) {

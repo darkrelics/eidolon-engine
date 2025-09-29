@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+import '../services/api_service.dart';
+import 'story.dart';
+
 /// Character model for display purposes only.
 /// All progression and calculations happen server-side.
 class Character {
@@ -15,8 +18,7 @@ class Character {
   final Map<String, double> skills;
   final Map<String, int> resources;
   final Map<String, String> inventory; // MUD-compatible: slot -> itemId
-  final Map<String, dynamic>
-  inventoryDetails; // Enriched inventory data with item details
+  final Map<String, dynamic> inventoryDetails; // Enriched inventory data with item details
   final Map<String, dynamic> progress; // Story progress flags
   Map<String, dynamic>? storyState; // Current story position
   final String? activeStoryID; // Currently active story ID
@@ -26,8 +28,7 @@ class Character {
   final List<String> availableStories;
   final List<String> abandonedStories;
   final List<String> completedStories;
-  final List<Map<String, dynamic>>?
-  availableStoriesDetails; // Full story metadata when no active story
+  final List<Map<String, dynamic>>? availableStoriesDetails; // Full story metadata when no active story
 
   Character({
     required this.id,
@@ -78,9 +79,7 @@ class Character {
 
       // Log warning for unexpected types and provide safe default
       // This could happen if server data format changes unexpectedly
-      debugPrint(
-        'Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0.0',
-      );
+      debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0.0');
       return MapEntry(key, 0.0);
     });
   }
@@ -105,9 +104,7 @@ class Character {
       }
 
       // Log warning for unexpected types and provide safe default
-      debugPrint(
-        'Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0',
-      );
+      debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0');
       return MapEntry(key, 0);
     });
   }
@@ -122,15 +119,9 @@ class Character {
     // debugPrint('Character.fromJson - InventoryDetails: ${json['InventoryDetails']}');
 
     // Parse attributes and skills, converting numbers to doubles
-    final Map<String, double> parsedAttributes = parseMapToDouble(
-      json['Attributes'] ?? {},
-    );
-    final Map<String, double> parsedSkills = parseMapToDouble(
-      json['Skills'] ?? {},
-    );
-    final Map<String, int> parsedResources = parseMapToInt(
-      json['Resources'] ?? {},
-    );
+    final Map<String, double> parsedAttributes = parseMapToDouble(json['Attributes'] ?? {});
+    final Map<String, double> parsedSkills = parseMapToDouble(json['Skills'] ?? {});
+    final Map<String, int> parsedResources = parseMapToInt(json['Resources'] ?? {});
 
     // Debug parsed data (commented out to reduce verbosity)
     // debugPrint('Character.fromJson - Parsed attributes: $parsedAttributes');
@@ -154,28 +145,18 @@ class Character {
       skills: parsedSkills,
       resources: parsedResources,
       inventory: Map<String, String>.from(json['Inventory'] ?? {}),
-      inventoryDetails: Map<String, dynamic>.from(
-        json['InventoryDetails'] ?? {},
-      ),
+      inventoryDetails: Map<String, dynamic>.from(json['InventoryDetails'] ?? {}),
       progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
       storyState: json['StoryState'] as Map<String, dynamic>?,
       activeStoryID: json['ActiveStoryID'] as String?,
       activeSegmentID: json['ActiveSegmentID'] as String?,
       gameMode: json['GameMode'] as String? ?? 'Incremental',
       lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
-      availableStories: (json['AvailableStories'] as List? ?? [])
-          .map((storyId) => storyId as String)
-          .toList(),
-      abandonedStories: (json['AbandonedStories'] as List? ?? [])
-          .map((storyId) => storyId as String)
-          .toList(),
-      completedStories: (json['CompletedStories'] as List? ?? [])
-          .map((storyId) => storyId as String)
-          .toList(),
+      availableStories: (json['AvailableStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
+      abandonedStories: (json['AbandonedStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
+      completedStories: (json['CompletedStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
       availableStoriesDetails: json['AvailableStoriesDetails'] != null
-          ? (json['AvailableStoriesDetails'] as List)
-                .map((story) => story as Map<String, dynamic>)
-                .toList()
+          ? (json['AvailableStoriesDetails'] as List).map((story) => story as Map<String, dynamic>).toList()
           : null,
     );
   }
@@ -202,8 +183,7 @@ class Character {
       'AvailableStories': availableStories,
       'AbandonedStories': abandonedStories,
       'CompletedStories': completedStories,
-      if (availableStoriesDetails != null)
-        'AvailableStoriesDetails': availableStoriesDetails,
+      if (availableStoriesDetails != null) 'AvailableStoriesDetails': availableStoriesDetails,
     };
   }
 
@@ -249,8 +229,7 @@ class Character {
       availableStories: availableStories ?? this.availableStories,
       abandonedStories: abandonedStories ?? this.abandonedStories,
       completedStories: completedStories ?? this.completedStories,
-      availableStoriesDetails:
-          availableStoriesDetails ?? this.availableStoriesDetails,
+      availableStoriesDetails: availableStoriesDetails ?? this.availableStoriesDetails,
     );
   }
 
@@ -270,10 +249,7 @@ class Character {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Character &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          lastUpdated == other.lastUpdated;
+      other is Character && runtimeType == other.runtimeType && id == other.id && lastUpdated == other.lastUpdated;
 
   @override
   int get hashCode => id.hashCode ^ lastUpdated.hashCode;
@@ -291,17 +267,7 @@ class Attributes {
   static const String intelligence = 'Intelligence';
   static const String cunning = 'Cunning';
 
-  static const List<String> all = [
-    strength,
-    agility,
-    endurance,
-    charisma,
-    intrigue,
-    presence,
-    perception,
-    intelligence,
-    cunning,
-  ];
+  static const List<String> all = [strength, agility, endurance, charisma, intrigue, presence, perception, intelligence, cunning];
 }
 
 /// Skill names matching server implementation
@@ -346,4 +312,13 @@ class Resources {
   static const String gold = 'gold';
   static const String supplies = 'supplies';
   static const String reputation = 'reputation';
+}
+
+/// Data passed to GameScreen when starting a story
+class StoryStartData {
+  final CharacterInfo characterInfo;
+  final Map<String, dynamic> initialSegment;
+  final StoryMetadata storyMetadata;
+
+  const StoryStartData({required this.characterInfo, required this.initialSegment, required this.storyMetadata});
 }

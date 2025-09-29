@@ -24,16 +24,14 @@ class StoryPollingService {
   static const Duration _minFailedPollInterval = Duration(seconds: 10);
 
   final ApiService _apiService;
-  final StreamController<PollingEvent> _eventController =
-      StreamController<PollingEvent>.broadcast();
+  final StreamController<PollingEvent> _eventController = StreamController<PollingEvent>.broadcast();
   Timer? _pollTimer;
   bool _isPolling = false;
   String? _currentCharacterId;
   Timer? _delayTimer;
   Completer<void>? _delayCompleter;
 
-  StoryPollingService({required ApiService apiService})
-    : _apiService = apiService;
+  StoryPollingService({required ApiService apiService}) : _apiService = apiService;
 
   /// Stream of polling events
   Stream<PollingEvent> get events => _eventController.stream;
@@ -53,9 +51,7 @@ class StoryPollingService {
     _currentCharacterId = characterId;
     _isPolling = true;
 
-    debugPrint(
-      'StoryPollingService: Starting polling for character: $characterId',
-    );
+    debugPrint('StoryPollingService: Starting polling for character: $characterId');
 
     try {
       await _runPollingLoop(characterId);
@@ -87,36 +83,21 @@ class StoryPollingService {
 
     while (_isPolling) {
       try {
-        final segmentStatus = await _apiService.getSegmentStatus(
-          characterId: characterId,
-        );
+        final segmentStatus = await _apiService.getSegmentStatus(characterId: characterId);
 
         if (!_isPolling) break;
 
         final currentSegmentId = segmentStatus['SegmentID']?.toString();
-        final rawProcessingStatus = segmentStatus['ProcessingStatus']
-            ?.toString()
-            .toLowerCase();
-        final fallbackStatus = segmentStatus['Status']
-            ?.toString()
-            .toLowerCase();
-        final processingStatus = (rawProcessingStatus?.isNotEmpty ?? false)
-            ? rawProcessingStatus
-            : fallbackStatus;
-        final storyCompleteFlag =
-            segmentStatus['StoryComplete'] == true ||
-            segmentStatus['IsComplete'] == true;
+        final rawProcessingStatus = segmentStatus['ProcessingStatus']?.toString().toLowerCase();
+        final fallbackStatus = segmentStatus['Status']?.toString().toLowerCase();
+        final processingStatus = (rawProcessingStatus?.isNotEmpty ?? false) ? rawProcessingStatus : fallbackStatus;
+        final storyCompleteFlag = segmentStatus['StoryComplete'] == true || segmentStatus['IsComplete'] == true;
 
-        final segmentChanged =
-            lastSegmentId != null &&
-            currentSegmentId != null &&
-            currentSegmentId != lastSegmentId;
+        final segmentChanged = lastSegmentId != null && currentSegmentId != null && currentSegmentId != lastSegmentId;
 
         const completeStatuses = {'processed', 'complete', 'completed'};
         final processingStateChanged =
-            processingStatus != null &&
-            processingStatus != lastProcessingStatus &&
-            completeStatuses.contains(processingStatus);
+            processingStatus != null && processingStatus != lastProcessingStatus && completeStatuses.contains(processingStatus);
 
         final storyJustCompleted = storyCompleteFlag && !lastStoryComplete;
 
@@ -124,8 +105,7 @@ class StoryPollingService {
           lastSegmentId = currentSegmentId;
         }
 
-        final shouldReloadCharacter =
-            segmentChanged || processingStateChanged || storyJustCompleted;
+        final shouldReloadCharacter = segmentChanged || processingStateChanged || storyJustCompleted;
 
         if (shouldReloadCharacter) {
           final character = await _apiService.getCharacterById(characterId);
@@ -134,21 +114,15 @@ class StoryPollingService {
 
           if (character == null) {
             debugPrint('StoryPollingService: Character not found');
-            _eventController.add(
-              PollingEvent(PollingEventType.error, 'Character not found'),
-            );
+            _eventController.add(PollingEvent(PollingEventType.error, 'Character not found'));
             break;
           }
 
-          _eventController.add(
-            PollingEvent(PollingEventType.characterUpdated, character),
-          );
+          _eventController.add(PollingEvent(PollingEventType.characterUpdated, character));
 
           final activeSegmentId = character.activeSegmentID;
           if (activeSegmentId == null) {
-            debugPrint(
-              'StoryPollingService: Story completed - no active segment',
-            );
+            debugPrint('StoryPollingService: Story completed - no active segment');
             _eventController.add(PollingEvent(PollingEventType.storyCompleted));
             lastStoryComplete = true;
             break;
@@ -173,9 +147,7 @@ class StoryPollingService {
         final recommendedWait = _determineWaitDuration(segmentStatus);
         final waitDuration = _applySuccessInterval(recommendedWait);
         final rawRemaining = segmentStatus['TimeRemaining'];
-        final enforcedSuffix = waitDuration > recommendedWait
-            ? ', enforcing ${_minSuccessfulPollInterval.inSeconds}s minimum'
-            : '';
+        final enforcedSuffix = waitDuration > recommendedWait ? ', enforcing ${_minSuccessfulPollInterval.inSeconds}s minimum' : '';
 
         debugPrint(
           'StoryPollingService: Waiting ${waitDuration.inSeconds}s '
@@ -190,15 +162,12 @@ class StoryPollingService {
         consecutiveErrors = 0;
       } catch (e) {
         consecutiveErrors++;
-        debugPrint(
-          'StoryPollingService: Polling error ($consecutiveErrors/$maxConsecutiveErrors): $e',
-        );
+        debugPrint('StoryPollingService: Polling error ($consecutiveErrors/$maxConsecutiveErrors): $e');
 
         // Handle specific error cases as documented
         final errorStr = e.toString().toLowerCase();
 
-        if (errorStr.contains('404') ||
-            errorStr.contains('no active segment')) {
+        if (errorStr.contains('404') || errorStr.contains('no active segment')) {
           // Story completed
           debugPrint('StoryPollingService: Story completed (404 response)');
           _eventController.add(PollingEvent(PollingEventType.storyCompleted));
@@ -206,15 +175,8 @@ class StoryPollingService {
         }
 
         if (consecutiveErrors >= maxConsecutiveErrors) {
-          debugPrint(
-            'StoryPollingService: Too many consecutive errors, stopping',
-          );
-          _eventController.add(
-            PollingEvent(
-              PollingEventType.error,
-              'Connection failed after $maxConsecutiveErrors attempts',
-            ),
-          );
+          debugPrint('StoryPollingService: Too many consecutive errors, stopping');
+          _eventController.add(PollingEvent(PollingEventType.error, 'Connection failed after $maxConsecutiveErrors attempts'));
           break;
         }
 
@@ -250,6 +212,13 @@ class StoryPollingService {
     const minWait = Duration(seconds: 1);
     const networkPadding = Duration(seconds: 1);
 
+    // Check if this is a decision segment - if so, pause polling until user acts
+    final segmentType = segmentStatus['SegmentType']?.toString().toLowerCase();
+    if (segmentType == 'decision') {
+      debugPrint('StoryPollingService: Decision segment detected, pausing polling');
+      return const Duration(hours: 1); // Effectively pause polling for decision segments
+    }
+
     Duration? timeRemaining;
     final rawRemaining = segmentStatus['TimeRemaining'];
     if (rawRemaining is num) {
@@ -268,9 +237,7 @@ class StoryPollingService {
 
     Duration? calculated;
     if (timeRemaining != null && endTimeRemaining != null) {
-      calculated = timeRemaining < endTimeRemaining
-          ? timeRemaining
-          : endTimeRemaining;
+      calculated = timeRemaining < endTimeRemaining ? timeRemaining : endTimeRemaining;
     } else {
       calculated = timeRemaining ?? endTimeRemaining;
     }

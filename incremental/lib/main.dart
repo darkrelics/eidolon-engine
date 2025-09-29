@@ -1,15 +1,18 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
-import 'screens/login_screen.dart';
-import 'screens/registration_screen.dart';
-import 'screens/password_reset_screen.dart';
-import 'screens/password_reset_confirm_screen.dart';
+import 'providers/timer_provider.dart';
 import 'screens/account_settings_screen.dart';
 import 'screens/character_screen.dart';
 import 'screens/game_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/password_reset_confirm_screen.dart';
+import 'screens/password_reset_screen.dart';
+import 'screens/registration_screen.dart';
 
 void main() {
   // Set up global error handlers
@@ -30,6 +33,7 @@ void main() {
           providers: [
             ChangeNotifierProvider(create: (_) => AuthProvider()),
             ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
+            ChangeNotifierProvider(create: (_) => TimerProvider()),
           ],
           child: const EidolonIncrementalApp(),
         ),

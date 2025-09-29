@@ -79,7 +79,7 @@ def get_story_history_entries(character_id: str, story_instance_ids: List[str]) 
         )
         raise RuntimeError(f"Failed to retrieve story history: {err}") from err
 
-    stories_by_instance = {item.get("StoryInstanceID"): item for item in items if item.get("StoryInstanceID")}
+    stories_by_instance = {item.get("StoryInstanceID"): item for item in items if item.get("StoryInstanceID")} # type: ignore
 
     ordered_results = []
     missing = []
