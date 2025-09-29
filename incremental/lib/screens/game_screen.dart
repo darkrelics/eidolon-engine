@@ -43,8 +43,8 @@ class _GameScreenState extends State<GameScreen> {
   Future<void>? _activeCharacterLoad;
 
   // Segment history for the current story display
-  List<Map<String, dynamic>> _segmentHistory = [];
-  final List<Map<String, dynamic>> _storyHistoryArchive = [];
+  List<Map<String, dynamic>> _segmentHistory = const [];
+  final List<Map<String, dynamic>> _storyHistoryArchive = const [];
   final Set<String> _storyHistoryKeys = <String>{};
   Map<String, dynamic>? _lastStoryDetails;
 
@@ -98,7 +98,9 @@ class _GameScreenState extends State<GameScreen> {
               _synchronizeStoryCompletionState();
             });
 
-            if (segmentChanged) {
+            // Only load segment history when story completes, not on every segment change
+            // This prevents excessive API calls during active gameplay
+            if (segmentChanged && character.activeSegmentID == null) {
               debugPrint('GameScreen: Segment changed from $oldSegmentId to $newSegmentId, reloading history');
               await _loadSegmentHistory(mergeWithExisting: true);
             }
@@ -522,6 +524,12 @@ class _GameScreenState extends State<GameScreen> {
       return true;
     }
 
+    // Check if this is the final segment of a completed story
+    final storyComplete = segment['StoryComplete'];
+    if (storyComplete == true) {
+      return true;
+    }
+
     return false;
   }
 
@@ -717,6 +725,14 @@ class _GameScreenState extends State<GameScreen> {
         await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
       }
 
+      // Before loading history, ensure the final segment is included
+      final activeSegment = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+      if (activeSegment != null && _isSegmentComplete(activeSegment)) {
+        final storyDetails = _character?.storyState?['Story'] as Map<String, dynamic>? ?? _lastStoryDetails;
+        _segmentHistory = _mergeSegmentIntoList(_segmentHistory, activeSegment, storyDetails: storyDetails);
+        debugPrint('GameScreen: Added final segment to history during completion');
+      }
+
       await _loadSegmentHistory(mergeWithExisting: true);
     } catch (e) {
       debugPrint('GameScreen: Error updating state after story completion: $e');
@@ -886,7 +902,8 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('GameScreen: Building with character: ${_character?.name}, loading: $_isLoading, error: $_error}');
+    // Temporarily remove debug print to reduce noise
+    // debugPrint('GameScreen: Building with character: ${_character?.name}, loading: $_isLoading, error: $_error}');
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final deviceType = ResponsiveLayout.getDeviceType(context);

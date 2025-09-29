@@ -80,6 +80,7 @@ class StoryPollingService {
     String? lastSegmentId;
     String? lastProcessingStatus;
     bool lastStoryComplete = false;
+    dynamic lastCharacter; // Track last character state to avoid unnecessary events
 
     while (_isPolling) {
       try {
@@ -92,6 +93,13 @@ class StoryPollingService {
         final fallbackStatus = segmentStatus['Status']?.toString().toLowerCase();
         final processingStatus = (rawProcessingStatus?.isNotEmpty ?? false) ? rawProcessingStatus : fallbackStatus;
         final storyCompleteFlag = segmentStatus['StoryComplete'] == true || segmentStatus['IsComplete'] == true;
+
+        // Check if story is complete and stop polling
+        if (storyCompleteFlag) {
+          debugPrint('StoryPollingService: Story completed (StoryComplete flag detected)');
+          _eventController.add(PollingEvent(PollingEventType.storyCompleted));
+          break;
+        }
 
         final segmentChanged = lastSegmentId != null && currentSegmentId != null && currentSegmentId != lastSegmentId;
 
@@ -118,7 +126,14 @@ class StoryPollingService {
             break;
           }
 
-          _eventController.add(PollingEvent(PollingEventType.characterUpdated, character));
+          // Only send event if character data actually changed
+          final characterChanged = _hasCharacterChanged(character, lastCharacter);
+          if (characterChanged) {
+            // Only debug print when data actually changes
+            debugPrint('StoryPollingService: Character data changed, sending update event');
+            _eventController.add(PollingEvent(PollingEventType.characterUpdated, character));
+            lastCharacter = character;
+          }
 
           final activeSegmentId = character.activeSegmentID;
           if (activeSegmentId == null) {
@@ -149,10 +164,13 @@ class StoryPollingService {
         final rawRemaining = segmentStatus['TimeRemaining'];
         final enforcedSuffix = waitDuration > recommendedWait ? ', enforcing ${_minSuccessfulPollInterval.inSeconds}s minimum' : '';
 
-        debugPrint(
-          'StoryPollingService: Waiting ${waitDuration.inSeconds}s '
-          '(server TimeRemaining: $rawRemaining$enforcedSuffix)',
-        );
+        // Only debug print wait duration on significant changes or errors
+        if (consecutiveErrors > 0 || segmentChanged || processingStateChanged) {
+          debugPrint(
+            'StoryPollingService: Waiting ${waitDuration.inSeconds}s '
+            '(server TimeRemaining: $rawRemaining$enforcedSuffix)',
+          );
+        }
 
         if (_isPolling) {
           await _waitFor(waitDuration);
@@ -294,4 +312,38 @@ class StoryPollingService {
     _delayTimer?.cancel();
     _delayTimer = null;
   }
+}
+
+/// Helper method to check if character data has actually changed
+bool _hasCharacterChanged(dynamic newCharacter, dynamic oldCharacter) {
+  if (newCharacter == null && oldCharacter == null) return false;
+  if (newCharacter == null || oldCharacter == null) return true;
+
+  // Fast comparison of key identifiers first
+  if (newCharacter.id != oldCharacter.id) return true;
+  if (newCharacter.activeSegmentID != oldCharacter.activeSegmentID) return true;
+  if (newCharacter.activeStoryID != oldCharacter.activeStoryID) return true;
+
+  // Compare core stats that affect UI
+  if (newCharacter.health != oldCharacter.health) return true;
+  if (newCharacter.essence != oldCharacter.essence) return true;
+  if (newCharacter.maxHealth != oldCharacter.maxHealth) return true;
+  if (newCharacter.maxEssence != oldCharacter.maxEssence) return true;
+
+  // Compare inventory count (efficient check without full comparison)
+  final newInventory = newCharacter.inventory ?? {};
+  final oldInventory = oldCharacter.inventory ?? {};
+  if (newInventory.length != oldInventory.length) return true;
+
+  // Compare story state structure (lightweight check)
+  final newStoryState = newCharacter.storyState;
+  final oldStoryState = oldCharacter.storyState;
+  if ((newStoryState == null) != (oldStoryState == null)) return true;
+  if (newStoryState != null && oldStoryState != null) {
+    final newActiveSegment = newStoryState['ActiveSegment'];
+    final oldActiveSegment = oldStoryState['ActiveSegment'];
+    if ((newActiveSegment == null) != (oldActiveSegment == null)) return true;
+  }
+
+  return false;
 }
