@@ -61,6 +61,8 @@ def get_story_history(character_id: str, story_id: str) -> dict:
     except ClientError as err:
         logger.error(f"Failed to get story history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get story history: {err}") from err
+
+
 def get_story_cooldown(character_id: str, story_id: str, story_type: str):
     """
     Calculate cooldown remaining for a story based on its type and last completion.
