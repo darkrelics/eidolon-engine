@@ -292,9 +292,11 @@ class _GameScreenState extends State<GameScreen> {
         final newActiveSegmentId = updated.activeSegmentID;
         final oldActiveSegmentId = oldActiveSegment?['ActiveSegmentID']?.toString() ?? oldActiveSegment?['SegmentID']?.toString();
 
-        // If we're transitioning to a new segment, save the old one to history
+        // If we're transitioning to a new segment (not completing the story), save the old one to history
+        // Don't add if story is completing (newActiveSegmentId == null) - let _handleStoryCompletion handle it
         if (oldActiveSegment != null &&
             oldActiveSegmentId != null &&
+            newActiveSegmentId != null &&
             newActiveSegmentId != oldActiveSegmentId &&
             _isSegmentComplete(oldActiveSegment)) {
           final segmentCopy = Map<String, dynamic>.from(oldActiveSegment);
