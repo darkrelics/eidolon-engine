@@ -74,20 +74,19 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
 
       if (!mounted) return;
 
-      // Navigate to game screen with initial segment data
+      // Navigate to game screen with complete character data
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
           builder: (context) => const GameScreen(),
           settings: RouteSettings(
-            arguments: StoryStartData(
-              characterInfo: CharacterInfo(
-                name: widget.character.name,
-                id: widget.character.id,
-                dead: widget.character.health <= 0,
-              ),
-              initialSegment: initialSegment,
-              storyMetadata: story,
+            arguments: widget.character.copyWith(
+              activeStoryId: initialSegment['StoryID']?.toString(),
+              activeSegmentId: initialSegment['ActiveSegmentID']?.toString(),
+              storyState: {
+                'ActiveSegment': initialSegment,
+                'Story': {'Title': story.title, 'Description': story.description, 'Type': story.type, 'StoryID': story.storyID},
+              },
             ),
           ),
         ),

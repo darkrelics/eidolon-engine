@@ -83,6 +83,11 @@ class _GameScreenState extends State<GameScreen> {
             setState(() {
               _character = character;
 
+              // Clear loading state when we receive the first real character data after story start
+              if (_isLoading && _character != null) {
+                _isLoading = false;
+              }
+
               // Preserve story metadata for later use (e.g. completion screen)
               final currentStory = character.storyState?['Story'] as Map<String, dynamic>?;
               if (currentStory != null) {
@@ -138,19 +143,27 @@ class _GameScreenState extends State<GameScreen> {
     final args = ModalRoute.of(context)?.settings.arguments;
     // Handle both Character and CharacterInfo types
     if (args is Character) {
-      // Only update if it's a different character or first load
+      // Direct character object with story state (from StorySelectionScreen)
       if (_character == null || _character!.id != args.id) {
         _character = args;
         _characterInfo = CharacterInfo(name: args.name, id: args.id, dead: args.health <= 0);
-        // Only call setState if actually changing from loading state
+
+        // Extract story details for later use
+        final storyData = args.storyState?['Story'] as Map<String, dynamic>?;
+        if (storyData != null) {
+          _lastStoryDetails = Map<String, dynamic>.from(storyData);
+        }
+
+        // No loading state needed - we have complete character data
         if (_isLoading && mounted) {
           setState(() {
             _isLoading = false;
           });
         }
-        // Start polling if needed
-        if (_character?.activeSegmentID != null && !_pollingService.isPolling) {
-          _pollingService.startPolling(_character!.id);
+
+        // Start polling if needed for ongoing story updates
+        if (args.activeSegmentID != null && !_pollingService.isPolling) {
+          _pollingService.startPolling(args.id);
         }
       }
     } else if (args is CharacterInfo) {
@@ -158,58 +171,6 @@ class _GameScreenState extends State<GameScreen> {
       if (_characterInfo == null || _characterInfo!.id != args.id) {
         _characterInfo = args;
         _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate).then((_) => _loadSegmentHistory());
-      }
-    } else if (args is StoryStartData) {
-      // Handle story start data from StorySelectionScreen
-      if (_characterInfo == null || _characterInfo!.id != args.characterInfo.id) {
-        _characterInfo = args.characterInfo;
-
-        // Create a temporary character object with story state
-        _character = Character(
-          id: args.characterInfo.id,
-          name: args.characterInfo.name,
-          archetypeId: '', // Will be filled by API
-          archetypeName: '', // Will be filled by API
-          health: 100, // Will be filled by API
-          maxHealth: 100, // Will be filled by API
-          essence: 0, // Will be filled by API
-          maxEssence: 0, // Will be filled by API
-          attributes: {},
-          skills: {},
-          resources: {},
-          inventory: {},
-          inventoryDetails: {},
-          progress: {},
-          gameMode: 'Incremental',
-          lastUpdated: DateTime.now(),
-          availableStories: [],
-          abandonedStories: [],
-          completedStories: [],
-          storyState: {
-            'ActiveSegment': args.initialSegment,
-            'Story': {
-              'Title': args.storyMetadata.title,
-              'Description': args.storyMetadata.description,
-              'Type': args.storyMetadata.type,
-              'StoryID': args.storyMetadata.storyID,
-            },
-          },
-          activeStoryID: args.initialSegment['StoryID']?.toString(),
-          activeSegmentID: args.initialSegment['ActiveSegmentID']?.toString(),
-        );
-
-        _lastStoryDetails = Map<String, dynamic>.from(_character!.storyState!['Story'] as Map<String, dynamic>);
-
-        if (_isLoading && mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-
-        // Start polling for the new segment
-        if (_character?.activeSegmentID != null && !_pollingService.isPolling) {
-          _pollingService.startPolling(_character!.id);
-        }
       }
     } else if (args != null) {
       // Unexpected argument type provided via navigation; ignoring.

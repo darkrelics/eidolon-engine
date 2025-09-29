@@ -1,8 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../services/api_service.dart';
-import 'story.dart';
-
 /// Character model for display purposes only.
 /// All progression and calculations happen server-side.
 class Character {
@@ -312,13 +309,4 @@ class Resources {
   static const String gold = 'gold';
   static const String supplies = 'supplies';
   static const String reputation = 'reputation';
-}
-
-/// Data passed to GameScreen when starting a story
-class StoryStartData {
-  final CharacterInfo characterInfo;
-  final Map<String, dynamic> initialSegment;
-  final StoryMetadata storyMetadata;
-
-  const StoryStartData({required this.characterInfo, required this.initialSegment, required this.storyMetadata});
 }
