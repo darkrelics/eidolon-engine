@@ -20,13 +20,13 @@ phases:
 
   build:
     commands:
-      - flutter build web --release --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
+      - flutter build web --release --no-wasm-dry-run --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
 
   post_build:
     commands:
       - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "max-age=86400"
       - |
-        if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then 
+        if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
           aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
         else
           echo "No CloudFront distribution ID provided, skipping cache invalidation"
