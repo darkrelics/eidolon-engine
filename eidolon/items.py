@@ -1,7 +1,7 @@
 """Item management functions for the Eidolon Engine."""
 
-from datetime import datetime, timezone
 import uuid
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
@@ -73,9 +73,7 @@ def create_item_from_prototype(
         logger.info(f"Created item {item_id} from prototype {prototype_id}")
         return item_payload
     except Exception as err:  # pragma: no cover - DynamoDB client handles errors
-        logger.error(
-            f"Error creating item {item_id} from prototype {prototype_id} Error: {err}", exc_info=True
-        )
+        logger.error(f"Error creating item {item_id} from prototype {prototype_id} Error: {err}", exc_info=True)
         return None
 
 
@@ -101,9 +99,7 @@ def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[
     try:
         character_record = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
     except ClientError as err:
-        logger.error(
-            "Failed to load character %s for story rewards Error: %s", character_id, err, exc_info=True
-        )
+        logger.error("Failed to load character %s for story rewards Error: %s", character_id, err, exc_info=True)
         return []
 
     if not character_record:
@@ -112,9 +108,7 @@ def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[
 
     inventory = character_record.get("Inventory") or {}
     if not isinstance(inventory, dict):
-        logger.warning(
-            "Character %s has unexpected inventory format; initializing empty inventory", character_id
-        )
+        logger.warning("Character %s has unexpected inventory format; initializing empty inventory", character_id)
         inventory = {}
 
     normalized_inventory = {str(key): value for key, value in inventory.items()}
@@ -122,9 +116,7 @@ def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[
 
     for prototype_id in prototype_ids:
         if not isinstance(prototype_id, str) or not prototype_id:
-            logger.warning(
-                "Skipping invalid prototype ID in story rewards for %s: %s", character_id, prototype_id
-            )
+            logger.warning("Skipping invalid prototype ID in story rewards for %s: %s", character_id, prototype_id)
             continue
 
         item_payload = create_item_from_prototype(prototype_id)

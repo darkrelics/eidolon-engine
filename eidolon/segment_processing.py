@@ -9,8 +9,8 @@ from botocore.exceptions import ClientError
 from eidolon.character_data import apply_character_updates
 from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import logger
 from eidolon.items import add_items_to_inventory
+from eidolon.logger import logger
 from eidolon.segment_challenges import process_skill_challenges
 from eidolon.segment_combat import process_combat_segment
 from eidolon.segment_core import map_outcome_to_key

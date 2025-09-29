@@ -120,7 +120,7 @@ def calculate_story_progress(
                 KeyConditionExpression="StoryID = :story_id",
                 ExpressionAttributeValues={":story_id": story_id},
                 ProjectionExpression="SegmentID",
-            ) # type: ignore
+            )  # type: ignore
         )
         total_segments = len(segment_defs)
     except ClientError as err:
@@ -580,9 +580,7 @@ def get_active_story_and_segment(character: dict) -> tuple:
         return {}, {}
 
     if not isinstance(active_story_id, str):
-        logger.warning(
-            f"ActiveStoryID for character {character_id} is not a string; clearing story state"
-        )
+        logger.warning(f"ActiveStoryID for character {character_id} is not a string; clearing story state")
         character_clear_story(character_id)
         return {}, {}
 
