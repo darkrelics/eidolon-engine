@@ -10,6 +10,7 @@ from eidolon.character_data import apply_character_updates
 from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
+from eidolon.items import add_items_to_inventory
 from eidolon.segment_challenges import process_skill_challenges
 from eidolon.segment_combat import process_combat_segment
 from eidolon.segment_core import map_outcome_to_key
@@ -222,6 +223,12 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 results["StoryEffects"] = story_effects
             except Exception as err:
                 logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
+
+            reward_items = story_effects.get("Items")
+            if reward_items:
+                granted_items = add_items_to_inventory(character_id, reward_items)
+                if granted_items:
+                    results["GrantedItemIDs"] = granted_items
 
     return overall_outcome, results
 

@@ -150,7 +150,6 @@ class _StoryCard extends StatelessWidget {
     final title = story['Title'] ?? 'Unknown Story';
     final description = story['Description'] ?? '';
     final type = story['Type'] ?? 'story';
-    final progress = story['Progress'] as Map<String, dynamic>?;
 
     return Container(
       decoration: BoxDecoration(
@@ -203,10 +202,6 @@ class _StoryCard extends StatelessWidget {
                   color: theme.colorScheme.onPrimaryContainer,
                 ),
               ),
-            ],
-            if (progress != null) ...[
-              const SizedBox(height: 12),
-              _ProgressIndicator(progress: progress),
             ],
           ],
         ),
@@ -275,62 +270,6 @@ class _TypeBadge extends StatelessWidget {
       default:
         return Icons.auto_stories;
     }
-  }
-}
-
-class _ProgressIndicator extends StatelessWidget {
-  final Map<String, dynamic> progress;
-
-  const _ProgressIndicator({required this.progress});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final current = progress['Current'] ?? 0;
-    final total = progress['Total'] ?? 1;
-    final percentage = total > 0 ? (current / total).clamp(0.0, 1.0) : 0.0;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Progress',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer.withValues(
-                  alpha: 0.8,
-                ),
-              ),
-            ),
-            Text(
-              '$current / $total segments',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onPrimaryContainer.withValues(
-                  alpha: 0.8,
-                ),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: percentage,
-            backgroundColor: theme.colorScheme.onPrimaryContainer.withValues(
-              alpha: 0.2,
-            ),
-            valueColor: AlwaysStoppedAnimation<Color>(
-              theme.colorScheme.onPrimaryContainer,
-            ),
-            minHeight: 8,
-          ),
-        ),
-      ],
-    );
   }
 }
 
@@ -437,7 +376,6 @@ class _SimpleSegmentCard extends StatelessWidget {
     }
 
     final supplementalStatus = _pickSegmentText([
-      rawSegmentActivity,
       prompt,
       rawSegmentTitle,
     ], exclude: segmentTitle);
@@ -501,7 +439,7 @@ class _SimpleSegmentCard extends StatelessWidget {
     var processingIndicatorText = '';
     if (waitingOnTimer) {
       final candidate = _pickSegmentText(
-        [rawSegmentActivity, prompt, rawSegmentTitle],
+        [prompt, rawSegmentTitle],
         allowPlaceholders: true,
         exclude: segmentTitle,
       );

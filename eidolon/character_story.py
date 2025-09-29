@@ -93,23 +93,34 @@ def calculate_story_progress(
             key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
         )
         if story_history_entry:
-            story_history_entry = decimal_to_float(story_history_entry)
-            completed_segment_entries = story_history_entry.get("SegmentHistory", []) or []
-            for entry in completed_segment_entries:
-                segment_id = entry.get("SegmentID")
-                if segment_id:
-                    completed_segment_ids.add(segment_id)
+            normalized_entry = decimal_to_float(story_history_entry)
+            if isinstance(normalized_entry, dict):
+                segment_history_raw = normalized_entry.get("SegmentHistory")
+                if isinstance(segment_history_raw, list):
+                    completed_segment_entries = segment_history_raw
+                else:
+                    completed_segment_entries = []
+
+                for entry in completed_segment_entries:
+                    if isinstance(entry, dict):
+                        segment_id = entry.get("SegmentID")
+                        if segment_id:
+                            completed_segment_ids.add(segment_id)
+            else:
+                completed_segment_entries = []
     except ClientError as err:
         logger.warning(f"Failed to load story history for progress calculation for {character_id} Error: {err}")
 
     completed_count = len(completed_segment_entries)
 
     try:
-        segment_defs = dynamo.query(
-            TableName.SEGMENTS,
-            KeyConditionExpression="StoryID = :story_id",
-            ExpressionAttributeValues={":story_id": story_id},
-            ProjectionExpression="SegmentID",
+        segment_defs = list(
+            dynamo.query(
+                TableName.SEGMENTS,
+                KeyConditionExpression="StoryID = :story_id",
+                ExpressionAttributeValues={":story_id": story_id},
+                ProjectionExpression="SegmentID",
+            ) # type: ignore
         )
         total_segments = len(segment_defs)
     except ClientError as err:
@@ -486,6 +497,7 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
             )
 
             logger.info(f"Applied story outcome effects for {character_id}")
+
     except ClientError as err:
         logger.error(f"Failed to apply outcome effects for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply outcome effects: {err}") from err
@@ -567,11 +579,19 @@ def get_active_story_and_segment(character: dict) -> tuple:
         character_clear_story(character_id)
         return {}, {}
 
+    if not isinstance(active_story_id, str):
+        logger.warning(
+            f"ActiveStoryID for character {character_id} is not a string; clearing story state"
+        )
+        character_clear_story(character_id)
+        return {}, {}
+
+    story_instance_id = active_segment.get("StoryInstanceID")
     try:
         progress = calculate_story_progress(
             character_id,
             active_story_id,
-            active_segment.get("StoryInstanceID"),
+            story_instance_id if isinstance(story_instance_id, str) else None,
             active_segment,
         )
         if progress:
