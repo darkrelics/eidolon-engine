@@ -120,7 +120,10 @@ class _GameScreenState extends State<GameScreen> {
 
           case PollingEventType.storyCompleted:
             debugPrint('GameScreen: Story completed via polling service');
-            await _handleStoryCompletion(showMessage: true);
+            await _handleStoryCompletion(
+              refreshCharacter: true,
+              showMessage: true,
+            );
             break;
 
           case PollingEventType.error:
@@ -788,7 +791,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _handleStoryCompletion({
-    bool refreshCharacter = false,
+    bool refreshCharacter = true,
     bool showMessage = true,
   }) async {
     debugPrint('GameScreen: Handling story completion');
@@ -810,6 +813,32 @@ class _GameScreenState extends State<GameScreen> {
 
     setState(() {
       _archiveCurrentStorySegments();
+
+      if (_character != null) {
+        final completedSegmentsCopy = _segmentHistory
+            .map((segment) => Map<String, dynamic>.from(segment))
+            .toList();
+
+        Map<String, dynamic>? storyStateUpdate;
+        if (completedSegmentsCopy.isNotEmpty || _lastStoryDetails != null) {
+          storyStateUpdate = <String, dynamic>{};
+          if (completedSegmentsCopy.isNotEmpty) {
+            storyStateUpdate['CompletedSegments'] = completedSegmentsCopy;
+          }
+          if (_lastStoryDetails != null) {
+            storyStateUpdate['Story'] = Map<String, dynamic>.from(
+              _lastStoryDetails!,
+            );
+          }
+        }
+
+        _character = _character!.copyWith(
+          activeStoryId: null,
+          activeSegmentId: null,
+          storyState: storyStateUpdate,
+        );
+      }
+
       _isLoading = false;
     });
 
