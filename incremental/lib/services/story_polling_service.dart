@@ -20,6 +20,9 @@ class PollingEvent {
 /// This service provides a clean stream-based interface for story polling,
 /// eliminating the complex callback setup while maintaining server-authoritative behavior.
 class StoryPollingService {
+  static const Duration _minSuccessfulPollInterval = Duration(seconds: 60);
+  static const Duration _minFailedPollInterval = Duration(seconds: 10);
+
   final ApiService _apiService;
   final StreamController<PollingEvent> _eventController =
       StreamController<PollingEvent>.broadcast();
@@ -91,24 +94,27 @@ class StoryPollingService {
         if (!_isPolling) break;
 
         final currentSegmentId = segmentStatus['SegmentID']?.toString();
-        final rawProcessingStatus =
-            segmentStatus['ProcessingStatus']?.toString().toLowerCase();
-        final fallbackStatus =
-            segmentStatus['Status']?.toString().toLowerCase();
-        final processingStatus =
-            (rawProcessingStatus?.isNotEmpty ?? false)
-                ? rawProcessingStatus
-                : fallbackStatus;
+        final rawProcessingStatus = segmentStatus['ProcessingStatus']
+            ?.toString()
+            .toLowerCase();
+        final fallbackStatus = segmentStatus['Status']
+            ?.toString()
+            .toLowerCase();
+        final processingStatus = (rawProcessingStatus?.isNotEmpty ?? false)
+            ? rawProcessingStatus
+            : fallbackStatus;
         final storyCompleteFlag =
             segmentStatus['StoryComplete'] == true ||
             segmentStatus['IsComplete'] == true;
 
-        final segmentChanged = lastSegmentId != null &&
+        final segmentChanged =
+            lastSegmentId != null &&
             currentSegmentId != null &&
             currentSegmentId != lastSegmentId;
 
         const completeStatuses = {'processed', 'complete', 'completed'};
-        final processingStateChanged = processingStatus != null &&
+        final processingStateChanged =
+            processingStatus != null &&
             processingStatus != lastProcessingStatus &&
             completeStatuses.contains(processingStatus);
 
@@ -120,8 +126,6 @@ class StoryPollingService {
 
         final shouldReloadCharacter =
             segmentChanged || processingStateChanged || storyJustCompleted;
-
-        var refreshedThisCycle = false;
 
         if (shouldReloadCharacter) {
           final character = await _apiService.getCharacterById(characterId);
@@ -156,29 +160,26 @@ class StoryPollingService {
             lastSegmentId = activeSegmentId;
           }
           lastProcessingStatus = processingStatus ?? lastProcessingStatus;
-          lastStoryComplete = false;
-          refreshedThisCycle = true;
+          lastStoryComplete = storyCompleteFlag;
           consecutiveErrors = 0;
         } else {
           lastProcessingStatus = processingStatus ?? lastProcessingStatus;
           lastStoryComplete = storyCompleteFlag;
         }
 
-        if (refreshedThisCycle) {
-          // Skip waiting so we can immediately observe the new segment status.
-          continue;
-        }
-
         if (currentSegmentId != null) {
           lastSegmentId = currentSegmentId;
         }
-
-        final waitDuration = _determineWaitDuration(segmentStatus);
+        final recommendedWait = _determineWaitDuration(segmentStatus);
+        final waitDuration = _applySuccessInterval(recommendedWait);
         final rawRemaining = segmentStatus['TimeRemaining'];
+        final enforcedSuffix = waitDuration > recommendedWait
+            ? ', enforcing ${_minSuccessfulPollInterval.inSeconds}s minimum'
+            : '';
 
         debugPrint(
           'StoryPollingService: Waiting ${waitDuration.inSeconds}s '
-          '(server TimeRemaining: $rawRemaining)',
+          '(server TimeRemaining: $rawRemaining$enforcedSuffix)',
         );
 
         if (_isPolling) {
@@ -217,14 +218,26 @@ class StoryPollingService {
           break;
         }
 
-        // Wait 30 seconds before retry as documented
+        // Wait before retrying to respect minimum failure backoff
         if (_isPolling) {
-          await _waitFor(const Duration(seconds: 30));
+          await _waitFor(_minFailedPollInterval);
         }
       }
     }
 
     debugPrint('StoryPollingService: Polling loop ended');
+  }
+
+  Duration _applySuccessInterval(Duration recommendedWait) {
+    final minWait = _minSuccessfulPollInterval;
+
+    // Always respect the minimum cadence so we never poll faster than the
+    // system resolution.
+    if (recommendedWait < minWait) {
+      return minWait;
+    }
+
+    return recommendedWait;
   }
 
   /// Dispose of resources
