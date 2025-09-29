@@ -76,7 +76,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
     raw_duration = active_segment.get("Duration") or active_segment.get("SegmentDuration") or active_segment.get("ExpectedDuration")
     try:
-        duration = int(raw_duration) # type: ignore
+        duration = int(raw_duration)  # type: ignore
     except (TypeError, ValueError):
         duration = 60
     if duration <= 0:
