@@ -286,6 +286,36 @@ class _GameScreenState extends State<GameScreen> {
       character: _character!,
       onCharacterReloaded: (updated) {
         if (!mounted) return;
+
+        // Before updating character, capture the completed segment if transitioning
+        final oldActiveSegment = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+        final newActiveSegmentId = updated.activeSegmentID;
+        final oldActiveSegmentId = oldActiveSegment?['ActiveSegmentID']?.toString() ?? oldActiveSegment?['SegmentID']?.toString();
+
+        // If we're transitioning to a new segment, save the old one to history
+        if (oldActiveSegment != null &&
+            oldActiveSegmentId != null &&
+            newActiveSegmentId != oldActiveSegmentId &&
+            _isSegmentComplete(oldActiveSegment)) {
+          final segmentCopy = Map<String, dynamic>.from(oldActiveSegment);
+
+          // Add story title for display
+          if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
+            segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
+          }
+
+          // Add to history if not already present
+          final exists = _segmentHistory.any((s) {
+            final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
+            return id == oldActiveSegmentId;
+          });
+
+          if (!exists) {
+            _segmentHistory = [..._segmentHistory, segmentCopy];
+            debugPrint('GameScreen: Added completed segment to history: $oldActiveSegmentId');
+          }
+        }
+
         setState(() {
           _character = updated;
           _error = null;
@@ -467,6 +497,30 @@ class _GameScreenState extends State<GameScreen> {
       // Use the next segment from response instead of reloading
       if (response['NextSegment'] != null) {
         final nextSegment = response['NextSegment'] as Map<String, dynamic>;
+
+        // Capture the completed segment before transitioning
+        if (previousSegment != null && _isSegmentComplete(previousSegment)) {
+          final oldSegmentId = previousSegment['ActiveSegmentID']?.toString() ?? previousSegment['SegmentID']?.toString();
+          if (oldSegmentId != null) {
+            final segmentCopy = Map<String, dynamic>.from(previousSegment);
+
+            // Add story title for display
+            if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
+              segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
+            }
+
+            // Add to history if not already present
+            final exists = _segmentHistory.any((s) {
+              final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
+              return id == oldSegmentId;
+            });
+
+            if (!exists) {
+              _segmentHistory = [..._segmentHistory, segmentCopy];
+              debugPrint('GameScreen: Added completed segment to history (decision): $oldSegmentId');
+            }
+          }
+        }
 
         if (mounted) {
           setState(() {
