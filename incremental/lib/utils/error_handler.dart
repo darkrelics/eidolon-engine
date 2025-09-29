@@ -2,6 +2,7 @@
 //
 // Copyright 2024‑2025 Jason E. Robinson
 
+import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import 'package:flutter/foundation.dart';
 
 /// Central error handler for the application
@@ -15,6 +16,13 @@ class ErrorHandler {
       debugPrint('ErrorHandler: Error details: $error');
       if (error is Error) {
         debugPrint('ErrorHandler: Stack trace: ${error.stackTrace}');
+      }
+    }
+
+    if (error is CognitoClientException) {
+      final message = error.message;
+      if (message != null && message.trim().isNotEmpty) {
+        return message;
       }
     }
 

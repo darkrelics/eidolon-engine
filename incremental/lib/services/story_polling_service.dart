@@ -78,46 +78,101 @@ class StoryPollingService {
   Future<void> _runPollingLoop(String characterId) async {
     int consecutiveErrors = 0;
     const maxConsecutiveErrors = 3;
+    String? lastSegmentId;
+    String? lastProcessingStatus;
+    bool lastStoryComplete = false;
 
     while (_isPolling) {
       try {
-        // Step 2: Check character state for story completion
-        final character = await _apiService.getCharacterById(characterId);
-
-        // Check if polling was stopped during the await
-        if (!_isPolling) break;
-
-        if (character == null) {
-          debugPrint('StoryPollingService: Character not found');
-          _eventController.add(
-            PollingEvent(PollingEventType.error, 'Character not found'),
-          );
-          break;
-        }
-
-        // Update UI with latest character data
-        _eventController.add(
-          PollingEvent(PollingEventType.characterUpdated, character),
-        );
-
-        // If no active segment, story is complete
-        if (character.activeSegmentID == null) {
-          debugPrint(
-            'StoryPollingService: Story completed - no active segment',
-          );
-          _eventController.add(PollingEvent(PollingEventType.storyCompleted));
-          break;
-        }
-
-        // Step 3: Get server timing for current segment
         final segmentStatus = await _apiService.getSegmentStatus(
           characterId: characterId,
         );
 
-        // Check if polling was stopped during the await
         if (!_isPolling) break;
 
-        // Step 4: Wait server-specified time, accounting for clock skew
+        final currentSegmentId = segmentStatus['SegmentID']?.toString();
+        final rawProcessingStatus =
+            segmentStatus['ProcessingStatus']?.toString().toLowerCase();
+        final fallbackStatus =
+            segmentStatus['Status']?.toString().toLowerCase();
+        final processingStatus =
+            (rawProcessingStatus?.isNotEmpty ?? false)
+                ? rawProcessingStatus
+                : fallbackStatus;
+        final storyCompleteFlag =
+            segmentStatus['StoryComplete'] == true ||
+            segmentStatus['IsComplete'] == true;
+
+        final segmentChanged = lastSegmentId != null &&
+            currentSegmentId != null &&
+            currentSegmentId != lastSegmentId;
+
+        const completeStatuses = {'processed', 'complete', 'completed'};
+        final processingStateChanged = processingStatus != null &&
+            processingStatus != lastProcessingStatus &&
+            completeStatuses.contains(processingStatus);
+
+        final storyJustCompleted = storyCompleteFlag && !lastStoryComplete;
+
+        if (currentSegmentId != null && lastSegmentId == null) {
+          lastSegmentId = currentSegmentId;
+        }
+
+        final shouldReloadCharacter =
+            segmentChanged || processingStateChanged || storyJustCompleted;
+
+        var refreshedThisCycle = false;
+
+        if (shouldReloadCharacter) {
+          final character = await _apiService.getCharacterById(characterId);
+
+          if (!_isPolling) break;
+
+          if (character == null) {
+            debugPrint('StoryPollingService: Character not found');
+            _eventController.add(
+              PollingEvent(PollingEventType.error, 'Character not found'),
+            );
+            break;
+          }
+
+          _eventController.add(
+            PollingEvent(PollingEventType.characterUpdated, character),
+          );
+
+          final activeSegmentId = character.activeSegmentID;
+          if (activeSegmentId == null) {
+            debugPrint(
+              'StoryPollingService: Story completed - no active segment',
+            );
+            _eventController.add(PollingEvent(PollingEventType.storyCompleted));
+            lastStoryComplete = true;
+            break;
+          }
+
+          if (currentSegmentId != null) {
+            lastSegmentId = currentSegmentId;
+          } else {
+            lastSegmentId = activeSegmentId;
+          }
+          lastProcessingStatus = processingStatus ?? lastProcessingStatus;
+          lastStoryComplete = false;
+          refreshedThisCycle = true;
+          consecutiveErrors = 0;
+        } else {
+          lastProcessingStatus = processingStatus ?? lastProcessingStatus;
+          lastStoryComplete = storyCompleteFlag;
+        }
+
+        if (refreshedThisCycle) {
+          // Skip waiting so we can immediately observe the new segment status.
+          continue;
+        }
+
+        if (currentSegmentId != null) {
+          lastSegmentId = currentSegmentId;
+        }
+
         final waitDuration = _determineWaitDuration(segmentStatus);
         final rawRemaining = segmentStatus['TimeRemaining'];
 

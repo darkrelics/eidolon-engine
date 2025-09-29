@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../models/character.dart';
@@ -138,9 +140,25 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
 
   DateTime? _parseDate(Object? value) {
     if (value is DateTime) return value.toUtc();
+    if (value is num) {
+      final timestamp = value.toDouble();
+      if (timestamp.isNaN) return null;
+      if (timestamp > 1000000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(timestamp.round(), isUtc: true);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(
+        (timestamp * 1000).round(),
+        isUtc: true,
+      );
+    }
     if (value is String && value.isNotEmpty) {
       try {
-        return DateTime.parse(value).toUtc();
+        final trimmed = value.trim();
+        final numeric = double.tryParse(trimmed);
+        if (numeric != null) {
+          return _parseDate(numeric);
+        }
+        return DateTime.parse(trimmed).toUtc();
       } catch (_) {
         return null;
       }
@@ -167,7 +185,9 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
     DateTime? latest;
     for (final segment in segments) {
       final candidate =
-          _parseDate(segment['CompletedAt']) ?? _parseDate(segment['EndTime']);
+          _parseDate(segment['ProcessedAt']) ??
+          _parseDate(segment['CompletedAt']) ??
+          _parseDate(segment['EndTime']);
       if (candidate == null) continue;
       if (latest == null || candidate.isAfter(latest)) {
         latest = candidate;
@@ -313,6 +333,7 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
       ),
     );
   }
+
 }
 
 class _FilterSortBar extends StatelessWidget {
@@ -489,18 +510,55 @@ class _StatisticsSummary extends StatelessWidget {
 
     final totalStories = entries.length;
     final successCount = entries
-        .where((e) => e.outcomeCategory == 'success')
+        .where((entry) => entry.outcomeCategory == 'success')
         .length;
-    final successRate = totalStories > 0
-        ? ((successCount / totalStories) * 100).clamp(0, 100).toStringAsFixed(0)
-        : '0';
+    final normalCount = entries
+        .where((entry) => entry.outcomeCategory == 'normal')
+        .length;
+    final deathCount = entries
+        .where((entry) => entry.outcome.toLowerCase() == 'death')
+        .length;
+    final rawFailureCount = entries
+        .where((entry) => entry.outcome.toLowerCase() == 'failure')
+        .length;
+    final inferredFailures = totalStories -
+        (successCount + normalCount + rawFailureCount + deathCount);
+    final failureCount = math.max(0, rawFailureCount + inferredFailures);
+
     final totalTime = entries.fold<Duration>(
       Duration.zero,
-      (sum, e) => sum + e.duration,
+      (sum, entry) => sum + entry.duration,
     );
-    final averageDuration = Duration(
-      minutes: totalStories > 0 ? totalTime.inMinutes ~/ totalStories : 0,
-    );
+    final averageDuration = totalStories > 0
+        ? Duration(milliseconds: totalTime.inMilliseconds ~/ totalStories)
+        : Duration.zero;
+
+    final stats = <_OutcomeStatDefinition>[
+      _OutcomeStatDefinition(
+        icon: Icons.emoji_events,
+        label: 'Successes',
+        value: successCount,
+        color: Colors.green,
+      ),
+      _OutcomeStatDefinition(
+        icon: Icons.change_circle,
+        label: 'Normal Progress',
+        value: normalCount,
+        color: theme.colorScheme.primary,
+      ),
+      _OutcomeStatDefinition(
+        icon: Icons.report_problem,
+        label: 'Failures',
+        value: failureCount,
+        color: Colors.orange,
+      ),
+      _OutcomeStatDefinition(
+        icon: Icons.close,
+        label: 'Deaths',
+        value: deathCount,
+        color: theme.colorScheme.error,
+      ),
+    ];
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -526,50 +584,67 @@ class _StatisticsSummary extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Adventure Statistics',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(height: 12),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.flag,
-                  label: 'Completed',
-                  value: totalStories.toString(),
+              Text(
+                'Adventure Statistics',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                   color: theme.colorScheme.onPrimaryContainer,
                 ),
               ),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.workspace_premium,
-                  label: 'Success Rate',
-                  value: '$successRate%',
-                  color: Colors.green,
-                ),
-              ),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.timer,
-                  label: 'Total Time',
-                  value: _formatDuration(totalTime),
+              Text(
+                'Total Runs: $totalStories',
+                style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onPrimaryContainer,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Center(
-            child: _StatItem(
-              icon: Icons.insights,
-              label: 'Avg Duration',
-              value: _formatDuration(averageDuration),
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final availableWidth = constraints.maxWidth;
+              const spacing = 12.0;
+              final isNarrow = availableWidth < 360;
+              final itemWidth = isNarrow
+                  ? availableWidth
+                  : (availableWidth - spacing) / 2;
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: stats
+                    .map(
+                      (stat) => _OutcomeStatCard(
+                        width: itemWidth,
+                        icon: stat.icon,
+                        label: stat.label,
+                        value: stat.value,
+                        color: stat.color,
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _SummaryChip(
+                icon: Icons.timer,
+                label: 'Total Time',
+                value: _formatDuration(totalTime),
+              ),
+              _SummaryChip(
+                icon: Icons.insights,
+                label: 'Avg Duration',
+                value: _formatDuration(averageDuration),
+              ),
+            ],
           ),
         ],
       ),
@@ -577,20 +652,41 @@ class _StatisticsSummary extends StatelessWidget {
   }
 
   String _formatDuration(Duration duration) {
-    if (duration.inHours > 0) {
-      return '${duration.inHours}h ${duration.inMinutes % 60}m';
+    if (duration.inHours >= 1) {
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes.remainder(60);
+      return '${hours}h ${minutes}m';
     }
-    return '${duration.inMinutes}m';
+    if (duration.inMinutes >= 1) {
+      return '${duration.inMinutes}m';
+    }
+    return '${duration.inSeconds}s';
   }
 }
 
-class _StatItem extends StatelessWidget {
+class _OutcomeStatDefinition {
   final IconData icon;
   final String label;
-  final String value;
+  final int value;
   final Color color;
 
-  const _StatItem({
+  const _OutcomeStatDefinition({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+}
+
+class _OutcomeStatCard extends StatelessWidget {
+  final double width;
+  final IconData icon;
+  final String label;
+  final int value;
+  final Color color;
+
+  const _OutcomeStatCard({
+    required this.width,
     required this.icon,
     required this.label,
     required this.value,
@@ -601,24 +697,76 @@ class _StatItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Column(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
+    return SizedBox(
+      width: width,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: color.withValues(alpha: 0.4),
+            width: 1,
           ),
         ),
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: color.withValues(alpha: 0.8),
-          ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.85),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value.toString(),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _SummaryChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Chip(
+      avatar: Icon(icon, size: 18, color: theme.colorScheme.primary),
+      label: Text('$label: $value'),
+      backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.7),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+        ),
+      ),
     );
   }
 }

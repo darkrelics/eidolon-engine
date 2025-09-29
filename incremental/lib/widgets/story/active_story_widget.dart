@@ -439,7 +439,7 @@ class _SimpleSegmentCard extends StatelessWidget {
     var processingIndicatorText = '';
     if (waitingOnTimer) {
       final candidate = _pickSegmentText(
-        [prompt, rawSegmentTitle],
+        [rawSegmentActivity, prompt, rawSegmentTitle],
         allowPlaceholders: true,
         exclude: segmentTitle,
       );
