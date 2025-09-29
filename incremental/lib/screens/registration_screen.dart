@@ -39,6 +39,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -93,6 +94,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -134,6 +136,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   Future<void> _resendCode() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });

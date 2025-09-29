@@ -289,6 +289,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
         'CharacterScreen: _createCharacter called with name: $name, archetype: $archetype',
       );
 
+      if (!mounted) return;
       setState(() {
         _isLoading = true;
       });
@@ -427,6 +428,7 @@ class _CharacterScreenState extends State<CharacterScreen> {
 
   Future<void> _deleteCharacter(CharacterInfo character) async {
     try {
+      if (!mounted) return;
       setState(() {
         _isLoading = true;
       });

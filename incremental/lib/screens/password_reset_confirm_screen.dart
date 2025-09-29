@@ -55,6 +55,7 @@ class _PasswordResetConfirmScreenState
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -102,6 +103,7 @@ class _PasswordResetConfirmScreenState
   Future<void> _resendCode() async {
     if (_email == null) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });

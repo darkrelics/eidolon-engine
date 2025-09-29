@@ -22,6 +22,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool _isLoading = false;
 
   Future<void> _handleSignOut() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -60,6 +61,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final doubleConfirmed = await _showFinalDeleteConfirmationDialog();
     if (!doubleConfirmed || !mounted) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });

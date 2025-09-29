@@ -67,6 +67,7 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
       return;
     }
 
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {

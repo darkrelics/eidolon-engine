@@ -29,6 +29,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   Future<void> _handlePasswordReset() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
