@@ -397,6 +397,7 @@ class _GameScreenState extends State<GameScreen> {
     final completedSegments = completedSegmentsRaw
         .whereType<Map<String, dynamic>>()
         .map((segment) => Map<String, dynamic>.from(segment))
+        .where(_isSegmentComplete)
         .toList();
     final hasCompletedSegments = completedSegments.isNotEmpty;
 
@@ -420,12 +421,44 @@ class _GameScreenState extends State<GameScreen> {
       return;
     }
 
+    final activeSegmentState =
+        _character!.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+    final processingStatus = activeSegmentState?['ProcessingStatus']
+            ?.toString()
+            .toLowerCase() ??
+        '';
+    final status = activeSegmentState?['Status']?.toString().toLowerCase() ?? '';
+    final isSegmentProcessed =
+        processingStatus == 'processed' || status == 'completed';
+
+    final hasActiveStory = _character!.activeStoryID != null;
+    final hasInFlightSegment =
+        hasActiveStory && activeSegmentState != null && !isSegmentProcessed;
+    final hasLocalHistory =
+        _segmentHistory.isNotEmpty || completedSegments.isNotEmpty;
+
+    if (hasInFlightSegment && hasLocalHistory) {
+      debugPrint(
+        'GameScreen: Skipping segment history fetch (active segment still processing)',
+      );
+      if (completedSegments.isNotEmpty && mounted) {
+        setState(() {
+          _segmentHistory = mergeWithExisting
+              ? _mergeSegmentList(_segmentHistory, completedSegments)
+              : completedSegments;
+          _synchronizeStoryCompletionState();
+        });
+      }
+      return;
+    }
+
     try {
       final historyResponse = await _apiService.getSegmentHistory(
         characterId: _character!.id,
       );
       final history = historyResponse
           .map((segment) => Map<String, dynamic>.from(segment))
+          .where(_isSegmentComplete)
           .toList();
 
       if (!mounted) return;
@@ -489,6 +522,10 @@ class _GameScreenState extends State<GameScreen> {
       return updated;
     }
 
+    if (!_isSegmentComplete(segmentCopy)) {
+      return updated;
+    }
+
     final effectiveStory = storyDetails ?? _lastStoryDetails;
     if (!segmentCopy.containsKey('StoryTitle') &&
         effectiveStory != null &&
@@ -508,6 +545,29 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     return updated;
+  }
+
+  bool _isSegmentComplete(Map<String, dynamic> segment) {
+    final completedAt = segment['CompletedAt'];
+    if (completedAt is String && completedAt.isNotEmpty) {
+      return true;
+    }
+    if (completedAt is num && completedAt > 0) {
+      return true;
+    }
+
+    final status = segment['Status']?.toString().toLowerCase();
+    if (status == 'completed') {
+      return true;
+    }
+
+    final processingStatus =
+        segment['ProcessingStatus']?.toString().toLowerCase();
+    if (processingStatus == 'processed') {
+      return true;
+    }
+
+    return false;
   }
 
   void _archiveCurrentStorySegments() {

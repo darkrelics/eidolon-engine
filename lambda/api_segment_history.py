@@ -62,7 +62,10 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
     story_title = "Unknown Story"
     active_segment = active_segments[0] if active_segments else None
 
+    active_segment_id = None
+
     if active_segment:
+        active_segment_id = active_segment.get("ActiveSegmentID")
         story_id = active_segment.get("StoryID")
         story_instance_id = active_segment.get("StoryInstanceID")
 
@@ -153,6 +156,9 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
     # Format segments for response with all the data Flutter expects
     formatted_segments: list = []
     for segment in segments or []:
+        if active_segment_id and segment.get("ActiveSegmentID") == active_segment_id:
+            continue
+
         # Convert Unix timestamps to ISO 8601 for API response
         start_time_unix = segment.get("StartTime", 0)
         end_time_unix = segment.get("EndTime", 0)

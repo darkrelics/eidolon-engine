@@ -10,7 +10,6 @@ Returns segment completion status and any available results.
 import time
 from typing import Optional
 
-from eidolon.character_story import calculate_story_progress
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
@@ -115,17 +114,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     segment_type = active_segment.get("SegmentType", "").lower()
     story_id = active_segment.get("StoryID")
     segment_id = active_segment.get("SegmentID")
-
-    story_progress = None
-    try:
-        story_progress = calculate_story_progress(
-            character_id,
-            story_id,
-            active_segment.get("StoryInstanceID"),
-            active_segment,
-        )
-    except Exception as err:
-        logger.debug(f"Unable to compute story progress for {character_id}: {err}")
 
     segment_def = None
 
@@ -240,14 +228,9 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                     "Type": story_data.get("StoryType", ""),
                     "StoryID": story_id,
                 }
-                if story_progress:
-                    response["Story"]["Progress"] = story_progress
         except Exception as err:
             logger.debug(f"Could not fetch story data: {err}")
             # Not critical, continue without story data
-    elif story_progress:
-        # Ensure progress is exposed even if story metadata could not be fetched
-        response["Story"] = {"StoryID": story_id, "Progress": story_progress}
 
     logger.debug(f"Segment status retrieved for {character_id}")
 

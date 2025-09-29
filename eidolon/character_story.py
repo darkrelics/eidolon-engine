@@ -61,89 +61,6 @@ def get_story_history(character_id: str, story_id: str) -> dict:
     except ClientError as err:
         logger.error(f"Failed to get story history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to get story history: {err}") from err
-
-
-def calculate_story_progress(
-    character_id: str,
-    story_id: str,
-    story_instance_id: str | None,
-    active_segment: dict,
-) -> dict | None:
-    """Determine current progress for the active story instance.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        story_instance_id: Current story instance UUID
-        active_segment: Active segment record (may contain Decimal values)
-
-    Returns:
-        Dict with Current/Total counts or None if progress unavailable
-    """
-
-    if not story_id or not story_instance_id:
-        return None
-
-    completed_segment_entries: list = []
-    completed_segment_ids: set = set()
-
-    try:
-        story_history_entry = dynamo.get_item(
-            TableName.STORY_HISTORY,
-            key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
-        )
-        if story_history_entry:
-            normalized_entry = decimal_to_float(story_history_entry)
-            if isinstance(normalized_entry, dict):
-                segment_history_raw = normalized_entry.get("SegmentHistory")
-                if isinstance(segment_history_raw, list):
-                    completed_segment_entries = segment_history_raw
-                else:
-                    completed_segment_entries = []
-
-                for entry in completed_segment_entries:
-                    if isinstance(entry, dict):
-                        segment_id = entry.get("SegmentID")
-                        if segment_id:
-                            completed_segment_ids.add(segment_id)
-            else:
-                completed_segment_entries = []
-    except ClientError as err:
-        logger.warning(f"Failed to load story history for progress calculation for {character_id} Error: {err}")
-
-    completed_count = len(completed_segment_entries)
-
-    try:
-        segment_defs = list(
-            dynamo.query(
-                TableName.SEGMENTS,
-                KeyConditionExpression="StoryID = :story_id",
-                ExpressionAttributeValues={":story_id": story_id},
-                ProjectionExpression="SegmentID",
-            )  # type: ignore
-        )
-        total_segments = len(segment_defs)
-    except ClientError as err:
-        logger.error(
-            f"Failed to query segments for progress calculation for story {story_id} Error: {err}",
-            exc_info=True,
-        )
-        return None
-
-    if total_segments <= 0:
-        return None
-
-    current_segment_id = active_segment.get("SegmentID")
-    current_value = completed_count
-
-    if current_segment_id and current_segment_id not in completed_segment_ids:
-        current_value += 1
-
-    current_value = max(0, min(current_value, total_segments))
-
-    return {"Current": int(current_value), "Total": int(total_segments)}
-
-
 def get_story_cooldown(character_id: str, story_id: str, story_type: str):
     """
     Calculate cooldown remaining for a story based on its type and last completion.
@@ -583,20 +500,6 @@ def get_active_story_and_segment(character: dict) -> tuple:
         logger.warning(f"ActiveStoryID for character {character_id} is not a string; clearing story state")
         character_clear_story(character_id)
         return {}, {}
-
-    story_instance_id = active_segment.get("StoryInstanceID")
-    try:
-        progress = calculate_story_progress(
-            character_id,
-            active_story_id,
-            story_instance_id if isinstance(story_instance_id, str) else None,
-            active_segment,
-        )
-        if progress:
-            active_story["Progress"] = progress
-            active_story["TotalSegments"] = progress.get("Total")
-    except Exception as err:
-        logger.debug(f"Unable to compute story progress for {character_id}: {err}")
 
     # Everything is valid - convert Decimal types to float for JSON serialization
     logger.debug(f"Valid story and segment found for character {character_id}")
