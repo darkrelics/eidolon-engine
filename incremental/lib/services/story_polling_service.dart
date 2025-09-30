@@ -66,27 +66,36 @@ class StoryPollingService {
     final segmentStart = _parseDate(activeSegment['StartTime']) ?? DateTime.now().toUtc();
     final end = _resolveEndTime(activeSegment, segmentStart);
 
-    // First status at T+60s from segment start
-    final firstStatusAt = segmentStart.add(const Duration(seconds: firstStatusDelaySeconds));
-    final delayToFirst = firstStatusAt.difference(DateTime.now().toUtc());
-    final firstDelay = delayToFirst.isNegative ? Duration.zero : delayToFirst;
+    // If segment is already processed when we start orchestration, fetch status immediately
+    // This handles the case where we load a character with a processed segment
+    if (_processed) {
+      // Delay slightly to allow UI to mount
+      Future.delayed(const Duration(milliseconds: 100), () async {
+        await _performStatusCheck(onStatusUpdated: onStatusUpdated, onError: onError);
+      });
+    } else {
+      // First status at T+60s from segment start
+      final firstStatusAt = segmentStart.add(const Duration(seconds: firstStatusDelaySeconds));
+      final delayToFirst = firstStatusAt.difference(DateTime.now().toUtc());
+      final firstDelay = delayToFirst.isNegative ? Duration.zero : delayToFirst;
 
-    _firstStatusTimer = Timer(firstDelay, () async {
-      await _performStatusCheck(onStatusUpdated: onStatusUpdated, onError: onError);
-      // If not yet processed, schedule repeating status every 30s
-      if (!_processed) {
-        _repeatStatusTimer = Timer.periodic(
-          const Duration(seconds: repeatStatusDelaySeconds),
-          (_) async {
-            await _performStatusCheck(onStatusUpdated: onStatusUpdated, onError: onError);
-            if (_processed) {
-              _repeatStatusTimer?.cancel();
-              _repeatStatusTimer = null;
-            }
-          },
-        );
-      }
-    });
+      _firstStatusTimer = Timer(firstDelay, () async {
+        await _performStatusCheck(onStatusUpdated: onStatusUpdated, onError: onError);
+        // If not yet processed, schedule repeating status every 30s
+        if (!_processed) {
+          _repeatStatusTimer = Timer.periodic(
+            const Duration(seconds: repeatStatusDelaySeconds),
+            (_) async {
+              await _performStatusCheck(onStatusUpdated: onStatusUpdated, onError: onError);
+              if (_processed) {
+                _repeatStatusTimer?.cancel();
+                _repeatStatusTimer = null;
+              }
+            },
+          );
+        }
+      });
+    }
 
     // Expiry timer triggers character reload exactly at EndTime
     if (end != null) {

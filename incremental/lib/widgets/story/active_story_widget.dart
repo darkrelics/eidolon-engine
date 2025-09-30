@@ -346,16 +346,21 @@ class _SimpleSegmentCard extends StatelessWidget {
 
     if (endTime != null) {
       hasTimingInfo = true;
-      if (DateTime.now().toUtc().isAfter(endTime)) {
+      final now = DateTime.now().toUtc();
+      if (now.isAfter(endTime)) {
         hasTimerExpired = true;
       }
     }
 
-    if (!hasTimingInfo && processingStatus == 'processed') {
+    // Don't treat as expired just because it's processed - for active segments, wait for the timer
+    // Only use this fallback for non-active (historical) segments with no timing info
+    if (!isActive && !hasTimingInfo && processingStatus == 'processed') {
       hasTimerExpired = true;
     }
 
-    final bool shouldRevealResults = !isActive || isCompleteFlag || (processingStatus == 'processed' && hasTimerExpired);
+    // For active segments: ONLY reveal results when timer expires, regardless of processing status
+    // For inactive segments: reveal if complete flag is set OR if processed
+    final bool shouldRevealResults = !isActive || isCompleteFlag || (!isActive && processingStatus == 'processed') || (isActive && hasTimerExpired);
     final bool waitingOnTimer = isActive && !shouldRevealResults;
 
     var processingIndicatorText = '';
