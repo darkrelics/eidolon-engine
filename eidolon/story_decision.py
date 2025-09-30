@@ -16,7 +16,6 @@ from eidolon.player import verify_character_ownership
 from eidolon.segment_core import get_segment_definition
 from eidolon.segment_history import record_segment_history
 from eidolon.segment_polling import delete_active_segment
-from eidolon.segment_processing import determine_next_segment
 from eidolon.segment_state import create_next_active_segment
 from eidolon.sqs import send_message
 from eidolon.story_active import get_active_decision_segment
@@ -101,7 +100,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
                     logger.warning(f"Segment {active_segment_id} is no longer active (status: {status_value})")
                     raise ValueError("Decision already submitted") from err  # Same error for 409 mapping
                 else:
-                    logger.warning(f"Conditional check failed but Decision=None and Status=active - unexpected state")
+                    logger.warning("Conditional check failed but Decision=None and Status=active - unexpected state")
                     raise ValueError("Decision already submitted") from err
             else:
                 logger.warning(f"Conditional check failed for {active_segment_id} but segment not found")
