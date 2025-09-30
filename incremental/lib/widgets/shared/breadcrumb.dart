@@ -6,11 +6,7 @@ class BreadcrumbItem {
   final VoidCallback? onTap;
   final IconData? icon;
 
-  BreadcrumbItem({
-    required this.label,
-    this.onTap,
-    this.icon,
-  });
+  BreadcrumbItem({required this.label, this.onTap, this.icon});
 }
 
 /// A breadcrumb navigation widget
@@ -34,12 +30,11 @@ class Breadcrumb extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final defaultActiveColor = activeColor ?? theme.colorScheme.primary;
-    final defaultInactiveColor = inactiveColor ?? theme.colorScheme.onSurfaceVariant;
-    final defaultSeparator = separator ?? Icon(
-      Icons.chevron_right,
-      size: 16,
-      color: defaultInactiveColor,
-    );
+    final defaultInactiveColor =
+        inactiveColor ?? theme.colorScheme.onSurfaceVariant;
+    final defaultSeparator =
+        separator ??
+        Icon(Icons.chevron_right, size: 16, color: defaultInactiveColor);
 
     return Row(
       children: [
@@ -79,16 +74,12 @@ class _BreadcrumbItemWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = isActive ? activeColor : inactiveColor;
-    
+
     Widget content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         if (item.icon != null) ...[
-          Icon(
-            item.icon,
-            size: 16,
-            color: color,
-          ),
+          Icon(item.icon, size: 16, color: color),
           const SizedBox(width: 4),
         ],
         Text(

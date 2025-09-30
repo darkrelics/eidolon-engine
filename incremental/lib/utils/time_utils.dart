@@ -21,7 +21,15 @@ class TimeUtils {
 
   /// Parse ISO 8601 string to DateTime object.
   static DateTime parseIso(String isoString) {
-    return DateTime.parse(isoString);
+    if (isoString.trim().isEmpty) {
+      return DateTime.now().toUtc();
+    }
+
+    try {
+      return DateTime.parse(isoString).toUtc();
+    } catch (_) {
+      return DateTime.now().toUtc();
+    }
   }
 
   /// Convert ISO 8601 string to Unix timestamp (seconds).
@@ -32,7 +40,10 @@ class TimeUtils {
 
   /// Convert Unix timestamp to ISO 8601 string.
   static String fromUnix(int unixTimestamp) {
-    final dt = DateTime.fromMillisecondsSinceEpoch(unixTimestamp * 1000, isUtc: true);
+    final dt = DateTime.fromMillisecondsSinceEpoch(
+      unixTimestamp * 1000,
+      isUtc: true,
+    );
     return dt.toIso8601String();
   }
 

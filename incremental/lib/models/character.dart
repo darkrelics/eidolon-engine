@@ -54,13 +54,13 @@ class Character {
   });
 
   /// Safely parse a map of dynamic values to doubles.
-  /// 
+  ///
   /// This method handles various input types gracefully:
   /// - If value is already a double, it's used as-is
   /// - If value is an int or other num type, it's converted to double
   /// - If value is null, it defaults to 0.0
   /// - If value is not a number, it logs a warning and defaults to 0.0
-  /// 
+  ///
   /// This prevents runtime crashes from unexpected server data formats.
   static Map<String, double> parseMapToDouble(Map<String, dynamic> rawMap) {
     return rawMap.map((key, value) {
@@ -68,12 +68,12 @@ class Character {
       if (value == null) {
         return MapEntry(key, 0.0);
       }
-      
+
       // Try to convert to double safely
       if (value is num) {
         return MapEntry(key, value.toDouble());
       }
-      
+
       // Log warning for unexpected types and provide safe default
       // This could happen if server data format changes unexpectedly
       debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0.0');
@@ -82,7 +82,7 @@ class Character {
   }
 
   /// Safely parse a map of dynamic values to integers.
-  /// 
+  ///
   /// Similar to parseMapToDouble but for integer values:
   /// - Handles null by defaulting to 0
   /// - Converts any numeric type to int safely
@@ -93,13 +93,13 @@ class Character {
       if (value == null) {
         return MapEntry(key, 0);
       }
-      
+
       // Try to convert to int safely
       if (value is num) {
         // Use round() instead of toInt() to handle floating point values gracefully
         return MapEntry(key, value.round());
       }
-      
+
       // Log warning for unexpected types and provide safe default
       debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0');
       return MapEntry(key, 0);
@@ -114,17 +114,11 @@ class Character {
     // debugPrint('Character.fromJson - Skills: ${json['Skills']}');
     // debugPrint('Character.fromJson - Inventory: ${json['Inventory']}');
     // debugPrint('Character.fromJson - InventoryDetails: ${json['InventoryDetails']}');
-    
+
     // Parse attributes and skills, converting numbers to doubles
-    final Map<String, double> parsedAttributes = parseMapToDouble(
-      json['Attributes'] ?? {},
-    );
-    final Map<String, double> parsedSkills = parseMapToDouble(
-      json['Skills'] ?? {},
-    );
-    final Map<String, int> parsedResources = parseMapToInt(
-      json['Resources'] ?? {},
-    );
+    final Map<String, double> parsedAttributes = parseMapToDouble(json['Attributes'] ?? {});
+    final Map<String, double> parsedSkills = parseMapToDouble(json['Skills'] ?? {});
+    final Map<String, int> parsedResources = parseMapToInt(json['Resources'] ?? {});
 
     // Debug parsed data (commented out to reduce verbosity)
     // debugPrint('Character.fromJson - Parsed attributes: $parsedAttributes');
@@ -155,19 +149,11 @@ class Character {
       activeSegmentID: json['ActiveSegmentID'] as String?,
       gameMode: json['GameMode'] as String? ?? 'Incremental',
       lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
-      availableStories: (json['AvailableStories'] as List? ?? [])
-          .map((storyId) => storyId as String)
-          .toList(),
-      abandonedStories: (json['AbandonedStories'] as List? ?? [])
-          .map((storyId) => storyId as String)
-          .toList(),
-      completedStories: (json['CompletedStories'] as List? ?? [])
-          .map((storyId) => storyId as String)
-          .toList(),
+      availableStories: (json['AvailableStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
+      abandonedStories: (json['AbandonedStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
+      completedStories: (json['CompletedStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
       availableStoriesDetails: json['AvailableStoriesDetails'] != null
-          ? (json['AvailableStoriesDetails'] as List)
-              .map((story) => story as Map<String, dynamic>)
-              .toList()
+          ? (json['AvailableStoriesDetails'] as List).map((story) => story as Map<String, dynamic>).toList()
           : null,
     );
   }
@@ -194,8 +180,7 @@ class Character {
       'AvailableStories': availableStories,
       'AbandonedStories': abandonedStories,
       'CompletedStories': completedStories,
-      if (availableStoriesDetails != null)
-        'AvailableStoriesDetails': availableStoriesDetails,
+      if (availableStoriesDetails != null) 'AvailableStoriesDetails': availableStoriesDetails,
     };
   }
 
@@ -210,6 +195,7 @@ class Character {
     Map<String, dynamic>? inventoryDetails,
     Map<String, dynamic>? progress,
     Map<String, dynamic>? storyState,
+    String? activeStoryId,
     String? activeSegmentId,
     DateTime? lastUpdated,
     List<String>? availableStories,
@@ -233,6 +219,7 @@ class Character {
       inventoryDetails: inventoryDetails ?? this.inventoryDetails,
       progress: progress ?? this.progress,
       storyState: storyState ?? this.storyState,
+      activeStoryID: activeStoryId ?? activeStoryID,
       activeSegmentID: activeSegmentId ?? activeSegmentID,
       gameMode: gameMode,
       lastUpdated: lastUpdated ?? this.lastUpdated,
@@ -259,10 +246,7 @@ class Character {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Character &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          lastUpdated == other.lastUpdated;
+      other is Character && runtimeType == other.runtimeType && id == other.id && lastUpdated == other.lastUpdated;
 
   @override
   int get hashCode => id.hashCode ^ lastUpdated.hashCode;
@@ -280,17 +264,7 @@ class Attributes {
   static const String intelligence = 'Intelligence';
   static const String cunning = 'Cunning';
 
-  static const List<String> all = [
-    strength,
-    agility,
-    endurance,
-    charisma,
-    intrigue,
-    presence,
-    perception,
-    intelligence,
-    cunning,
-  ];
+  static const List<String> all = [strength, agility, endurance, charisma, intrigue, presence, perception, intelligence, cunning];
 }
 
 /// Skill names matching server implementation

@@ -1,20 +1,14 @@
-"""
-Eidolon Engine
+"""Utility to create an item from a prototype in the Items table."""
 
-Copyright 2024-2025 Jason E. Robinson
-
-Utility to create an item from a prototype in the Items table.
-"""
-
+import argparse
 import os
 import sys
 import uuid
 from decimal import Decimal
 
-from eidolon.dynamo import dynamo  # noqa: E402
-from eidolon.dynamo import TableName
+from eidolon.dynamo import TableName, dynamo
 
-# Add parent directory to path to import eidolon modules
+# Ensure repo root is on path before importing eidolon modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -26,7 +20,7 @@ def display_prototypes() -> list:
         A list of prototype dictionaries.
     """
     try:
-        prototypes = dynamo.scan(TableName.PROTOTYPES)
+        prototypes = dynamo.scan_all(TableName.PROTOTYPES)
         if not prototypes:
             print("No prototypes found.")
             return []
@@ -114,11 +108,23 @@ def add_item_to_table(new_item: dict) -> bool:
         return False
 
 
-def main() -> None:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Create an item from a prototype in DynamoDB.")
+    parser.add_argument(
+        "--region",
+        default="us-east-1",
+        help="AWS region for DynamoDB (default: us-east-1)",
+    )
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace) -> None:
     """
     Allows the user to select a prototype and then creates an item in the Items table.
     Conforms to documentation/schema.md field names. Does not link items to rooms.
     """
+
+    dynamo.set_region(args.region)
 
     while True:
         try:
@@ -156,4 +162,5 @@ def main() -> None:
             continue
 
 
-main()
+if __name__ == "__main__":
+    main(parse_args())

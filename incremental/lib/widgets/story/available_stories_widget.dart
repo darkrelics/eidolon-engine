@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../models/story.dart';
-import '../../models/character.dart';
+import 'package:eidolon_incremental/models/story.dart';
+import 'package:eidolon_incremental/models/character.dart';
 
 /// Widget displaying available stories for selection
 class AvailableStoriesWidget extends StatefulWidget {
@@ -28,7 +28,7 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
     if (widget.character.availableStoriesDetails == null) {
       return [];
     }
-    
+
     return widget.character.availableStoriesDetails!
         .map((story) => StoryMetadata.fromJson(story))
         .toList();
@@ -36,14 +36,16 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
 
   List<StoryMetadata> get _filteredStories {
     var stories = _stories;
-    
+
     // Apply filter
     if (_filterType != 'all') {
-      stories = stories.where((story) => 
-        story.type.toLowerCase() == _filterType.toLowerCase()
-      ).toList();
+      stories = stories
+          .where(
+            (story) => story.type.toLowerCase() == _filterType.toLowerCase(),
+          )
+          .toList();
     }
-    
+
     // Apply sort
     switch (_sortBy) {
       case 'availability':
@@ -54,28 +56,28 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
         });
         break;
       case 'duration':
-        stories.sort((a, b) => a.estimatedDuration.compareTo(b.estimatedDuration));
+        stories.sort(
+          (a, b) => a.estimatedDuration.compareTo(b.estimatedDuration),
+        );
         break;
       case 'name':
         stories.sort((a, b) => a.title.compareTo(b.title));
         break;
     }
-    
+
     return stories;
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
-    
+
     if (_stories.isEmpty) {
       return _buildEmptyState(context);
     }
-    
+
     return Column(
       children: [
         // Filters and Sort
@@ -94,13 +96,13 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
           },
         ),
         const SizedBox(height: 16),
-        
+
         // Story Grid/List
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 600;
-              
+
               if (isWide) {
                 // Grid layout for wide screens
                 return _buildGridView();
@@ -114,10 +116,10 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
       ],
     );
   }
-  
+
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -145,7 +147,7 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
       ),
     );
   }
-  
+
   Widget _buildGridView() {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
@@ -168,7 +170,7 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
       },
     );
   }
-  
+
   Widget _buildListView() {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -206,7 +208,7 @@ class _FilterBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -258,10 +260,7 @@ class _FilterBar extends StatelessWidget {
           const SizedBox(width: 16),
           // Sort Dropdown
           PopupMenuButton<String>(
-            icon: Icon(
-              Icons.sort,
-              color: theme.colorScheme.primary,
-            ),
+            icon: Icon(Icons.sort, color: theme.colorScheme.primary),
             tooltip: 'Sort by',
             onSelected: onSortChanged,
             itemBuilder: (context) => [
@@ -322,7 +321,7 @@ class _FilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final chipColor = color ?? theme.colorScheme.primary;
-    
+
     return FilterChip(
       label: Text(label),
       selected: selected,
@@ -342,17 +341,13 @@ class _StoryCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool isGrid;
 
-  const _StoryCard({
-    required this.story,
-    this.onTap,
-    required this.isGrid,
-  });
+  const _StoryCard({required this.story, this.onTap, required this.isGrid});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isAvailable = story.available;
-    
+
     return Card(
       elevation: isAvailable ? 4 : 1,
       child: InkWell(
@@ -398,7 +393,7 @@ class _StoryCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Description
                 Expanded(
                   child: Text(
@@ -406,14 +401,16 @@ class _StoryCard extends StatelessWidget {
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: isAvailable
                           ? theme.colorScheme.onSurfaceVariant
-                          : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+                          : theme.colorScheme.onSurfaceVariant.withValues(
+                              alpha: 0.6,
+                            ),
                     ),
                     maxLines: isGrid ? 2 : 3,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 const SizedBox(height: 12),
-                
+
                 // Footer
                 Row(
                   children: [
@@ -532,16 +529,12 @@ class _AvailabilityIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     if (!available && cooldown > 0) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.timer_off,
-            size: 16,
-            color: theme.colorScheme.error,
-          ),
+          Icon(Icons.timer_off, size: 16, color: theme.colorScheme.error),
           const SizedBox(width: 4),
           Text(
             _formatCooldown(cooldown),
@@ -563,11 +556,7 @@ class _AvailabilityIndicator extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.play_circle_outline,
-              size: 16,
-              color: Colors.green,
-            ),
+            Icon(Icons.play_circle_outline, size: 16, color: Colors.green),
             const SizedBox(width: 4),
             Text(
               'AVAILABLE',
@@ -609,4 +598,3 @@ class _AvailabilityIndicator extends StatelessWidget {
     return '${seconds ~/ 86400}d';
   }
 }
-

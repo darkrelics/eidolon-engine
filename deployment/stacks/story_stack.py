@@ -196,6 +196,7 @@ class StoryStack(Stack):
             # Story API functions
             ("api-story-start", "api_story_start.lambda_handler"),
             ("api-story-abandon", "api_story_abandon.lambda_handler"),
+            ("api-story-history", "api_story_history.lambda_handler"),
             ("api-segment-decision", "api_segment_decision.lambda_handler"),
             ("api-segment-history", "api_segment_history.lambda_handler"),
             ("api-segment-rest", "api_segment_rest.lambda_handler"),
@@ -237,6 +238,7 @@ class StoryStack(Stack):
         logical_id_map = {
             "api-story-start": "ApiStoryStartFunction",
             "api-story-abandon": "ApiStoryAbandonFunction",
+            "api-story-history": "ApiStoryHistoryFunction",
             "api-segment-decision": "ApiSegmentDecisionFunction",
             "api-segment-history": "ApiSegmentHistoryFunction",
             "api-segment-rest": "ApiSegmentRestFunction",
@@ -267,13 +269,13 @@ class StoryStack(Stack):
 
         # Add DynamoDB table names
         table_mapping = {
-            "story_table": "story",
-            "segments_table": "segments",
-            "active_segments_table": "active_segments",
-            "story_history_table": "story_history",
-            "segment_history_table": "segment_history",
-            "characters_table": "characters",
-            "opponents_table": "opponents",
+            "STORY_TABLE": "story",
+            "SEGMENTS_TABLE": "segments",
+            "ACTIVE_SEGMENTS_TABLE": "active_segments",
+            "STORY_HISTORY_TABLE": "story_history",
+            "SEGMENT_HISTORY_TABLE": "segment_history",
+            "CHARACTERS_TABLE": "characters",
+            "OPPONENTS_TABLE": "opponents",
         }
 
         for env_key, table_key in table_mapping.items():

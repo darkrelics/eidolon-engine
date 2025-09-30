@@ -31,6 +31,11 @@ class Config:
     cognito_user_pool_id: str = ""
     cognito_client_id: str = ""
 
+    # Story configuration
+    sqs_processing_queue_url: str = ""
+    sqs_advancement_queue_url: str = ""
+    ssm_story_parameter: str = ""
+
     def save(self, path: str) -> None:
         """Save operational configuration to config.yml."""
         config_path = Path(path)
@@ -41,8 +46,12 @@ class Config:
             with open(config_path, "r") as f:
                 existing_config = yaml.safe_load(f) or {}
 
-        # Update deployment mode
+        # Update deployment mode (support both legacy and nested structures)
         existing_config["DeploymentMode"] = self.deployment_mode
+        existing_config.setdefault("Deployment", {})["Mode"] = self.deployment_mode
+
+        # Update AWS region
+        existing_config.setdefault("AWS", {})["Region"] = self.region
 
         # Update DynamoDB section
         existing_config["DynamoDB"] = {"Tables": self.dynamodb_tables}
@@ -74,6 +83,16 @@ class Config:
             if self.cognito_client_id:
                 existing_config["Cognito"]["ClientId"] = self.cognito_client_id
 
+        # Update Story section if any values are set
+        if self.sqs_processing_queue_url or self.sqs_advancement_queue_url or self.ssm_story_parameter:
+            story_section = existing_config.setdefault("Story", {})
+            if self.sqs_processing_queue_url:
+                story_section["ProcessingQueueUrl"] = self.sqs_processing_queue_url
+            if self.sqs_advancement_queue_url:
+                story_section["AdvancementQueueUrl"] = self.sqs_advancement_queue_url
+            if self.ssm_story_parameter:
+                story_section["SSMParameter"] = self.ssm_story_parameter
+
         with open(config_path, "w") as f:
             yaml.dump(existing_config, f, default_flow_style=False, sort_keys=False)
 
@@ -101,8 +120,8 @@ class Config:
         with open(config_path, "r") as f:
             data = yaml.safe_load(f) or {}
 
-        # Load deployment mode
-        instance.deployment_mode = data.get("DeploymentMode", instance.deployment_mode)
+        # Load deployment mode (support nested structure)
+        instance.deployment_mode = data.get("DeploymentMode") or data.get("Deployment", {}).get("Mode", instance.deployment_mode)
 
         if "AWS" in data:
             instance.region = data.get("AWS", {}).get("Region", instance.region)
@@ -119,5 +138,11 @@ class Config:
         if "Cognito" in data:
             instance.cognito_user_pool_id = data.get("Cognito", {}).get("UserPoolId", "")
             instance.cognito_client_id = data.get("Cognito", {}).get("ClientId", "")
+
+        if "Story" in data:
+            story_section = data.get("Story", {})
+            instance.sqs_processing_queue_url = story_section.get("ProcessingQueueUrl", instance.sqs_processing_queue_url)
+            instance.sqs_advancement_queue_url = story_section.get("AdvancementQueueUrl", instance.sqs_advancement_queue_url)
+            instance.ssm_story_parameter = story_section.get("SSMParameter", instance.ssm_story_parameter)
 
         return instance

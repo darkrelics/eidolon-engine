@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
-import '../models/active_segment.dart';
-import '../utils/time_utils.dart';
+import 'package:eidolon_incremental/models/active_segment.dart';
+import 'package:eidolon_incremental/utils/time_utils.dart';
 
 class RestSegmentDisplay extends StatelessWidget {
   final ActiveSegment activeSegment;
 
-  const RestSegmentDisplay({
-    super.key,
-    required this.activeSegment,
-  });
+  const RestSegmentDisplay({super.key, required this.activeSegment});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isCompleted = activeSegment.status == 'completed';
-    
+
     return Card(
       elevation: 4,
       child: Padding(
@@ -25,11 +22,7 @@ class RestSegmentDisplay extends StatelessWidget {
             // Header with icon
             Row(
               children: [
-                Icon(
-                  Icons.hotel,
-                  size: 32,
-                  color: theme.colorScheme.primary,
-                ),
+                Icon(Icons.hotel, size: 32, color: theme.colorScheme.primary),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -53,14 +46,16 @@ class RestSegmentDisplay extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 16),
-            
+
             // Rest benefits or completion status
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isCompleted 
+                color: isCompleted
                     ? theme.colorScheme.primaryContainer
-                    : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                    : theme.colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.5,
+                      ),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -128,8 +123,7 @@ class RestSegmentDisplay extends StatelessWidget {
                 ],
               ),
             ),
-            
-            
+
             // Time remaining
             if (!isCompleted)
               Padding(
@@ -159,16 +153,21 @@ class RestSegmentDisplay extends StatelessWidget {
   }
 
   Widget _buildProgressIndicator(BuildContext context) {
-    final total = TimeUtils.durationBetween(activeSegment.startTime, activeSegment.endTime);
+    final total = TimeUtils.durationBetween(
+      activeSegment.startTime,
+      activeSegment.endTime,
+    );
     final elapsed = TimeUtils.secondsSince(activeSegment.startTime);
     final progress = total > 0 ? (elapsed / total).clamp(0.0, 1.0) : 0.0;
-    
+
     return Column(
       children: [
         LinearProgressIndicator(
           value: progress,
           minHeight: 8,
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.surfaceContainerHighest,
         ),
         const SizedBox(height: 4),
         Text(
@@ -189,16 +188,9 @@ class RestSegmentDisplay extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 16,
-            color: iconColor,
-          ),
+          Icon(icon, size: 16, color: iconColor),
           const SizedBox(width: 8),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text(text, style: Theme.of(context).textTheme.bodySmall),
         ],
       ),
     );
@@ -206,12 +198,12 @@ class RestSegmentDisplay extends StatelessWidget {
 
   String _formatTimeRemaining() {
     final remaining = TimeUtils.secondsUntil(activeSegment.endTime);
-    
+
     if (remaining <= 0) return 'Complete';
-    
+
     final minutes = remaining ~/ 60;
     final seconds = remaining % 60;
-    
+
     if (minutes > 0) {
       return '$minutes:${seconds.toString().padLeft(2, '0')}';
     }

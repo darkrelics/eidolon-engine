@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/api_service.dart';
-import '../providers/segment_provider.dart';
-import '../models/story.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
+import 'package:eidolon_incremental/providers/segment_provider.dart';
+import 'package:eidolon_incremental/models/story.dart';
 
 class StoryCompletionScreen extends StatefulWidget {
   final String characterId;
@@ -22,7 +22,7 @@ class StoryCompletionScreen extends StatefulWidget {
   State<StoryCompletionScreen> createState() => _StoryCompletionScreenState();
 }
 
-class _StoryCompletionScreenState extends State<StoryCompletionScreen> 
+class _StoryCompletionScreenState extends State<StoryCompletionScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -43,13 +43,9 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
       curve: Curves.easeIn,
     );
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.elasticOut,
-    ));
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.elasticOut),
+    );
 
     _animationController.forward();
   }
@@ -69,33 +65,33 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
     try {
       final apiService = context.read<ApiService>();
       final segmentProvider = context.read<SegmentProvider>();
-      
+
       // Get available stories from character data
       final character = await apiService.getCharacterById(widget.characterId);
       if (character == null) {
         throw Exception('Character not found');
       }
-      
+
       List<StoryMetadata> stories = [];
       if (character.availableStoriesDetails != null) {
         stories = character.availableStoriesDetails!
             .map((story) => StoryMetadata.fromJson(story))
             .toList();
       }
-      
+
       if (stories.isEmpty) {
         throw Exception('No stories available');
       }
-      
+
       // Start the first available story
       await apiService.startStory(
         characterId: widget.characterId,
         storyId: stories.first.storyID,
       );
-      
+
       // Reload the current story/segment
       await segmentProvider.loadCurrentStory(widget.characterId);
-      
+
       // Call the continuation callback if provided
       if (widget.onContinue != null) {
         widget.onContinue!();
@@ -114,7 +110,7 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       body: SafeArea(
@@ -148,7 +144,7 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
                           ),
                         ),
                         const SizedBox(height: 24),
-                        
+
                         // Title
                         Text(
                           'Story Complete!',
@@ -158,7 +154,7 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
                           ),
                         ),
                         const SizedBox(height: 8),
-                        
+
                         // Story title
                         Text(
                           widget.storyTitle,
@@ -166,9 +162,9 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 32),
-                        
+
                         // Rewards section
-                        if (widget.storyRewards != null && 
+                        if (widget.storyRewards != null &&
                             widget.storyRewards!.isNotEmpty) ...[
                           Container(
                             width: double.infinity,
@@ -190,9 +186,10 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
                                     const SizedBox(width: 8),
                                     Text(
                                       'Rewards Earned',
-                                      style: theme.textTheme.titleMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                      style: theme.textTheme.titleMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                     ),
                                   ],
                                 ),
@@ -203,7 +200,7 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
                           ),
                           const SizedBox(height: 24),
                         ],
-                        
+
                         // Error message
                         if (_errorMessage != null)
                           Container(
@@ -231,12 +228,14 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
                               ],
                             ),
                           ),
-                        
+
                         // Continue button
                         SizedBox(
                           width: double.infinity,
                           child: ElevatedButton.icon(
-                            onPressed: _isStartingNewStory ? null : _startNewStory,
+                            onPressed: _isStartingNewStory
+                                ? null
+                                : _startNewStory,
                             icon: _isStartingNewStory
                                 ? const SizedBox(
                                     width: 20,
@@ -247,8 +246,8 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
                                   )
                                 : const Icon(Icons.play_arrow),
                             label: Text(
-                              _isStartingNewStory 
-                                  ? 'Starting...' 
+                              _isStartingNewStory
+                                  ? 'Starting...'
                                   : 'Start New Adventure',
                             ),
                             style: ElevatedButton.styleFrom(
@@ -340,16 +339,9 @@ class _StoryCompletionScreenState extends State<StoryCompletionScreen>
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 20,
-            color: iconColor,
-          ),
+          Icon(icon, size: 20, color: iconColor),
           const SizedBox(width: 8),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          Text(text, style: Theme.of(context).textTheme.bodyMedium),
         ],
       ),
     );

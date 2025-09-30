@@ -14,7 +14,7 @@ from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.requests import get_query_parameter
+from eidolon.requests import get_query_parameter, parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_history import record_abandoned_segment_history
 from eidolon.story_active import get_active_story_segment, mark_segment_as_abandoned
@@ -140,8 +140,23 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
-    # Get character ID from query parameters
-    character_id = get_query_parameter(event, "CharacterID")
+    # Get character ID from body or query parameters (body preferred per API contract)
+    character_id = None
+
+    # Attempt to read from request body first
+    try:
+        body = parse_event_body(event)
+        character_id = body.get("CharacterID") if isinstance(body, dict) else None
+    except ValueError:
+        # Fall through to query string handling
+        character_id = None
+    except Exception as err:
+        return lambda_error(event, err)
+
+    # Fallback to query parameters for backward compatibility
+    if not character_id:
+        character_id = get_query_parameter(event, "CharacterID")
+
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
 

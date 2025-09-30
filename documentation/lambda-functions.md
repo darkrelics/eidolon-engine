@@ -8,14 +8,7 @@ All Lambda functions in this directory serve both the MUD Portal and Incremental
 
 ## Production Deployment
 
-The Lambda functions are deployed as part of the 9-stack CDK architecture:
-
-- **16 Lambda Functions**: All operational with fixed logical IDs
-- **Shared Execution Role**: `eidolon-lambda-execution-role`
-- **Managed IAM Policy**: `eidolon-dynamodb-policy` with DescribeTable permission
-- **Lambda Layer**: Shared `eidolon` library updated post-deployment
-- **Fixed Logical IDs**: Preventing resource recreation on stack updates
-- **Post-Deployment Updates**: Functions updated from S3 artifacts
+The Lambda functions are deployed as part of the architecture described in [Deployment Guide](deployment.md#system-architecture). Highlights include fixed logical IDs, a shared execution role (`eidolon-lambda-execution-role`), the managed `eidolon-dynamodb-policy`, and post-deployment updates sourced from S3 artifacts.
 
 ## Current Implementation Status
 
@@ -132,22 +125,7 @@ All Lambda functions receive standardized environment variables from the Lambda 
 
 ### Database Tables (From DynamoDB Stack Outputs)
 
-All 14 tables with lowercase environment variable names:
-
-- `players_table` - Players table
-- `characters_table` - Characters table with GameMode field
-- `archetypes_table` - Character archetypes
-- `items_table` - Items table
-- `rooms_table` - Rooms table
-- `exits_table` - Room exits
-- `prototypes_table` - Item prototypes
-- `motd_table` - Messages of the day
-- `story_table` - Story metadata
-- `segments_table` - Story segment definitions
-- `active_segments_table` - Active segment instances
-- `story_history_table` - Story completion tracking
-- `segment_history_table` - Segment completion history
-- `opponents_table` - Combat opponent definitions
+Environment variable names follow the table identifiers in [Database Schema](schema.md); each Lambda reads the lowercase `_table` variables emitted by the stack outputs.
 
 ### Function-Specific Variables
 

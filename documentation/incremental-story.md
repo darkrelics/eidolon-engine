@@ -7,21 +7,14 @@ The Eidolon Engine's incremental game mode features a story-driven progression s
 ### Core Concepts
 
 - **Story**: A complete narrative arc available to characters based on their archetype and progress
-- **Segment**: A single timed activity within a story (mechanical challenges, decisions, or rest periods)
+- **Segment**: A single timed activity within a story (mechanical challenges, decisions, or rest periods) — see [Incremental Requirements](incremental-requirements.md#24-segment-types) for canonical definitions
 - **Front-loaded Processing**: All outcomes are calculated when segments start, not when they end
 - **Event-driven Advancement**: A polling system checks every minute for completed segments
-- **Mode Exclusivity**: Characters can only be active in one game mode at a time (MUD or Incremental)
+- **Mode Exclusivity**: Characters can only be active in one game mode at a time (MUD or Incremental); refer to [Character Mode Workflow](incremental-mud-workflow.md) for the full lifecycle
 
 ### Production Infrastructure
 
-The story system is deployed as part of the 9-stack CDK architecture:
-
-- **Story Stack**: Available in Incremental and Hybrid deployment modes
-- **16 Lambda Functions**: Including 12 story-related functions
-- **14 DynamoDB Tables**: 5 dedicated to story/segment data
-- **SQS Queues**: Dual queues for processing and advancement
-- **EventBridge**: 1-minute polling rule (auto-enabled when stories active)
-- **Fixed Logical IDs**: Preventing resource recreation on updates
+The story system relies on the infrastructure described in the [Deployment Guide](deployment.md#system-architecture) and shares the same Lambda and DynamoDB resources referenced throughout that document.
 
 ## Schema Elements
 
@@ -130,7 +123,7 @@ Active → Abandoned
     - Clear ActiveStoryID and ActiveSegmentID
     - Set GameMode = "None"
     - Update StoryHistory with FinalOutcome = "abandoned"
-    - Delete ActiveSegment record
+    - Mark current ActiveSegment Status="abandoned" and ProcessingStatus="processed" so pollers ignore it (record retained for audit)
   Note: Only player-initiated quits count as abandoned, not story failures
 ```
 

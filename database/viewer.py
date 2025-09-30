@@ -1,10 +1,6 @@
-"""
-Eidolon Engine
+"""Simple CLI to display the contents of DynamoDB tables."""
 
-Copyright 2024-2025 Jason E. Robinson
-
-"""
-
+import argparse
 import os
 import sys
 
@@ -12,7 +8,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
 
-# Add parent directory to path to import eidolon modules
+# Ensure eidolon modules can be imported when run as a script
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -92,9 +88,27 @@ def view_table(table_name, table_enum):
         print(f"Unexpected error scanning table {table_name}: {err}")
 
 
-def main():
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="View the contents of Eidolon DynamoDB tables.")
+    parser.add_argument(
+        "--region",
+        default="us-east-1",
+        help="AWS region for DynamoDB (default: us-east-1)",
+    )
+    parser.add_argument(
+        "tables",
+        nargs="*",
+        metavar="TABLE",
+        help="Optional logical table names to display (defaults to all)",
+    )
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace):
     """View contents of all DynamoDB tables."""
     try:
+        dynamo.set_region(args.region)
+
         # List all tables
         print("Available tables:")
         for logical_name, table_enum in TABLE_NAMES.items():
@@ -103,7 +117,12 @@ def main():
         print("=" * 50)
 
         # View contents of each table
-        for logical_name, table_enum in TABLE_NAMES.items():
+        tables_to_show = args.tables if args.tables else list(TABLE_NAMES.keys())
+        for logical_name in tables_to_show:
+            table_enum = TABLE_NAMES.get(logical_name)
+            if not table_enum:
+                print(f"Unknown table '{logical_name}'. Skipping.")
+                continue
             view_table(logical_name, table_enum)
 
     except KeyError as err:
@@ -114,4 +133,5 @@ def main():
         sys.exit(1)
 
 
-main()
+if __name__ == "__main__":
+    main(parse_args())

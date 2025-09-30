@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/character.dart';
+import 'package:eidolon_incremental/models/character.dart';
 
 class ExpandableDescription extends StatefulWidget {
   final String description;
@@ -70,7 +70,8 @@ class PrerequisitesDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final minSkills = prerequisites['minSkills'] as Map<String, dynamic>? ?? {};
-    final requiredItems = prerequisites['requiredItems'] as List<dynamic>? ?? [];
+    final requiredItems =
+        prerequisites['requiredItems'] as List<dynamic>? ?? [];
 
     if (minSkills.isEmpty && requiredItems.isEmpty) {
       return const SizedBox.shrink();
@@ -173,10 +174,7 @@ class PrerequisitesDisplay extends StatelessWidget {
 class RewardsPreview extends StatelessWidget {
   final Map<String, String> rewardTiers;
 
-  const RewardsPreview({
-    super.key,
-    required this.rewardTiers,
-  });
+  const RewardsPreview({super.key, required this.rewardTiers});
 
   @override
   Widget build(BuildContext context) {
@@ -187,18 +185,31 @@ class RewardsPreview extends StatelessWidget {
     }
 
     // Define the order for reward tiers from best to worst
-    final tierOrder = ['Exceptional', 'Excellent', 'Good', 'Normal', 'Basic', 'Minimal', 'Failure', 'Death'];
-    
+    final tierOrder = [
+      'Exceptional',
+      'Excellent',
+      'Good',
+      'Normal',
+      'Basic',
+      'Minimal',
+      'Failure',
+      'Death',
+    ];
+
     // Sort the reward tiers according to the defined order
     final sortedEntries = rewardTiers.entries.toList()
       ..sort((a, b) {
-        final aIndex = tierOrder.indexWhere((t) => t.toLowerCase() == a.key.toLowerCase());
-        final bIndex = tierOrder.indexWhere((t) => t.toLowerCase() == b.key.toLowerCase());
-        
+        final aIndex = tierOrder.indexWhere(
+          (t) => t.toLowerCase() == a.key.toLowerCase(),
+        );
+        final bIndex = tierOrder.indexWhere(
+          (t) => t.toLowerCase() == b.key.toLowerCase(),
+        );
+
         // If not found in order list, put at the end
         final aOrder = aIndex == -1 ? tierOrder.length : aIndex;
         final bOrder = bIndex == -1 ? tierOrder.length : bIndex;
-        
+
         return aOrder.compareTo(bOrder);
       });
 
@@ -248,10 +259,7 @@ class RewardsPreview extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: Text(
-                      description,
-                      style: theme.textTheme.bodySmall,
-                    ),
+                    child: Text(description, style: theme.textTheme.bodySmall),
                   ),
                 ],
               ),
@@ -312,10 +320,7 @@ class RewardsPreview extends StatelessWidget {
 class StoryTypeChip extends StatelessWidget {
   final String type;
 
-  const StoryTypeChip({
-    super.key,
-    required this.type,
-  });
+  const StoryTypeChip({super.key, required this.type});
 
   @override
   Widget build(BuildContext context) {
@@ -353,10 +358,7 @@ class StoryTypeChip extends StatelessWidget {
         children: [
           Icon(icon, size: 12),
           const SizedBox(width: 2),
-          Text(
-            type,
-            style: theme.textTheme.labelSmall,
-          ),
+          Text(type, style: theme.textTheme.labelSmall),
         ],
       ),
     );

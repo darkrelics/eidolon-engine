@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../models/character.dart';
-import '../models/active_segment.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/models/active_segment.dart';
 import 'base_provider.dart';
 
 /// Provider for character state management
@@ -26,16 +26,16 @@ class CharacterProvider extends BaseProvider {
   }
 
   /// Load character from local storage with improved error recovery.
-  /// 
+  ///
   /// This method attempts to recover from corrupted data by:
   /// 1. Clearing corrupted character data and continuing
   /// 2. Clearing corrupted segment data and continuing
   /// 3. Always notifying listeners even if loading fails
-  /// 
+  ///
   /// This ensures the app remains functional even if local storage is corrupted.
   Future<void> _loadFromStorage() async {
     bool dataCleared = false;
-    
+
     try {
       // Attempt to load character data
       final characterJson = _prefs.getString(_characterKey);
@@ -44,7 +44,9 @@ class CharacterProvider extends BaseProvider {
           _character = Character.fromJson(jsonDecode(characterJson));
         } catch (characterError) {
           // Character data is corrupted - clear it and continue
-          debugPrint('Corrupted character data detected, clearing: $characterError');
+          debugPrint(
+            'Corrupted character data detected, clearing: $characterError',
+          );
           await _prefs.remove(_characterKey);
           _character = null;
           dataCleared = true;
@@ -64,7 +66,9 @@ class CharacterProvider extends BaseProvider {
           }
         } catch (segmentError) {
           // Segment data is corrupted - clear it and continue
-          debugPrint('Corrupted segment data detected, clearing: $segmentError');
+          debugPrint(
+            'Corrupted segment data detected, clearing: $segmentError',
+          );
           await _prefs.remove(_activeSegmentKey);
           _activeSegment = null;
           dataCleared = true;
@@ -73,10 +77,12 @@ class CharacterProvider extends BaseProvider {
 
       // Always notify listeners, even if some data failed to load
       notifyListeners();
-      
+
       // Log if we had to clear corrupted data
       if (dataCleared) {
-        debugPrint('Some corrupted data was cleared. App will continue normally.');
+        debugPrint(
+          'Some corrupted data was cleared. App will continue normally.',
+        );
       }
     } catch (e) {
       // Catastrophic error - log it but ensure app continues
@@ -90,7 +96,7 @@ class CharacterProvider extends BaseProvider {
   }
 
   /// Update character from server response with proper error handling.
-  /// 
+  ///
   /// This method follows the "persist first, then update state" pattern to prevent
   /// data loss if persistence fails. The state is only updated after successful
   /// persistence to storage, preventing race conditions where the UI shows data
@@ -100,12 +106,16 @@ class CharacterProvider extends BaseProvider {
       try {
         // CRITICAL: Persist to storage FIRST before updating in-memory state
         // This ensures data is safely stored before UI reflects the change
-        await _prefs.setString(_characterKey, jsonEncode(newCharacter.toJson()));
-        
+        await _prefs.setString(
+          _characterKey,
+          jsonEncode(newCharacter.toJson()),
+        );
+
         // Only update in-memory state after successful persistence
         _character = newCharacter;
-        
+
         debugPrint('Character successfully updated and persisted');
+        notifyListeners();
       } catch (e) {
         // If persistence fails, don't update state - keep old data
         debugPrint('Failed to persist character update: $e');
@@ -116,7 +126,7 @@ class CharacterProvider extends BaseProvider {
   }
 
   /// Set active segment when starting with proper error handling.
-  /// 
+  ///
   /// Uses the same "persist first" pattern to ensure data integrity.
   /// If storage fails, the segment won't be set in memory, preventing
   /// the UI from showing an unsaved segment.
@@ -125,11 +135,12 @@ class CharacterProvider extends BaseProvider {
       try {
         // CRITICAL: Persist to storage FIRST
         await _prefs.setString(_activeSegmentKey, jsonEncode(segment));
-        
+
         // Only update in-memory state after successful persistence
         _activeSegment = segment;
-        
+
         debugPrint('Active segment successfully set and persisted');
+        notifyListeners();
       } catch (e) {
         // If persistence fails, don't update state
         debugPrint('Failed to persist active segment: $e');
@@ -139,7 +150,7 @@ class CharacterProvider extends BaseProvider {
   }
 
   /// Clear active segment when completed with proper error handling.
-  /// 
+  ///
   /// Clears storage first, then memory. If storage clearing fails,
   /// we still clear memory to prevent showing stale data, but log
   /// the error for debugging.
@@ -152,14 +163,14 @@ class CharacterProvider extends BaseProvider {
         // Log but don't fail - we still want to clear from memory
         debugPrint('Warning: Failed to remove segment from storage: $e');
       }
-      
+
       // Always clear from memory to prevent showing stale data
       _activeSegment = null;
-      
+
       debugPrint('Active segment cleared');
+      notifyListeners();
     }, showLoading: false);
   }
-
 
   /// Create new character (called after server creates it)
   Future<void> createCharacter(Character newCharacter) async {
@@ -167,7 +178,7 @@ class CharacterProvider extends BaseProvider {
   }
 
   /// Clear all character data with proper error handling.
-  /// 
+  ///
   /// This method clears both storage and memory. Storage operations are
   /// attempted first, but memory is always cleared regardless of storage
   /// success to ensure the UI doesn't show stale data.
@@ -175,7 +186,7 @@ class CharacterProvider extends BaseProvider {
     await executeAsyncVoid(() async {
       // Track any storage errors for logging
       bool storageError = false;
-      
+
       try {
         // Attempt to clear from storage first
         await Future.wait([
@@ -187,17 +198,20 @@ class CharacterProvider extends BaseProvider {
         debugPrint('Warning: Failed to clear some data from storage: $e');
         storageError = true;
       }
-      
+
       // ALWAYS clear from memory to ensure UI shows correct state
       // This prevents the app from showing stale data even if storage fails
       _character = null;
       _activeSegment = null;
-      
+
       if (storageError) {
         debugPrint('Character data cleared from memory (storage had errors)');
       } else {
-        debugPrint('Character data successfully cleared from storage and memory');
+        debugPrint(
+          'Character data successfully cleared from storage and memory',
+        );
       }
+      notifyListeners();
     }, showLoading: false);
   }
 

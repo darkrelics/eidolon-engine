@@ -85,11 +85,13 @@ class ThemeProvider extends ChangeNotifier {
     SystemChrome.setSystemUIOverlayStyle(
       SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness:
-            _themeMode == ThemeMode.dark ? Brightness.light : Brightness.dark,
+        statusBarIconBrightness: _themeMode == ThemeMode.dark
+            ? Brightness.light
+            : Brightness.dark,
         systemNavigationBarColor: _themeData.scaffoldBackgroundColor,
-        systemNavigationBarIconBrightness:
-            _themeMode == ThemeMode.dark ? Brightness.light : Brightness.dark,
+        systemNavigationBarIconBrightness: _themeMode == ThemeMode.dark
+            ? Brightness.light
+            : Brightness.dark,
       ),
     );
   }
@@ -102,7 +104,7 @@ class ThemeProvider extends ChangeNotifier {
     const Color darkTextPrimary = Color(0xFFE6E6E6);
     const Color darkTextSecondary = Color(0xFFAEAEB2);
     const Color darkDivider = Color(0xFF505050);
-    
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
@@ -199,10 +201,7 @@ class ThemeProvider extends ChangeNotifier {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
       ),
-      dividerTheme: const DividerThemeData(
-        color: darkDivider,
-        thickness: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: darkDivider, thickness: 1),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -228,7 +227,7 @@ class ThemeProvider extends ChangeNotifier {
     const Color lightTextPrimary = Color(0xDE000000); // Black 87%
     const Color lightTextSecondary = Color(0x8A000000); // Black 54%
     const Color lightDivider = Color(0xFFE0E0E0);
-    
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
@@ -324,10 +323,7 @@ class ThemeProvider extends ChangeNotifier {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
       ),
-      dividerTheme: const DividerThemeData(
-        color: lightDivider,
-        thickness: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: lightDivider, thickness: 1),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -363,8 +359,9 @@ class ThemeProvider extends ChangeNotifier {
 
   /// Toggles between light and dark themes
   Future<void> toggleTheme() async {
-    final newMode =
-        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    final newMode = _themeMode == ThemeMode.light
+        ? ThemeMode.dark
+        : ThemeMode.light;
     await setThemeMode(newMode);
   }
 
@@ -393,7 +390,7 @@ class ThemeModeSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final theme = Theme.of(context);
-    
+
     return PopupMenuButton<ThemeMode>(
       icon: Icon(
         _getThemeIcon(themeProvider.themeMode),

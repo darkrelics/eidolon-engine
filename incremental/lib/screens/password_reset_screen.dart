@@ -5,8 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/auth_provider.dart';
-import '../utils/error_handler.dart';
+import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
 
 class PasswordResetScreen extends StatefulWidget {
   const PasswordResetScreen({super.key});
@@ -29,6 +29,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   Future<void> _handlePasswordReset() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -38,17 +39,26 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       await authProvider.forgotPassword(_emailController.text.trim());
 
       if (mounted) {
-        Navigator.pushNamed(context, '/password-reset-confirm', arguments: _emailController.text.trim());
-
-        ScaffoldMessenger.of(
+        Navigator.pushNamed(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Reset code sent to your email'), backgroundColor: Colors.green));
+          '/password-reset-confirm',
+          arguments: _emailController.text.trim(),
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reset code sent to your email'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -76,7 +86,11 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Forgot Your Password?', style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
+                  Text(
+                    'Forgot Your Password?',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Enter your email address and we\'ll send you a code to reset your password.',
@@ -98,7 +112,9 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -108,7 +124,11 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                   FilledButton(
                     onPressed: _isLoading ? null : _handlePasswordReset,
                     child: _isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Send Reset Code'),
                   ),
                   const SizedBox(height: 16),

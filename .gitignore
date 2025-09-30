@@ -63,11 +63,13 @@ go.work
 
 **/.dart_tool/
 
+.dart_tool/**
+
 **/*.metadata
 
 incremental/ios
 incremental/android
-
+sectio
 # Claude Code specific files
 CLAUDE.md
 .claude/

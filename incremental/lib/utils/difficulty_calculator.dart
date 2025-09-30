@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/character.dart';
+import 'package:eidolon_incremental/models/character.dart';
 
-enum DifficultyLevel {
-  trivial,
-  easy,
-  moderate,
-  hard,
-  extreme,
-}
+enum DifficultyLevel { trivial, easy, moderate, hard, extreme }
 
 class DifficultyCalculator {
   /// Calculate story difficulty based on character's skills vs required checks

@@ -96,11 +96,11 @@ abstract class BaseApiService {
         }
 
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        
+
         if (parser != null) {
           return parser(json);
         }
-        
+
         return json as T;
       } else if (response.statusCode == 404) {
         throw NotFoundException('Resource not found');
@@ -108,13 +108,15 @@ abstract class BaseApiService {
         throw UnauthorizedException('Unauthorized');
       } else {
         // Parse error message
-        String errorMessage = 'Request failed with status ${response.statusCode}';
+        String errorMessage =
+            'Request failed with status ${response.statusCode}';
         try {
           final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
-          errorMessage = errorBody['Error'] ?? 
-                        errorBody['error'] ?? 
-                        errorBody['message'] ?? 
-                        errorMessage;
+          errorMessage =
+              errorBody['Error'] ??
+              errorBody['error'] ??
+              errorBody['message'] ??
+              errorMessage;
         } catch (_) {
           // Use default error message if parsing fails
         }

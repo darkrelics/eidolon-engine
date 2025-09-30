@@ -1,10 +1,4 @@
-"""
-Eidolon Engine
-
-Copyright 2024-2025 Jason E. Robinson
-
-This module adds a Message of the Day (MOTD) to the DynamoDB database.
-"""
+"""Add a Message of the Day (MOTD) entry to the DynamoDB motd table."""
 
 import argparse
 import os
@@ -16,7 +10,7 @@ from uuid_extension import uuid7
 
 from eidolon.dynamo import TableName, dynamo
 
-# Add parent directory to path to import eidolon modules
+# Ensure eidolon modules can be imported when running as a script
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
@@ -75,11 +69,18 @@ def main() -> None:
         action="store_true",
         help="Set this flag to make the MOTD inactive",
     )
+    parser.add_argument(
+        "--region",
+        default="us-east-1",
+        help="AWS region for DynamoDB (default: us-east-1)",
+    )
 
     args = parser.parse_args()
 
     # The MOTD is active by default unless --inactive is specified
     is_active = not args.inactive
+
+    dynamo.set_region(args.region)
 
     # Add or update the MOTD
     try:
@@ -92,4 +93,5 @@ def main() -> None:
         sys.exit(1)
 
 
-main()
+if __name__ == "__main__":
+    main()

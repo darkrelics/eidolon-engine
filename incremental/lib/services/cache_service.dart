@@ -13,7 +13,7 @@ class CacheService {
   late SharedPreferences _prefs;
   final Map<String, dynamic> _memoryCache = {};
   final Map<String, DateTime> _memoryCacheTimestamps = {};
-  
+
   /// Configurable cleanup threshold for expired cache entries
   Duration _cleanupThreshold = _defaultCleanupThreshold;
 
@@ -25,18 +25,18 @@ class CacheService {
     _prefs = await SharedPreferences.getInstance();
     await _cleanExpiredCache();
   }
-  
+
   /// Set the cleanup threshold for expired cache entries
   void setCleanupThreshold(Duration threshold) {
     _cleanupThreshold = threshold;
   }
-  
+
   /// Get the current cleanup threshold
   Duration get cleanupThreshold => _cleanupThreshold;
 
   /// Store data in cache with optional TTL
   Future<void> set(
-    String key, 
+    String key,
     dynamic value, {
     Duration ttl = _defaultTTL,
   }) async {
@@ -53,7 +53,7 @@ class CacheService {
       final jsonString = jsonEncode(value);
       await _prefs.setString(cacheKey, jsonString);
       await _prefs.setString(timestampKey, now.toIso8601String());
-      
+
       // Schedule cleanup
       if (ttl != Duration.zero) {
         Timer(ttl, () => remove(key));
@@ -76,13 +76,13 @@ class CacheService {
     // Check persistent cache
     final cacheKey = '$_cachePrefix$key';
     final timestampKey = '$_timestampPrefix$key';
-    
+
     final jsonString = _prefs.getString(cacheKey);
     final timestampString = _prefs.getString(timestampKey);
-    
+
     if (jsonString != null && timestampString != null) {
       final timestamp = DateTime.parse(timestampString);
-      
+
       if (_isValid(timestamp, maxAge)) {
         try {
           final value = jsonDecode(jsonString);
@@ -95,7 +95,7 @@ class CacheService {
         }
       }
     }
-    
+
     return null;
   }
 
@@ -108,7 +108,7 @@ class CacheService {
   Future<void> remove(String key) async {
     _memoryCache.remove(key);
     _memoryCacheTimestamps.remove(key);
-    
+
     await _prefs.remove('$_cachePrefix$key');
     await _prefs.remove('$_timestampPrefix$key');
   }
@@ -117,7 +117,7 @@ class CacheService {
   Future<void> clear() async {
     _memoryCache.clear();
     _memoryCacheTimestamps.clear();
-    
+
     final keys = _prefs.getKeys();
     for (final key in keys) {
       if (key.startsWith(_cachePrefix) || key.startsWith(_timestampPrefix)) {
@@ -130,7 +130,7 @@ class CacheService {
   Future<void> _cleanExpiredCache() async {
     final keys = _prefs.getKeys();
     final now = DateTime.now();
-    
+
     for (final key in keys) {
       if (key.startsWith(_timestampPrefix)) {
         final timestampString = _prefs.getString(key);
@@ -148,7 +148,7 @@ class CacheService {
 
   bool _isValid(DateTime timestamp, Duration? maxAge) {
     if (maxAge == null) return true;
-    
+
     final age = DateTime.now().difference(timestamp);
     return age <= maxAge;
   }

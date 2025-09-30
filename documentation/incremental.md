@@ -27,20 +27,18 @@ The incremental module serves as:
 
 ### Segment Types
 
-1. **Decision**: Player choices with configurable timeouts
-2. **Mechanical**: Skill challenges and/or combat using MUD mechanics
-3. **Rest**: Healing periods where wounds recover
+Canonical segment definitions live in [Incremental Requirements](incremental-requirements.md#24-segment-types); the system supports decision, mechanical, and rest segments.
 
 ### Character Integration
 
 - **Shared Character Data**: Same character plays both MUD and Incremental
-- **Mode Exclusivity**: GameMode field prevents concurrent play
+- **Mode Exclusivity**: GameMode field prevents concurrent play (see [Character Mode Workflow](incremental-mud-workflow.md))
 - **Persistent State**: Wounds, inventory, skills, and location carry between modes
 - **Unified Progression**: Experience gained in either mode contributes to growth
 
 ## Technical Overview
 
-The incremental game is built on a serverless architecture using AWS Lambda functions, DynamoDB tables, and event-driven processing via SQS and EventBridge.
+The incremental game is built on the serverless architecture described in [Deployment Guide](deployment.md#system-architecture), using AWS Lambda functions, DynamoDB tables, and event-driven processing via SQS and EventBridge.
 
 - **Architecture**: See [Technical Design](incremental-design.md) for detailed architecture
 - **API**: See [API Documentation](incremental-api.md) for endpoints and Lambda functions
@@ -64,13 +62,7 @@ Players can access the Incremental game through the portal deployed at `https://
 
 ### For Developers
 
-**Deployment**:
-
-```bash
-cd deployment
-python3 deploy.py
-# Select "incremental" or "hybrid" mode when prompted
-```
+**Deployment**: Follow the commands in [Deployment Guide](deployment.md#quick-start) and select the incremental or hybrid mode when prompted.
 
 **Key Environment Variables** (set in Lambda Stack):
 

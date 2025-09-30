@@ -57,123 +57,95 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         logger.error(f"Failed to query active segment for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to query active segment: {err}") from err
 
-    if not active_segments:
-        # No active segment found - check character state to be sure
-        logger.info(f"No active segment found for {character_id}, checking character state")
+    story_id = None
+    story_instance_id = None
+    story_title = "Unknown Story"
+    active_segment = active_segments[0] if active_segments else None
+
+    active_segment_id = None
+
+    if active_segment:
+        active_segment_id = active_segment.get("ActiveSegmentID")
+        story_id = active_segment.get("StoryID")
+        story_instance_id = active_segment.get("StoryInstanceID")
+
+        if story_id:
+            try:
+                story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
+                if story:
+                    story_title = story.get("Title", "Unknown Story")
+            except ClientError:
+                logger.warning(f"Could not fetch story title for {story_id}")
+    else:
+        logger.info(f"No active segment found for {character_id}, loading latest story history")
 
         try:
             character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
             if not character:
                 raise ValueError(f"Character not found: {character_id}")
-
-            # Check if character has an active story
-            active_story_id = character.get("ActiveStoryID")
-
-            if not active_story_id:
-                # No active story at all - return empty
-                logger.info(f"Character {character_id} has no active story")
-                return {"CharacterID": character_id, "StoryID": None, "Segments": []}
-
-            # Character has an active story but no segment yet (between segments)
-            # or story just completed - get history for the current story instance
-            logger.info(f"Character has story {active_story_id} but no active segment - fetching recent history")
-
-            # Get the most recent story instance from story_history
-            try:
-                story_histories = dynamo.query(
-                    TableName.STORY_HISTORY,
-                    KeyConditionExpression="CharacterID = :cid",
-                    FilterExpression="StoryID = :sid",
-                    ExpressionAttributeValues={
-                        ":cid": character_id,
-                        ":sid": active_story_id,
-                    },
-                    ScanIndexForward=False,  # Most recent first
-                    Limit=1,
-                )
-
-                if story_histories:
-                    story_instance_id = story_histories[0].get("StoryInstanceID")
-
-                    # Get all segments for this story instance
-                    segments = dynamo.query(
-                        TableName.SEGMENT_HISTORY,
-                        KeyConditionExpression="CharacterID = :cid",
-                        FilterExpression="StoryInstanceID = :siid",
-                        ExpressionAttributeValues={
-                            ":cid": character_id,
-                            ":siid": story_instance_id,
-                        },
-                    )
-
-                    # Sort by StartTime ascending (first to last)
-                    sorted_segments = sorted(segments or [], key=lambda s: s.get("StartTime", 0))
-
-                    # Convert to response format
-                    segment_items = []
-                    for seg in sorted_segments:
-                        segment_items.append(
-                            {
-                                "ActiveSegmentID": seg.get("ActiveSegmentID"),
-                                "SegmentID": seg.get("SegmentID"),
-                                "SegmentType": seg.get("SegmentType", "mechanical"),
-                                "Status": seg.get("Status"),
-                                "Outcome": seg.get("Outcome"),
-                                "StartTime": from_unix(seg.get("StartTime", 0)) if seg.get("StartTime") else "",
-                                "EndTime": from_unix(seg.get("CompletedAt", 0)) if seg.get("CompletedAt") else "",
-                                "ClientEvents": seg.get("ClientEvents", []),
-                            }
-                        )
-
-                    return {
-                        "CharacterID": character_id,
-                        "StoryID": active_story_id,
-                        "Segments": segment_items,
-                    }
-            except ClientError as err:
-                logger.warning(f"Failed to get story history segments: {err}")
-
         except ClientError as err:
             logger.error(f"Failed to get character data: {err}")
+            raise RuntimeError(f"Failed to load character: {err}") from err
 
-        # Fallback to empty if we can't determine state
+        preferred_story_id = character.get("ActiveStoryID")
+
+        try:
+            history_query_values = {":cid": character_id}
+            history_kwargs = {
+                "KeyConditionExpression": "CharacterID = :cid",
+                "ExpressionAttributeValues": history_query_values,
+                "ScanIndexForward": False,
+            }
+
+            if preferred_story_id:
+                history_kwargs["FilterExpression"] = "StoryID = :sid"
+                history_query_values[":sid"] = preferred_story_id
+
+            story_histories = dynamo.query(TableName.STORY_HISTORY, **history_kwargs)
+
+            if not story_histories and preferred_story_id:
+                # Retry without filter to get the most recent story if filter returned nothing
+                history_kwargs.pop("FilterExpression", None)
+                story_histories = dynamo.query(TableName.STORY_HISTORY, **history_kwargs)
+
+            if not story_histories:
+                logger.info(f"No story history entries found for {character_id}")
+                return {"CharacterID": character_id, "StoryID": None, "Segments": []}
+
+            latest_story = story_histories[0]
+            story_id = latest_story.get("StoryID")
+            story_instance_id = latest_story.get("StoryInstanceID")
+            story_title = latest_story.get("StoryTitle", story_title)
+        except ClientError as err:
+            logger.error(f"Failed to query story history for {character_id} Error: {err}", exc_info=True)
+            raise RuntimeError(f"Failed to query story history: {err}") from err
+
+    if not story_id and not story_instance_id:
+        logger.info(f"No story context available for {character_id}")
         return {"CharacterID": character_id, "StoryID": None, "Segments": []}
 
-    active_segment = active_segments[0]
-    story_id = active_segment.get("StoryID")
-    story_instance_id = active_segment.get("StoryInstanceID")
-
-    # Get story title from stories table for Flutter client
-    story_title = "Unknown Story"
-    if story_id:
-        try:
-            story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
-            if story:
-                story_title = story.get("Title", "Unknown Story")
-        except ClientError:
-            # If we can't get the story title, continue with default
-            logger.warning(f"Could not fetch story title for {story_id}")
-
-    # Query completed segments from SegmentHistory table
-    # Filter by StoryInstanceID to get only current run's segments
+    # Query completed segments from SegmentHistory table, favouring StoryInstanceID when available
     try:
-        filter_expr = "StoryID = :sid"
-        expr_values = {
-            ":cid": character_id,
-            ":sid": story_id,
+        expr_values = {":cid": character_id}
+        query_kwargs = {
+            "KeyConditionExpression": "CharacterID = :cid",
+            "ExpressionAttributeValues": expr_values,
         }
 
-        # If we have StoryInstanceID, use it for precise filtering
+        filter_parts = []
+
+        if story_id:
+            filter_parts.append("StoryID = :sid")
+            expr_values[":sid"] = story_id
+
         if story_instance_id:
-            filter_expr += " AND StoryInstanceID = :siid"
+            filter_parts.append("StoryInstanceID = :siid")
             expr_values[":siid"] = story_instance_id
 
-        segments = dynamo.query(
-            TableName.SEGMENT_HISTORY,
-            KeyConditionExpression="CharacterID = :cid",
-            FilterExpression=filter_expr,
-            ExpressionAttributeValues=expr_values,
-        )
+        if filter_parts:
+            query_kwargs["FilterExpression"] = " AND ".join(filter_parts)
+
+        segments = dynamo.query(TableName.SEGMENT_HISTORY, **query_kwargs)
     except ClientError as err:
         logger.error(
             f"Failed to query segment history for {character_id} Error: {err}",
@@ -184,6 +156,9 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
     # Format segments for response with all the data Flutter expects
     formatted_segments: list = []
     for segment in segments or []:
+        if active_segment_id and segment.get("ActiveSegmentID") == active_segment_id:
+            continue
+
         # Convert Unix timestamps to ISO 8601 for API response
         start_time_unix = segment.get("StartTime", 0)
         end_time_unix = segment.get("EndTime", 0)
@@ -193,6 +168,8 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
             "ActiveSegmentID": segment.get("ActiveSegmentID"),
             "SegmentID": segment.get("SegmentID"),
             "SegmentType": segment.get("SegmentType"),
+            "SegmentTitle": segment.get("SegmentTitle"),
+            "SegmentActivity": segment.get("SegmentActivity"),
             "StartTime": from_unix(start_time_unix) if start_time_unix else None,
             "EndTime": from_unix(end_time_unix) if end_time_unix else None,
             "StoryTitle": story_title,

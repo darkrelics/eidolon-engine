@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
-import '../services/auth_service.dart';
+import 'package:eidolon_incremental/services/auth_service.dart';
 
 enum AuthStatus { uninitialized, authenticated, unauthenticated, loading }
 
@@ -43,7 +43,9 @@ class AuthProvider extends ChangeNotifier {
       }
       notifyListeners();
     } catch (err) {
-      debugPrint('AuthProvider $_instanceId: Error during initialization: $err');
+      debugPrint(
+        'AuthProvider $_instanceId: Error during initialization: $err',
+      );
       _status = AuthStatus.unauthenticated;
       notifyListeners();
     }
@@ -124,7 +126,11 @@ class AuthProvider extends ChangeNotifier {
     await _authService.forgotPassword(email);
   }
 
-  Future<void> confirmPassword(String email, String code, String newPassword) async {
+  Future<void> confirmPassword(
+    String email,
+    String code,
+    String newPassword,
+  ) async {
     await _authService.confirmPassword(email, code, newPassword);
   }
 

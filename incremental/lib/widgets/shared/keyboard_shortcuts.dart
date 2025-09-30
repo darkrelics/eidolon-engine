@@ -26,14 +26,14 @@ class GameKeyboardShortcuts extends StatelessWidget {
       shortcuts: <LogicalKeySet, Intent>{
         // Refresh
         LogicalKeySet(LogicalKeyboardKey.f5): const RefreshIntent(),
-        LogicalKeySet(LogicalKeyboardKey.keyR, LogicalKeyboardKey.control): 
+        LogicalKeySet(LogicalKeyboardKey.keyR, LogicalKeyboardKey.control):
             const RefreshIntent(),
-        
+
         // Navigation
         LogicalKeySet(LogicalKeyboardKey.escape): const EscapeIntent(),
         LogicalKeySet(LogicalKeyboardKey.tab): const TabIntent(),
         LogicalKeySet(LogicalKeyboardKey.space): const TogglePanelIntent(),
-        
+
         // Decision shortcuts (1-9)
         LogicalKeySet(LogicalKeyboardKey.digit1): const NumberIntent(1),
         LogicalKeySet(LogicalKeyboardKey.digit2): const NumberIntent(2),
@@ -44,7 +44,7 @@ class GameKeyboardShortcuts extends StatelessWidget {
         LogicalKeySet(LogicalKeyboardKey.digit7): const NumberIntent(7),
         LogicalKeySet(LogicalKeyboardKey.digit8): const NumberIntent(8),
         LogicalKeySet(LogicalKeyboardKey.digit9): const NumberIntent(9),
-        
+
         // Arrow keys for panel navigation
         LogicalKeySet(LogicalKeyboardKey.arrowLeft): const NavigateIntent(-1),
         LogicalKeySet(LogicalKeyboardKey.arrowRight): const NavigateIntent(1),
@@ -57,16 +57,14 @@ class GameKeyboardShortcuts extends StatelessWidget {
           EscapeIntent: CallbackAction<EscapeIntent>(
             onInvoke: (_) => onEscape?.call(),
           ),
-          TabIntent: CallbackAction<TabIntent>(
-            onInvoke: (_) => onTab?.call(),
-          ),
+          TabIntent: CallbackAction<TabIntent>(onInvoke: (_) => onTab?.call()),
           TogglePanelIntent: CallbackAction<TogglePanelIntent>(
             onInvoke: (_) => onTogglePanel?.call(),
           ),
           NumberIntent: CallbackAction<NumberIntent>(
             onInvoke: (NumberIntent intent) {
-              if (numberCallbacks != null && 
-                  intent.number > 0 && 
+              if (numberCallbacks != null &&
+                  intent.number > 0 &&
                   intent.number <= numberCallbacks!.length) {
                 numberCallbacks![intent.number - 1]?.call();
               }
@@ -80,10 +78,7 @@ class GameKeyboardShortcuts extends StatelessWidget {
             },
           ),
         },
-        child: Focus(
-          autofocus: true,
-          child: child,
-        ),
+        child: Focus(autofocus: true, child: child),
       ),
     );
   }
@@ -123,14 +118,11 @@ class KeyboardShortcutHelp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return AlertDialog(
       title: Row(
         children: [
-          Icon(
-            Icons.keyboard,
-            color: theme.colorScheme.primary,
-          ),
+          Icon(Icons.keyboard, color: theme.colorScheme.primary),
           const SizedBox(width: 8),
           const Text('Keyboard Shortcuts'),
         ],
@@ -140,34 +132,25 @@ class KeyboardShortcutHelp extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildShortcutSection(
-              'Navigation',
-              [
-                _ShortcutItem('Tab', 'Switch panels'),
-                _ShortcutItem('←/→', 'Navigate panels'),
-                _ShortcutItem('Space', 'Toggle side panel'),
-                _ShortcutItem('Esc', 'Go back'),
-              ],
-            ),
+            _buildShortcutSection('Navigation', [
+              _ShortcutItem('Tab', 'Switch panels'),
+              _ShortcutItem('←/→', 'Navigate panels'),
+              _ShortcutItem('Space', 'Toggle side panel'),
+              _ShortcutItem('Esc', 'Go back'),
+            ]),
             const SizedBox(height: 16),
-            _buildShortcutSection(
-              'Actions',
-              [
-                _ShortcutItem('F5 / Ctrl+R', 'Refresh'),
-                _ShortcutItem('1-9', 'Select decision choice'),
-                _ShortcutItem('Enter', 'Confirm selection'),
-                _ShortcutItem('?', 'Show this help'),
-              ],
-            ),
+            _buildShortcutSection('Actions', [
+              _ShortcutItem('F5 / Ctrl+R', 'Refresh'),
+              _ShortcutItem('1-9', 'Select decision choice'),
+              _ShortcutItem('Enter', 'Confirm selection'),
+              _ShortcutItem('?', 'Show this help'),
+            ]),
             const SizedBox(height: 16),
-            _buildShortcutSection(
-              'Story',
-              [
-                _ShortcutItem('C', 'Continue story'),
-                _ShortcutItem('R', 'Rest (when available)'),
-                _ShortcutItem('A', 'Abandon story'),
-              ],
-            ),
+            _buildShortcutSection('Story', [
+              _ShortcutItem('C', 'Continue story'),
+              _ShortcutItem('R', 'Rest (when available)'),
+              _ShortcutItem('A', 'Abandon story'),
+            ]),
           ],
         ),
       ),
@@ -186,42 +169,46 @@ class KeyboardShortcutHelp extends StatelessWidget {
       children: [
         Text(
           title,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 14,
-          ),
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
         const SizedBox(height: 8),
-        ...items.map((item) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.grey.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.grey.withValues(alpha: 0.4)),
-                ),
-                child: Text(
-                  item.key,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+        ...items.map(
+          (item) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: Colors.grey.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Text(
+                    item.key,
+                    style: const TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  item.description,
-                  style: const TextStyle(fontSize: 13),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.description,
+                    style: const TextStyle(fontSize: 13),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        )),
+        ),
       ],
     );
   }

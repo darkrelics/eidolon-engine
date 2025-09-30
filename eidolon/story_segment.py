@@ -53,7 +53,8 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, segm
         "ProcessingStatus": "pending",  # Add ProcessingStatus field
         "StartTime": start_time,
         "EndTime": end_time,
-        "DefaultStatus": segment.get("ShortStatus", "Processing..."),
+        "SegmentTitle": segment.get("SegmentTitle", "Processing..."),
+        "SegmentActivity": segment.get("SegmentActivity", "Processing..."),
     }
 
     if segment_type == "decision":

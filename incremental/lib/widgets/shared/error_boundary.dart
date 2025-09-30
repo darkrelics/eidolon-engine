@@ -33,25 +33,25 @@ class _ErrorBoundaryState extends State<ErrorBoundary> {
       // Always log the error to console for debugging
       debugPrint('ErrorBoundary caught Flutter error: ${details.exception}');
       debugPrint('Stack trace: ${details.stack}');
-      
+
       if (mounted) {
         setState(() {
           _errorDetails = details;
         });
         widget.onError?.call(details);
       }
-      
+
       // Log error in debug mode
       if (kDebugMode) {
         FlutterError.presentError(details);
       }
     };
-    
+
     // Handle async errors not caught by Flutter framework
     PlatformDispatcher.instance.onError = (error, stack) {
       debugPrint('ErrorBoundary caught async error: $error');
       debugPrint('Async stack trace: $stack');
-      
+
       if (mounted) {
         setState(() {
           _errorDetails = FlutterErrorDetails(
@@ -100,7 +100,7 @@ class DefaultErrorWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       body: Center(
         child: Container(
@@ -208,7 +208,7 @@ class WidgetErrorBoundary extends StatelessWidget {
 
   Widget _buildErrorWidget(BuildContext context, Object error) {
     final theme = Theme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -221,11 +221,7 @@ class WidgetErrorBoundary extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.warning,
-            color: theme.colorScheme.error,
-            size: 32,
-          ),
+          Icon(Icons.warning, color: theme.colorScheme.error, size: 32),
           const SizedBox(height: 8),
           Text(
             fallbackMessage ?? 'Unable to load content',

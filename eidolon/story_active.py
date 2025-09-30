@@ -107,18 +107,20 @@ def mark_segment_as_abandoned(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET #status = :abandoned",
-            ConditionExpression="#status = :processing",
-            ExpressionAttributeNames={"#status": "Status"},
+            UpdateExpression="SET #status = :abandoned, ProcessingStatus = :processed, #outcome = :outcome",
+            ConditionExpression="attribute_exists(ActiveSegmentID) AND (#status = :active OR #status = :abandoned)",
+            ExpressionAttributeNames={"#status": "Status", "#outcome": "Outcome"},
             ExpressionAttributeValues={
                 ":abandoned": "abandoned",
-                ":processing": "processing",
+                ":processed": "processed",
+                ":outcome": "abandoned",
+                ":active": "active",
             },
         )
     except ClientError as err:
         if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning(f"Segment {active_segment_id} not in processing state, cannot abandon")
-            raise ValueError("Segment already completed or abandoned") from err
+            logger.info(f"Segment {active_segment_id} already in terminal state, skipping abandonment")
+            return
         logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to mark segment as abandoned: {err}") from err
 
@@ -166,7 +168,12 @@ def get_active_decision_segment(character_id: str, player_id: str) -> dict:
     return items[0]
 
 
-def story_update_character(character_id: str, story_id: str, active_segment_id: str) -> dict:
+def story_update_character(
+    character_id: str,
+    story_id: str,
+    active_segment_id: str,
+    story_instance_id: str | None = None,
+) -> dict:
     """
     Atomically update character to set GameMode, ActiveStoryID, and ActiveSegmentID.
 
@@ -194,18 +201,24 @@ def story_update_character(character_id: str, story_id: str, active_segment_id: 
 
     try:
         logger.debug(f"Updating character state with GameMode=Incremental, ActiveStoryID={story_id}")
+        expression_values = {
+            ":mode": "Incremental",
+            ":none": "None",
+            ":incremental": "Incremental",
+            ":null": None,
+            ":story_id": story_id,
+            ":segment_id": active_segment_id,
+        }
+
+        if story_instance_id:
+            update_expression += " ADD CompletedStories :story_instance"
+            expression_values[":story_instance"] = {story_instance_id}
+
         response = dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
             UpdateExpression=update_expression,
-            ExpressionAttributeValues={
-                ":mode": "Incremental",
-                ":none": "None",
-                ":incremental": "Incremental",
-                ":null": None,
-                ":story_id": story_id,
-                ":segment_id": active_segment_id,
-            },
+            ExpressionAttributeValues=expression_values,
             ConditionExpression=condition_expression,
         )
     except ClientError as err:
@@ -220,52 +233,3 @@ def story_update_character(character_id: str, story_id: str, active_segment_id: 
         raise RuntimeError(f"Failed to update character state: {err}") from err
 
     return response  # type: ignore
-
-
-def rollback_story_start(character_id: str, active_segment_id: str, story_instance_id: str) -> None:
-    """
-    Rollback a failed story start by cleaning up all created records.
-
-    This is used when SQS queueing fails for mechanical segments.
-    Removes:
-    - Active segment record
-    - Story history record
-    - Character's ActiveStoryID, ActiveSegmentID, and reverts GameMode to None
-
-    Args:
-        character_id: Character UUID
-        active_segment_id: Active segment UUID to delete
-        story_instance_id: Story instance UUID to delete from history
-
-    Note:
-        Failures during rollback are logged but not raised to avoid masking
-        the original error.
-    """
-    logger.info(f"Rolling back story start for character {character_id}")
-
-    # 1. Revert character state to None
-    try:
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID",
-            ExpressionAttributeValues={":none": "None"},
-        )
-        logger.info(f"Reverted character state for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to revert character state during rollback for {character_id}: {err}")
-
-    # 2. Delete the active segment
-    try:
-        dynamo.delete_item(TableName.ACTIVE_SEGMENTS, Key={"ActiveSegmentID": active_segment_id})
-        logger.info(f"Deleted active segment {active_segment_id}")
-    except ClientError as err:
-        logger.error(f"Failed to delete active segment during rollback for {active_segment_id}: {err}")
-
-    # 3. Delete the story history record
-    if story_instance_id:
-        try:
-            dynamo.delete_item(TableName.STORY_HISTORY, Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id})
-            logger.info(f"Deleted story history record {story_instance_id}")
-        except ClientError as err:
-            logger.error(f"Failed to delete story history during rollback for {story_instance_id}: {err}")

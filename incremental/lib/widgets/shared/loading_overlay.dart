@@ -25,32 +25,39 @@ class LoadingOverlay extends StatelessWidget {
           Container(
             color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.8),
             child: Center(
-              child: Card(
-                elevation: 8,
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (showProgress)
-                        const CircularProgressIndicator()
-                            .animate(onPlay: (controller) => controller.repeat())
-                            .rotate(duration: 1000.ms),
-                      if (message != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          message!,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                          textAlign: TextAlign.center,
-                        ).animate()
-                          .fadeIn(delay: 200.ms),
-                      ],
-                    ],
-                  ),
-                ),
-              ).animate()
-                .fadeIn(duration: 200.ms)
-                .scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1)),
+              child:
+                  Card(
+                        elevation: 8,
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (showProgress)
+                                const CircularProgressIndicator()
+                                    .animate(
+                                      onPlay: (controller) =>
+                                          controller.repeat(),
+                                    )
+                                    .rotate(duration: 1000.ms),
+                              if (message != null) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  message!,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                  textAlign: TextAlign.center,
+                                ).animate().fadeIn(delay: 200.ms),
+                              ],
+                            ],
+                          ),
+                        ),
+                      )
+                      .animate()
+                      .fadeIn(duration: 200.ms)
+                      .scale(
+                        begin: const Offset(0.9, 0.9),
+                        end: const Offset(1, 1),
+                      ),
             ),
           ),
       ],
@@ -63,11 +70,7 @@ class InlineLoadingIndicator extends StatelessWidget {
   final String? message;
   final double size;
 
-  const InlineLoadingIndicator({
-    super.key,
-    this.message,
-    this.size = 16.0,
-  });
+  const InlineLoadingIndicator({super.key, this.message, this.size = 16.0});
 
   @override
   Widget build(BuildContext context) {
@@ -86,15 +89,10 @@ class InlineLoadingIndicator extends StatelessWidget {
         ),
         if (message != null) ...[
           const SizedBox(width: 8),
-          Text(
-            message!,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
+          Text(message!, style: Theme.of(context).textTheme.bodySmall),
         ],
       ],
-    ).animate()
-      .fadeIn()
-      .slideX(begin: -0.1, end: 0);
+    ).animate().fadeIn().slideX(begin: -0.1, end: 0);
   }
 }
 
@@ -114,14 +112,18 @@ class SkeletonLoader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: borderRadius ?? BorderRadius.circular(4),
-      ),
-    ).animate(onPlay: (controller) => controller.repeat())
-      .shimmer(duration: 1500.ms, color: Theme.of(context).colorScheme.surface);
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: borderRadius ?? BorderRadius.circular(4),
+          ),
+        )
+        .animate(onPlay: (controller) => controller.repeat())
+        .shimmer(
+          duration: 1500.ms,
+          color: Theme.of(context).colorScheme.surface,
+        );
   }
 }
 
@@ -188,15 +190,15 @@ class CharacterPanelSkeleton extends StatelessWidget {
             // Header
             const SkeletonLoader(width: 120, height: 24),
             const SizedBox(height: 20),
-            
+
             // Health bar
             const SkeletonLoader(width: double.infinity, height: 8),
             const SizedBox(height: 12),
-            
+
             // Essence bar
             const SkeletonLoader(width: double.infinity, height: 8),
             const SizedBox(height: 20),
-            
+
             // Stats
             for (int i = 0; i < 4; i++) ...[
               Row(

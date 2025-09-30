@@ -1,4 +1,4 @@
-import '../utils/time_utils.dart';
+import 'package:eidolon_incremental/utils/time_utils.dart';
 
 /// Active segment data from API
 class ActiveSegment {
@@ -8,7 +8,8 @@ class ActiveSegment {
   final String segmentID;
   final String segmentType;
   final String status;
-  final String? defaultStatus;
+  final String? segmentTitle;
+  final String? segmentActivity;
   final String startTime;
   final String endTime;
   final List<dynamic>? challengeResults;
@@ -27,7 +28,8 @@ class ActiveSegment {
     required this.segmentID,
     required this.segmentType,
     required this.status,
-    this.defaultStatus,
+    this.segmentTitle,
+    this.segmentActivity,
     required this.startTime,
     required this.endTime,
     this.challengeResults,
@@ -48,11 +50,14 @@ class ActiveSegment {
       segmentID: json['SegmentID'] as String,
       segmentType: json['SegmentType'] as String,
       status: json['Status'] as String,
-      defaultStatus: json['DefaultStatus'] as String?,
-      startTime: json['StartTime'] as String,
-      endTime: json['EndTime'] as String,
+      segmentTitle: json['SegmentTitle'] as String?,
+      segmentActivity: json['SegmentActivity'] as String?,
+      startTime: _normalizeIsoTimestamp(json['StartTime']),
+      endTime: _normalizeIsoTimestamp(json['EndTime']),
       challengeResults: json['ChallengeResults'] as List<dynamic>?,
-      outcome: json['Outcome'] is Map ? (json['Outcome']['Type'] as String?) : json['Outcome'] as String?,
+      outcome: json['Outcome'] is Map
+          ? (json['Outcome']['Type'] as String?)
+          : json['Outcome'] as String?,
       decision: json['Decision'] as String?,
       decisionOptions: json['DecisionOptions'] as Map<String, dynamic>?,
       combatState: json['CombatState'] as Map<String, dynamic>?,
@@ -70,7 +75,8 @@ class ActiveSegment {
       'SegmentID': segmentID,
       'SegmentType': segmentType,
       'Status': status,
-      if (defaultStatus != null) 'DefaultStatus': defaultStatus,
+      if (segmentTitle != null) 'SegmentTitle': segmentTitle,
+      if (segmentActivity != null) 'SegmentActivity': segmentActivity,
       'StartTime': startTime,
       'EndTime': endTime,
       if (challengeResults != null) 'ChallengeResults': challengeResults,
@@ -91,4 +97,16 @@ class ActiveSegment {
 
   /// Check if segment timer has expired
   bool get isExpired => TimeUtils.isPast(endTime);
+}
+
+String _normalizeIsoTimestamp(dynamic value) {
+  if (value is String && value.trim().isNotEmpty) {
+    return value;
+  }
+
+  if (value is num) {
+    return TimeUtils.fromUnix(value.toInt());
+  }
+
+  return TimeUtils.nowIso();
 }

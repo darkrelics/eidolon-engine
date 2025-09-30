@@ -1,11 +1,156 @@
 """Item management functions for the Eidolon Engine."""
 
 import uuid
+from datetime import datetime, timezone
 
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
+
+
+def build_item_payload(
+    prototype: dict,
+    item_id: str,
+    *,
+    is_worn: bool = False,
+    contents: list[str] | None = None,
+) -> dict:
+    """Construct item payload from a prototype definition."""
+
+    return {
+        "ItemID": item_id,
+        "PrototypeID": prototype.get("PrototypeID", ""),
+        "Name": prototype.get("Name", "Unknown Item"),
+        "Description": prototype.get("Description", ""),
+        "Mass": prototype.get("Mass", 0),
+        "Value": prototype.get("Value", 0),
+        "Stackable": prototype.get("Stackable", False),
+        "MaxStack": prototype.get("MaxStack", 1),
+        "Quantity": prototype.get("Quantity", 1),
+        "Wearable": prototype.get("Wearable", False),
+        "WornOn": prototype.get("WornOn", ""),
+        "Verbs": prototype.get("Verbs", {}),
+        "Overrides": prototype.get("Overrides", {}),
+        "TraitMods": prototype.get("TraitMods", {}),
+        "Container": prototype.get("Container", False),
+        "Contents": contents if contents is not None else [],
+        "IsWorn": is_worn,
+        # Keep compatibility with any consumers that expect 'Equipped'
+        "Equipped": is_worn,
+        "CanPickUp": prototype.get("CanPickUp", True),
+        "Metadata": prototype.get("Metadata", {}),
+    }
+
+
+def create_item_from_prototype(
+    prototype_id: str,
+    *,
+    is_worn: bool = False,
+    initial_contents: list[str] | None = None,
+) -> dict | None:
+    """Create a single item instance from a prototype and persist it."""
+
+    if not prototype_id:
+        logger.warning("Cannot create item: missing prototype ID")
+        return None
+
+    prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
+    if not prototype:
+        logger.warning(f"Prototype not found for {prototype_id}")
+        return None
+
+    item_id = str(uuid.uuid4())
+    item_payload = build_item_payload(
+        prototype,
+        item_id,
+        is_worn=is_worn,
+        contents=initial_contents,
+    )
+
+    try:
+        dynamo.put_item(TableName.ITEMS, item_payload)
+        logger.info(f"Created item {item_id} from prototype {prototype_id}")
+        return item_payload
+    except Exception as err:  # pragma: no cover - DynamoDB client handles errors
+        logger.error(f"Error creating item {item_id} from prototype {prototype_id} Error: {err}", exc_info=True)
+        return None
+
+
+def find_next_available_slot(inventory: dict) -> str:
+    """Return the next open inventory slot, reusing empty entries when possible."""
+
+    normalized = {str(key): value for key, value in inventory.items()}
+    index = 0
+    while True:
+        key = str(index)
+        value = normalized.get(key)
+        if value in (None, "", 0) or key not in normalized:
+            return key
+        index += 1
+
+
+def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[str]:
+    """Create items from prototypes and append them to a character's inventory."""
+
+    if not prototype_ids:
+        return []
+
+    try:
+        character_record = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+    except ClientError as err:
+        logger.error("Failed to load character %s for story rewards Error: %s", character_id, err, exc_info=True)
+        return []
+
+    if not character_record:
+        logger.error("Character %s not found when applying story rewards", character_id)
+        return []
+
+    inventory = character_record.get("Inventory") or {}
+    if not isinstance(inventory, dict):
+        logger.warning("Character %s has unexpected inventory format; initializing empty inventory", character_id)
+        inventory = {}
+
+    normalized_inventory = {str(key): value for key, value in inventory.items()}
+    granted_items: list[str] = []
+
+    for prototype_id in prototype_ids:
+        if not isinstance(prototype_id, str) or not prototype_id:
+            logger.warning("Skipping invalid prototype ID in story rewards for %s: %s", character_id, prototype_id)
+            continue
+
+        item_payload = create_item_from_prototype(prototype_id)
+        if not item_payload:
+            continue
+
+        slot_key = find_next_available_slot(normalized_inventory)
+        normalized_inventory[slot_key] = item_payload["ItemID"]
+        granted_items.append(item_payload["ItemID"])
+
+    if not granted_items:
+        return []
+
+    try:
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET Inventory = :inventory, UpdatedAt = :updated_at",
+            ExpressionAttributeValues={
+                ":inventory": normalized_inventory,
+                ":updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to update inventory for %s while applying story rewards Error: %s",
+            character_id,
+            err,
+            exc_info=True,
+        )
+        return []
+
+    logger.info("Added %d item(s) to inventory for %s", len(granted_items), character_id)
+    return granted_items
 
 
 def create_items_from_prototypes(starting_items: list, character_id: str) -> dict:
@@ -35,38 +180,18 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
             is_worn = item_def.get("IsWorn", False)
             is_container = item_def.get("Container", False)
 
-            # Get prototype data
             prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
 
             if not prototype:
                 logger.warning(f"Prototype not found for {prototype_id}")
                 continue
 
-            # Create new item from prototype
             item_id = str(uuid.uuid4())
-            item_data = {
-                "ItemID": item_id,
-                "PrototypeID": prototype_id,
-                "Name": prototype.get("Name", "Unknown Item"),
-                "Description": prototype.get("Description", ""),
-                "Mass": prototype.get("Mass", 0),
-                "Value": prototype.get("Value", 0),
-                "Stackable": prototype.get("Stackable", False),
-                "MaxStack": prototype.get("MaxStack", 1),
-                "Quantity": prototype.get("Quantity", 1),
-                "Wearable": prototype.get("Wearable", False),
-                "WornOn": prototype.get("WornOn", ""),
-                "Verbs": prototype.get("Verbs", {}),
-                "Overrides": prototype.get("Overrides", {}),
-                "TraitMods": prototype.get("TraitMods", {}),
-                "Container": prototype.get("Container", False),
-                "Contents": [],
-                "IsWorn": is_worn,
-                # Keep compatibility with any consumers that expect 'Equipped'
-                "Equipped": is_worn,
-                "CanPickUp": prototype.get("CanPickUp", True),
-                "Metadata": prototype.get("Metadata", {}),
-            }
+            item_data = build_item_payload(
+                prototype,
+                item_id,
+                is_worn=is_worn,
+            )
 
             # Track first container
             if is_container and container_id is None:

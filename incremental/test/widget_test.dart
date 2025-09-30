@@ -17,7 +17,7 @@ void main() {
     // Verify that the auth screen is shown
     expect(find.text('Eidolon Incremental'), findsOneWidget);
     expect(find.text('Sign in to continue'), findsOneWidget);
-    
+
     // Verify auth fields and buttons are present
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);

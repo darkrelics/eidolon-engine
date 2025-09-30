@@ -163,7 +163,8 @@ class StoryHistoryEntry {
           ? DateTime.parse(json['CompletedAt'])
           : null,
       finalOutcome: json['FinalOutcome'] ?? 'abandoned',
-      segments: (json['SegmentHistory'] as List<dynamic>?)
+      segments:
+          (json['SegmentHistory'] as List<dynamic>?)
               ?.map((s) => SegmentHistoryEntry.fromJson(s))
               .toList() ??
           [],

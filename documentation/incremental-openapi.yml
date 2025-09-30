@@ -475,6 +475,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DecisionResponse"
+              examples:
+                mechanicalAdvance:
+                  summary: Decision advances to a mechanical segment
+                  value:
+                    Accepted: true
+                    NextSegmentTime: "2025-01-15T14:30:00Z"
+                    NextSegment:
+                      ActiveSegmentID: "550e8400-e29b-41d4-a716-446655440001"
+                      StoryID: "story-uuid"
+                      SegmentID: "segment-next-uuid"
+                      SegmentType: "mechanical"
+                      Status: "active"
+                      StartTime: "2025-01-15T14:25:00Z"
+                      EndTime: "2025-01-15T14:30:00Z"
+                      ProcessingStatus: "pending"
+                      SegmentActivity: "Fighting the goblin"
+                      SegmentTitle: "Preparing for combat"
+                      Duration: 300
         "400":
           description: Bad request
           content:
@@ -1388,7 +1406,7 @@ components:
             EndTime:
               type: string
               format: date-time
-            ShortStatus:
+            SegmentActivity:
               type: string
             Duration:
               type: integer
@@ -1403,6 +1421,44 @@ components:
           type: string
           format: date-time
           nullable: true
+        NextSegment:
+          type: object
+          nullable: true
+          properties:
+            ActiveSegmentID:
+              type: string
+            StoryID:
+              type: string
+            SegmentID:
+              type: string
+            SegmentType:
+              type: string
+            Status:
+              type: string
+            StartTime:
+              type: string
+              format: date-time
+            EndTime:
+              type: string
+              format: date-time
+            ProcessingStatus:
+              type: string
+            SegmentActivity:
+              type: string
+            SegmentTitle:
+              type: string
+            Duration:
+              type: integer
+            DecisionText:
+              type: string
+              nullable: true
+            DecisionOptions:
+              type: object
+              additionalProperties:
+                type: string
+            DefaultDecision:
+              type: string
+              nullable: true
       required: [Accepted]
 
     SegmentOutcomeResponse:

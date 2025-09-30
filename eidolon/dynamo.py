@@ -81,7 +81,7 @@ class ExponentialBackoff:
     Decorator for retrying a database operation with exponentially increasing wait times.
 
     Based on AWS best practices: https://docs.aws.amazon.com/general/latest/gr/api-retries.html
-    Default retry count of 8 maximizes total wait time to 0.42s
+    Default retry count of 8 maximizes total wait time to ~25.5s with proper exponential backoff
     """
 
     def __init__(self, expected_errors=None, expected_error_factory=None, retry_count=8):
@@ -105,11 +105,11 @@ class ExponentialBackoff:
                     success = True
                 except self.expected_errors as err:
                     logger.info(f"DynamoDB expected error, retrying Error: {err}")
-                    sleep(2 ** (count - 1) / 10)
+                    sleep(2**count / 10)
                     count += 1
                 except tuple(self.expected_error_factory.RETRY_ERRORS) as err:
                     logger.info(f"DynamoDB retry error Error: {err}")
-                    sleep(2 ** (count - 1) / 10)
+                    sleep(2**count / 10)
                     count += 1
                 except ClientError as err:
                     error_code = err.response.get("Error", {}).get("Code", "")
@@ -120,7 +120,7 @@ class ExponentialBackoff:
                         "InternalServerError",
                     ]:
                         logger.info("DynamoDB throttling error, retrying")
-                        sleep(2 ** (count - 1) / 10)
+                        sleep(2**count / 10)
                         count += 1
                     else:
                         # Non-retryable client error
@@ -217,6 +217,34 @@ class DynamoInterface:
             logger.error(f"Failed to connect to table {table_enum.value} Error: {err}")
             self._connection_status[table_enum] = False
             return False
+
+    def set_region(self, region: str) -> None:
+        """Reinitialize the DynamoDB client for a specific AWS region."""
+
+        sanitized = (region or "").strip().lower()
+        if not sanitized:
+            return
+
+        current_region = getattr(self._client, "meta", None)
+        current_region = getattr(current_region, "region_name", None)
+        if current_region == sanitized:
+            return
+
+        logger.info(f"Reinitializing DynamoDB interface for region {sanitized}")
+
+        self._resource = resource("dynamodb", region_name=sanitized)
+        self._client = self._resource.meta.client  # type: ignore
+        self._tables = {}
+        self._connection_status = {}
+
+        ExpectedDynamoErrors.RETRY_ERRORS = [
+            self._client.exceptions.ProvisionedThroughputExceededException,
+            self._client.exceptions.RequestLimitExceeded,
+            self._client.exceptions.InternalServerError,
+        ]
+
+        for table_enum in TableName:
+            self._connect_table(table_enum)
 
     def get_table(self, table_enum: TableName):
         """

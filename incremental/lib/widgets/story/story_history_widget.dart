@@ -1,15 +1,20 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
-import '../../models/character.dart';
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 /// Widget displaying completed story history
 class StoryHistoryWidget extends StatefulWidget {
   final Character character;
+  final List<Map<String, dynamic>> segmentHistory;
   final Function(String)? onStoryTap;
 
   const StoryHistoryWidget({
     super.key,
     required this.character,
+    this.segmentHistory = const [],
     this.onStoryTap,
   });
 
@@ -20,80 +25,233 @@ class StoryHistoryWidget extends StatefulWidget {
 class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
   String _filterOutcome = 'all';
   String _sortBy = 'recent';
-  
-  // Mock history data - in production this would come from API
-  List<StoryHistoryEntry> get _historyEntries {
-    // For now, create mock entries from completed stories
-    return widget.character.completedStories.asMap().entries.map((entry) {
-      final index = entry.key;
-      final storyId = entry.value;
-      
-      return StoryHistoryEntry(
-        storyId: storyId,
-        storyTitle: _extractStoryTitle(storyId),
-        completedAt: DateTime.now().subtract(Duration(days: index * 2)),
-        outcome: index % 3 == 0 ? 'success' : index % 3 == 1 ? 'normal' : 'failure',
-        duration: Duration(minutes: 15 + (index * 5)),
-        rewards: {
-          'XP': 100 + (index * 50),
-          'Gold': 50 + (index * 25),
-        },
-        segments: 5 + index,
-      );
-    }).toList();
-  }
-  
-  String _extractStoryTitle(String storyId) {
-    // Extract a readable title from story ID
-    return storyId
-        .replaceAll('-', ' ')
-        .replaceAll('_', ' ')
-        .split(' ')
-        .map((word) => word.isNotEmpty 
-            ? word[0].toUpperCase() + word.substring(1).toLowerCase()
-            : word)
-        .join(' ');
-  }
-  
-  List<StoryHistoryEntry> get _filteredEntries {
-    var entries = _historyEntries;
-    
-    // Apply filter
-    if (_filterOutcome != 'all') {
-      entries = entries.where((entry) => 
-        entry.outcome.toLowerCase() == _filterOutcome.toLowerCase()
-      ).toList();
+
+  List<StoryHistoryEntry> _buildHistoryEntries() {
+    if (widget.segmentHistory.isEmpty) {
+      return const <StoryHistoryEntry>[];
     }
-    
-    // Apply sort
+
+    final Map<String, List<Map<String, dynamic>>> segmentsByInstance = {};
+
+    for (final segment in widget.segmentHistory) {
+      final dynamic rawIdValue =
+          segment['StoryInstanceID'] ?? segment['StoryID'];
+      final rawInstanceId = (rawIdValue?.toString())?.trim();
+      final key = (rawInstanceId != null && rawInstanceId.isNotEmpty)
+          ? rawInstanceId
+          : 'unknown';
+
+      segmentsByInstance
+          .putIfAbsent(key, () => <Map<String, dynamic>>[])
+          .add(segment);
+    }
+
+    final history = <StoryHistoryEntry>[];
+
+    for (final segments in segmentsByInstance.values) {
+      if (segments.isEmpty) continue;
+
+      segments.sort((a, b) {
+        final aTime =
+            _parseDate(a['CompletedAt']) ??
+            _parseDate(a['EndTime']) ??
+            _parseDate(a['StartTime']);
+        final bTime =
+            _parseDate(b['CompletedAt']) ??
+            _parseDate(b['EndTime']) ??
+            _parseDate(b['StartTime']);
+
+        if (aTime == null && bTime == null) return 0;
+        if (aTime == null) return -1;
+        if (bTime == null) return 1;
+        return aTime.compareTo(bTime);
+      });
+
+      final storyId = segments.first['StoryID']?.toString() ?? 'Unknown Story';
+      final storyTitle = _selectStoryTitle(segments) ?? storyId;
+
+      final startTime = _findEarliestDate(segments, 'StartTime');
+      final completionTime = _findLatestCompletion(segments);
+
+      final duration =
+          (startTime != null &&
+              completionTime != null &&
+              !completionTime.isBefore(startTime))
+          ? completionTime.difference(startTime)
+          : Duration.zero;
+
+      final outcome = _determineOutcome(segments);
+
+      final totalXp = _calculateTotalXP(segments);
+      final rewards = <String, int>{};
+      if (totalXp > 0) {
+        rewards['XP'] = totalXp;
+      }
+
+      history.add(
+        StoryHistoryEntry(
+          storyId: storyId,
+          storyTitle: storyTitle,
+          completedAt: completionTime ?? startTime ?? DateTime.now().toUtc(),
+          outcome: outcome,
+          duration: duration.isNegative ? Duration.zero : duration,
+          rewards: rewards,
+          segments: segments.length,
+        ),
+      );
+    }
+
+    history.sort((a, b) => b.completedAt.compareTo(a.completedAt));
+    return history;
+  }
+
+  List<StoryHistoryEntry> _filteredEntries(List<StoryHistoryEntry> entries) {
+    var filtered = List<StoryHistoryEntry>.from(entries);
+
+    if (_filterOutcome != 'all') {
+      filtered = filtered
+          .where(
+            (entry) => entry.outcomeCategory == _filterOutcome.toLowerCase(),
+          )
+          .toList();
+    }
+
     switch (_sortBy) {
       case 'recent':
-        entries.sort((a, b) => b.completedAt.compareTo(a.completedAt));
+        filtered.sort((a, b) => b.completedAt.compareTo(a.completedAt));
         break;
       case 'oldest':
-        entries.sort((a, b) => a.completedAt.compareTo(b.completedAt));
+        filtered.sort((a, b) => a.completedAt.compareTo(b.completedAt));
         break;
       case 'duration':
-        entries.sort((a, b) => b.duration.compareTo(a.duration));
+        filtered.sort((a, b) => b.duration.compareTo(a.duration));
         break;
       case 'rewards':
-        entries.sort((a, b) {
+        filtered.sort((a, b) {
           final aTotal = a.rewards.values.fold<int>(0, (sum, val) => sum + val);
           final bTotal = b.rewards.values.fold<int>(0, (sum, val) => sum + val);
           return bTotal.compareTo(aTotal);
         });
         break;
     }
-    
-    return entries;
+
+    return filtered;
+  }
+
+  DateTime? _parseDate(Object? value) {
+    if (value is DateTime) return value.toUtc();
+    if (value is num) {
+      final timestamp = value.toDouble();
+      if (timestamp.isNaN) return null;
+      if (timestamp > 1000000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(timestamp.round(), isUtc: true);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(
+        (timestamp * 1000).round(),
+        isUtc: true,
+      );
+    }
+    if (value is String && value.isNotEmpty) {
+      try {
+        final trimmed = value.trim();
+        final numeric = double.tryParse(trimmed);
+        if (numeric != null) {
+          return _parseDate(numeric);
+        }
+        return DateTime.parse(trimmed).toUtc();
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  DateTime? _findEarliestDate(
+    List<Map<String, dynamic>> segments,
+    String field,
+  ) {
+    DateTime? earliest;
+    for (final segment in segments) {
+      final candidate = _parseDate(segment[field]);
+      if (candidate == null) continue;
+      if (earliest == null || candidate.isBefore(earliest)) {
+        earliest = candidate;
+      }
+    }
+    return earliest;
+  }
+
+  DateTime? _findLatestCompletion(List<Map<String, dynamic>> segments) {
+    DateTime? latest;
+    for (final segment in segments) {
+      final candidate =
+          _parseDate(segment['ProcessedAt']) ??
+          _parseDate(segment['CompletedAt']) ??
+          _parseDate(segment['EndTime']);
+      if (candidate == null) continue;
+      if (latest == null || candidate.isAfter(latest)) {
+        latest = candidate;
+      }
+    }
+    return latest;
+  }
+
+  String _determineOutcome(List<Map<String, dynamic>> segments) {
+    for (final segment in segments.reversed) {
+      final outcome = segment['Outcome'];
+      if (outcome is String && outcome.isNotEmpty) {
+        return outcome;
+      }
+    }
+    return 'unknown';
+  }
+
+  int _calculateTotalXP(List<Map<String, dynamic>> segments) {
+    int total = 0;
+
+    void accumulate(dynamic value) {
+      if (value is Map) {
+        for (final entry in value.values) {
+          if (entry is num) {
+            total += entry.round();
+          }
+        }
+      }
+    }
+
+    for (final segment in segments) {
+      accumulate(segment['SkillXPAwarded']);
+      accumulate(segment['AttributeXPAwarded']);
+
+      final characterUpdates = segment['CharacterUpdates'];
+      if (characterUpdates is Map) {
+        accumulate(characterUpdates['SkillsAwarded']);
+        accumulate(characterUpdates['AttributesAwarded']);
+      }
+    }
+
+    return total;
+  }
+
+  String? _selectStoryTitle(List<Map<String, dynamic>> segments) {
+    for (final segment in segments) {
+      final title = segment['StoryTitle'];
+      if (title is String && title.trim().isNotEmpty) {
+        return title.trim();
+      }
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.character.completedStories.isEmpty) {
+    final historyEntries = _buildHistoryEntries();
+    if (historyEntries.isEmpty) {
       return _buildEmptyState(context);
     }
-    
+
+    final filteredEntries = _filteredEntries(historyEntries);
+
     return Column(
       children: [
         // Filter and Sort Bar
@@ -112,18 +270,18 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
           },
         ),
         const SizedBox(height: 16),
-        
+
         // Statistics Summary
-        _StatisticsSummary(entries: _historyEntries),
+        _StatisticsSummary(entries: historyEntries),
         const SizedBox(height: 16),
-        
+
         // History List
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _filteredEntries.length,
+            itemCount: filteredEntries.length,
             itemBuilder: (context, index) {
-              final entry = _filteredEntries[index];
+              final entry = filteredEntries[index];
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _HistoryEntryCard(
@@ -139,10 +297,14 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
       ],
     );
   }
-  
+
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
-    
+    final hasCompletedStories = widget.character.completedStories.isNotEmpty;
+    final message = hasCompletedStories
+        ? 'Story history is currently unavailable. Try refreshing your character.'
+        : 'Complete a story to see its history here.';
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -161,7 +323,8 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Your completed adventures will appear here',
+            message,
+            textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -170,6 +333,7 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
       ),
     );
   }
+
 }
 
 class _FilterSortBar extends StatelessWidget {
@@ -188,7 +352,7 @@ class _FilterSortBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -246,10 +410,7 @@ class _FilterSortBar extends StatelessWidget {
           const SizedBox(width: 16),
           // Sort Dropdown
           PopupMenuButton<String>(
-            icon: Icon(
-              Icons.sort,
-              color: theme.colorScheme.primary,
-            ),
+            icon: Icon(Icons.sort, color: theme.colorScheme.primary),
             tooltip: 'Sort by',
             onSelected: onSortChanged,
             itemBuilder: (context) => [
@@ -320,7 +481,7 @@ class _OutcomeFilterChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final chipColor = color ?? theme.colorScheme.primary;
-    
+
     return FilterChip(
       label: Text(label),
       selected: selected,
@@ -344,21 +505,61 @@ class _StatisticsSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     if (entries.isEmpty) return const SizedBox();
-    
+
     final totalStories = entries.length;
-    final successCount = entries.where((e) => e.outcome == 'success').length;
-    final totalXP = entries.fold<int>(
-      0, (sum, e) => sum + (e.rewards['XP'] ?? 0)
-    );
-    final totalGold = entries.fold<int>(
-      0, (sum, e) => sum + (e.rewards['Gold'] ?? 0)
-    );
+    final successCount = entries
+        .where((entry) => entry.outcomeCategory == 'success')
+        .length;
+    final normalCount = entries
+        .where((entry) => entry.outcomeCategory == 'normal')
+        .length;
+    final deathCount = entries
+        .where((entry) => entry.outcome.toLowerCase() == 'death')
+        .length;
+    final rawFailureCount = entries
+        .where((entry) => entry.outcome.toLowerCase() == 'failure')
+        .length;
+    final inferredFailures = totalStories -
+        (successCount + normalCount + rawFailureCount + deathCount);
+    final failureCount = math.max(0, rawFailureCount + inferredFailures);
+
     final totalTime = entries.fold<Duration>(
-      Duration.zero, (sum, e) => sum + e.duration
+      Duration.zero,
+      (sum, entry) => sum + entry.duration,
     );
-    
+    final averageDuration = totalStories > 0
+        ? Duration(milliseconds: totalTime.inMilliseconds ~/ totalStories)
+        : Duration.zero;
+
+    final stats = <_OutcomeStatDefinition>[
+      _OutcomeStatDefinition(
+        icon: Icons.emoji_events,
+        label: 'Successes',
+        value: successCount,
+        color: Colors.green,
+      ),
+      _OutcomeStatDefinition(
+        icon: Icons.change_circle,
+        label: 'Normal Progress',
+        value: normalCount,
+        color: theme.colorScheme.primary,
+      ),
+      _OutcomeStatDefinition(
+        icon: Icons.report_problem,
+        label: 'Failures',
+        value: failureCount,
+        color: Colors.orange,
+      ),
+      _OutcomeStatDefinition(
+        icon: Icons.close,
+        label: 'Deaths',
+        value: deathCount,
+        color: theme.colorScheme.error,
+      ),
+    ];
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(16),
@@ -383,70 +584,65 @@ class _StatisticsSummary extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Adventure Statistics',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(height: 12),
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.flag,
-                  label: 'Completed',
-                  value: totalStories.toString(),
+              Text(
+                'Adventure Statistics',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                   color: theme.colorScheme.onPrimaryContainer,
                 ),
               ),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.workspace_premium,
-                  label: 'Success Rate',
-                  value: '${((successCount / totalStories) * 100).toStringAsFixed(0)}%',
-                  color: Colors.green,
-                ),
-              ),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.timer,
-                  label: 'Total Time',
-                  value: _formatDuration(totalTime),
+              Text(
+                'Total Runs: $totalStories',
+                style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onPrimaryContainer,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final availableWidth = constraints.maxWidth;
+              const spacing = 12.0;
+              final isNarrow = availableWidth < 360;
+              final itemWidth = isNarrow
+                  ? availableWidth
+                  : (availableWidth - spacing) / 2;
+
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: stats
+                    .map(
+                      (stat) => _OutcomeStatCard(
+                        width: itemWidth,
+                        icon: stat.icon,
+                        label: stat.label,
+                        value: stat.value,
+                        color: stat.color,
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
             children: [
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.trending_up,
-                  label: 'Total XP',
-                  value: _formatNumber(totalXP),
-                  color: Colors.purple,
-                ),
+              _SummaryChip(
+                icon: Icons.timer,
+                label: 'Total Time',
+                value: _formatDuration(totalTime),
               ),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.monetization_on,
-                  label: 'Total Gold',
-                  value: _formatNumber(totalGold),
-                  color: Colors.orange,
-                ),
-              ),
-              Expanded(
-                child: _StatItem(
-                  icon: Icons.insights,
-                  label: 'Avg Duration',
-                  value: _formatDuration(
-                    Duration(minutes: totalTime.inMinutes ~/ totalStories),
-                  ),
-                  color: theme.colorScheme.onPrimaryContainer,
-                ),
+              _SummaryChip(
+                icon: Icons.insights,
+                label: 'Avg Duration',
+                value: _formatDuration(averageDuration),
               ),
             ],
           ),
@@ -456,29 +652,41 @@ class _StatisticsSummary extends StatelessWidget {
   }
 
   String _formatDuration(Duration duration) {
-    if (duration.inHours > 0) {
-      return '${duration.inHours}h ${duration.inMinutes % 60}m';
+    if (duration.inHours >= 1) {
+      final hours = duration.inHours;
+      final minutes = duration.inMinutes.remainder(60);
+      return '${hours}h ${minutes}m';
     }
-    return '${duration.inMinutes}m';
-  }
-
-  String _formatNumber(int number) {
-    if (number >= 1000000) {
-      return '${(number / 1000000).toStringAsFixed(1)}M';
-    } else if (number >= 1000) {
-      return '${(number / 1000).toStringAsFixed(1)}K';
+    if (duration.inMinutes >= 1) {
+      return '${duration.inMinutes}m';
     }
-    return number.toString();
+    return '${duration.inSeconds}s';
   }
 }
 
-class _StatItem extends StatelessWidget {
+class _OutcomeStatDefinition {
   final IconData icon;
   final String label;
-  final String value;
+  final int value;
   final Color color;
 
-  const _StatItem({
+  const _OutcomeStatDefinition({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+}
+
+class _OutcomeStatCard extends StatelessWidget {
+  final double width;
+  final IconData icon;
+  final String label;
+  final int value;
+  final Color color;
+
+  const _OutcomeStatCard({
+    required this.width,
     required this.icon,
     required this.label,
     required this.value,
@@ -488,25 +696,77 @@ class _StatItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
-    return Column(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: color,
+
+    return SizedBox(
+      width: width,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: color.withValues(alpha: 0.4),
+            width: 1,
           ),
         ),
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: color.withValues(alpha: 0.8),
-          ),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant
+                          .withValues(alpha: 0.85),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    value.toString(),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _SummaryChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _SummaryChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Chip(
+      avatar: Icon(icon, size: 18, color: theme.colorScheme.primary),
+      label: Text('$label: $value'),
+      backgroundColor: theme.colorScheme.surface.withValues(alpha: 0.7),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: theme.colorScheme.outline.withValues(alpha: 0.2),
+        ),
+      ),
     );
   }
 }
@@ -515,15 +775,12 @@ class _HistoryEntryCard extends StatelessWidget {
   final StoryHistoryEntry entry;
   final VoidCallback? onTap;
 
-  const _HistoryEntryCard({
-    required this.entry,
-    this.onTap,
-  });
+  const _HistoryEntryCard({required this.entry, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Card(
       elevation: 2,
       child: InkWell(
@@ -537,7 +794,7 @@ class _HistoryEntryCard extends StatelessWidget {
               // Header
               Row(
                 children: [
-                  _OutcomeIcon(outcome: entry.outcome),
+                  _OutcomeIcon(entry: entry),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -559,11 +816,11 @@ class _HistoryEntryCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _OutcomeBadge(outcome: entry.outcome),
+                  _OutcomeBadge(entry: entry),
                 ],
               ),
               const SizedBox(height: 12),
-              
+
               // Stats Row
               Row(
                 children: [
@@ -580,17 +837,14 @@ class _HistoryEntryCard extends StatelessWidget {
                   ),
                 ],
               ),
-              
+
               // Rewards
               if (entry.rewards.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   children: entry.rewards.entries.map((reward) {
-                    return _RewardChip(
-                      type: reward.key,
-                      value: reward.value,
-                    );
+                    return _RewardChip(type: reward.key, value: reward.value);
                   }).toList(),
                 ),
               ],
@@ -604,7 +858,7 @@ class _HistoryEntryCard extends StatelessWidget {
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
-    
+
     if (difference.inDays == 0) {
       if (difference.inHours == 0) {
         return '${difference.inMinutes} minutes ago';
@@ -630,34 +884,30 @@ class _HistoryEntryCard extends StatelessWidget {
 }
 
 class _OutcomeIcon extends StatelessWidget {
-  final String outcome;
+  final StoryHistoryEntry entry;
 
-  const _OutcomeIcon({required this.outcome});
+  const _OutcomeIcon({required this.entry});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final outcomeType = normalizedOutcomeType(entry.outcome) ?? 'unknown';
+    final color = outcomeAccentColor(theme, entry.outcome);
+
     IconData icon;
-    Color color;
-    
-    switch (outcome.toLowerCase()) {
-      case 'success':
-      case 'exceptional':
-        icon = Icons.workspace_premium;
-        color = Colors.green;
-        break;
-      case 'normal':
-        icon = Icons.check_circle;
-        color = Colors.blue;
+    switch (outcomeType) {
+      case 'death':
+        icon = Icons.dangerous;
         break;
       case 'failure':
+      case 'failed':
         icon = Icons.cancel;
-        color = Colors.red;
         break;
       default:
-        icon = Icons.help_outline;
-        color = Colors.grey;
+        icon = Icons.check_circle;
+        break;
     }
-    
+
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
@@ -670,29 +920,15 @@ class _OutcomeIcon extends StatelessWidget {
 }
 
 class _OutcomeBadge extends StatelessWidget {
-  final String outcome;
+  final StoryHistoryEntry entry;
 
-  const _OutcomeBadge({required this.outcome});
+  const _OutcomeBadge({required this.entry});
 
   @override
   Widget build(BuildContext context) {
-    Color color;
-    
-    switch (outcome.toLowerCase()) {
-      case 'success':
-      case 'exceptional':
-        color = Colors.green;
-        break;
-      case 'normal':
-        color = Colors.blue;
-        break;
-      case 'failure':
-        color = Colors.red;
-        break;
-      default:
-        color = Colors.grey;
-    }
-    
+    final theme = Theme.of(context);
+    final color = outcomeAccentColor(theme, entry.outcome);
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       decoration: BoxDecoration(
@@ -701,7 +937,7 @@ class _OutcomeBadge extends StatelessWidget {
         border: Border.all(color: color),
       ),
       child: Text(
-        outcome.toUpperCase(),
+        entry.displayOutcome.toUpperCase(),
         style: TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.bold,
@@ -737,13 +973,7 @@ class _EntryStatChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: color,
-            ),
-          ),
+          Text(label, style: TextStyle(fontSize: 12, color: color)),
         ],
       ),
     );
@@ -754,17 +984,14 @@ class _RewardChip extends StatelessWidget {
   final String type;
   final int value;
 
-  const _RewardChip({
-    required this.type,
-    required this.value,
-  });
+  const _RewardChip({required this.type, required this.value});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     IconData icon;
     Color color;
-    
+
     switch (type.toLowerCase()) {
       case 'xp':
       case 'experience':
@@ -780,7 +1007,7 @@ class _RewardChip extends StatelessWidget {
         icon = Icons.card_giftcard;
         color = theme.colorScheme.primary;
     }
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -826,4 +1053,39 @@ class StoryHistoryEntry {
     required this.rewards,
     required this.segments,
   });
+
+  String get outcomeCategory {
+    final normalized = outcome.toLowerCase();
+    if (normalized == 'exceptional' ||
+        normalized == 'success' ||
+        normalized == 'minimal') {
+      return 'success';
+    }
+    if (normalized == 'normal') {
+      return 'normal';
+    }
+    if (normalized == 'failure' || normalized == 'death') {
+      return 'failure';
+    }
+    return normalized;
+  }
+
+  String get displayOutcome {
+    switch (outcome.toLowerCase()) {
+      case 'exceptional':
+        return 'Exceptional Success';
+      case 'minimal':
+        return 'Minimal Success';
+      case 'success':
+        return 'Success';
+      case 'normal':
+        return 'Normal Progress';
+      case 'failure':
+        return 'Failure';
+      case 'death':
+        return 'Death';
+      default:
+        return outcome.isEmpty ? 'Unknown' : outcome;
+    }
+  }
 }

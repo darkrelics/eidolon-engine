@@ -17,7 +17,9 @@ class ApiParser {
   }
 
   /// Parse characters list response
-  static List<Map<String, dynamic>> parseCharactersList(Map<String, dynamic> response) {
+  static List<Map<String, dynamic>> parseCharactersList(
+    Map<String, dynamic> response,
+  ) {
     // Extract characters array
     final characters = response['Characters'] as List<dynamic>?;
     if (characters == null) {
@@ -27,7 +29,11 @@ class ApiParser {
     // Validate each character
     return characters.map((char) {
       final charMap = char as Map<String, dynamic>;
-      ApiValidation.validateRequiredFields(charMap, ['CharacterID', 'CharacterName', 'Dead'], 'Character');
+      ApiValidation.validateRequiredFields(charMap, [
+        'CharacterID',
+        'CharacterName',
+        'Dead',
+      ], 'Character');
       // Default GameMode to 'None' if not provided by API
       if (!charMap.containsKey('GameMode')) {
         charMap['GameMode'] = 'None';
@@ -37,7 +43,9 @@ class ApiParser {
   }
 
   /// Parse stories response
-  static List<Map<String, dynamic>> parseStories(Map<String, dynamic> response) {
+  static List<Map<String, dynamic>> parseStories(
+    Map<String, dynamic> response,
+  ) {
     // Extract stories array
     final stories = response['Stories'] as List<dynamic>?;
     if (stories == null) {
@@ -69,7 +77,10 @@ class ApiParser {
   /// Parse current story response
   static Map<String, dynamic> parseCurrentStory(Map<String, dynamic> response) {
     // Validate top-level fields
-    ApiValidation.validateRequiredFields(response, ['Story', 'Segment'], 'CurrentStory');
+    ApiValidation.validateRequiredFields(response, [
+      'Story',
+      'Segment',
+    ], 'CurrentStory');
 
     // Validate nested objects
     final story = response['Story'] as Map<String, dynamic>;
@@ -90,7 +101,11 @@ class ApiParser {
     }
 
     // Validate required outcome fields
-    ApiValidation.validateRequiredFields(outcomeData, ['Outcome', 'Narrative', 'Effects'], 'Outcome');
+    ApiValidation.validateRequiredFields(outcomeData, [
+      'Outcome',
+      'Narrative',
+      'Effects',
+    ], 'Outcome');
 
     return outcomeData;
   }
@@ -110,7 +125,8 @@ class ApiParser {
     }
 
     // Fallback to message field
-    final message = response['Message'] as String? ?? response['message'] as String?;
+    final message =
+        response['Message'] as String? ?? response['message'] as String?;
     if (message != null) {
       return message;
     }
@@ -124,7 +140,9 @@ class ApiParser {
 
     data.forEach((key, value) {
       // Convert first letter to uppercase
-      final pascalKey = key.isEmpty ? key : key[0].toUpperCase() + key.substring(1);
+      final pascalKey = key.isEmpty
+          ? key
+          : key[0].toUpperCase() + key.substring(1);
 
       // Recursively convert nested maps
       if (value is Map<String, dynamic>) {

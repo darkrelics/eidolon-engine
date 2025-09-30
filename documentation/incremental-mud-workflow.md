@@ -2,14 +2,11 @@
 
 ## Overview
 
-This document describes how characters transition between Incremental and MUD game modes in the production Eidolon Engine system. Built on the 9-stack CDK deployment with 16 Lambda functions and 14 DynamoDB tables, the system uses the GameMode field to ensure characters can only be active in one mode at a time.
+This document describes how characters transition between Incremental and MUD game modes in the production Eidolon Engine system. The workflow assumes the shared infrastructure described in [Deployment Guide](deployment.md#system-architecture) and relies on the GameMode field to ensure characters can only be active in one mode at a time.
 
 ## Infrastructure Context
 
-- **Deployment Modes**: MUD (8 stacks), Incremental (7 stacks), or Hybrid (9 stacks)
-- **Shared Resources**: All modes use the same DynamoDB tables and Lambda functions
-- **Authentication**: Cognito User Pool (`eidolon-users`) with PostConfirmation trigger
-- **API Gateway**: REST API at `api.{domain}` with Lambda integrations
+For deployment-mode specifics, refer to [Deployment Modes](deployment-modes.md); this workflow focuses solely on how characters move between modes, independent of backend stack selection.
 
 ## Workflow Steps
 

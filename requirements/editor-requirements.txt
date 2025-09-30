@@ -1,4 +1,4 @@
-#Required 
+#Required
 jupyter==1.1.1
 matplotlib==3.10.1
 networkx==3.4.2
@@ -6,7 +6,6 @@ notebook==7.4.7
 numpy==2.2.4
 pyyaml==6.0.3
 voila==0.5.11
-
 #Dependancies
 anyio==4.11.0
 argon2-cffi==25.1.0

@@ -8,6 +8,7 @@ Returns segment completion status and any available results.
 """
 
 import time
+from typing import Optional
 
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
@@ -51,14 +52,43 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             raise ValueError("No active story. Please select a story to begin your adventure.") from err
         raise
 
-    # Convert Unix timestamps to ISO 8601 for API response
-    end_time_unix = active_segment.get("EndTime", 0)
-    end_time = from_unix(end_time_unix) if end_time_unix else ""
+    def _coerce_unix(timestamp_value: object, default: Optional[int] = None) -> Optional[int]:
+        if timestamp_value in (None, "", 0, "0"):
+            return default
+        if isinstance(timestamp_value, (int, float)):
+            return int(timestamp_value)
+        if "Decimal" in type(timestamp_value).__name__:
+            try:
+                return int(timestamp_value)  # type: ignore[arg-type]
+            except Exception:
+                return default
+        if isinstance(timestamp_value, str):
+            try:
+                return int(float(timestamp_value))
+            except ValueError:
+                return default
+        return default
+
+    now = time.time()
+    start_time_unix = _coerce_unix(active_segment.get("StartTime"), int(now))
+    if start_time_unix is None:
+        start_time_unix = int(now)
+
+    raw_duration = active_segment.get("Duration") or active_segment.get("SegmentDuration") or active_segment.get("ExpectedDuration")
+    try:
+        duration = int(raw_duration)  # type: ignore
+    except (TypeError, ValueError):
+        duration = 60
+    if duration <= 0:
+        duration = 60
+
+    end_time_unix = _coerce_unix(active_segment.get("EndTime"), None)
+    if end_time_unix is None:
+        end_time_unix = start_time_unix + duration
 
     # Calculate status using Unix timestamps
-    now = time.time()
-    is_complete = end_time_unix <= now if end_time_unix else False
-    time_remaining = max(0, int(end_time_unix - now)) if end_time_unix else 0
+    is_complete = end_time_unix <= now
+    time_remaining = max(0, int(end_time_unix - now))
 
     processing_status = active_segment.get("ProcessingStatus", "")
 
@@ -70,12 +100,13 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         "Status": active_segment.get("Status", "active"),
         "IsComplete": is_complete,
         "TimeRemaining": time_remaining,
-        "StartTime": from_unix(active_segment.get("StartTime", 0)) if active_segment.get("StartTime") else "",
-        "EndTime": end_time,
+        "StartTime": from_unix(start_time_unix),
+        "EndTime": from_unix(end_time_unix),
         "ProcessingStatus": processing_status,
         "SegmentType": active_segment.get("SegmentType"),
-        "ShortStatus": active_segment.get("ShortStatus", active_segment.get("DefaultStatus", "")),
-        "Duration": active_segment.get("Duration", 60),
+        "SegmentActivity": active_segment.get("SegmentActivity", ""),
+        "SegmentTitle": active_segment.get("SegmentTitle", ""),
+        "Duration": duration,
     }
 
     # Only include narrative data if segment is processed or if it's not a mechanical segment
@@ -84,9 +115,11 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     story_id = active_segment.get("StoryID")
     segment_id = active_segment.get("SegmentID")
 
+    segment_def = None
+
     if segment_type != "mechanical" or processing_status == "processed":
         # Include narrative and events for display
-        response["DefaultStatus"] = active_segment.get("DefaultStatus")
+        response["SegmentTitle"] = active_segment.get("SegmentTitle")
         response["ClientEvents"] = active_segment.get("ClientEvents", [])
         response["ChallengeResults"] = active_segment.get("ChallengeResults", [])
         response["Outcome"] = active_segment.get("Outcome")
@@ -149,7 +182,8 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                                 "SegmentID": next_segment_id,
                                 "SegmentType": next_segment_def.get("SegmentType", "mechanical"),
                                 "SegmentDuration": next_segment_def.get("SegmentDuration", 60),
-                                "DefaultStatus": next_segment_def.get("DefaultStatus", "Processing..."),
+                                "SegmentTitle": next_segment_def.get("SegmentTitle", "Processing..."),
+                                "SegmentActivity": next_segment_def.get("SegmentActivity", ""),
                             }
                     except Exception as preview_err:
                         logger.debug(f"Could not fetch next segment preview: {preview_err}")
@@ -162,7 +196,17 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                 # Continue without narrative - not critical
     else:
         # Segment is still processing - just return basic status
-        response["DefaultStatus"] = "Processing..."
+        response["SegmentTitle"] = response.get("SegmentTitle") or "Processing..."
+        response.setdefault("SegmentActivity", "")
+
+    if (not response.get("SegmentTitle") or not response.get("SegmentActivity")) and story_id and segment_id:
+        try:
+            if segment_def is None:
+                segment_def = get_story_segment(story_id, segment_id)  # type: ignore
+            response["SegmentTitle"] = response.get("SegmentTitle") or segment_def.get("SegmentTitle", "Processing...")
+            response["SegmentActivity"] = response.get("SegmentActivity") or segment_def.get("SegmentActivity", "")
+        except Exception as err:
+            logger.debug(f"Could not enrich segment metadata for {segment_id}: {err}")
 
     # Include decision-specific data
     if segment_type == "decision":

@@ -38,9 +38,6 @@ def get_archetypes() -> list:
     # Filter for player archetypes
     player_archetypes: list = []
     for item in items:  # type: ignore
-        # Defensive check in case filter was bypassed/misconfigured
-        if not item.get("Player", False):
-            continue
 
         attributes: dict = item.get("Attributes", {})
         skills: dict = item.get("Skills", {})

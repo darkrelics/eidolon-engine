@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import '../../models/character.dart';
-import '../../models/story.dart';
-import '../story/active_story_widget.dart';
-import '../story/available_stories_widget.dart';
-import '../story/story_history_widget.dart';
+
+import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/models/story.dart';
+import 'package:eidolon_incremental/utils/outcome_colors.dart';
+import 'package:eidolon_incremental/widgets/story/active_story_widget.dart';
+import 'package:eidolon_incremental/widgets/story/available_stories_widget.dart';
+import 'package:eidolon_incremental/widgets/story/story_history_widget.dart';
 
 /// Center panel that displays story content dynamically
 class StoryPanel extends StatefulWidget {
   final Character character;
   final List<Map<String, dynamic>> segmentHistory;
+  final List<Map<String, dynamic>> storyHistoryArchive;
   final bool isLoading;
   final String? error;
   final VoidCallback? onRefresh;
@@ -22,6 +25,7 @@ class StoryPanel extends StatefulWidget {
     super.key,
     required this.character,
     this.segmentHistory = const [],
+    this.storyHistoryArchive = const [],
     this.isLoading = false,
     this.error,
     this.onRefresh,
@@ -41,30 +45,27 @@ class _StoryPanelState extends State<StoryPanel> {
 
   bool _hasActiveStory([Character? character]) {
     final char = character ?? widget.character;
-    return char.activeStoryID != null;
+    if (char.activeStoryID != null) return true;
+    final active = char.storyState != null ? char.storyState!['ActiveSegment'] : null;
+    return active != null;
   }
 
   bool _isStoryComplete() {
-    // Story is complete if we have an active story but no active segment
-    // AND we have completed segments in the history
     final char = widget.character;
-    final hasCompletedSegments = char.storyState?['CompletedSegments'] != null &&
-        (char.storyState!['CompletedSegments'] as List).isNotEmpty;
-    
-    // Additional check: if the last segment outcome was 'death' or final 'failure'
-    if (hasCompletedSegments) {
-      final segments = char.storyState!['CompletedSegments'] as List;
-      final lastSegment = segments.last as Map<String, dynamic>;
-      final lastOutcome = lastSegment['Outcome']?.toString().toLowerCase();
-      
-      // Story is complete if no active segment and we have history
-      // OR if the last outcome was a terminal state
-      return (char.activeStoryID != null && char.activeSegmentID == null) ||
-             lastOutcome == 'death' ||
-             (lastOutcome == 'failure' && lastSegment['NextSegmentID'] == null);
+
+    // If character has an active story, it's not complete
+    if (char.activeStoryID != null) {
+      return false;
     }
-    
-    return false;
+
+    // Story is complete if:
+    // 1. No active story ID (cleared by server on completion)
+    // 2. AND we have either segment history or completed segments in story state
+    final hasSegmentHistory = widget.segmentHistory.isNotEmpty;
+    final stateSegments = char.storyState?['CompletedSegments'] as List<dynamic>?;
+    final hasCompletedSegments = stateSegments != null && stateSegments.isNotEmpty;
+
+    return hasSegmentHistory || hasCompletedSegments;
   }
 
   @override
@@ -82,33 +83,21 @@ class _StoryPanelState extends State<StoryPanel> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: colorScheme.primaryContainer,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(12), topRight: Radius.circular(12)),
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.auto_stories,
-                  color: colorScheme.onPrimaryContainer,
-                ),
+                Icon(Icons.auto_stories, color: colorScheme.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Text(
                   _getHeaderTitle(),
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    color: colorScheme.onPrimaryContainer,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: theme.textTheme.titleLarge?.copyWith(color: colorScheme.onPrimaryContainer, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 // History toggle button
-                if (!_hasActiveStory() && widget.character.completedStories.isNotEmpty)
+                if (!_hasActiveStory() && (widget.character.completedStories.isNotEmpty || widget.storyHistoryArchive.isNotEmpty))
                   IconButton(
-                    icon: Icon(
-                      _showHistory ? Icons.library_books : Icons.history,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
+                    icon: Icon(_showHistory ? Icons.library_books : Icons.history, color: colorScheme.onPrimaryContainer),
                     onPressed: () {
                       setState(() {
                         _showHistory = !_showHistory;
@@ -118,21 +107,16 @@ class _StoryPanelState extends State<StoryPanel> {
                   ),
                 if (widget.onRefresh != null)
                   IconButton(
-                    icon: Icon(
-                      Icons.refresh,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
+                    icon: Icon(Icons.refresh, color: colorScheme.onPrimaryContainer),
                     onPressed: widget.onRefresh,
                     tooltip: 'Refresh',
                   ),
               ],
             ),
           ),
-          
+
           // Content
-          Expanded(
-            child: _buildContent(),
-          ),
+          Expanded(child: _buildContent()),
         ],
       ),
     );
@@ -152,8 +136,7 @@ class _StoryPanelState extends State<StoryPanel> {
 
   Widget _buildContent() {
     // Don't show loading if we already have content
-    if (widget.isLoading && !_hasActiveStory() && 
-        widget.character.availableStoriesDetails == null) {
+    if (widget.isLoading && !_hasActiveStory() && widget.character.availableStoriesDetails == null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -162,9 +145,7 @@ class _StoryPanelState extends State<StoryPanel> {
             const SizedBox(height: 16),
             Text(
               'Loading stories...',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
             ),
           ],
         ),
@@ -200,33 +181,18 @@ class _StoryPanelState extends State<StoryPanel> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: colorScheme.error,
-            ),
+            Icon(Icons.error_outline, size: 64, color: colorScheme.error),
             const SizedBox(height: 16),
-            Text(
-              'Error Loading Stories',
-              style: theme.textTheme.titleMedium?.copyWith(
-                color: colorScheme.error,
-              ),
-            ),
+            Text('Error Loading Stories', style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.error)),
             const SizedBox(height: 8),
             Text(
               widget.error!,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+              style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
             if (widget.onRefresh != null) ...[
               const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: widget.onRefresh,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
-              ),
+              FilledButton.icon(onPressed: widget.onRefresh, icon: const Icon(Icons.refresh), label: const Text('Retry')),
             ],
           ],
         ),
@@ -259,18 +225,25 @@ class _StoryPanelState extends State<StoryPanel> {
     return StoryHistoryWidget(
       key: const ValueKey('story_history'),
       character: widget.character,
+      segmentHistory: widget.storyHistoryArchive,
     );
   }
 
   Widget _buildStoryCompleteWidget() {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
-    // Get story data and completed segments
+
+    // Get story data and completed segments (prefer provided history from parent)
     final storyData = widget.character.storyState?['Story'] as Map<String, dynamic>?;
-    final completedSegments = widget.character.storyState?['CompletedSegments'] as List<dynamic>?;
-    
-    if (completedSegments == null || completedSegments.isEmpty) {
+    final completedSegmentsDynamic = widget.segmentHistory.isNotEmpty
+        ? widget.segmentHistory
+        : (widget.character.storyState?['CompletedSegments'] as List<dynamic>? ?? const []);
+
+    final completedSegments = completedSegmentsDynamic.map((segment) => segment as Map<String, dynamic>).toList();
+
+    if (completedSegments.isEmpty) {
+      // Attempt to infer story information from history if available
+      final storyTitle = widget.segmentHistory.isNotEmpty ? widget.segmentHistory.last['StoryTitle'] as String? : null;
       // Fallback to simple completion screen
       return Center(
         child: Column(
@@ -279,6 +252,10 @@ class _StoryPanelState extends State<StoryPanel> {
             Icon(Icons.check_circle, size: 80, color: colorScheme.primary),
             const SizedBox(height: 16),
             Text('Story Complete', style: theme.textTheme.headlineMedium),
+            if (storyTitle != null) ...[
+              const SizedBox(height: 8),
+              Text(storyTitle, style: theme.textTheme.titleMedium, textAlign: TextAlign.center),
+            ],
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: widget.onReturnToStories,
@@ -289,21 +266,30 @@ class _StoryPanelState extends State<StoryPanel> {
         ),
       );
     }
-    
+
     // Get the last segment to determine overall outcome
-    final lastSegment = completedSegments.last as Map<String, dynamic>;
+    final lastSegment = completedSegments.last;
     final lastOutcome = lastSegment['Outcome'] ?? 'normal';
-    
+
     // Check if story ended in death or complete failure
     final storyFailed = lastOutcome == 'death' || lastOutcome == 'failure';
-    
+
+    // If the API no longer supplies story metadata, fall back to the last segment title
+    Map<String, dynamic>? effectiveStoryData = storyData;
+    if (effectiveStoryData == null) {
+      final inferredTitle = lastSegment['StoryTitle'];
+      if (inferredTitle is String && inferredTitle.isNotEmpty) {
+        effectiveStoryData = {'Title': inferredTitle};
+      }
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Story Card at the top
-          if (storyData != null) ...[
+          if (effectiveStoryData != null) ...[
             Card(
               elevation: 2,
               color: storyFailed ? Colors.red.withValues(alpha: 0.1) : Colors.green.withValues(alpha: 0.1),
@@ -318,10 +304,8 @@ class _StoryPanelState extends State<StoryPanel> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      storyData['Title'] ?? 'Story',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      effectiveStoryData['Title'] ?? 'Story',
+                      style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -337,86 +321,226 @@ class _StoryPanelState extends State<StoryPanel> {
             ),
             const SizedBox(height: 16),
           ],
-          
+
           // Segment History - Reverse order (newest first)
-          Text(
-            'Story Segments',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          Text('Story Segments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          
-          // Display segments in reverse order
-          ...completedSegments.reversed.map((segment) {
-            final segmentMap = segment as Map<String, dynamic>;
-            final outcome = segmentMap['Outcome'] ?? 'normal';
-            final segmentType = segmentMap['SegmentType'] ?? 'mechanical';
-            final shortStatus = segmentMap['ShortStatus'] ?? 'Segment';
-            
-            // Determine color based on outcome
-            Color segmentColor;
-            Color backgroundColor;
-            IconData icon;
-            
-            if (outcome == 'death') {
-              segmentColor = Colors.black;
-              backgroundColor = Colors.black.withValues(alpha: 0.1);
-              icon = Icons.dangerous;
-            } else if (outcome == 'failure' || outcome == 'failed') {
-              segmentColor = Colors.red;
-              backgroundColor = Colors.red.withValues(alpha: 0.1);
-              icon = Icons.cancel;
-            } else {
-              // Success (exceptional, normal, minimal, etc.)
-              segmentColor = Colors.green;
-              backgroundColor = Colors.green.withValues(alpha: 0.1);
-              icon = Icons.check_circle;
-            }
-            
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Card(
-                color: backgroundColor,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(color: segmentColor.withValues(alpha: 0.3), width: 1),
-                ),
-                child: ListTile(
-                  leading: Icon(icon, color: segmentColor),
-                  title: Text(
-                    shortStatus,
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: segmentColor,
-                    ),
-                  ),
-                  subtitle: Text(
-                    'Type: $segmentType | Outcome: $outcome',
-                    style: TextStyle(
-                      color: segmentColor.withValues(alpha: 0.8),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }),
-          
+
+          // Display segments in reverse order with full details
+          ...completedSegments.reversed.map((segmentMap) => _buildCompletedSegmentCard(segmentMap, theme)),
+
           const SizedBox(height: 24),
-          
+
           // Return button
           Center(
             child: FilledButton.icon(
               onPressed: widget.onReturnToStories,
               icon: const Icon(Icons.chevron_left),
               label: const Text('Return to Stories'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
+              style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildCompletedSegmentCard(Map<String, dynamic> segment, ThemeData theme) {
+    final rawSegmentActivity = segment['SegmentActivity']?.toString().trim();
+    final rawSegmentTitle = segment['SegmentTitle']?.toString().trim();
+    final rawProcessingStatus = segment['ProcessingStatus']?.toString().toLowerCase();
+    final isProcessed = rawProcessingStatus == 'processed';
+    final narrative = _extractSegmentNarrative(segment);
+
+    final prompt = segment['Prompt']?.toString();
+
+    final title = _resolveCompletedSegmentTitle(rawSegmentTitle, narrative, rawSegmentActivity, prompt);
+
+    final subtitle = _resolveCompletedSegmentSubtitle(rawSegmentActivity, rawSegmentTitle, prompt, title, isProcessed: isProcessed);
+
+    final outcome = segment['Outcome'];
+    final cardColor = outcomeAccentColor(theme, outcome);
+    final backgroundColor = outcomeBackgroundColor(theme, outcome);
+    final icon = _resolveOutcomeIcon(outcome);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Card(
+        color: backgroundColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: cardColor.withValues(alpha: 0.3), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(icon, color: cardColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: cardColor),
+                        ),
+                        const SizedBox(height: 4),
+                        if (subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(subtitle, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (narrative.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(narrative, style: theme.textTheme.bodyMedium, textAlign: TextAlign.justify),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(Icons.workspace_premium, size: 16, color: cardColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Outcome: ${_formatOutcome(outcome)}',
+                    style: TextStyle(color: cardColor, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static bool _isProcessingPlaceholder(String? value) {
+    if (value == null) return false;
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) return false;
+    if (normalized.startsWith('processing')) return true;
+    return normalized == '...processing...' || normalized == 'processing your actions...';
+  }
+
+  String _resolveCompletedSegmentTitle(String? rawSegmentTitle, String narrative, String? segmentActivity, String? prompt) {
+    if (rawSegmentTitle != null && rawSegmentTitle.isNotEmpty && !_isProcessingPlaceholder(rawSegmentTitle)) {
+      return rawSegmentTitle;
+    }
+
+    if (narrative.isNotEmpty) {
+      final trimmedNarrative = narrative.trim();
+      final sentenceBreak = trimmedNarrative.indexOf(RegExp(r'[.!?]'));
+      if (sentenceBreak > 0) {
+        return trimmedNarrative.substring(0, sentenceBreak + 1).trim();
+      }
+      return trimmedNarrative;
+    }
+
+    if (segmentActivity != null && segmentActivity.trim().isNotEmpty) {
+      return segmentActivity.trim();
+    }
+
+    if (prompt != null && prompt.trim().isNotEmpty) {
+      return prompt.trim();
+    }
+
+    return 'Segment';
+  }
+
+  String _resolveCompletedSegmentSubtitle(
+    String? rawSegmentActivity,
+    String? segmentTitle,
+    String? prompt,
+    String title, {
+    required bool isProcessed,
+  }) {
+    final candidates = <String?>[rawSegmentActivity, segmentTitle, prompt];
+
+    final normalizedTitle = title.trim().toLowerCase();
+
+    for (final candidate in candidates) {
+      if (candidate == null) continue;
+      final trimmed = candidate.trim();
+      if (trimmed.isEmpty) continue;
+      if (_isProcessingPlaceholder(trimmed)) {
+        // Skip placeholders and generic copy once a segment is completed.
+        continue;
+      }
+      if (trimmed.toLowerCase() == normalizedTitle) continue;
+      return trimmed;
+    }
+
+    // If nothing else is suitable and the short status was a placeholder
+    // while the segment is still processing, fall back to a generic label.
+    if (!isProcessed &&
+        rawSegmentActivity != null &&
+        rawSegmentActivity.trim().isNotEmpty &&
+        !_isProcessingPlaceholder(rawSegmentActivity)) {
+      return rawSegmentActivity.trim();
+    }
+
+    return '';
+  }
+
+  String _extractSegmentNarrative(Map<String, dynamic> segment) {
+    final clientEvents = segment['ClientEvents'] as List<dynamic>?;
+    if (clientEvents != null && clientEvents.isNotEmpty) {
+      final descriptions = clientEvents
+          .map((event) => event is Map ? event['Description']?.toString() ?? '' : event.toString())
+          .where((text) => text.trim().isNotEmpty)
+          .toList();
+      if (descriptions.isNotEmpty) {
+        return descriptions.join('\n\n');
+      }
+    }
+
+    final narrative = segment['Narrative']?.toString() ?? '';
+    if (narrative.trim().isNotEmpty) {
+      return narrative.trim();
+    }
+
+    final segmentTitle = segment['SegmentTitle']?.toString() ?? '';
+    if (segmentTitle.trim().isNotEmpty) {
+      return segmentTitle.trim();
+    }
+
+    return '';
+  }
+
+  String _outcomeToString(dynamic outcome) {
+    if (outcome is String) {
+      return outcome.toLowerCase();
+    }
+    if (outcome is Map && outcome['Type'] is String) {
+      return (outcome['Type'] as String).toLowerCase();
+    }
+    return 'normal';
+  }
+
+  String _formatOutcome(dynamic outcome) {
+    final outcomeStr = _outcomeToString(outcome);
+    if (outcomeStr.isEmpty) {
+      return 'Unknown';
+    }
+    return outcomeStr[0].toUpperCase() + outcomeStr.substring(1);
+  }
+
+  IconData _resolveOutcomeIcon(dynamic outcome) {
+    switch (normalizedOutcomeType(outcome)) {
+      case 'death':
+        return Icons.dangerous;
+      case 'failure':
+      case 'failed':
+        return Icons.cancel;
+      default:
+        return Icons.check_circle;
+    }
   }
 }

@@ -88,10 +88,7 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
         raise RuntimeError(f"Failed to get story: {err}") from err
 
     story_type = story_metadata.get("StoryType", "repeatable")
-    if story_type == "repeatable":
-        # For repeatable stories, we don't track in CompletedStories
-        # since they can be repeated. Just log the completion.
-        logger.info(f"Repeatable story {story_id} completed for {character_id}")
+    logger.info(f"Story {story_id} completed for {character_id} (type={story_type})")
 
     if story_instance_id:
         history = dynamo.get_item(TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryInstanceID": story_instance_id})

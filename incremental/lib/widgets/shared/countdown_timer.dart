@@ -57,7 +57,7 @@ class _CountdownTimerState extends State<CountdownTimer> {
 
   String _formatTime(int seconds) {
     if (seconds <= 0) return '00:00';
-    
+
     final minutes = seconds ~/ 60;
     final remainingSeconds = seconds % 60;
     return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
@@ -65,9 +65,6 @@ class _CountdownTimerState extends State<CountdownTimer> {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      _formatTime(_remainingSeconds),
-      style: widget.textStyle,
-    );
+    return Text(_formatTime(_remainingSeconds), style: widget.textStyle);
   }
 }

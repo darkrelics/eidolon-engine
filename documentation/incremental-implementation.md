@@ -1,6 +1,6 @@
 # Eidolon Engine Incremental Game Implementation Guide
 
-This guide provides detailed technical information, code examples, and specific configurations for the production-deployed Incremental Game system. Based on the 9-stack CDK deployment architecture with 16 Lambda functions and 14 DynamoDB tables, this guide reflects the actual implementation deployed to AWS.
+This guide provides detailed technical information, code examples, and specific configurations for the production-deployed Incremental Game system. For the shared deployment architecture (stack counts, Lambda inventory, DynamoDB tables), see the canonical overview in [Deployment Guide](deployment.md#system-architecture).
 
 ## Table of Contents
 
@@ -36,7 +36,7 @@ This complete example shows how segment processing results are stored, including
   "StoryTitle": "The Whispering Woods",
   "SegmentID": "seg-forest-002a",
   "SegmentType": "mechanical",
-  "DefaultStatus": "Walking through the dark forest",
+  "SegmentTitle": "Walking through the dark forest",
   "StartTime": 1737000300,
   "EndTime": 1737003900,
   "ProcessedAt": 1737000305,
@@ -85,8 +85,8 @@ Mechanical segments can contain both skill challenges and combat encounters. Thi
   "StoryID": "forest-adventure-001",
   "SegmentID": "seg-combat-goblin-001",
   "SegmentType": "mechanical",
-  "ShortStatus": "Fighting the goblin scout",
-  "DefaultStatus": "Engaged in combat",
+  "SegmentActivity": "Fighting the goblin scout",
+  "SegmentTitle": "Engaged in combat",
   "SegmentDuration": 120,
   "NextSegmentID": "seg-forest-004",
   "Combat": {
@@ -397,142 +397,1995 @@ def process_mechanical_segment(segment):
     }
 ```
 
-## 3. Game Mechanics Implementation
+# Eidolon Engine Incremental Game Implementation Guide
 
-### 3.1 Skill Check Implementation
+This guide provides detailed technical information, code examples, and specific configurations for the production-deployed Incremental Game system. For the shared deployment architecture (stack counts, Lambda inventory, DynamoDB tables), see the canonical overview in [Deployment Guide](deployment.md#system-architecture).
 
-The skill challenge system integrates with the MUD mechanics to provide consistent difficulty scaling and XP awards. This implementation handles multiple attempts per challenge, accumulates XP across all attempts, and returns detailed results for client display and character progression.
+## Table of Contents
 
-```python
-def resolve_skill_challenge(character, challenge_def):
-    """Execute a skill challenge using MUD mechanics."""
-    skill = challenge_def['skill']
-    attribute = challenge_def['attribute']
-    difficulty = challenge_def['difficulty']
-    attempts = challenge_def.get('attempts', 1)
+1. [Database Implementation](#1-database-implementation)
+2. [Lambda Function Implementation](#2-lambda-function-implementation)
+3. [Client Architecture](#3-client-architecture)
+4. [State Management](#4-state-management)
+5. [API Service Layer](#5-api-service-layer)
+6. [Polling System](#6-polling-system)
+7. [UI Architecture](#7-ui-architecture)
+8. [Error Handling](#8-error-handling)
+9. [Testing Guidelines](#9-testing-guidelines)
+10. [Performance Optimization](#10-performance-optimization)
 
-    results = []
-    total_skill_xp = 0
-    total_attribute_xp = 0
+## 3. Client Architecture
 
-    for attempt in range(attempts):
-        # Calculate effective score
-        skill_value = character.get('Skills', {}).get(skill, 0)
-        attribute_value = character.get('Attributes', {}).get(attribute, 0)
-        effective_score = skill_value + attribute_value
+### 3.1 Service Layer Architecture
 
-        # Call MUD mechanics
-        success, sigma, skill_xp, attribute_xp = ResolveStaticCheckWithXP(
-            character, skill, attribute, difficulty
-        )
+The client follows a layered service architecture with clear separation of concerns:
 
-        results.append({
-            "Attempt": attempt + 1,
-            "Skill": skill,
-            "Attribute": attribute,
-            "EffectiveScore": effective_score,
-            "Difficulty": difficulty,
-            "Sigma": round(sigma, 2),
-            "Success": success,
-            "SkillXPAwarded": skill_xp,
-            "AttributeXPAwarded": attribute_xp
-        })
+#### Core Services
 
-        total_skill_xp += skill_xp
-        total_attribute_xp += attribute_xp
+**ApiService** - Primary API client extending BaseApiService:
 
-    return {
-        "Results": results,
-        "TotalSkillXP": {skill: total_skill_xp},
-        "TotalAttributeXP": {attribute: total_attribute_xp}
+- Handles all HTTP communication with retry logic and authentication
+- Provides typed methods for each API endpoint
+- Includes response parsing and validation
+- Uses rate limiting for API calls
+
+**StoryPollingService** - Server-authoritative polling system:
+
+- Stream-based event system for real-time updates
+- Handles segment completion detection and story state changes
+- Implements exponential backoff for error recovery
+- Follows server timing exactly (no client-side predictions)
+
+**AuthService** - Authentication management:
+
+- JWT token management and refresh
+- Cognito integration for user authentication
+- Secure token storage and validation
+
+**Supporting Services:**
+
+- **NotificationService**: User notifications and feedback
+- **RateLimiter**: API call rate limiting and throttling
+- **CacheService**: Response caching and offline support
+
+### 3.2 Model Layer
+
+#### Character Model
+
+The Character model represents server-side progression with client-side display logic:
+
+```dart
+class Character {
+  final String id;
+  final String name;
+  final String archetypeId;
+  final String archetypeName;
+  final double health;
+  final double maxHealth;
+  final double essence;
+  final double maxEssence;
+  final Map<String, double> attributes;    // Server-calculated values
+  final Map<String, double> skills;        // Server-calculated values
+  final Map<String, int> resources;        // Integer resources (gold, supplies)
+  final Map<String, String> inventory;     // Slot -> ItemID mapping
+  final Map<String, dynamic> inventoryDetails; // Enriched item data
+  final Map<String, dynamic> progress;     // Story progress flags
+  Map<String, dynamic>? storyState;        // Current story position
+  final String? activeStoryID;             // Server-provided story ID
+  final String? activeSegmentID;           // Server-provided segment ID
+  final String gameMode;                   // "MUD" or "Incremental"
+  final DateTime lastUpdated;
+  final List<String> availableStories;
+  final List<String> abandonedStories;
+  final List<String> completedStories;
+  final List<Map<String, dynamic>>? availableStoriesDetails;
+
+  // Display-only calculations
+  int getEffectiveScore(String skill, String attribute) {
+    final skillValue = skills[skill] ?? 0.0;
+    final attributeValue = attributes[attribute] ?? 0.0;
+    return (skillValue + attributeValue).floor();
+  }
+}
+```
+
+**Key Design Principles:**
+
+- All progression calculations happen server-side
+- Client models are display-only with safe parsing
+- Story state includes both active story and segment data
+- Server provides `activeStoryID` and `activeSegmentID` directly
+
+#### ActiveSegment Model
+
+Represents the current segment state with timing and narrative data:
+
+```dart
+class ActiveSegment {
+  final String id;
+  final String segmentId;
+  final String segmentType;        // "mechanical", "decision", "rest"
+  final String status;             // "active", "completed"
+  final DateTime startTime;
+  final DateTime endTime;
+  final Map<String, dynamic> data; // Segment-specific data
+  final bool isExpired;            // Client-side expiration check
+
+  bool get isExpired => DateTime.now().isAfter(endTime);
+}
+```
+
+### 3.3 Provider Pattern State Management
+
+The client uses the Provider pattern for reactive state management with SharedPreferences persistence:
+
+#### CharacterProvider
+
+Manages character state with automatic persistence and error recovery:
+
+```dart
+class CharacterProvider extends BaseProvider {
+  Character? _character;
+  ActiveSegment? _activeSegment;
+
+  // Persistence with error recovery
+  Future<void> updateCharacter(Character newCharacter) async {
+    await executeAsyncVoid(() async {
+      // Persist to storage FIRST
+      await _prefs.setString(_characterKey, jsonEncode(newCharacter.toJson()));
+
+      // Update in-memory state after successful persistence
+      _character = newCharacter;
+    });
+  }
+
+  // Automatic data recovery on startup
+  Future<void> _loadFromStorage() async {
+    try {
+      final characterJson = _prefs.getString(_characterKey);
+      if (characterJson != null) {
+        _character = Character.fromJson(jsonDecode(characterJson));
+      }
+    } catch (characterError) {
+      // Clear corrupted data and continue
+      await _prefs.remove(_characterKey);
+      _character = null;
     }
+    notifyListeners();
+  }
+}
 ```
 
-### 3.2 Outcome Calculation
+**Provider Architecture Benefits:**
 
-This algorithm determines the final outcome of a mechanical segment by analyzing all challenge results (both skill checks and combat). It uses statistical measures (sigma values) from the MUD mechanics to create a fair outcome distribution, with special handling for catastrophic failures and critical successes that can override average performance.
+- Reactive UI updates through ChangeNotifier
+- Automatic persistence with corruption recovery
+- Async operation handling with loading states
+- Centralized state validation and business logic
 
-```python
-def calculate_mechanical_outcome(challenge_results):
-    """Determine mechanical segment outcome based on all challenge results (skill checks and combat)."""
-    if not challenge_results:
-        return "normal"
+## 4. State Management
 
-    # Extract sigma values
-    sigmas = []
-    for challenge in challenge_results:
-        for result in challenge.get('results', []):
-            sigmas.append(result['sigma'])
+The Incremental client implements a sophisticated Provider-based state management architecture built on Flutter's ChangeNotifier pattern. This system provides reactive UI updates, persistent storage, error handling, and proper resource disposal across all application state.
 
-    if not sigmas:
-        return "normal"
+### 4.1 Provider Architecture Overview
 
-    # Check for catastrophic failure
-    if any(sigma <= -3.0 for sigma in sigmas):
-        return "death"
+The app uses a hierarchical Provider structure with dependency injection, where each provider extends `BaseProvider` for consistent behavior:
 
-    # Calculate average performance
-    avg_sigma = sum(sigmas) / len(sigmas)
-
-    # Check for critical overrides
-    critical_failures = sum(1 for s in sigmas if s < -2.0)
-    critical_successes = sum(1 for s in sigmas if s > 2.0)
-
-    # Determine outcome
-    if avg_sigma < -2.0 or critical_failures >= 2:
-        return "death"
-    elif avg_sigma < -0.5:
-        return "failure"
-    elif avg_sigma < 0.5:
-        return "minimal"
-    elif avg_sigma < 1.5:
-        return "normal"
-    else:
-        return "exceptional"
+```dart
+void main() {
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, CharacterProvider>(
+          create: (context) => CharacterProvider(prefs: prefs),
+          update: (context, auth, previous) => previous ?? CharacterProvider(prefs: prefs),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, SegmentProvider>(
+          create: (context) => SegmentProvider(),
+          update: (context, auth, previous) => previous ?? SegmentProvider(),
+        ),
+      ],
+      child: const MyApp(),
+    ),
+  );
+}
 ```
 
-### 3.3 XP Application
+### 4.2 BaseProvider Foundation
 
-Character updates are applied atomically using DynamoDB update expressions. This function builds dynamic update statements based on the specific changes needed, handling XP additions, wound applications, and room changes in a single database operation for consistency and performance. These updates are accumulated from both skill challenges and combat encounters within mechanical segments.
+All providers extend `BaseProvider`, which provides common functionality for async operations, loading states, error handling, and disposal safety:
 
-**Important XP Multiplier Constraint**: The BaseXPMultiplier field in story metadata must default to 0.5 and must never equal or exceed 1.0. This ensures incremental gameplay provides experience at a slower rate than active MUD play, maintaining game balance between the two modes.
+```dart
+abstract class BaseProvider extends ChangeNotifier {
+  bool _isLoading = false;
+  String? _error;
+  bool _disposed = false;
 
-```python
-def apply_character_updates(character_id, updates):
-    """Apply accumulated XP and other updates to character."""
-    update_expressions = []
-    expression_values = {}
+  bool get isLoading => _isLoading;
+  String? get error => _error;
 
-    # Skills XP
-    if updates.get('SkillXP'):
-        for skill, xp in updates['SkillXP'].items():
-            update_expressions.append(f"Skills.{skill} = Skills.{skill} + :xp_{skill}")
-            expression_values[f":xp_{skill}"] = Decimal(str(xp))
+  @protected
+  Future<T> executeAsync<T>(Future<T> Function() operation) async {
+    if (_disposed) return Future.error('Provider disposed');
 
-    # Attributes XP
-    if updates.get('AttributeXP'):
-        for attr, xp in updates['AttributeXP'].items():
-            update_expressions.append(f"Attributes.{attr} = Attributes.{attr} + :xp_{attr}")
-            expression_values[f":xp_{attr}"] = Decimal(str(xp))
+    _setLoading(true);
+    _setError(null);
 
-    # Wounds
-    if updates.get('Wounds'):
-        update_expressions.append("Wounds = list_append(Wounds, :new_wounds)")
-        expression_values[":new_wounds"] = updates['Wounds']
+    try {
+      final result = await operation();
+      _setLoading(false);
+      return result;
+    } catch (e) {
+      _setError(e.toString());
+      _setLoading(false);
+      rethrow;
+    }
+  }
 
-    # Room change
-    if updates.get('Room'):
-        update_expressions.append("RoomID = :room")
-        expression_values[":room"] = updates['Room']
+  void _setLoading(bool loading) {
+    _isLoading = loading;
+    if (!_disposed) notifyListeners();
+  }
 
-    # Execute update
-    if update_expressions:
-        dynamodb.update_item(
-            TableName=CHARACTER_TABLE,
-            Key={'CharacterID': {'S': character_id}},
-            UpdateExpression=f"SET {', '.join(update_expressions)}",
-            ExpressionAttributeValues=expression_values
-        )
+  void _setError(String? error) {
+    _error = error;
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+}
+```
+
+**Key Features:**
+
+- **Async Operation Safety**: `executeAsync` wraps operations with loading/error state management
+- **Disposal Safety**: Prevents state updates after disposal to avoid memory leaks
+- **Error Propagation**: Captures and exposes errors for UI display
+- **Loading States**: Provides reactive loading indicators
+
+### 4.3 AuthProvider - Authentication State Management
+
+`AuthProvider` manages Cognito-based authentication with status tracking and automatic initialization:
+
+```dart
+enum AuthStatus { uninitialized, authenticated, unauthenticated, loading }
+
+class AuthProvider extends BaseProvider {
+  AuthStatus _status = AuthStatus.uninitialized;
+  User? _user;
+
+  AuthStatus get status => _status;
+  User? get user => _user;
+
+  Future<void> _initializeAuth() async {
+    await executeAsync(() async {
+      try {
+        final user = await Amplify.Auth.getCurrentUser();
+        _user = user;
+        _status = AuthStatus.authenticated;
+      } on AuthException {
+        _status = AuthStatus.unauthenticated;
+      }
+    });
+  }
+
+  Future<void> signIn(String email, String password) async {
+    await executeAsync(() async {
+      await Amplify.Auth.signIn(username: email, password: password);
+      await _initializeAuth();
+    });
+  }
+
+  Future<void> signOut() async {
+    await executeAsync(() async {
+      await Amplify.Auth.signOut();
+      _user = null;
+      _status = AuthStatus.unauthenticated;
+    });
+  }
+}
+```
+
+**Key Features:**
+
+- **Status Tracking**: Four-state authentication status (uninitialized/authenticated/unauthenticated/loading)
+- **Automatic Initialization**: Checks auth state on startup
+- **Cognito Integration**: Direct Amplify Auth integration
+- **Error Handling**: Failed sign-in attempts properly handled
+
+### 4.4 CharacterProvider - Character State with Persistence
+
+`CharacterProvider` manages character data with SharedPreferences persistence and corruption recovery:
+
+```dart
+class CharacterProvider extends BaseProvider {
+  static const String _characterKey = 'current_character';
+  static const String _activeSegmentKey = 'active_segment';
+  final SharedPreferences _prefs;
+
+  Character? _character;
+  ActiveSegment? _activeSegment;
+
+  Character? get character => _character;
+  ActiveSegment? get activeSegment => _activeSegment;
+
+  Future<void> updateCharacter(Character character) async {
+    // Persist-first pattern: save to storage before updating state
+    await _prefs.setString(_characterKey, jsonEncode(character.toJson()));
+    _character = character;
+    notifyListeners();
+  }
+
+  Future<void> _loadFromStorage() async {
+    final characterJson = _prefs.getString(_characterKey);
+    if (characterJson != null) {
+      try {
+        _character = Character.fromJson(jsonDecode(characterJson));
+      } catch (e) {
+        // Corruption recovery: clear invalid data
+        await _prefs.remove(_characterKey);
+        _character = null;
+      }
+    }
+
+    final segmentJson = _prefs.getString(_activeSegmentKey);
+    if (segmentJson != null) {
+      final segment = ActiveSegment.fromJson(jsonDecode(segmentJson));
+      if (segment.isExpired) {
+        await _prefs.remove(_activeSegmentKey);
+      } else {
+        _activeSegment = segment;
+      }
+    }
+  }
+
+  int getEffectiveScore(String skill, String attribute) {
+    if (_character == null) return 0;
+
+    final skillValue = _character!.skills[skill] ?? 0;
+    final attributeValue = _character!.attributes[attribute] ?? 0;
+    final wounds = _character!.wounds.length;
+
+    return skillValue + attributeValue - wounds;
+  }
+}
+```
+
+**Key Features:**
+
+- **Persist-First Pattern**: Saves to SharedPreferences before updating in-memory state
+- **Corruption Recovery**: Automatically clears and recovers from invalid stored data
+- **Segment Expiration**: Cleans up expired segments on load
+- **Effective Score Calculation**: Combines skills, attributes, and wound penalties
+
+### 4.5 SegmentProvider - Active Segment Coordination
+
+`SegmentProvider` manages active segment state and coordinates with the polling system:
+
+```dart
+class SegmentProvider extends BaseProvider {
+  ActiveSegment? _activeSegment;
+  bool _isPolling = false;
+
+  ActiveSegment? get activeSegment => _activeSegment;
+  bool get isPolling => _isPolling;
+
+  Future<void> loadCurrentStory(String characterId) async {
+    await executeAsync(() async {
+      final character = await _apiService.getCharacterById(characterId);
+      _activeSegment = character?.activeSegment;
+      _isPolling = _activeSegment != null;
+    });
+  }
+
+  Future<void> completeSegment(String characterId, String decision) async {
+    await executeAsync(() async {
+      await _apiService.submitDecision(
+        characterId: characterId,
+        decision: decision,
+      );
+
+      // Clear local state immediately
+      _activeSegment = null;
+      _isPolling = false;
+    });
+  }
+}
+```
+
+**Key Features:**
+
+- **Polling Coordination**: Tracks polling state for UI feedback
+- **Server State Loading**: Fetches current segment state from server
+- **Decision Submission**: Handles user decisions with immediate local state clearing
+- **Error Recovery**: Leverages BaseProvider error handling for failed operations
+
+### 4.6 ThemeProvider - Theme Management with Persistence
+
+`ThemeProvider` manages application theming with SharedPreferences persistence and system UI updates:
+
+```dart
+class ThemeProvider extends BaseProvider {
+  static const String _themeKey = 'theme_mode';
+  ThemeMode _themeMode = ThemeMode.system;
+  final SharedPreferences _prefs;
+
+  ThemeMode get themeMode => _themeMode;
+
+  Future<void> _initializeTheme() async {
+    final stored = _prefs.getString(_themeKey);
+    if (stored != null) {
+      _themeMode = ThemeMode.values.firstWhere(
+        (mode) => mode.name == stored,
+        orElse: () => ThemeMode.system,
+      );
+    }
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    await _prefs.setString(_themeKey, mode.name);
+    await _updateSystemChrome();
+    notifyListeners();
+  }
+
+  Future<void> _updateSystemChrome() async {
+    final isDark = _themeMode == ThemeMode.dark ||
+        (_themeMode == ThemeMode.system &&
+         MediaQuery.of(context).platformBrightness == Brightness.dark);
+
+    SystemChrome.setSystemUIOverlayStyle(
+      isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+    );
+  }
+}
+```
+
+**Key Features:**
+
+- **System Integration**: Respects system theme preference when set to system mode
+- **Persistence**: Remembers user theme choice across app restarts
+- **System UI Updates**: Updates status bar and navigation bar colors
+- **Safe Initialization**: Handles invalid stored values gracefully
+
+### 4.7 SharedPreferences Integration Patterns
+
+All providers follow consistent SharedPreferences patterns for data persistence:
+
+```dart
+// Pattern 1: Simple value storage
+await _prefs.setString(key, value);
+final value = _prefs.getString(key);
+
+// Pattern 2: JSON object storage with error handling
+Future<void> _saveObject(String key, dynamic object) async {
+  try {
+    await _prefs.setString(key, jsonEncode(object.toJson()));
+  } catch (e) {
+    // Handle serialization errors
+  }
+}
+
+Future<T?> _loadObject<T>(String key, T Function(Map<String, dynamic>) fromJson) async {
+  final jsonStr = _prefs.getString(key);
+  if (jsonStr == null) return null;
+
+  try {
+    final json = jsonDecode(jsonStr);
+    return fromJson(json);
+  } catch (e) {
+    // Corruption recovery
+    await _prefs.remove(key);
+    return null;
+  }
+}
+
+// Pattern 3: Expiration-based cleanup
+Future<void> _loadWithExpiration(String key, Duration maxAge) async {
+  final stored = _prefs.getString(key);
+  if (stored == null) return;
+
+  final data = jsonDecode(stored);
+  final timestamp = DateTime.parse(data['timestamp']);
+
+  if (DateTime.now().difference(timestamp) > maxAge) {
+    await _prefs.remove(key);
+  } else {
+    // Use the data
+  }
+}
+```
+
+### 4.8 Server-Authoritative Design
+
+**Core Principle:** All state transitions are determined by the server. The client never predicts or modifies story state.
+
+**Client Responsibilities:**
+
+- Display current server state
+- Send user decisions to server
+- Poll for server-determined state changes
+- Handle server-provided timing exactly
+
+**Server Responsibilities:**
+
+- Determine all segment outcomes and timing
+- Calculate XP and character updates
+- Provide exact timing for client polling
+- Maintain authoritative game state
+
+**Provider Integration:**
+
+The Provider system integrates seamlessly with server-authoritative design:
+
+```dart
+// CharacterProvider - displays server state
+class CharacterProvider extends BaseProvider {
+  // Server state is loaded and displayed, never modified locally
+  Future<void> refreshCharacter(String characterId) async {
+    await executeAsync(() async {
+      final serverCharacter = await _apiService.getCharacterById(characterId);
+      // Update local state to match server
+      _character = serverCharacter;
+    });
+  }
+}
+
+// SegmentProvider - coordinates with polling
+class SegmentProvider extends BaseProvider {
+  // Polling system provides server-determined updates
+  void onPollingUpdate(Character updatedCharacter) {
+    _activeSegment = updatedCharacter.activeSegment;
+    notifyListeners();
+  }
+}
+```
+
+This Provider-based architecture ensures reactive UI updates, persistent state management, proper error handling, and seamless integration with the server-authoritative design pattern.
+
+## 5. Service Layer Architecture
+
+The Incremental client implements a comprehensive service layer that handles authentication, API communication, caching, notifications, rate limiting, and polling. This layered architecture ensures clean separation of concerns, consistent error handling, and optimal performance.
+
+### 5.1 BaseApiService - HTTP Foundation
+
+`BaseApiService` provides the foundation for all HTTP communication with consistent authentication, error handling, and request/response processing:
+
+```dart
+abstract class BaseApiService {
+  final AuthService _authService;
+  final http.Client _httpClient;
+  final String baseUrl;
+
+  BaseApiService({
+    required AuthService authService,
+    required this.baseUrl,
+    http.Client? httpClient,
+  }) : _authService = authService,
+       _httpClient = httpClient ?? http.Client();
+
+  Future<Map<String, String>> getHeaders() async {
+    final token = await _authService.getIdToken();
+    if (token == null) {
+      throw Exception('Not authenticated');
+    }
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  Future<T> executeRequest<T>({
+    required String method,
+    required String endpoint,
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParams,
+    T Function(Map<String, dynamic>)? parser,
+    bool returnRawResponse = false,
+  }) async {
+    // Comprehensive request execution with error handling
+  }
+
+  // Helper methods for GET, POST, PUT, DELETE, PATCH
+  Future<T> get<T>(String endpoint, {Map<String, String>? queryParams, T Function(Map<String, dynamic>)? parser});
+  Future<T> post<T>(String endpoint, {Map<String, dynamic>? body, Map<String, String>? queryParams, T Function(Map<String, dynamic>)? parser});
+  // ... other HTTP methods
+}
+```
+
+**Key Features:**
+
+- **Authentication Integration**: Automatic JWT token retrieval and header injection
+- **Error Handling**: Typed exceptions (ApiException, NotFoundException, UnauthorizedException)
+- **Request Logging**: Debug logging for development troubleshooting
+- **Response Parsing**: Flexible parsing with optional custom parsers
+- **HTTP Method Support**: Complete REST API support (GET, POST, PUT, DELETE, PATCH)
+
+### 5.2 AuthService - Cognito Authentication
+
+`AuthService` manages AWS Cognito authentication with secure token storage and session management:
+
+```dart
+class AuthService {
+  late final CognitoUserPool userPool;
+  CognitoUser? _currentUser;
+  CognitoUserSession? _session;
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
+  static const String _accessTokenKey = 'access_token';
+  static const String _idTokenKey = 'id_token';
+  static const String _refreshTokenKey = 'refresh_token';
+  static const String _userEmailKey = 'user_email';
+
+  Future<void> initialize() async {
+    // Cognito configuration validation and setup
+  }
+
+  Future<CognitoUser> signIn(String email, String password) async {
+    // Authentication with fallback auth flows
+  }
+
+  Future<String?> getIdToken() async {
+    // Token retrieval with automatic refresh
+  }
+
+  Future<void> signOut() async {
+    // Secure sign-out with token cleanup
+  }
+}
+```
+
+**Key Features:**
+
+- **Cognito Integration**: Full AWS Cognito User Pool support with SRP and USER_PASSWORD_AUTH fallback
+- **Secure Storage**: FlutterSecureStorage for encrypted token persistence
+- **Session Management**: Automatic token refresh and session validation
+- **Error Mapping**: User-friendly error messages for Cognito exceptions
+- **Configuration Validation**: Environment variable validation with development fallbacks
+
+**Authentication Flow:**
+
+1. **Sign Up**: Email verification with resend capability
+2. **Sign In**: Multi-flow authentication (SRP → fallback to password auth)
+3. **Session Persistence**: Automatic token storage and restoration
+4. **Token Refresh**: Background session renewal
+5. **Sign Out**: Global sign-out with secure cleanup
+
+### 5.3 ApiService - Game-Specific API Methods
+
+`ApiService` extends `BaseApiService` to provide game-specific API operations:
+
+```dart
+class ApiService extends BaseApiService {
+  // Character Management
+  Future<Map<String, dynamic>> addCharacter({
+    required String name,
+    required String archetype,
+  }) async {
+    return post<Map<String, dynamic>>(
+      '/character',
+      body: {'CharacterName': name, 'ArchetypeName': archetype},
+    );
+  }
+
+  Future<Character?> getCharacterById(String characterId) async {
+    try {
+      final json = await get<Map<String, dynamic>>(
+        '/character',
+        queryParams: {'CharacterID': characterId},
+      );
+
+      final characterData = json['Character'] as Map<String, dynamic>;
+      // Story state enrichment from server response
+      final activeStory = json['ActiveStory'] as Map<String, dynamic>?;
+      final activeSegment = json['ActiveSegment'] as Map<String, dynamic>?;
+
+      if (activeStory != null && activeSegment != null) {
+        characterData['StoryState'] = {
+          'Story': activeStory,
+          'ActiveSegment': activeSegment,
+        };
+      }
+
+      return Character.fromJson(characterData);
+    } catch (e) {
+      if (e is NotFoundException) return null;
+      rethrow;
+    }
+  }
+
+  // Story Operations
+  Future<Map<String, dynamic>> startStory({
+    required String characterId,
+    required String storyId,
+  }) async {
+    return post<Map<String, dynamic>>(
+      '/story/start',
+      body: {'CharacterID': characterId, 'StoryID': storyId},
+    );
+  }
+
+  Future<Map<String, dynamic>> submitDecision({
+    required String characterId,
+    required String decision,
+  }) async {
+    return post<Map<String, dynamic>>(
+      '/segment/decision',
+      body: {'CharacterID': characterId, 'Decision': decision},
+    );
+  }
+}
+```
+
+**Key Features:**
+
+- **Typed API Methods**: Strongly-typed methods for all game operations
+- **Error Translation**: HTTP status codes mapped to user-friendly exceptions
+- **Response Enrichment**: Automatic story state assembly from server responses
+- **Validation Integration**: Input validation and response parsing
+- **Comprehensive Coverage**: Character CRUD, story operations, segment management
+
+### 5.4 CacheService - Local Data Caching
+
+`CacheService` provides intelligent local caching with TTL and memory management:
+
+```dart
+class CacheService {
+  static const Duration _defaultTTL = Duration(minutes: 5);
+  static const Duration _defaultCleanupThreshold = Duration(hours: 24);
+
+  late SharedPreferences _prefs;
+  final Map<String, dynamic> _memoryCache = {};
+  final Map<String, DateTime> _memoryCacheTimestamps = {};
+  Duration _cleanupThreshold = _defaultCleanupThreshold;
+
+  Future<void> initialize() async {
+    _prefs = await SharedPreferences.getInstance();
+    await _cleanExpiredCache();
+  }
+
+  Future<void> set(String key, dynamic value, {Duration ttl = _defaultTTL}) async {
+    // Dual-layer caching: memory + persistent storage
+    _memoryCache[key] = value;
+    _memoryCacheTimestamps[key] = DateTime.now();
+
+    final jsonString = jsonEncode(value);
+    await _prefs.setString('cache_$key', jsonString);
+    await _prefs.setString('cache_ts_$key', DateTime.now().toIso8601String());
+
+    // Auto-expiry with Timer
+    if (ttl != Duration.zero) {
+      Timer(ttl, () => remove(key));
+    }
+  }
+
+  T? get<T>(String key, {Duration? maxAge}) {
+    // Memory cache first, then persistent cache
+    if (_memoryCache.containsKey(key)) {
+      final timestamp = _memoryCacheTimestamps[key];
+      if (timestamp != null && _isValid(timestamp, maxAge)) {
+        return _memoryCache[key] as T?;
+      }
+    }
+
+    // Check persistent cache with validation
+    final jsonString = _prefs.getString('cache_$key');
+    final timestampString = _prefs.getString('cache_ts_$key');
+
+    if (jsonString != null && timestampString != null) {
+      final timestamp = DateTime.parse(timestampString);
+      if (_isValid(timestamp, maxAge)) {
+        final value = jsonDecode(jsonString);
+        _memoryCache[key] = value;
+        _memoryCacheTimestamps[key] = timestamp;
+        return value as T?;
+      }
+    }
+
+    return null;
+  }
+
+  Future<void> _cleanExpiredCache() async {
+    // Periodic cleanup to prevent memory leaks
+    final cutoff = DateTime.now().subtract(_cleanupThreshold);
+    final keys = _prefs.getKeys();
+
+    for (final key in keys) {
+      if (key.startsWith('cache_ts_')) {
+        final timestampString = _prefs.getString(key);
+        if (timestampString != null) {
+          final timestamp = DateTime.parse(timestampString);
+          if (timestamp.isBefore(cutoff)) {
+            final cacheKey = key.replaceFirst('cache_ts_', '');
+            await remove(cacheKey);
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Key Features:**
+
+- **Dual-Layer Caching**: Fast memory cache with persistent SharedPreferences fallback
+- **TTL Support**: Configurable time-to-live with automatic expiration
+- **Memory Management**: Periodic cleanup to prevent memory leaks
+- **Type Safety**: Generic methods with compile-time type checking
+- **Async Operations**: Non-blocking cache operations
+
+**Caching Patterns:**
+
+```dart
+// Simple caching
+await _cache.set('user_profile', profileData, ttl: Duration(hours: 1));
+
+// Cached async operations
+class CachedData<T> {
+  Future<T> get({bool forceRefresh = false}) async {
+    if (!forceRefresh) {
+      final cached = _cache.get<T>(key, maxAge: ttl);
+      if (cached != null) return cached;
+    }
+    final data = await fetcher();
+    await _cache.set(key, data, ttl: ttl);
+    return data;
+  }
+}
+```
+
+### 5.5 NotificationService - In-App Notifications
+
+`NotificationService` provides animated, contextual in-app notifications:
+
+```dart
+class NotificationService {
+  static void showSegmentComplete({
+    required BuildContext context,
+    required String segmentType,
+    String? outcome,
+  }) {
+    final message = _getCompletionMessage(segmentType, outcome);
+    final icon = _getCompletionIcon(segmentType, outcome);
+    final color = _getCompletionColor(segmentType, outcome);
+
+    showCustomNotification(
+      context,
+      message: message,
+      icon: icon,
+      color: color,
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  static void showCustomNotification(
+    BuildContext context, {
+    required String message,
+    String? subtitle,
+    IconData? icon,
+    Color? color,
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    final overlay = Overlay.of(context);
+
+    late OverlayEntry overlayEntry;
+    overlayEntry = OverlayEntry(
+      builder: (context) => _NotificationOverlay(
+        message: message,
+        subtitle: subtitle,
+        icon: icon ?? Icons.info,
+        color: color ?? Theme.of(context).colorScheme.primary,
+        duration: duration,
+        onDismiss: () => overlayEntry.remove(),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+  }
+}
+
+class _NotificationOverlay extends StatefulWidget {
+  // Animated notification overlay with auto-dismiss
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: MediaQuery.of(context).padding.top + 16,
+      left: 16,
+      right: 16,
+      child: SlideTransition(
+        position: _slideAnimation,
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: Container(
+            // Gradient background with animations
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.surface,
+                  Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: widget.color.withValues(alpha: 0.3),
+                width: 2,
+              ),
+            ),
+            child: // Notification content with animations
+          ).animate()
+            .shimmer(delay: 500.ms, duration: 1000.ms),
+        ),
+      ),
+    );
+  }
+}
+```
+
+**Key Features:**
+
+- **Contextual Notifications**: Different styles for segment completion, rewards, errors
+- **Smooth Animations**: Slide-in, fade, scale, and shimmer effects using flutter_animate
+- **Auto-Dismiss**: Configurable duration with manual dismiss option
+- **Theme Integration**: Respects app theme colors and typography
+- **Accessibility**: Proper semantic labeling and keyboard navigation
+
+**Notification Types:**
+
+- **Segment Complete**: Shows segment type, outcome, and appropriate icon/color
+- **Story Complete**: Displays story title and final outcome
+- **Rewards**: Animated XP, gold, item notifications
+- **Errors**: User-friendly error messages with retry options
+
+### 5.6 RateLimiter - API Call Rate Limiting
+
+`RateLimiter` prevents excessive API calls with intelligent queuing and backoff:
+
+```dart
+class RateLimiter {
+  static const Duration humanDrivenInterval = Duration(seconds: 15);
+  static const Duration automatedInterval = Duration(seconds: 60);
+
+  final Map<String, DateTime> _lastCallTimes = {};
+  final Map<String, Timer?> _pendingTimers = {};
+  final Map<String, Completer<void>?> _pendingCompleters = {};
+
+  Future<T> executeHumanDriven<T>(
+    String key,
+    Future<T> Function() action, {
+    bool throwOnRateLimit = false,
+  }) async {
+    final lastCall = _lastCallTimes[key];
+    final now = DateTime.now();
+
+    if (lastCall != null) {
+      final elapsed = now.difference(lastCall);
+      final remaining = humanDrivenInterval - elapsed;
+
+      if (remaining > Duration.zero) {
+        if (throwOnRateLimit) {
+          throw RateLimitException(
+            'Please wait ${remaining.inSeconds} seconds before trying again',
+            remaining: remaining,
+          );
+        }
+
+        // Queue the action to run when rate limit expires
+        return _queueAction(key, action, remaining);
+      }
+    }
+
+    _lastCallTimes[key] = now;
+    return await action();
+  }
+
+  Future<T> executeAutomated<T>(
+    String key,
+    Future<T> Function() action,
+  ) async {
+    // Similar logic but with automated interval and always queues
+  }
+
+  Future<T> _queueAction<T>(
+    String key,
+    Future<T> Function() action,
+    Duration delay,
+  ) async {
+    // Cancel existing queued action and create new one
+    _pendingTimers[key]?.cancel();
+    _pendingCompleters[key]?.completeError(
+      RateLimitException('Cancelled by new request', remaining: Duration.zero),
+    );
+
+    final completer = Completer<T>();
+    _pendingCompleters[key] = completer as Completer<void>;
+
+    _pendingTimers[key] = Timer(delay, () async {
+      try {
+        _lastCallTimes[key] = DateTime.now();
+        final result = await action();
+        completer.complete(result);
+      } catch (e) {
+        completer.completeError(e);
+      } finally {
+        _pendingTimers.remove(key);
+        _pendingCompleters.remove(key);
+      }
+    });
+
+    return completer.future;
+  }
+}
+```
+
+**Key Features:**
+
+- **Dual Rate Limits**: Separate intervals for human-driven (15s) and automated (60s) actions
+- **Intelligent Queuing**: Actions queue instead of failing when rate limited
+- **Memory Management**: Automatic cleanup to prevent memory leaks
+- **Request Cancellation**: New requests cancel pending queued actions
+- **Global Instance**: Singleton for app-wide rate limiting
+
+**Rate Limiting Strategy:**
+
+```dart
+class GlobalRateLimiter {
+  static const String getCharacter = 'api_get_character';
+  static const String startStory = 'api_start_story';
+  static const String submitDecision = 'api_submit_decision';
+  // ... other API endpoints
+
+  Future<T> executeHumanDriven<T>(String key, Future<T> Function() action) {
+    return _limiter.executeHumanDriven(key, action);
+  }
+
+  Future<T> executeAutomated<T>(String key, Future<T> Function() action) {
+    return _limiter.executeAutomated(key, action);
+  }
+}
+```
+
+### 5.7 StoryPollingService - Server-Authoritative Polling
+
+`StoryPollingService` implements server-authoritative polling with stream-based event delivery:
+
+```dart
+enum PollingEventType { characterUpdated, storyCompleted, error }
+
+class PollingEvent {
+  final PollingEventType type;
+  final dynamic data;
+  PollingEvent(this.type, [this.data]);
+}
+
+class StoryPollingService {
+  final ApiService _apiService;
+  final StreamController<PollingEvent> _eventController = StreamController<PollingEvent>.broadcast();
+  Timer? _pollTimer;
+  bool _isPolling = false;
+  String? _currentCharacterId;
+
+  Stream<PollingEvent> get events => _eventController.stream;
+
+  Future<void> startPolling(String characterId) async {
+    if (_isPolling && _currentCharacterId == characterId) return;
+
+    stopPolling();
+    _currentCharacterId = characterId;
+    _isPolling = true;
+
+    await _runPollingLoop(characterId);
+  }
+
+  Future<void> _runPollingLoop(String characterId) async {
+    int consecutiveErrors = 0;
+    const maxConsecutiveErrors = 3;
+
+    // Initial 60-second wait for server processing
+    await Future.delayed(const Duration(seconds: 60));
+
+    while (_isPolling) {
+      try {
+        // Get character state
+        final character = await _apiService.getCharacterById(characterId);
+        _eventController.add(PollingEvent(PollingEventType.characterUpdated, character));
+
+        // Check for story completion
+        if (character?.activeSegmentID == null) {
+          _eventController.add(PollingEvent(PollingEventType.storyCompleted));
+          break;
+        }
+
+        // Get server timing
+        final segmentStatus = await _apiService.getSegmentStatus(characterId: characterId);
+        final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
+
+        // Wait server-specified time
+        if (timeRemaining > 0) {
+          await Future.delayed(Duration(seconds: timeRemaining));
+        }
+      } catch (e) {
+        consecutiveErrors++;
+
+        if (consecutiveErrors >= maxConsecutiveErrors) {
+          _eventController.add(PollingEvent(PollingEventType.error,
+            'Connection failed after $maxConsecutiveErrors attempts'));
+          break;
+        }
+
+        // Retry delay
+        await Future.delayed(const Duration(seconds: 30));
+      }
+    }
+  }
+
+  void stopPolling() {
+    _isPolling = false;
+    _pollTimer?.cancel();
+  }
+}
+```
+
+**Key Features:**
+
+- **Server Authority**: Polling cadence determined entirely by server timing
+- **Stream-Based Events**: Reactive event delivery for UI updates
+- **Error Recovery**: Automatic retry with exponential backoff
+- **Resource Management**: Proper cleanup and disposal
+- **Completion Detection**: Story completion detected by server state
+
+**Polling Flow:**
+
+1. **Initial Wait**: 60 seconds for server processing
+2. **Character Check**: Fetch latest character state
+3. **Completion Check**: Detect story completion (activeSegmentID == null)
+4. **Timing Wait**: Wait server-specified duration
+5. **Repeat**: Continue until story completion or error threshold
+
+### 5.8 Service Integration Patterns
+
+The service layer follows consistent integration patterns across the application:
+
+**Dependency Injection:**
+
+```dart
+void main() {
+  // Initialize services in dependency order
+  final authService = AuthService();
+  await authService.initialize();
+
+  final apiService = ApiService(authService: authService);
+  final cacheService = CacheService();
+  await cacheService.initialize();
+
+  final rateLimiter = GlobalRateLimiter();
+  final notificationService = NotificationService();
+  final pollingService = StoryPollingService(apiService: apiService);
+
+  // Provide to widget tree
+  runApp(
+    MultiProvider(
+      providers: [
+        Provider.value(value: authService),
+        Provider.value(value: apiService),
+        Provider.value(value: cacheService),
+        Provider.value(value: rateLimiter),
+        Provider.value(value: notificationService),
+        Provider.value(value: pollingService),
+      ],
+      child: const MyApp(),
+    ),
+  );
+}
+```
+
+**Error Handling Chain:**
+
+```
+UI Layer → Provider Layer → Service Layer → BaseApiService → HTTP Client
+    ↑              ↑              ↑              ↑
+  User Feedback  State Updates  Business Logic  Network Errors
+```
+
+**Performance Optimizations:**
+
+- **Caching**: Reduces API calls for frequently accessed data
+- **Rate Limiting**: Prevents server overload and improves UX
+- **Background Processing**: Non-blocking operations with proper error handling
+- **Memory Management**: Automatic cleanup and resource disposal
+- **Connection Pooling**: HTTP client reuse for efficient connections
+
+This comprehensive service layer ensures reliable, performant, and maintainable communication between the Flutter client and backend services while providing an excellent user experience.
+
+## 6. Polling System
+
+### 6.1 Stream-Based Polling Service
+
+The actual polling implementation uses Dart streams for reactive updates:
+
+```dart
+enum PollingEventType { characterUpdated, storyCompleted, error }
+
+class PollingEvent {
+  final PollingEventType type;
+  final dynamic data;
+  PollingEvent(this.type, [this.data]);
+}
+
+class StoryPollingService {
+  final ApiService _apiService;
+  final StreamController<PollingEvent> _eventController = StreamController<PollingEvent>.broadcast();
+  Timer? _pollTimer;
+  bool _isPolling = false;
+  String? _currentCharacterId;
+
+  Stream<PollingEvent> get events => _eventController.stream;
+
+  Future<void> startPolling(String characterId) async {
+    if (_isPolling && _currentCharacterId == characterId) return;
+
+    stopPolling();
+    _currentCharacterId = characterId;
+    _isPolling = true;
+
+    await _runPollingLoop(characterId);
+  }
+
+  Future<void> _runPollingLoop(String characterId) async {
+    // Initial 60-second wait for server processing
+    await Future.delayed(const Duration(seconds: 60));
+
+    while (_isPolling) {
+      try {
+        // Get character state
+        final character = await _apiService.getCharacterById(characterId);
+        _eventController.add(PollingEvent(PollingEventType.characterUpdated, character));
+
+        // Check for story completion
+        if (character?.activeSegmentID == null) {
+          _eventController.add(PollingEvent(PollingEventType.storyCompleted));
+          break;
+        }
+
+        // Get server timing
+        final segmentStatus = await _apiService.getSegmentStatus(characterId: characterId);
+        final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
+
+        // Wait server-specified time
+        if (timeRemaining > 0) {
+          await Future.delayed(Duration(seconds: timeRemaining));
+        }
+      } catch (e) {
+        // Error handling with retry logic
+        if (e.toString().contains('404')) {
+          _eventController.add(PollingEvent(PollingEventType.storyCompleted));
+          break;
+        }
+        await Future.delayed(const Duration(seconds: 30)); // Retry delay
+      }
+    }
+  }
+
+  void stopPolling() {
+    _isPolling = false;
+    _pollTimer?.cancel();
+  }
+}
+```
+
+### 6.2 Game Screen Integration
+
+The GameScreen consumes polling events reactively:
+
+```dart
+class _GameScreenState extends State<GameScreen> {
+  late StoryPollingService _pollingService;
+  StreamSubscription<PollingEvent>? _pollingSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _pollingService = StoryPollingService(apiService: _apiService);
+
+    // Reactive event handling
+    _pollingSubscription = _pollingService.events.listen((event) {
+      switch (event.type) {
+        case PollingEventType.characterUpdated:
+          final character = event.data as Character;
+          setState(() => _character = character);
+          break;
+
+        case PollingEventType.storyCompleted:
+          _showStoryCompletionDialog();
+          break;
+
+        case PollingEventType.error:
+          setState(() => _error = event.data as String);
+          break;
+      }
+    });
+  }
+
+  Future<void> _handleStorySelect(StoryMetadata story) async {
+    // Start story
+    await _apiService.startStory(characterId: _character!.id, storyId: story.storyID);
+
+    // Start polling for the new story
+    _pollingService.startPolling(_character!.id);
+  }
+}
+```
+
+## 7. Complete UI Architecture
+
+### 7.1 Screen Hierarchy and Navigation
+
+The Incremental client implements a comprehensive screen hierarchy with proper navigation flow and state management:
+
+#### Authentication Flow Screens
+
+**LoginScreen** - Primary authentication entry point:
+
+- Email/password form with validation
+- Password visibility toggle
+- Forgot password navigation
+- Navigation to registration
+- Post-login message handling via route arguments
+- Automatic navigation to home on successful login
+
+**RegistrationScreen** - Multi-step account creation:
+
+- Two-step process: registration → email verification
+- Password strength validation (8+ chars, uppercase, lowercase, number, special char)
+- Email verification code input
+- Resend verification code functionality
+- Automatic navigation to login after verification
+
+**PasswordResetScreen** - Password recovery initiation:
+
+- Email input for reset code request
+- Navigation to password reset confirmation
+- Back to login navigation
+
+**PasswordResetConfirmScreen** - Password recovery completion:
+
+- Verification code input
+- New password creation with strength validation
+- Password confirmation matching
+- Resend code functionality
+- Automatic navigation to login after reset
+
+#### Main Application Screens
+
+**CharacterScreen** - Character management hub:
+
+- Character list display with status indicators
+- Character creation dialog with archetype selection
+- Character deletion with confirmation dialogs
+- Character selection with loading states
+- Navigation to game screen with pre-loaded character data
+- App bar actions: refresh, settings, sign out
+- Floating action button for character creation
+
+**StorySelectionScreen** - Story selection interface:
+
+- Available stories list with metadata display
+- Story availability status (available/cooldown)
+- Story type chips (one-time, daily, repeatable)
+- Estimated duration display
+- Cooldown timer formatting
+- Story initiation with loading states
+- Navigation to game screen after story start
+
+**GameScreen** - Main gameplay interface (detailed in section 6.2):
+
+- Responsive panel-based layout
+- Stream-based polling integration
+- Device-aware rendering (mobile/tablet/desktop)
+
+**AccountSettingsScreen** - User account management:
+
+- User email display
+- Theme selection (light/dark/system)
+- Keyboard shortcuts help
+- Change password navigation
+- Account deletion with double confirmation
+- Sign out functionality
+
+### 7.2 Shared Widget Architecture
+
+The client uses a comprehensive shared widget library for consistent UI patterns:
+
+#### Core Shared Widgets
+
+**LoadingDialog** - Standardized loading states:
+
+- Title, message, and subtitle support
+- Barrier dismissible control
+- Consistent loading UI across screens
+
+**ErrorBoundary** - Error containment and recovery:
+
+- Flutter error catching and display
+- User-friendly error messages
+- Graceful degradation on errors
+
+**ResponsiveLayout** - Device-aware layout system:
+
+- Device type detection (mobile/tablet/desktop)
+- Adaptive widget rendering
+- Panel-based responsive design
+
+**KeyboardShortcutHelp** - Accessibility features:
+
+- Keyboard shortcut documentation
+- Modal help display
+- Consistent shortcut handling
+
+**StateWrapper** - State management utilities:
+
+- Loading state handling
+- Error state display
+- Retry functionality integration
+
+#### Navigation and Routing
+
+The app implements named route navigation with argument passing:
+
+```dart
+// Route definitions
+'/': (context) => const CharacterScreen(),
+'/login': (context) => const LoginScreen(),
+'/register': (context) => const RegistrationScreen(),
+'/forgot-password': (context) => const PasswordResetScreen(),
+'/password-reset-confirm': (context) => const PasswordResetConfirmScreen(),
+'/game': (context) => const GameScreen(),
+'/account-settings': (context) => const AccountSettingsScreen(),
+'/story-selection': (context) => StorySelectionScreen(character: character),
+```
+
+**Navigation Patterns:**
+
+- `pushNamed` for forward navigation
+- `pushReplacementNamed` for screen replacement
+- `pushNamedAndRemoveUntil` for root navigation after auth
+- Route arguments for data passing between screens
+
+### 7.3 Form Validation and User Input
+
+#### Validation Architecture
+
+All forms implement consistent validation patterns:
+
+```dart
+class ValidationPatterns {
+  static String? validateEmail(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter your email';
+    }
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+      return 'Please enter a valid email';
+    }
+    return null;
+  }
+
+  static String? validatePassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please enter a password';
+    }
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+    // Additional complexity requirements
+  }
+
+  static String? validatePasswordConfirmation(String? value, String original) {
+    if (value == null || value.isEmpty) {
+      return 'Please confirm your password';
+    }
+    if (value != original) {
+      return 'Passwords do not match';
+    }
+    return null;
+  }
+}
+```
+
+#### Input Field Patterns
+
+Consistent input field implementation across screens:
+
+```dart
+TextFormField(
+  controller: _controller,
+  decoration: InputDecoration(
+    labelText: 'Field Label',
+    border: const OutlineInputBorder(),
+    prefixIcon: const Icon(Icons.icon_name),
+    suffixIcon: IconButton(
+      icon: Icon(_isVisible ? Icons.visibility_off : Icons.visibility),
+      onPressed: () => setState(() => _isVisible = !_isVisible),
+    ),
+  ),
+  obscureText: !_isVisible, // For password fields
+  keyboardType: TextInputType.emailAddress, // Context-appropriate
+  textInputAction: TextInputAction.next, // Proper action chaining
+  validator: ValidationPatterns.validateEmail,
+  onFieldSubmitted: (_) => _handleSubmit(), // Keyboard navigation
+),
+```
+
+### 7.4 Dialog and Modal Patterns
+
+#### Confirmation Dialogs
+
+Standardized confirmation patterns for destructive actions:
+
+```dart
+Future<bool> _showConfirmationDialog({
+  required String title,
+  required String content,
+  String confirmText = 'Confirm',
+  String cancelText = 'Cancel',
+}) async {
+  return await showDialog<bool>(
+    context: context,
+    barrierDismissible: false, // Prevent accidental dismissal
+    builder: (context) => AlertDialog(
+      title: Text(title),
+      content: Text(content),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(cancelText),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+          child: Text(confirmText),
+        ),
+      ],
+    ),
+  ) ?? false;
+}
+```
+
+#### Loading States in Dialogs
+
+Modal loading states for async operations:
+
+```dart
+Future<void> _performAsyncOperation() async {
+  LoadingDialog.show(
+    context: context,
+    title: 'Operation Title',
+    message: 'Performing operation...',
+    barrierDismissible: false,
+  );
+
+  try {
+    await _asyncOperation();
+    LoadingDialog.hide(context);
+    // Success handling
+  } catch (e) {
+    LoadingDialog.hide(context);
+    // Error handling
+  }
+}
+```
+
+### 7.5 Theme and Styling Architecture
+
+#### Theme Provider Integration
+
+Dynamic theme switching with persistence:
+
+```dart
+class ThemeProvider extends ChangeNotifier {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  ThemeMode get themeMode => _themeMode;
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    await _prefs.setString('theme_mode', mode.name);
+    notifyListeners();
+  }
+}
+```
+
+#### Theme Mode Selector Widget
+
+UI for theme selection in settings:
+
+```dart
+class ThemeModeSelector extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return DropdownButton<ThemeMode>(
+          value: themeProvider.themeMode,
+          items: const [
+            DropdownMenuItem(value: ThemeMode.system, child: Text('System')),
+            DropdownMenuItem(value: ThemeMode.light, child: Text('Light')),
+            DropdownMenuItem(value: ThemeMode.dark, child: Text('Dark')),
+          ],
+          onChanged: (mode) {
+            if (mode != null) {
+              themeProvider.setThemeMode(mode);
+            }
+          },
+        );
+      },
+    );
+  }
+}
+```
+
+### 7.6 Accessibility and Keyboard Navigation
+
+#### Keyboard Shortcuts Implementation
+
+Global keyboard shortcut handling:
+
+```dart
+class KeyboardShortcutHandler {
+  static Map<LogicalKeySet, Intent> get shortcuts => {
+    LogicalKeySet(LogicalKeyboardKey.keyR, LogicalKeyboardKey.control): const RefreshIntent(),
+    LogicalKeySet(LogicalKeyboardKey.keyS, LogicalKeyboardKey.control): const SettingsIntent(),
+    LogicalKeySet(LogicalKeyboardKey.escape): const BackIntent(),
+  };
+
+  static Map<Type, Action<Intent>> get actions => {
+    RefreshIntent: CallbackAction(onInvoke: (intent) => _handleRefresh()),
+    SettingsIntent: CallbackAction(onInvoke: (intent) => _handleSettings()),
+    BackIntent: CallbackAction(onInvoke: (intent) => _handleBack()),
+  };
+}
+```
+
+#### Screen Reader Support
+
+Semantic labeling and accessibility:
+
+```dart
+ListTile(
+  leading: const Icon(Icons.person),
+  title: const Text('Email'),
+  subtitle: Text(userEmail ?? 'Not available'),
+  semanticLabel: 'User email: ${userEmail ?? "not set"}',
+),
+```
+
+### 7.7 Error Handling and User Feedback
+
+#### Snackbar Patterns
+
+Consistent error and success messaging:
+
+```dart
+class FeedbackMessenger {
+  static void showSuccess(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  static void showError(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: 'Retry',
+          onPressed: () => _handleRetry(),
+        ),
+      ),
+    );
+  }
+}
+```
+
+#### Loading States
+
+Comprehensive loading state management:
+
+```dart
+class LoadingStateBuilder extends StatelessWidget {
+  final bool isLoading;
+  final Widget Function() builder;
+  final Widget? loadingWidget;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return loadingWidget ?? const Center(child: CircularProgressIndicator());
+    }
+    return builder();
+  }
+}
+```
+
+### 7.8 Performance Optimizations
+
+#### List Virtualization
+
+Efficient rendering for large lists:
+
+```dart
+ListView.builder(
+  itemCount: items.length,
+  itemBuilder: (context, index) {
+    return CharacterCard(
+      key: ValueKey(items[index].id), // Stable keys for performance
+      character: items[index],
+    );
+  },
+)
+```
+
+#### Image and Asset Optimization
+
+Lazy loading and caching for assets:
+
+```dart
+class CachedImage extends StatelessWidget {
+  final String url;
+  final double? width;
+  final double? height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      url,
+      width: width,
+      height: height,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const CircularProgressIndicator();
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return const Icon(Icons.broken_image);
+      },
+    );
+  }
+}
+```
+
+This comprehensive UI architecture ensures consistent user experience, proper error handling, accessibility support, and performance optimization across all screens in the Incremental client application.
+
+## 8. Error Handling
+
+### 8.1 Typed Exception Hierarchy
+
+The client uses typed exceptions for different error categories:
+
+```dart
+class IncrementalException implements Exception {
+  final String message;
+  final String? code;
+  final dynamic details;
+
+  IncrementalException(this.message, {this.code, this.details});
+}
+
+class ApiException extends IncrementalException {
+  final int statusCode;
+
+  ApiException(String message, this.statusCode, {String? code, dynamic details})
+      : super(message, code: code, details: details);
+}
+
+class ValidationException extends IncrementalException {
+  ValidationException(String message, {String? field})
+      : super(message, code: 'VALIDATION_ERROR', details: {'field': field});
+}
+
+class NotFoundException extends ApiException {
+  NotFoundException(String resource)
+      : super('$resource not found', 404, code: 'NOT_FOUND');
+}
+```
+
+### 8.2 Error Handler Service
+
+Centralized error handling with user-friendly messages:
+
+```dart
+class ErrorHandler {
+  static String getUserFriendlyMessage(dynamic error, {BuildContext? context}) {
+    if (error is ApiException) {
+      switch (error.statusCode) {
+        case 401: return 'Please sign in again';
+        case 403: return 'You don\'t have permission for this action';
+        case 404: return 'The requested item was not found';
+        case 409: return 'This action conflicts with the current state';
+        case 429: return 'Please wait a moment before trying again';
+        default: return 'A server error occurred';
+      }
+    }
+
+    if (error is ValidationException) {
+      return 'Please check your input and try again';
+    }
+
+    if (error is NetworkException) {
+      return 'Please check your internet connection';
+    }
+
+    return 'An unexpected error occurred';
+  }
+}
+```
+
+### 8.3 Retry Logic with Backoff
+
+Automatic retry for transient failures:
+
+```dart
+Future<T> retryWithBackoff<T>(
+  Future<T> Function() operation, {
+  int maxAttempts = 3,
+  Duration initialDelay = const Duration(seconds: 1),
+}) async {
+  for (int attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await operation();
+    } catch (e) {
+      if (attempt == maxAttempts - 1) rethrow;
+
+      final delay = initialDelay * math.pow(2, attempt);
+      await Future.delayed(delay);
+    }
+  }
+  throw Exception('Unreachable');
+}
+```
+
+## 9. Testing Guidelines
+
+### 9.1 Unit Test Patterns
+
+Mock-based testing for service layer:
+
+```dart
+class TestApiService {
+  @test
+  void testGetCharacterSuccess() {
+    final mockClient = MockClient();
+    final apiService = ApiService(
+      authService: mockAuthService,
+      httpClient: mockClient,
+    );
+
+    when(mockClient.get(any)).thenAnswer((_) async =>
+      http.Response('{"Character": {"CharacterID": "test"}}', 200)
+    );
+
+    final character = await apiService.getCharacterById('test');
+    expect(character?.id, equals('test'));
+  }
+}
+```
+
+### 9.2 Integration Test Patterns
+
+Full app integration testing:
+
+```dart
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('complete story flow', (tester) async {
+    await tester.pumpWidget(const MyApp());
+
+    // Navigate to character selection
+    await tester.tap(find.text('Select Character'));
+    await tester.pumpAndSettle();
+
+    // Select character
+    await tester.tap(find.text('TestCharacter'));
+    await tester.pumpAndSettle();
+
+    // Start story
+    await tester.tap(find.text('Start Story'));
+    await tester.pumpAndSettle();
+
+    // Verify polling starts and UI updates
+    expect(find.text('Processing...'), findsOneWidget);
+  });
+}
+```
+
+## 10. Performance Optimization
+
+### 10.1 Memory Management
+
+Efficient state management with proper disposal:
+
+```dart
+class GameScreen extends StatefulWidget {
+  @override
+  void dispose() {
+    _pollingSubscription?.cancel();
+    _pollingService.dispose();
+    super.dispose();
+  }
+}
+```
+
+### 10.2 Network Optimization
+
+Rate limiting and caching for API efficiency:
+
+```dart
+class GlobalRateLimiter {
+  static const getCharacter = 'get_character';
+  static const startStory = 'start_story';
+
+  final Map<String, DateTime> _lastCallTimes = {};
+  final Map<String, Duration> _minIntervals = {
+    getCharacter: const Duration(seconds: 1),
+    startStory: const Duration(seconds: 5),
+  };
+
+  Future<T> executeAutomated<T>(String operation, Future<T> Function() action) async {
+    final now = DateTime.now();
+    final lastCall = _lastCallTimes[operation];
+
+    if (lastCall != null) {
+      final timeSinceLastCall = now.difference(lastCall);
+      final minInterval = _minIntervals[operation] ?? Duration.zero;
+
+      if (timeSinceLastCall < minInterval) {
+        await Future.delayed(minInterval - timeSinceLastCall);
+      }
+    }
+
+    _lastCallTimes[operation] = DateTime.now();
+    return action();
+  }
+}
+```
+
+### 10.3 UI Performance
+
+Efficient rendering with proper key usage:
+
+```dart
+class StoryPanel extends StatelessWidget {
+  final List<Map<String, dynamic>> segmentHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      key: const PageStorageKey('story_panel'),
+      itemCount: segmentHistory.length,
+      itemBuilder: (context, index) {
+        final segment = segmentHistory[index];
+        return SegmentCard(
+          key: ValueKey(segment['ActiveSegmentID']),
+          segment: segment,
+        );
+      },
+    );
+  }
+}
 ```
 
 ## 4. Combat System Details
@@ -710,8 +2563,8 @@ A rest segment in the Segments table:
   "StoryID": "forest-adventure-001",
   "SegmentID": "seg-rest-001",
   "SegmentType": "rest",
-  "ShortStatus": "Resting at the campfire",
-  "DefaultStatus": "You rest by the warm campfire, tending to your wounds",
+  "SegmentActivity": "Resting at the campfire",
+  "SegmentTitle": "You rest by the warm campfire, tending to your wounds",
   "SegmentDuration": 600, // 10 minutes
   "RestSegment": true,
   "NextSegmentID": "seg-forest-003"
@@ -1251,7 +3104,7 @@ class Character {
 
 ### 7.1 Production CDK Configuration
 
-The Story Stack (deployed only in Incremental/Hybrid modes) provides SQS queues, EventBridge rule, and SSM parameter. This is part of the 9-stack deployment system.
+The Story Stack (deployed only in Incremental/Hybrid modes) provides SQS queues, EventBridge rule, and SSM parameter, aligning with the shared deployment system outlined in [Deployment Guide](deployment.md#stack-deployment-order).
 
 ```python
 # From app_story.py - actual production configuration
@@ -1353,11 +3206,677 @@ if function_name == "ops-segment-poller":
     env["STORY_ADVANCEMENT_QUEUE_URL"] = "https://sqs.{region}.amazonaws.com/{account}/eidolon-advancement-queue"
 ```
 
-## 8. Error Handling Patterns
+## 8. Error Handling - Custom exceptions, resilience features, and error boundaries
 
-### 8.1 Lambda Error Handling
+The Incremental client implements comprehensive error handling across all layers, from custom typed exceptions to resilient retry logic and graceful error boundaries. This ensures robust user experience and reliable operation under various failure conditions.
 
-The error handling framework provides typed exceptions with appropriate HTTP status codes and a decorator pattern that ensures consistent error responses across all Lambda functions while maintaining detailed logging for debugging.
+### 8.1 Custom Exception Classes
+
+The application uses a typed exception hierarchy for different error categories, enabling precise error handling and user-friendly messaging.
+
+#### API Exception Hierarchy
+
+```dart
+/// Base API exception with status code support
+class ApiException implements Exception {
+  final String message;
+  final int? statusCode;
+
+  ApiException(this.message, {this.statusCode});
+
+  @override
+  String toString() => message;
+}
+
+/// Specialized API exceptions
+class NotFoundException extends ApiException {
+  NotFoundException(super.message) : super(statusCode: 404);
+}
+
+class UnauthorizedException extends ApiException {
+  UnauthorizedException(super.message) : super(statusCode: 401);
+}
+```
+
+#### Authentication Exceptions
+
+```dart
+/// Configuration validation errors
+class ConfigurationException implements Exception {
+  final String message;
+
+  ConfigurationException(this.message);
+
+  @override
+  String toString() => message;
+}
+
+/// Sign-out operation failures
+class AuthSignOutException implements Exception {
+  final String message;
+
+  AuthSignOutException(this.message);
+
+  @override
+  String toString() => message;
+}
+```
+
+#### Auth Exception Mapping
+
+The `AuthExceptionMapper` class provides user-friendly error messages for AWS Cognito exceptions:
+
+```dart
+class AuthExceptionMapper {
+  static String mapToUserFriendlyMessage(dynamic error) {
+    if (error is CognitoClientException) {
+      switch (error.code) {
+        case 'UserNotFoundException':
+        case 'NotAuthorizedException':
+          return 'Invalid email or password';
+        case 'UserNotConfirmedException':
+          return 'Please verify your email before signing in';
+        case 'InvalidParameterException':
+          if (error.message?.toLowerCase().contains('password') == true) {
+            return 'Password must meet complexity requirements';
+          }
+          return 'Please check your input and try again';
+        case 'UsernameExistsException':
+          return 'The Player Account already exists.';
+        case 'LimitExceededException':
+          return 'Too many attempts. Please try again later';
+        case 'InvalidPasswordException':
+          return 'Password must meet complexity requirements';
+        case 'CodeMismatchException':
+          return 'Invalid verification code. Please try again';
+        case 'ExpiredCodeException':
+          return 'Verification code has expired. Please request a new one';
+        default:
+          return 'An error occurred. Please try again';
+      }
+    }
+    return 'An unexpected error occurred. Please try again';
+  }
+}
+```
+
+#### Validation Exceptions
+
+```dart
+/// API validation errors
+class ValidationException implements Exception {
+  final String message;
+
+  ValidationException(this.message);
+
+  @override
+  String toString() => 'ValidationException: $message';
+}
+```
+
+#### Rate Limiting Exceptions
+
+```dart
+/// Rate limit exceeded with remaining time
+class RateLimitException implements Exception {
+  final String message;
+  final Duration remaining;
+
+  RateLimitException(this.message, {required this.remaining});
+
+  @override
+  String toString() => message;
+}
+```
+
+### 8.2 Error Boundary Widgets
+
+Flutter error boundaries catch and handle errors gracefully, preventing app crashes and providing user-friendly error displays.
+
+#### ErrorBoundary Widget
+
+The main error boundary catches both Flutter framework errors and async errors:
+
+```dart
+class ErrorBoundary extends StatefulWidget {
+  final Widget child;
+  final Widget Function(FlutterErrorDetails)? errorBuilder;
+  final void Function(FlutterErrorDetails)? onError;
+
+  const ErrorBoundary({
+    super.key,
+    required this.child,
+    this.errorBuilder,
+    this.onError,
+  });
+
+  @override
+  State<ErrorBoundary> createState() => _ErrorBoundaryState();
+}
+
+class _ErrorBoundaryState extends State<ErrorBoundary> {
+  FlutterErrorDetails? _errorDetails;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupErrorHandling();
+  }
+
+  void _setupErrorHandling() {
+    // Handle Flutter framework errors
+    FlutterError.onError = (FlutterErrorDetails details) {
+      if (mounted) {
+        setState(() {
+          _errorDetails = details;
+        });
+        widget.onError?.call(details);
+      }
+
+      if (kDebugMode) {
+        FlutterError.presentError(details);
+      }
+    };
+
+    // Handle async errors not caught by Flutter framework
+    PlatformDispatcher.instance.onError = (error, stack) {
+      if (mounted) {
+        setState(() {
+          _errorDetails = FlutterErrorDetails(
+            exception: error,
+            stack: stack,
+            library: 'Async error',
+            context: ErrorDescription('Uncaught async error'),
+          );
+        });
+      }
+      return true; // Handled
+    };
+  }
+
+  void _resetError() {
+    setState(() {
+      _errorDetails = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_errorDetails != null) {
+      return widget.errorBuilder?.call(_errorDetails!) ??
+          DefaultErrorWidget(
+            errorDetails: _errorDetails!,
+            onRetry: _resetError,
+          );
+    }
+
+    return widget.child;
+  }
+}
+```
+
+#### Default Error Widget
+
+Provides user-friendly error display with retry functionality:
+
+```dart
+class DefaultErrorWidget extends StatelessWidget {
+  final FlutterErrorDetails errorDetails;
+  final VoidCallback? onRetry;
+
+  const DefaultErrorWidget({
+    super.key,
+    required this.errorDetails,
+    this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      body: Center(
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 400),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.errorContainer,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.error_outline,
+                  size: 48,
+                  color: theme.colorScheme.onErrorContainer,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Something went wrong',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'An unexpected error occurred. Please try again.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (kDebugMode) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    _getErrorMessage(),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                      color: theme.colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              if (onRetry != null)
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Try Again'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _getErrorMessage() {
+    String message = errorDetails.exception.toString();
+    if (message.length > 200) {
+      message = '${message.substring(0, 200)}...';
+    }
+    return message;
+  }
+}
+```
+
+#### Widget-Level Error Boundary
+
+For granular error containment within specific UI components:
+
+```dart
+class WidgetErrorBoundary extends StatelessWidget {
+  final Widget child;
+  final String? fallbackMessage;
+
+  const WidgetErrorBoundary({
+    super.key,
+    required this.child,
+    this.fallbackMessage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Builder(
+      builder: (context) {
+        try {
+          return child;
+        } catch (error, stackTrace) {
+          if (kDebugMode) {
+            debugPrint('Widget Error: $error');
+            debugPrintStack(stackTrace: stackTrace);
+          }
+
+          return _buildErrorWidget(context, error);
+        }
+      },
+    );
+  }
+
+  Widget _buildErrorWidget(BuildContext context, Object error) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: theme.colorScheme.error.withValues(alpha: 0.5),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.warning,
+            color: theme.colorScheme.error,
+            size: 32,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            fallbackMessage ?? 'Unable to load content',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.error,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          if (kDebugMode) ...[
+            const SizedBox(height: 8),
+            Text(
+              error.toString(),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+```
+
+### 8.3 Retry and Backoff Logic
+
+The application implements exponential backoff for resilient API communication.
+
+#### Flutter Retry Utility
+
+```dart
+/// Retry a function with exponential backoff
+/// Retries up to 3 times with delays of 1s, 2s, 4s
+Future<T> retryWithBackoff<T>(Future<T> Function() operation) async {
+  for (int i = 0; i < 3; i++) {
+    try {
+      return await operation();
+    } catch (e) {
+      if (i == 2) rethrow; // Last attempt, propagate error
+      final delay = math.pow(2, i).toInt(); // 1, 2, 4 seconds
+      await Future.delayed(Duration(seconds: delay));
+    }
+  }
+  throw Exception('Unreachable');
+}
+```
+
+#### Usage in Polling Service
+
+```dart
+class StoryPollingService {
+  Future<void> _runPollingLoop(String characterId) async {
+    // ... polling setup ...
+
+    while (_isPolling) {
+      try {
+        // Get segment status with retry
+        final status = await retryWithBackoff(
+          () => _apiService.getSegmentStatus(
+            characterId: characterId,
+          ),
+        );
+
+        // Process status updates
+        // ...
+      } catch (e) {
+        debugPrint('Error in polling loop: $e');
+        // Continue polling after a delay
+        await Future.delayed(const Duration(seconds: 5));
+      }
+    }
+  }
+}
+```
+
+#### Python Exponential Backoff Decorator
+
+```python
+class ExponentialBackoff:
+    """
+    Decorator for retrying a database operation with exponentially increasing wait times.
+    Based on AWS best practices: https://docs.aws.amazon.com/general/latest/gr/api-retries.html
+    """
+
+    def __init__(self, expected_errors=None, expected_error_factory=None, retry_count=8):
+        self.retry_count = retry_count
+        self.expected_errors = expected_errors if expected_errors else ()
+        self.expected_error_factory = expected_error_factory or ExpectedDynamoErrors
+
+    def __call__(self, func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            success = False
+            count = 0
+            response = None
+
+            while not success and count <= self.retry_count:
+                if count > 0:
+                    logger.info("DynamoDB exponential backoff retry")
+
+                try:
+                    response = func(*args, **kwargs)
+                    success = True
+                except self.expected_errors as err:
+                    logger.info(f"DynamoDB expected error, retrying Error: {err}")
+                    sleep(2 ** (count - 1) / 10)
+                    count += 1
+                except tuple(self.expected_error_factory.RETRY_ERRORS) as err:
+                    logger.info(f"DynamoDB retry error Error: {err}")
+                    sleep(2 ** (count - 1) / 10)
+                    count += 1
+                except ClientError as err:
+                    error_code = err.response.get("Error", {}).get("Code", "")
+                    if error_code in [
+                        "ProvisionedThroughputExceededException",
+                        "RequestLimitExceeded",
+                        "InternalServerError",
+                    ]:
+                        logger.info("DynamoDB throttling error, retrying")
+                        sleep(2 ** (count - 1) / 10)
+                        count += 1
+                    else:
+                        logger.error(f"DynamoDB non-retryable client error Error: {err}", exc_info=True)
+                        raise
+                except Exception as err:
+                    logger.error(f"DynamoDB unexpected error, cannot retry Error: {err}", exc_info=True)
+                    raise
+
+            if not success:
+                logger.error("DynamoDB retry count exceeded")
+                raise RuntimeError(f"Number of retries exceeded for {func.__name__}")
+
+            return response
+
+        return wrapper
+```
+
+### 8.4 UI Error Handling
+
+The StateWrapper widget provides consistent error states and retry functionality across the application.
+
+#### StateWrapper Widget
+
+```dart
+class StateWrapper extends StatelessWidget {
+  final bool isLoading;
+  final String? error;
+  final bool isEmpty;
+  final Widget child;
+  final VoidCallback? onRetry;
+  final String? emptyMessage;
+  final String? emptyTitle;
+  final IconData? emptyIcon;
+  final Widget? loadingWidget;
+  final Widget? errorWidget;
+  final Widget? emptyWidget;
+  final bool showLoadingOverlay;
+
+  const StateWrapper({
+    super.key,
+    required this.child,
+    this.isLoading = false,
+    this.error,
+    this.isEmpty = false,
+    this.onRetry,
+    this.emptyMessage,
+    this.emptyTitle,
+    this.emptyIcon,
+    this.loadingWidget,
+    this.errorWidget,
+    this.emptyWidget,
+    this.showLoadingOverlay = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Show error state
+    if (error != null && error!.isNotEmpty) {
+      return errorWidget ?? _buildDefaultError(context);
+    }
+
+    // Show empty state
+    if (isEmpty && !isLoading) {
+      return emptyWidget ?? _buildDefaultEmpty(context);
+    }
+
+    // Show loading state
+    if (isLoading && !showLoadingOverlay) {
+      return loadingWidget ?? _buildDefaultLoading(context);
+    }
+
+    // Show content with optional loading overlay
+    if (showLoadingOverlay && isLoading) {
+      return Stack(
+        children: [
+          child,
+          _buildLoadingOverlay(context),
+        ],
+      );
+    }
+
+    // Show content
+    return child;
+  }
+
+  Widget _buildDefaultError(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 400),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: theme.colorScheme.error,
+            ).animate()
+              .fadeIn()
+              .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1)),
+            const SizedBox(height: 16),
+            Text(
+              'Something went wrong',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error!,
+              style: theme.textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            if (onRetry != null) ...[
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Try Again'),
+              ),
+            ],
+          ],
+        ).animate()
+          .fadeIn(duration: 300.ms)
+          .slideY(begin: 0.1, end: 0),
+      ),
+    );
+  }
+
+  // ... other state builders
+}
+```
+
+### 8.5 Backend Error Responses
+
+The backend provides consistent error response formatting with proper HTTP status codes.
+
+#### Response Utilities
+
+```python
+def success_response(data=None, status_code: int = 200, headers=None) -> dict:
+    """Create standardized success response for API Gateway."""
+    response_headers = {"Content-Type": "application/json"}
+
+    if headers:
+        response_headers.update(headers)
+
+    if data is None:
+        body = json.dumps({"Success": True})
+    elif isinstance(data, str):
+        body = json.dumps({"Message": data})
+    else:
+        data = decimal_to_json_serializable(data)
+        body = json.dumps(data)
+
+    return {
+        "statusCode": status_code,
+        "headers": response_headers,
+        "body": body,
+    }
+
+def error_response(error: str, status_code: int = 400, details=None, headers=None) -> dict:
+    """Create standardized error response for API Gateway."""
+    response_headers: dict = {"Content-Type": "application/json"}
+
+    if headers:
+        response_headers.update(headers)
+
+    error_body: dict = {"Error": error}
+    if details:
+        error_body.update(details)
+
+    return {
+        "statusCode": status_code,
+        "headers": response_headers,
+        "body": json.dumps(error_body),
+    }
+
+def lambda_error(event: dict, err: Exception) -> dict:
+    """Handle Lambda function errors with proper logging and CORS response."""
+    logger.error(
+        f"Unexpected error in lambda_handler {err}",
+        exc_info=True,
+    )
+
+    return cors_handler.add_cors_headers(error_response("Internal server error", status_code=500), event)
+```
+
+#### Typed Backend Exceptions
 
 ```python
 class IncrementalError(Exception):
@@ -1381,63 +3900,209 @@ class ConflictError(IncrementalError):
     """Resource state conflict."""
     def __init__(self, message):
         super().__init__(message, 409)
-
-def handle_errors(func):
-    """Decorator for consistent error handling."""
-    def wrapper(event, context):
-        try:
-            return func(event, context)
-        except IncrementalError as e:
-            logger.warning(f"Business error: {e}")
-            return create_response(e.StatusCode, {
-                "Error": str(e),
-                **e.Details
-            })
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'ResourceNotFoundException':
-                return not_found_response("Resource")
-            elif error_code == 'ConditionalCheckFailedException':
-                return create_response(409, {"error": "Conflict detected"})
-            else:
-                logger.error("AWS error", exc_info=True)
-                return create_response(500, {"error": "Internal server error"})
-        except Exception as e:
-            logger.error("Unexpected error", exc_info=True)
-            return create_response(500, {"error": "Internal server error"})
-    return wrapper
 ```
 
-### 8.2 Retry Logic
+### 8.6 Database Resilience
 
-This exponential backoff implementation handles transient failures in AWS service calls, automatically retrying with increasing delays to improve reliability without overwhelming the system during temporary outages.
+The DynamoDB interface includes comprehensive retry logic and error handling.
+
+#### DynamoDB Interface with Resilience
 
 ```python
-def retry_with_backoff(func, max_attempts=3, base_delay=1):
-    """Retry function with exponential backoff."""
-    for attempt in range(max_attempts):
+class DynamoInterface:
+    """Singleton interface for DynamoDB operations with retry logic."""
+
+    @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
+    def get_item(self, table_enum: TableName, key: dict, **kwargs) -> dict:
+        """Get an item from a table with retry logic."""
+        table = self.get_table(table_enum)
+
         try:
-            return func()
-        except Exception as e:
-            if attempt == max_attempts - 1:
+            response = table.get_item(Key=key, **kwargs)
+        except ClientError as err:
+            logger.error(f"Error getting item from DynamoDB for {table_enum.value} Error: {err}")
+            raise
+
+        item = response.get("Item", {})
+        if not item:
+            return {}
+
+        result = decimal_to_float(item)
+        return result
+
+    @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
+    def update_item(self, table_enum: TableName, **kwargs) -> dict:
+        """Update an item with retry logic."""
+        table = self.get_table(table_enum)
+
+        try:
+            response = table.update_item(**kwargs)
+        except ClientError as err:
+            if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                logger.error(f"Condition check failed for {table_enum.value} Error: {err}")
                 raise
+            logger.error(f"Error updating item in DynamoDB for {table_enum.value} Error: {err}")
+            raise
 
-            delay = base_delay * (2 ** attempt)
-            logger.warning(f"Attempt {attempt + 1} failed, retrying in {delay}s", exc_info=True)
-            time.sleep(delay)
-
-# Usage example
-def update_with_retry(table_name, key, update_expression, expression_values):
-    def update():
-        return dynamodb.update_item(
-            TableName=table_name,
-            Key=key,
-            UpdateExpression=update_expression,
-            ExpressionAttributeValues=expression_values
-        )
-
-    return retry_with_backoff(update)
+        return response
 ```
+
+### 8.7 Rate Limiting Error Handling
+
+Rate limiting provides user feedback and queuing for API operations.
+
+#### Rate Limiter with Error Handling
+
+```dart
+class RateLimiter {
+  final Map<String, DateTime> _lastCallTimes = {};
+  final Map<String, Duration> _minIntervals = {};
+  final Map<String, Completer<void>?> _pendingCompleters = {};
+  final Map<String, Timer> _pendingTimers = {};
+
+  /// Execute human-driven action with rate limiting
+  Future<T> executeHumanDriven<T>(String key, Future<T> Function() action) async {
+    return _executeAction(key, action, const Duration(seconds: 15));
+  }
+
+  /// Execute automated action with rate limiting
+  Future<T> executeAutomated<T>(String key, Future<T> Function() action) async {
+    return _executeAction(key, action, const Duration(seconds: 60));
+  }
+
+  Future<T> _executeAction<T>(String key, Future<T> Function() action, Duration delay) async {
+    final now = DateTime.now();
+    final lastCall = _lastCallTimes[key];
+
+    if (lastCall != null) {
+      final timeSinceLastCall = now.difference(lastCall);
+      final minInterval = _minIntervals[key] ?? Duration.zero;
+
+      if (timeSinceLastCall < minInterval) {
+        // Rate limited - queue the action
+        return _queueAction(key, action, delay);
+      }
+    }
+
+    // Execute immediately
+    _lastCallTimes[key] = DateTime.now();
+    return action();
+  }
+
+  Future<T> _queueAction<T>(String key, Future<T> Function() action, Duration delay) async {
+    // Cancel existing queued action and create new one
+    _pendingTimers[key]?.cancel();
+    _pendingCompleters[key]?.completeError(
+      RateLimitException('Cancelled by new request', remaining: Duration.zero),
+    );
+
+    final completer = Completer<T>();
+    _pendingCompleters[key] = completer as Completer<void>;
+
+    _pendingTimers[key] = Timer(delay, () async {
+      try {
+        _lastCallTimes[key] = DateTime.now();
+        final result = await action();
+        completer.complete(result);
+      } catch (e) {
+        completer.completeError(e);
+      } finally {
+        _pendingTimers.remove(key);
+        _pendingCompleters.remove(key);
+      }
+    });
+
+    return completer.future;
+  }
+}
+```
+
+#### Rate Limit Exception
+
+```dart
+class RateLimitException implements Exception {
+  final String message;
+  final Duration remaining;
+
+  RateLimitException(this.message, {required this.remaining});
+
+  @override
+  String toString() => message;
+}
+```
+
+### 8.8 Error Handling Integration Patterns
+
+#### Service Layer Error Handling
+
+```dart
+class BaseApiService {
+  Future<T> executeRequest<T>({
+    required String method,
+    required String endpoint,
+    // ... other parameters
+  }) async {
+    try {
+      // Build and execute request
+      final response = await _httpClient.get(uri, headers: headers);
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        // Success handling
+        return parser != null ? parser(json) : json as T;
+      } else if (response.statusCode == 404) {
+        throw NotFoundException('Resource not found');
+      } else if (response.statusCode == 401) {
+        throw UnauthorizedException('Unauthorized');
+      } else {
+        // Parse error message
+        String errorMessage = 'Request failed with status ${response.statusCode}';
+        try {
+          final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
+          errorMessage = errorBody['Error'] ??
+                        errorBody['error'] ??
+                        errorBody['message'] ??
+                        errorMessage;
+        } catch (_) {
+          // Use default error message if parsing fails
+        }
+        throw ApiException(errorMessage, statusCode: response.statusCode);
+      }
+    } catch (e) {
+      if (e is ApiException) {
+        rethrow;
+      }
+      debugPrint('API Error: $e');
+      throw ApiException('Network error: $e');
+    }
+  }
+}
+```
+
+#### UI Error Boundary Integration
+
+```dart
+class GameScreen extends StatefulWidget {
+  @override
+  Widget build(BuildContext context) {
+    return ErrorBoundary(
+      onError: (details) {
+        debugPrint('GameScreen: ErrorBoundary caught error in GameScreen');
+        // Log to analytics service
+      },
+      child: Scaffold(
+        body: StateWrapper(
+          isLoading: _isLoading,
+          error: _error,
+          onRetry: _loadData,
+          child: _buildContent(),
+        ),
+      ),
+    );
+  }
+}
+```
+
+This comprehensive error handling system ensures the Incremental client provides a robust, user-friendly experience even under failure conditions, with proper error containment, recovery mechanisms, and clear user feedback.
 
 ## 9. Testing Guidelines
 
@@ -1565,7 +4230,7 @@ class IncrementalUser(HttpUser):
         """Login and select character."""
         # Login flow
         response = self.client.post("/auth/login", json={
-            "email": f"test{random.randint(1,1000)}@example.com",
+            "email": f"test{random.randint(1,1000)}@darkrelics.net",
             "password": "TestPassword123!"
         })
         self.token = response.json()['token']
@@ -1736,9 +4401,7 @@ def update_character_with_metrics(character_id, updates):
 
 ### Deployment Metrics
 
-- **9 CDK Stacks**: All operational in production
-- **16 Lambda Functions**: Deployed with fixed logical IDs
-- **14 DynamoDB Tables**: Created with RemovalPolicy.RETAIN
+- Shared infrastructure metrics (stack counts, Lambda inventory, table list) live in [Deployment Guide](deployment.md#system-architecture)
 - **2 SQS Queues**: Processing and advancement queues (Story Stack)
 - **1 EventBridge Rule**: 1-minute polling (disabled by default)
 - **Module Size**: 94% under 300 lines (modular architecture)
@@ -1755,14 +4418,8 @@ def update_character_with_metrics(character_id, updates):
 
 ### Stack Dependencies
 
-1. **CodeBuild Stack**: Provides Lambda artifacts
-2. **DynamoDB Stack**: Tables and managed policy
-3. **Lambda Stack**: Functions and execution role
-4. **Player Stack**: Cognito authentication
-5. **Story Stack**: SQS, EventBridge, SSM (Incremental/Hybrid only)
-6. **API Stack**: API Gateway with Lambda integrations
-7. **Client Stack**: CloudFront and portal deployment
+See [Deployment Guide](deployment.md#stack-deployment-order) for the full stack sequencing across modes.
 
 ## Conclusion
 
-This implementation guide reflects the production-deployed Incremental Game system as part of the Eidolon Engine's 9-stack CDK architecture. All code examples and configurations match the actual deployed infrastructure, providing a reliable reference for maintenance and enhancement.
+This implementation guide reflects the production-deployed Incremental Game system and aligns with the shared infrastructure documented in the Deployment Guide. All code examples and configurations match the actual deployed infrastructure, providing a reliable reference for maintenance and enhancement.
