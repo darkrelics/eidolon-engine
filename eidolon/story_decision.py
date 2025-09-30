@@ -72,8 +72,8 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
             Key={"ActiveSegmentID": active_segment_id},
             UpdateExpression="SET #decision = :decision, #status = :completed",
             ExpressionAttributeNames={"#decision": "Decision", "#status": "Status"},
-            ExpressionAttributeValues={":decision": decision_id, ":completed": "completed", ":active": "active"},
-            ConditionExpression="attribute_not_exists(#decision) AND #status = :active",
+            ExpressionAttributeValues={":decision": decision_id, ":completed": "completed", ":active": "active", ":null": None},
+            ConditionExpression="(attribute_not_exists(#decision) OR #decision = :null) AND #status = :active",
         )
 
         updated_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})

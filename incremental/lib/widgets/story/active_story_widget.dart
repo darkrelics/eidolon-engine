@@ -577,45 +577,33 @@ class _SimpleSegmentCard extends StatelessWidget {
                   final choiceData = entry.value;
                   String choiceText;
                   String? description;
-                  int? difficulty;
 
                   // Support both legacy (string) and rich (object) formats
                   if (choiceData is Map<String, dynamic>) {
                     choiceText = choiceData['Text'] as String? ?? entry.key;
                     description = choiceData['Description'] as String?;
-                    difficulty = choiceData['Difficulty'] as int?;
                   } else {
                     // Legacy format: display choice ID
                     choiceText = entry.key.replaceAll('-', ' ').toUpperCase();
                   }
 
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: FilledButton(
-                      onPressed: isDecisionSubmitting ? null : () => onDecisionSelect?.call(entry.key),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(choiceText),
-                          if (description != null)
-                            Text(
-                              description,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
-                          if (difficulty != null)
-                            Text(
-                              'Difficulty: $difficulty',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.normal,
-                              ),
-                            ),
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (description != null) ...[
+                          Text(
+                            description,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 8),
                         ],
-                      ),
+                        FilledButton(
+                          onPressed: isDecisionSubmitting ? null : () => onDecisionSelect?.call(entry.key),
+                          child: Text(choiceText),
+                        ),
+                      ],
                     ),
                   );
                 },
