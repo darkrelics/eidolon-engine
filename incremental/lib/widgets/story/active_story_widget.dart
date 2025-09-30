@@ -562,6 +562,71 @@ class _SimpleSegmentCard extends StatelessWidget {
               ),
             ],
 
+            // Show chosen decision for completed decision segments
+            if (segmentType == 'decision' && !isActive && segment['Decision'] != null && segment['DecisionOptions'] != null) ...[
+              const SizedBox(height: 12),
+              Builder(
+                builder: (context) {
+                  final decisionId = segment['Decision'] as String;
+                  final decisionOptions = segment['DecisionOptions'] as Map<String, dynamic>;
+                  final choiceData = decisionOptions[decisionId];
+
+                  String choiceText;
+                  String? description;
+
+                  if (choiceData is Map<String, dynamic>) {
+                    choiceText = choiceData['Text'] as String? ?? decisionId;
+                    description = choiceData['Description'] as String?;
+                  } else {
+                    choiceText = decisionId.replaceAll('-', ' ').toUpperCase();
+                  }
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.check_circle, size: 16, color: theme.colorScheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Decision Made:',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (description != null) ...[
+                          Text(
+                            description,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        Text(
+                          choiceText,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+
             // Decision options for decision segments
             if (segmentType == 'decision' && isActive && segment['DecisionOptions'] != null) ...[
               const SizedBox(height: 12),
