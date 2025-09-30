@@ -7,7 +7,7 @@
         "Description": "A mysterious path through the Vedant Forest leads to an unexpected encounter.",
         "NarrativeText": "You've heard rumors of strange happenings in the Vedant Forest. Local villagers speak of missing travelers and eerie sounds at night. Armed with courage and curiosity, you decide to investigate the old forest path that leads to an abandoned campsite deep in the woods.",
         "StoryType": "repeatable",
-        "EstimatedDuration": 7000,
+        "EstimatedDuration": 600,
         "Prerequisites": {
           "MinSkills": {},
           "RequiredItems": [],
