@@ -20,6 +20,7 @@ class StoryPanel extends StatefulWidget {
   final VoidCallback? onAbandonStory;
   final VoidCallback? onRestSegment;
   final VoidCallback? onReturnToStories;
+  final bool isDecisionSubmitting;
 
   const StoryPanel({
     super.key,
@@ -34,6 +35,7 @@ class StoryPanel extends StatefulWidget {
     this.onAbandonStory,
     this.onRestSegment,
     this.onReturnToStories,
+    this.isDecisionSubmitting = false,
   });
 
   @override
@@ -209,6 +211,7 @@ class _StoryPanelState extends State<StoryPanel> {
       onAbandonStory: widget.onAbandonStory,
       onRestSegment: widget.onRestSegment,
       onRefresh: widget.onRefresh,
+      isDecisionSubmitting: widget.isDecisionSubmitting,
     );
   }
 

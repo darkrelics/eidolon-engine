@@ -43,7 +43,7 @@ class Config:
         # Load existing config if it exists
         existing_config = {}
         if config_path.exists():
-            with open(config_path, "r") as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 existing_config = yaml.safe_load(f) or {}
 
         # Update deployment mode (support both legacy and nested structures)
@@ -93,7 +93,7 @@ class Config:
             if self.ssm_story_parameter:
                 story_section["SSMParameter"] = self.ssm_story_parameter
 
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             yaml.dump(existing_config, f, default_flow_style=False, sort_keys=False)
 
     @classmethod
@@ -107,9 +107,9 @@ class Config:
             template_path = config_path.parent / "config.template.yml"
             if template_path.exists():
                 print("Creating config.yml from template...")
-                with open(template_path, "r") as template_file:
+                with open(template_path, "r", encoding="utf-8") as template_file:
                     template_data = template_file.read()
-                with open(config_path, "w") as config_file:
+                with open(config_path, "w", encoding="utf-8") as config_file:
                     config_file.write(template_data)
                 print(f"Config file created at {config_path}")
             else:
@@ -117,7 +117,7 @@ class Config:
                 return instance
 
         # Load the config file
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
 
         # Load deployment mode (support nested structure)

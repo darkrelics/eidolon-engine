@@ -74,17 +74,22 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     if start_time_unix is None:
         start_time_unix = int(now)
 
-    raw_duration = active_segment.get("Duration") or active_segment.get("SegmentDuration") or active_segment.get("ExpectedDuration")
-    try:
-        duration = int(raw_duration)  # type: ignore
-    except (TypeError, ValueError):
-        duration = 60
-    if duration <= 0:
-        duration = 60
-
     end_time_unix = _coerce_unix(active_segment.get("EndTime"), None)
     if end_time_unix is None:
+        # No EndTime stored, try to get duration from segment fields
+        raw_duration = (
+            active_segment.get("Duration") or active_segment.get("SegmentDuration") or active_segment.get("ExpectedDuration")
+        )
+        try:
+            duration = int(raw_duration)  # type: ignore
+        except (TypeError, ValueError):
+            duration = 60
+        if duration <= 0:
+            duration = 60
         end_time_unix = start_time_unix + duration
+    else:
+        # Calculate duration from stored times
+        duration = max(60, end_time_unix - start_time_unix)
 
     # Calculate status using Unix timestamps
     is_complete = end_time_unix <= now
@@ -212,6 +217,19 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     if segment_type == "decision":
         response["Decision"] = active_segment.get("Decision")
         response["DecisionOptions"] = active_segment.get("DecisionOptions")
+
+        # Enrich with DecisionText from segment definition if available
+        if story_id and segment_id and segment_def is None:
+            try:
+                segment_def = get_story_segment(story_id, segment_id)  # type: ignore
+            except Exception as err:
+                logger.debug(f"Could not fetch segment definition for DecisionText: {err}")
+
+        if segment_def:
+            response["DecisionText"] = segment_def.get("DecisionText")
+            # If DecisionOptions not in active segment, get from definition
+            if not response.get("DecisionOptions"):
+                response["DecisionOptions"] = segment_def.get("DecisionOptions", {})
 
     # Include healing data for rest segments
     if segment_type == "rest":

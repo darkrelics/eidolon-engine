@@ -252,7 +252,7 @@ def verify_character_ownership(character_id: str, player_id: str) -> bool:
         # Check if character_id exists in player's character list
         character_list = player.get("CharacterList", {})
 
-        for char_name, char_info in character_list.items():
+        for char_info in character_list.values():
             if char_info.get("UUID") == character_id:
                 logger.debug(f"Character ownership verified: {character_id} belongs to {player_id}")
                 return True

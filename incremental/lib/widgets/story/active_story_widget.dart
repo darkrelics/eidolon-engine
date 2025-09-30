@@ -14,6 +14,7 @@ class ActiveStoryWidget extends StatefulWidget {
   final VoidCallback? onRestSegment;
   final VoidCallback? onContinue;
   final VoidCallback? onRefresh;
+  final bool isDecisionSubmitting;
 
   const ActiveStoryWidget({
     super.key,
@@ -24,6 +25,7 @@ class ActiveStoryWidget extends StatefulWidget {
     this.onRestSegment,
     this.onContinue,
     this.onRefresh,
+    this.isDecisionSubmitting = false,
   });
 
   @override
@@ -76,6 +78,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               segment: segmentData,
               isActive: true,
               onDecisionSelect: widget.onDecisionSelect,
+              isDecisionSubmitting: widget.isDecisionSubmitting,
               onTimeout: () {
                 if (!mounted) return;
                 // Allow UI to refresh timer visuals; network orchestration is handled elsewhere
@@ -96,7 +99,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               separatorBuilder: (context, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final segment = _orderedHistory[index];
-                return _SimpleSegmentCard(segment: segment, isActive: false);
+                return _SimpleSegmentCard(segment: segment, isActive: false, isDecisionSubmitting: false);
               },
             ),
           ],
@@ -265,8 +268,9 @@ class _SimpleSegmentCard extends StatelessWidget {
   final bool isActive;
   final Function(String)? onDecisionSelect;
   final VoidCallback? onTimeout;
+  final bool isDecisionSubmitting;
 
-  const _SimpleSegmentCard({super.key, required this.segment, required this.isActive, this.onDecisionSelect, this.onTimeout});
+  const _SimpleSegmentCard({super.key, required this.segment, required this.isActive, this.onDecisionSelect, this.onTimeout, this.isDecisionSubmitting = false});
 
   static bool _isProcessingPlaceholder(String? value) {
     if (value == null) return false;
@@ -558,17 +562,116 @@ class _SimpleSegmentCard extends StatelessWidget {
               ),
             ],
 
+            // Show chosen decision for completed decision segments
+            if (segmentType == 'decision' && !isActive && segment['Decision'] != null && segment['DecisionOptions'] != null) ...[
+              const SizedBox(height: 12),
+              Builder(
+                builder: (context) {
+                  final decisionId = segment['Decision'] as String;
+                  final decisionOptions = segment['DecisionOptions'] as Map<String, dynamic>;
+                  final choiceData = decisionOptions[decisionId];
+
+                  String choiceText;
+                  String? description;
+
+                  if (choiceData is Map<String, dynamic>) {
+                    choiceText = choiceData['Text'] as String? ?? decisionId;
+                    description = choiceData['Description'] as String?;
+                  } else {
+                    choiceText = decisionId.replaceAll('-', ' ').toUpperCase();
+                  }
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.check_circle, size: 16, color: theme.colorScheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Decision Made:',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (description != null) ...[
+                          Text(
+                            description,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                        ],
+                        Text(
+                          choiceText,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+
             // Decision options for decision segments
             if (segmentType == 'decision' && isActive && segment['DecisionOptions'] != null) ...[
               const SizedBox(height: 12),
-              ...((segment['DecisionOptions'] as Map<String, dynamic>).entries.map(
-                (entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: FilledButton(
-                    onPressed: () => onDecisionSelect?.call(entry.key),
-                    child: Text(entry.key.replaceAll('-', ' ').toUpperCase()),
-                  ),
+              if (segment['DecisionText'] != null) ...[
+                Text(
+                  segment['DecisionText'] as String,
+                  style: const TextStyle(fontStyle: FontStyle.italic),
                 ),
+                const SizedBox(height: 12),
+              ],
+              ...((segment['DecisionOptions'] as Map<String, dynamic>).entries.map(
+                (entry) {
+                  final choiceData = entry.value;
+                  String choiceText;
+                  String? description;
+
+                  // Support both legacy (string) and rich (object) formats
+                  if (choiceData is Map<String, dynamic>) {
+                    choiceText = choiceData['Text'] as String? ?? entry.key;
+                    description = choiceData['Description'] as String?;
+                  } else {
+                    // Legacy format: display choice ID
+                    choiceText = entry.key.replaceAll('-', ' ').toUpperCase();
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (description != null) ...[
+                          Text(
+                            description,
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        FilledButton(
+                          onPressed: isDecisionSubmitting ? null : () => onDecisionSelect?.call(entry.key),
+                          child: Text(choiceText),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               )),
             ],
           ],

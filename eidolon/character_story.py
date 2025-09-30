@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from botocore.exceptions import ClientError
 
-from eidolon.character_data import character_clear_story, character_get
+from eidolon.character_data import apply_character_updates, character_clear_story, character_get
 from eidolon.character_segment import character_get_active_segment
 from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
@@ -368,8 +368,6 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
     Raises:
         RuntimeError: If database operations fail
     """
-    from eidolon.character_data import apply_character_updates
-
     try:
         update_expressions = []
         expression_attribute_names = {}

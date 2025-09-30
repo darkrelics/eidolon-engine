@@ -164,8 +164,18 @@ def get_active_decision_segment(character_id: str, player_id: str) -> dict:
         logger.warning(f"No active decision segment found for {character_id}")
         raise ValueError("No active decision segment found")
 
+    if len(items) > 1:
+        logger.warning(f"Multiple active decision segments found for {character_id}: {[s.get('ActiveSegmentID') for s in items]}")
+
     # No need to check PlayerID again - already filtered in query
-    return items[0]
+    active_segment = items[0]
+    logger.info(
+        f"Retrieved active decision segment for {character_id}: "
+        f"ActiveSegmentID={active_segment.get('ActiveSegmentID')}, "
+        f"Decision={active_segment.get('Decision')}, "
+        f"Status={active_segment.get('Status')}"
+    )
+    return active_segment
 
 
 def story_update_character(

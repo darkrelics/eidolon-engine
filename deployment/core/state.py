@@ -29,7 +29,7 @@ class CDKState:
         state_path = Path(path)
         state_data = {"stacks": self.stacks, "infrastructure": self.infrastructure, "last_updated": self.last_updated}
 
-        with open(state_path, "w") as f:
+        with open(state_path, "w", encoding="utf-8") as f:
             json.dump(state_data, f, indent=2)
 
     @classmethod
@@ -41,7 +41,7 @@ class CDKState:
         if not state_path.exists():
             return instance
 
-        with open(state_path, "r") as f:
+        with open(state_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
         instance.stacks = data.get("stacks", {})
