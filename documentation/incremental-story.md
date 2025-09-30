@@ -38,9 +38,10 @@ The Segments table contains prototype definitions for all story segments:
 - **SegmentType**: decision, mechanical, or rest
 - **SegmentDuration**: Time in seconds for completion
 - **DecisionOptions**: For decisions, maps choice ID to next segment ID
-- **NextSegmentID**: For mechanical segments, the following segment
+- **Results**: For mechanical/rest segments, outcome-specific branches (see Weighted Branching below)
 - **Challenges**: List of skill/attribute challenges
 - **Combat**: Combat configuration if applicable
+- **TimeoutBehavior**: For decisions, optional weighted timeout branches
 
 ### ActiveSegments Table
 
@@ -53,6 +54,7 @@ The ActiveSegments table tracks currently running segment instances:
 - **ClientEvents**: Pre-calculated event sequence for display
 - **CharacterUpdates**: Changes to apply on completion
 - **Outcome**: death/failure/minimal/normal/exceptional
+- **BranchMetadata**: Branch selection tracking (SelectionMethod, BranchLabel, BranchIndex, etc.)
 
 ### StoryHistory Table
 
@@ -77,6 +79,7 @@ Archives completed segment instances:
 - **CharacterUpdates**: All character changes applied (contains SkillXP and AttributeXP)
 - **Outcome**: Final outcome of the segment
 - **ProcessedAt**: Unix timestamp when outcomes were calculated
+- **BranchMetadata**: Copy of branch selection tracking from ActiveSegments
 
 ## Story State Machine
 
@@ -377,12 +380,99 @@ Example:
 }
 ```
 
+#### Weighted Branching with Prerequisites
+
+The system supports weighted random branching where a single outcome can lead to multiple possible paths based on probability and character prerequisites. This allows for dynamic narrative variation and stat-gated content.
+
+**Structure:**
+
+```json
+"Results": {
+  "Normal": {
+    "Narrative": "You examine the paths ahead...",
+    "Branches": [
+      {
+        "NextSegmentID": "segment-easy",
+        "Weight": 0.6,
+        "Label": "common_path",
+        "Prerequisites": {
+          "MinSkills": {"perception": 3},
+          "MinAttributes": {"intelligence": 2}
+        }
+      },
+      {
+        "NextSegmentID": "segment-hard",
+        "Weight": 0.4,
+        "Label": "challenging_path",
+        "Prerequisites": {
+          "MinSkills": {"perception": 7}
+        }
+      }
+    ],
+    "FallbackSegmentID": "segment-default"
+  }
+}
+```
+
+**Selection Process:**
+
+1. **Filter by Prerequisites**: Check character skills, attributes, and required items
+2. **Renormalize Weights**: Adjust weights for only the available branches
+3. **Random Selection**: Use cryptographically secure random (secrets module)
+4. **Apply Fallback**: If no branches pass prerequisites, use FallbackSegmentID
+5. **Track Metadata**: Store selection details in BranchMetadata field
+
+**Branch Metadata:**
+
+All branch selections are tracked in the ActiveSegments and SegmentHistory records:
+
+- `SelectionMethod`: weighted_random, prerequisite_fallback, player_decision, etc.
+- `BranchLabel`: Analytics label from the selected branch
+- `BranchIndex`: Which branch was selected (0-indexed)
+- `TotalBranches`: How many branches were defined
+- `AvailableBranches`: How many passed prerequisite checks
+- `RandomSeed`: Seed used for selection (testing only)
+
+**Weighted Decision Timeouts:**
+
+Decision segments can use weighted random selection on timeout instead of a fixed default:
+
+```json
+{
+  "SegmentType": "decision",
+  "DecisionOptions": {
+    "investigate": {"NextSegmentID": "seg-investigate"},
+    "flee": {"NextSegmentID": "seg-flee"}
+  },
+  "TimeoutBehavior": {
+    "Type": "weighted",
+    "Branches": [
+      {"Decision": "investigate", "Weight": 0.7},
+      {"Decision": "flee", "Weight": 0.3}
+    ]
+  },
+  "DefaultDecision": "flee"
+}
+```
+
+If TimeoutBehavior is not specified, the system falls back to DefaultDecision.
+
+**Validation:**
+
+Use `scripts_python/validate_branching.py` to validate:
+- Branch weights sum to 1.0 (tolerance: 0.001)
+- NextSegmentIDs reference valid segments in the story
+- Prerequisite structure is valid
+- No circular dependencies exist
+
 #### Branching Principles
 
 1. **No Hardcoded Assumptions**: The system doesn't assume death or failure ends stories
 2. **Narrative Freedom**: Designers control all branching through data
 3. **Outcome Equality**: Any outcome can lead to any result
 4. **Conditional Progression**: Different outcomes create different player experiences
+5. **Stat-Based Gating**: Branches can require specific skills/attributes to unlock
+6. **Probabilistic Variation**: Weighted branches create replay value
 
 ### Segment Lifecycle
 

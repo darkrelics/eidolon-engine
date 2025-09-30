@@ -231,18 +231,24 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     return overall_outcome, results
 
 
-def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str) -> object:
+def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str, character: dict, random_seed: int = None) -> tuple:
     """
     Determine the next segment ID based on segment type and outcome.
+
+    Uses weighted branching for mechanical/rest segments.
 
     Args:
         segment_def: Segment definition from Segments table
         active_segment: Active segment record
         outcome: Segment outcome
+        character: Character record for prerequisite checking
+        random_seed: Optional seed for deterministic testing
 
     Returns:
-        Next segment ID or None if story ends
+        Tuple of (next_segment_id, branch_metadata)
     """
+    from eidolon.branching import select_next_branch
+
     segment_type = segment_def.get("SegmentType")
     segment_id = segment_def.get("SegmentID", "unknown")
     active_segment_id = active_segment.get("ActiveSegmentID", "unknown")
@@ -254,30 +260,65 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
     logger.debug(f"  Results keys: {list(segment_def.get('Results', {}).keys())}")
 
     if segment_type == "decision":
-        # Use decision to determine next segment
+        # Use decision to determine next segment (player choice)
         decision = active_segment.get("Decision")
         decision_options = segment_def.get("DecisionOptions", {})
 
         if decision and decision in decision_options:
-            # Support both legacy (string) and rich (dict with NextSegmentID) formats
+            # Support dict with NextSegmentID format
             decision_value = decision_options.get(decision)
             if isinstance(decision_value, dict):
                 next_segment_id = decision_value.get("NextSegmentID")
             else:
                 next_segment_id = decision_value
             logger.info(f"Selected decision branch for {active_segment_id}: decision={decision}, next={next_segment_id}")
-            return next_segment_id
+            return next_segment_id, {"SelectionMethod": "player_decision", "Decision": decision}
 
-        # No decision made (timeout) - use default if specified
+        # No decision made (timeout) - use weighted branches if available
+        timeout_behavior = segment_def.get("TimeoutBehavior", {})
+        if timeout_behavior.get("Type") == "weighted":
+            branches = timeout_behavior.get("Branches", [])
+            if branches:
+                # Convert decision branches to standard branch format for selection
+                weighted_branches = [
+                    {
+                        "Decision": b["Decision"],
+                        "Weight": b["Weight"],
+                        "Label": f"timeout_{b['Decision']}",
+                        "NextSegmentID": decision_options.get(b["Decision"], {}).get("NextSegmentID")
+                        if isinstance(decision_options.get(b["Decision"]), dict)
+                        else decision_options.get(b["Decision"]),
+                    }
+                    for b in branches
+                ]
+
+                # Filter and select
+                available = [(i, b) for i, b in enumerate(weighted_branches) if b.get("NextSegmentID")]
+                if available:
+                    from eidolon.branching import select_weighted_branch
+
+                    idx, selected = select_weighted_branch(available, random_seed)
+                    logger.info(f"Using weighted timeout for {active_segment_id}: decision={selected['Decision']}, next={selected['NextSegmentID']}")
+                    return selected["NextSegmentID"], {
+                        "SelectionMethod": "weighted_timeout",
+                        "Decision": selected["Decision"],
+                        "BranchIndex": idx,
+                    }
+
+        # Fallback to default decision
         default_decision = segment_def.get("DefaultDecision")
         if default_decision and default_decision in decision_options:
-            next_segment_id = decision_options.get(default_decision)
+            decision_value = decision_options.get(default_decision)
+            if isinstance(decision_value, dict):
+                next_segment_id = decision_value.get("NextSegmentID")
+            else:
+                next_segment_id = decision_value
             logger.info(f"Using default decision for {active_segment_id}: default={default_decision}, next={next_segment_id}")
-            return next_segment_id
+            return next_segment_id, {"SelectionMethod": "default_decision", "Decision": default_decision}
 
         # No valid decision path found
         logger.warning(f"No decision made for {active_segment_id} and no default available - story ends")
-        return None
+        return None, {"SelectionMethod": "no_decision"}
 
     elif segment_type in ["mechanical", "rest"]:
         # Rest segments always use Normal outcome
@@ -290,28 +331,31 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         results = segment_def.get("Results", {})
         if not isinstance(results, dict):
             logger.warning(f"Results is not a dict for {segment_id} - story ends")
-            return None
+            return None, {"SelectionMethod": "invalid_results"}
 
         # Get outcome-specific result
         outcome_result = results.get(outcome_key)
         if not outcome_result:
             logger.warning(f"No result found for outcome '{outcome_key}' in {segment_id} - story ends")
-            return None
+            return None, {"SelectionMethod": "no_outcome_result"}
 
         if not isinstance(outcome_result, dict):
             logger.warning(f"Outcome result for '{outcome_key}' is not a dict in {segment_id} - story ends")
-            return None
+            return None, {"SelectionMethod": "invalid_outcome_result"}
 
-        # Get NextSegmentID from outcome result
-        next_segment_id = outcome_result.get("NextSegmentID")
+        # Use weighted branching system
+        branch_result = select_next_branch(outcome_result, character, random_seed)
+
+        next_segment_id = branch_result["NextSegmentID"]
+        branch_metadata = branch_result["BranchMetadata"]
 
         if next_segment_id:
-            logger.info(f"Using outcome-based next segment for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
+            logger.info(f"Using weighted branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
         else:
-            logger.info(f"No NextSegmentID for outcome '{outcome_key}' in {segment_id} - story ends")
+            logger.info(f"No next segment for outcome '{outcome_key}' in {segment_id} - story ends")
 
-        return next_segment_id
+        return next_segment_id, branch_metadata
 
     # Unknown segment type
     logger.error(f"Unknown segment type '{segment_type}' for {segment_id} - story ends")
-    return None
+    return None, {"SelectionMethod": "unknown_segment_type"}
