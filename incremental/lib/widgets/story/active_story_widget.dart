@@ -324,7 +324,11 @@ class _SimpleSegmentCard extends StatelessWidget {
     }
 
     final statusStr = segment['Status']?.toString().toLowerCase();
-    final isCompleteFlag = segment['IsComplete'] == true || segment['StoryComplete'] == true || statusStr == 'complete' || statusStr == 'completed';
+    final isSegmentComplete = segment['IsComplete'] == true || statusStr == 'complete' || statusStr == 'completed';
+    final isStoryComplete = segment['StoryComplete'] == true;
+    // For active segments, only consider segment completion, not story completion
+    // Story might be complete while the final segment is still running
+    final isCompleteFlag = isActive ? isSegmentComplete : (isSegmentComplete || isStoryComplete);
 
     final dynamic timeRemainingValue = segment['TimeRemaining'];
     int? timeRemaining;
