@@ -1,10 +1,10 @@
 # Directly called packages.
 autopep8==2.3.2
-black==25.1.0
+black==25.9.0
 isort==6.0.1
 pip-audit==2.9.0
 pyupgrade==3.20.0
-ruff==0.13.0
+ruff==0.13.2
 yapf==0.43.0
 #Supporting Packages
 CacheControl==0.14.3 
@@ -33,7 +33,7 @@ platformdirs==4.4.0
 py-serializable==2.1.0
 pycodestyle==2.14.0
 pygments==2.19.2
-pyparsing==3.2.4
+pyparsing==3.2.5
 requests==2.32.5
 rich==14.1.0
 six==1.17.0
