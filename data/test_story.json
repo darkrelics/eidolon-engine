@@ -28,7 +28,7 @@
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
           "SegmentType": "mechanical",
-          "SegmentDuration": 2400,
+          "SegmentDuration": 180,
           "Challenges": [
             {
               "Attribute": "Perception",
@@ -91,8 +91,18 @@
           "SegmentDuration": 600,
           "DecisionText": "The forest path splits into two directions. To the left, you can hear the sound of running water - likely the babbling brook. To the right, the path seems to lead toward denser vegetation. Which way do you go?",
           "DecisionOptions": {
-            "Left": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
-            "Right": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a"
+            "Left": {
+              "Text": "Follow the sound of water",
+              "Description": "Head toward the babbling brook through the underbrush",
+              "Difficulty": 8,
+              "NextSegmentID": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f"
+            },
+            "Right": {
+              "Text": "Push through the thicket",
+              "Description": "Take the path toward the dense vegetation",
+              "Difficulty": 6,
+              "NextSegmentID": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a"
+            }
           },
           "DefaultDecision": "Right",
           "SegmentActivity": "Choosing your path",
@@ -102,7 +112,7 @@
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
           "SegmentType": "mechanical",
-          "SegmentDuration": 1200,
+          "SegmentDuration": 180,
           "Challenges": [
             {
               "Attribute": "Agility",
@@ -162,7 +172,7 @@
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
           "SegmentType": "mechanical",
-          "SegmentDuration": 1200,
+          "SegmentDuration": 180,
           "Challenges": [
             {
               "Attribute": "Strength",
@@ -227,7 +237,7 @@
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
           "SegmentType": "mechanical",
-          "SegmentDuration": 1200,
+          "SegmentDuration": 180,
           "Combat": {
             "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
             "MaxRounds": 12,
@@ -284,8 +294,18 @@
           "SegmentDuration": 600,
           "DecisionText": "After the encounter with the goblin, you notice tracks leading deeper into the forest. You could follow them to investigate further, or you could take a safer path around through the fern gully. What do you do?",
           "DecisionOptions": {
-            "Follow": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
-            "Around": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e"
+            "Follow": {
+              "Text": "Follow the tracks deeper into the forest",
+              "Description": "A direct but dangerous approach to find the goblin camp",
+              "Difficulty": 10,
+              "NextSegmentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d"
+            },
+            "Around": {
+              "Text": "Take the safer path through the fern gully",
+              "Description": "A longer route that avoids the goblin patrols",
+              "Difficulty": 7,
+              "NextSegmentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e"
+            }
           },
           "DefaultDecision": "Around",
           "SegmentActivity": "Following the goblin's trail",
@@ -295,7 +315,7 @@
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
           "SegmentType": "mechanical",
-          "SegmentDuration": 1200,
+          "SegmentDuration": 180,
           "Combat": {
             "OpponentID": "b8c9d0e1-2f3a-4b5c-6d7e8f9a0b1c2d3e",
             "MaxRounds": 15
@@ -348,7 +368,7 @@
           "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
           "SegmentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
           "SegmentType": "mechanical",
-          "SegmentDuration": 2400,
+          "SegmentDuration": 180,
           "Challenges": [
             {
               "Attribute": "Endurance",
@@ -559,7 +579,7 @@
           "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
           "SegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037",
           "SegmentType": "mechanical",
-          "SegmentDuration": 240,
+          "SegmentDuration": 180,
           "Combat": {
             "OpponentID": "51eadb06-e05c-4515-84a7-1e415d6b88e1",
             "MaxRounds": 10,

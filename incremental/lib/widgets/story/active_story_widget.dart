@@ -14,6 +14,7 @@ class ActiveStoryWidget extends StatefulWidget {
   final VoidCallback? onRestSegment;
   final VoidCallback? onContinue;
   final VoidCallback? onRefresh;
+  final bool isDecisionSubmitting;
 
   const ActiveStoryWidget({
     super.key,
@@ -24,6 +25,7 @@ class ActiveStoryWidget extends StatefulWidget {
     this.onRestSegment,
     this.onContinue,
     this.onRefresh,
+    this.isDecisionSubmitting = false,
   });
 
   @override
@@ -76,6 +78,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               segment: segmentData,
               isActive: true,
               onDecisionSelect: widget.onDecisionSelect,
+              isDecisionSubmitting: widget.isDecisionSubmitting,
               onTimeout: () {
                 if (!mounted) return;
                 // Allow UI to refresh timer visuals; network orchestration is handled elsewhere
@@ -96,7 +99,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               separatorBuilder: (context, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final segment = _orderedHistory[index];
-                return _SimpleSegmentCard(segment: segment, isActive: false);
+                return _SimpleSegmentCard(segment: segment, isActive: false, isDecisionSubmitting: false);
               },
             ),
           ],
@@ -265,8 +268,9 @@ class _SimpleSegmentCard extends StatelessWidget {
   final bool isActive;
   final Function(String)? onDecisionSelect;
   final VoidCallback? onTimeout;
+  final bool isDecisionSubmitting;
 
-  const _SimpleSegmentCard({super.key, required this.segment, required this.isActive, this.onDecisionSelect, this.onTimeout});
+  const _SimpleSegmentCard({super.key, required this.segment, required this.isActive, this.onDecisionSelect, this.onTimeout, this.isDecisionSubmitting = false});
 
   static bool _isProcessingPlaceholder(String? value) {
     if (value == null) return false;
@@ -561,14 +565,60 @@ class _SimpleSegmentCard extends StatelessWidget {
             // Decision options for decision segments
             if (segmentType == 'decision' && isActive && segment['DecisionOptions'] != null) ...[
               const SizedBox(height: 12),
-              ...((segment['DecisionOptions'] as Map<String, dynamic>).entries.map(
-                (entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: FilledButton(
-                    onPressed: () => onDecisionSelect?.call(entry.key),
-                    child: Text(entry.key.replaceAll('-', ' ').toUpperCase()),
-                  ),
+              if (segment['DecisionText'] != null) ...[
+                Text(
+                  segment['DecisionText'] as String,
+                  style: const TextStyle(fontStyle: FontStyle.italic),
                 ),
+                const SizedBox(height: 12),
+              ],
+              ...((segment['DecisionOptions'] as Map<String, dynamic>).entries.map(
+                (entry) {
+                  final choiceData = entry.value;
+                  String choiceText;
+                  String? description;
+                  int? difficulty;
+
+                  // Support both legacy (string) and rich (object) formats
+                  if (choiceData is Map<String, dynamic>) {
+                    choiceText = choiceData['Text'] as String? ?? entry.key;
+                    description = choiceData['Description'] as String?;
+                    difficulty = choiceData['Difficulty'] as int?;
+                  } else {
+                    // Legacy format: display choice ID
+                    choiceText = entry.key.replaceAll('-', ' ').toUpperCase();
+                  }
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: FilledButton(
+                      onPressed: isDecisionSubmitting ? null : () => onDecisionSelect?.call(entry.key),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(choiceText),
+                          if (description != null)
+                            Text(
+                              description,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                          if (difficulty != null)
+                            Text(
+                              'Difficulty: $difficulty',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               )),
             ],
           ],

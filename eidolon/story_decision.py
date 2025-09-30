@@ -100,6 +100,36 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         raise RuntimeError(f"Failed to update active segment: {err}") from err
 
 
+def get_next_segment_id_from_decision(decision_options: dict, decision_id: str) -> str | None:
+    """
+    Extract next segment ID from decision options.
+
+    Supports both formats:
+    - Legacy: {"choiceId": "segment-uuid"}
+    - Rich: {"choiceId": {"NextSegmentID": "segment-uuid", "Text": "..."}}
+
+    Args:
+        decision_options: Decision options dict
+        decision_id: Chosen decision ID
+
+    Returns:
+        Next segment ID or None
+    """
+    decision_value = decision_options.get(decision_id)
+    if not decision_value:
+        return None
+
+    # Check if it's rich format (dict with NextSegmentID)
+    if isinstance(decision_value, dict):
+        return decision_value.get("NextSegmentID")
+
+    # Legacy format (direct segment ID string)
+    if isinstance(decision_value, str):
+        return decision_value
+
+    return None
+
+
 def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
     """
     Calculate the next segment completion time based on the decision.
@@ -112,7 +142,7 @@ def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
         Next segment completion time (0 if no next segment)
     """
     decision_options = active_segment.get("DecisionOptions", {})
-    next_segment_id = decision_options.get(decision_id)
+    next_segment_id = get_next_segment_id_from_decision(decision_options, decision_id)
 
     if not next_segment_id:
         return 0
@@ -178,7 +208,9 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
 
     segment_def = get_segment_definition(str(story_id), str(segment_id))
 
-    next_segment_id = determine_next_segment(segment_def, active_segment, "normal")
+    # Get next segment ID from the decision options (supports both legacy and rich formats)
+    decision_options = segment_def.get("DecisionOptions", {})
+    next_segment_id = get_next_segment_id_from_decision(decision_options, decision_id)
 
     response_data: dict = {
         "Accepted": True,

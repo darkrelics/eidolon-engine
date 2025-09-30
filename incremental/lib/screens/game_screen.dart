@@ -1014,6 +1014,7 @@ class _GameScreenState extends State<GameScreen> {
             onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
             onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
+            isDecisionSubmitting: _isSubmittingDecision,
           ),
         ),
         // Inventory Panel (Right)
@@ -1045,6 +1046,7 @@ class _GameScreenState extends State<GameScreen> {
             onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
             onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
+            isDecisionSubmitting: _isSubmittingDecision,
           ),
         ),
         // Inventory Panel (Collapsible)
@@ -1071,6 +1073,7 @@ class _GameScreenState extends State<GameScreen> {
           onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
           onRestSegment: _handleRestSegment,
           onReturnToStories: _handleReturnToStories,
+          isDecisionSubmitting: _isSubmittingDecision,
         );
       case 2:
         return InventoryPanel(character: _character!);

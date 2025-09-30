@@ -259,7 +259,12 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         decision_options = segment_def.get("DecisionOptions", {})
 
         if decision and decision in decision_options:
-            next_segment_id = decision_options.get(decision)
+            # Support both legacy (string) and rich (dict with NextSegmentID) formats
+            decision_value = decision_options.get(decision)
+            if isinstance(decision_value, dict):
+                next_segment_id = decision_value.get("NextSegmentID")
+            else:
+                next_segment_id = decision_value
             logger.info(f"Selected decision branch for {active_segment_id}: decision={decision}, next={next_segment_id}")
             return next_segment_id
 

@@ -15,6 +15,7 @@ class ActiveSegment {
   final List<dynamic>? challengeResults;
   final String? outcome;
   final String? decision;
+  final String? decisionText;
   final Map<String, dynamic>? decisionOptions;
   final Map<String, dynamic>? combatState;
   final List<dynamic>? clientEvents;
@@ -35,6 +36,7 @@ class ActiveSegment {
     this.challengeResults,
     this.outcome,
     this.decision,
+    this.decisionText,
     this.decisionOptions,
     this.combatState,
     this.clientEvents,
@@ -59,6 +61,7 @@ class ActiveSegment {
           ? (json['Outcome']['Type'] as String?)
           : json['Outcome'] as String?,
       decision: json['Decision'] as String?,
+      decisionText: json['DecisionText'] as String?,
       decisionOptions: json['DecisionOptions'] as Map<String, dynamic>?,
       combatState: json['CombatState'] as Map<String, dynamic>?,
       clientEvents: json['ClientEvents'] as List<dynamic>?,
@@ -82,6 +85,7 @@ class ActiveSegment {
       if (challengeResults != null) 'ChallengeResults': challengeResults,
       if (outcome != null) 'Outcome': outcome,
       if (decision != null) 'Decision': decision,
+      if (decisionText != null) 'DecisionText': decisionText,
       if (decisionOptions != null) 'DecisionOptions': decisionOptions,
       if (combatState != null) 'CombatState': combatState,
       if (clientEvents != null) 'ClientEvents': clientEvents,
