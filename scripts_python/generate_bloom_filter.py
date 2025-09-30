@@ -16,7 +16,7 @@ def load_names_from_file(filepath: str) -> set:
         Set of lowercase names
     """
     names = set()
-    with open(filepath, "r") as f:
+    with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
             name = line.strip().lower()
             if name:

@@ -1,5 +1,6 @@
 """Main deployment script for Eidolon Engine infrastructure."""
 
+import argparse
 import json
 import sys
 import traceback
@@ -88,7 +89,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     cdk_json_path = Path(__file__).parent / "cdk.json"
     cdk_context = {}
     if cdk_json_path.exists():
-        with open(cdk_json_path, "r") as f:
+        with open(cdk_json_path, "r", encoding="utf-8") as f:
             cdk_data = json.load(f)
             cdk_context = cdk_data.get("context", {})
 
@@ -202,7 +203,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     # Save user selections back to cdk.json
     cdk_data = {"app": "python3 app.py", "context": {}}
     if cdk_json_path.exists():
-        with open(cdk_json_path, "r") as f:
+        with open(cdk_json_path, "r", encoding="utf-8") as f:
             cdk_data = json.load(f)
 
     if "context" not in cdk_data:
@@ -220,7 +221,7 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     cdk_data["context"]["client_host"] = params.client_host
     cdk_data["context"]["reply_email"] = params.reply_email
 
-    with open(cdk_json_path, "w") as f:
+    with open(cdk_json_path, "w", encoding="utf-8") as f:
         json.dump(cdk_data, f, indent=2)
 
     return params
@@ -290,8 +291,6 @@ def update_lambdas_only():
 
 def main():
     """Main deployment entry point."""
-    import argparse
-
     parser = argparse.ArgumentParser(description="Eidolon Engine Infrastructure Deployment")
     parser.add_argument(
         "--update-lambdas",

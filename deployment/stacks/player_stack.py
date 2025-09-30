@@ -130,7 +130,7 @@ class PlayerStack(Stack):
                 return lambda_.LayerVersion.from_layer_version_arn(self, "ImportedLambdaLayer", layer_arn)
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda layer from CloudFormation export: {e}")
-                raise ValueError("Lambda layer ARN not provided and CloudFormation export not found")
+                raise ValueError("Lambda layer ARN not provided and CloudFormation export not found") from e
 
     def _import_lambda_role(self) -> iam.IRole:
         """Import shared Lambda execution role from Character stack."""
@@ -143,7 +143,7 @@ class PlayerStack(Stack):
                 return iam.Role.from_role_arn(self, "ImportedLambdaRole", role_arn)
             except Exception as e:
                 print(f"  Warning: Failed to import Lambda role from CloudFormation export: {e}")
-                raise ValueError("Lambda role ARN not provided and CloudFormation export not found")
+                raise ValueError("Lambda role ARN not provided and CloudFormation export not found") from e
 
     def _deploy_lambda_function(self) -> lambda_.Function:
         """Deploy cognito-player-new Lambda function."""

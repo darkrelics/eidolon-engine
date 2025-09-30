@@ -9,7 +9,7 @@ from core.config import Config
 from core.state import CDKState
 from deploy_mode import get_stack_phase_number
 from stacks import stack_utilities as utils
-from utilities import run_cdk_deploy
+from utilities import extract_stack_outputs, run_cdk_deploy
 
 
 def get_shared_resources(params, state: CDKState) -> dict:
@@ -42,8 +42,6 @@ def get_shared_resources(params, state: CDKState) -> dict:
     # If not in state, try to get from Lambda stack CloudFormation outputs
     if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
         try:
-            from utilities import extract_stack_outputs
-
             lambda_outputs = extract_stack_outputs("lambda", params.region)
 
             if not resources["lambda_layer_arn"] and lambda_outputs.get("LambdaLayerArn"):

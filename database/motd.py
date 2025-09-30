@@ -50,9 +50,9 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
         print(f"MOTD ID: {motd_id}")
         return motd_item
     except ClientError as err:
-        raise RuntimeError(f"Failed to add MOTD to DynamoDB: {err}")
+        raise RuntimeError(f"Failed to add MOTD to DynamoDB: {err}") from err
     except Exception as err:
-        raise RuntimeError(f"Unexpected error adding MOTD: {err}")
+        raise RuntimeError(f"Unexpected error adding MOTD: {err}") from err
 
 
 def main() -> None:

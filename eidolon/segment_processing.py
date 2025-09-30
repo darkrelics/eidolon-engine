@@ -7,6 +7,7 @@ Provides functions for processing different segment types.
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import apply_character_updates
+from eidolon.character_story import apply_story_outcome_effects
 from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import add_items_to_inventory
@@ -206,9 +207,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 break
 
     # Apply story outcome effects immediately (wounds, room changes, etc.)
-    from eidolon.character_story import apply_story_outcome_effects
-    from eidolon.segment_core import map_outcome_to_key
-
     outcome_key = map_outcome_to_key(overall_outcome)
     outcome_results = segment_def.get("Results", {}).get(outcome_key, {})
     story_effects = outcome_results.get("Effects", {})
