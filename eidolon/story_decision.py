@@ -86,14 +86,25 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
             # Try to determine which condition failed by checking current state
             current_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
-            if current_segment and current_segment.get("Decision"):
-                logger.warning(f"Decision already submitted for {active_segment_id} (race condition detected)")
-                raise ValueError("Decision already submitted") from err
-            elif current_segment and current_segment.get("Status") != "active":
-                logger.warning(f"Segment {active_segment_id} is no longer active (status: {current_segment.get('Status')})")
-                raise ValueError("Decision already submitted") from err  # Same error for 409 mapping
+            if current_segment:
+                decision_value = current_segment.get("Decision")
+                status_value = current_segment.get("Status")
+                logger.warning(
+                    f"Conditional check failed for {active_segment_id}: "
+                    f"Decision={decision_value}, Status={status_value}, "
+                    f"SegmentID={current_segment.get('SegmentID')}"
+                )
+                if decision_value:
+                    logger.warning(f"Decision already submitted for {active_segment_id} (race condition detected)")
+                    raise ValueError("Decision already submitted") from err
+                elif status_value != "active":
+                    logger.warning(f"Segment {active_segment_id} is no longer active (status: {status_value})")
+                    raise ValueError("Decision already submitted") from err  # Same error for 409 mapping
+                else:
+                    logger.warning(f"Conditional check failed but Decision=None and Status=active - unexpected state")
+                    raise ValueError("Decision already submitted") from err
             else:
-                logger.warning(f"Conditional check failed for {active_segment_id}")
+                logger.warning(f"Conditional check failed for {active_segment_id} but segment not found")
                 raise ValueError("Decision already submitted") from err
 
         logger.error(f"Failed to update active segment for {active_segment_id} Error: {err}", exc_info=True)
@@ -189,6 +200,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
 
     validate_decision_option(active_segment, decision_id)
 
+    logger.info(f"Attempting to update decision for {active_segment_id} with decision={decision_id}")
     update_segment_decision(active_segment_id, decision_id)
 
     story_id = active_segment.get("StoryID")

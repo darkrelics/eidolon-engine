@@ -474,7 +474,13 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Set flag IMMEDIATELY before any async operations to prevent race condition
-    _isSubmittingDecision = true;
+    // Must use setState to update UI and disable buttons
+    if (mounted) {
+      setState(() {
+        _isSubmittingDecision = true;
+        _error = null;
+      });
+    }
 
     // Start debounce cooldown
     _decisionDebouncer.runImmediate(() {
@@ -482,12 +488,6 @@ class _GameScreenState extends State<GameScreen> {
     });
 
     try {
-      if (mounted) {
-        setState(() {
-          _error = null;
-        });
-      }
-
       final response = await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.submitDecision,
         () => _apiService.submitDecision(characterId: _character!.id, decision: choiceId),
