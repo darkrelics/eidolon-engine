@@ -31,10 +31,6 @@ def check_s3_bucket_exists(bucket_name: str, region: str) -> bool:
             return False
 
 
-# NOTE: import_or_create_s3_bucket removed - doesn't work during CDK synthesis
-# Use fixed logical IDs in stacks instead to prevent resource recreation
-
-
 def check_dynamodb_table_exists(table_name: str, region: str) -> bool:
     """Check if a DynamoDB table exists.
 
@@ -265,10 +261,6 @@ def check_acm_certificate_exists(domain_name: str, region: str) -> tuple[bool, s
         return False, ""
 
 
-# NOTE: import_or_create_certificate removed - doesn't work during CDK synthesis
-# Use fixed logical IDs in stacks instead to prevent resource recreation
-
-
 def check_cloudfront_distribution_exists(comment: str) -> tuple[bool, str, str]:
     """Check if a CloudFront distribution exists by comment.
 
@@ -290,7 +282,3 @@ def check_cloudfront_distribution_exists(comment: str) -> tuple[bool, str, str]:
         return False, "", ""
     except ClientError:
         return False, "", ""
-
-
-# NOTE: import_or_create_cloudfront_distribution removed - doesn't work during CDK synthesis
-# Use fixed logical IDs in stacks instead to prevent resource recreation

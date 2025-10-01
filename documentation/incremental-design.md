@@ -378,7 +378,81 @@ For combat encounters (based on wounds):
 
 When both exist in a segment, the worse outcome takes precedence.
 
-### 6.3 Wound System
+### 6.3 Weighted Branching System
+
+The story system supports weighted random branching with conditional prerequisites, allowing dynamic narrative paths based on character stats and items.
+
+**Branch Structure:**
+
+```json
+{
+  "Results": {
+    "Normal": {
+      "Branches": [
+        {
+          "NextSegmentID": "segment-abc",
+          "Weight": 0.6,
+          "Label": "successful_path",
+          "Prerequisites": {
+            "MinSkills": {"perception": 5},
+            "MinAttributes": {"intelligence": 3},
+            "RequiredItems": ["torch-prototype"]
+          }
+        },
+        {
+          "NextSegmentID": "segment-def",
+          "Weight": 0.4,
+          "Label": "alternate_path"
+        }
+      ],
+      "FallbackSegmentID": "segment-fallback"
+    }
+  }
+}
+```
+
+**Branch Selection Process:**
+
+1. Filter branches by prerequisites (skills, attributes, items)
+2. Renormalize weights for available branches
+3. Use cryptographically secure random selection
+4. Apply fallback if no branches pass prerequisites
+5. Track selection in BranchMetadata for analytics
+
+**Weighted Decision Timeouts:**
+
+Decision segments can use weighted random selection on timeout instead of fixed defaults:
+
+```json
+{
+  "SegmentType": "decision",
+  "DecisionOptions": {
+    "choice1": {"NextSegmentID": "seg-1"},
+    "choice2": {"NextSegmentID": "seg-2"}
+  },
+  "TimeoutBehavior": {
+    "Type": "weighted",
+    "Branches": [
+      {"Decision": "choice1", "Weight": 0.7},
+      {"Decision": "choice2", "Weight": 0.3}
+    ]
+  }
+}
+```
+
+**Branch Tracking:**
+
+All branch selections are stored in `BranchMetadata`:
+- `SelectionMethod`: How branch was chosen (weighted_random, prerequisite_fallback, player_decision)
+- `BranchLabel`: Analytics label for the branch
+- `BranchIndex`: Which branch was selected
+- `TotalBranches`: How many branches were defined
+- `AvailableBranches`: How many passed prerequisites
+- `RandomSeed`: Seed used (testing only)
+
+This metadata is stored in both `ActiveSegments` and `SegmentHistory` tables for tracking player paths.
+
+### 6.4 Wound System
 
 Full MUD wound implementation:
 

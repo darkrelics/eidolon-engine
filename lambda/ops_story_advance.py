@@ -151,6 +151,9 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     logger.info(f"  Results keys: {list(segment_def.get('Results', {}).keys())}")
     logger.info(f"  Has top-level NextSegmentID: {segment_def.get('NextSegmentID') is not None}")
 
+    # Get character for branching prerequisites
+    character = get_character(character_id)  # type: ignore
+
     # Check if we need to insert a rest segment for unconscious character
     if new_character_state == CharState.UNCONSCIOUS.value:
         try:
@@ -164,15 +167,32 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
             # Override next segment to be the rest segment
             next_segment_id = rest_segment_id
+            branch_metadata = {"SelectionMethod": "unconscious_rest_segment"}
 
             logger.info(f"Inserted rest segment for unconscious character for {character_id}")
         except Exception as err:
             logger.error(f"Failed to insert rest segment for unconscious character for {character_id} Error: {err}", exc_info=True)
             # Fall back to normal next segment determination
-            next_segment_id = determine_next_segment(segment_def, active_segment, outcome)
+            next_segment_id, branch_metadata = determine_next_segment(segment_def, active_segment, outcome, character)
     else:
-        # Determine next segment normally
-        next_segment_id = determine_next_segment(segment_def, active_segment, outcome)
+        # Determine next segment normally with weighted branching
+        next_segment_id, branch_metadata = determine_next_segment(segment_def, active_segment, outcome, character)
+
+    # Store branch metadata in current segment history before advancing
+    if branch_metadata:
+        try:
+            from eidolon.dynamo import TableName, dynamo
+
+            dynamo.update_item(
+                TableName.ACTIVE_SEGMENTS,
+                Key={"ActiveSegmentID": active_segment_id},
+                UpdateExpression="SET BranchMetadata = :metadata",
+                ExpressionAttributeValues={":metadata": branch_metadata},
+            )
+            logger.debug(f"Stored branch metadata for {active_segment_id}: {branch_metadata}")
+        except Exception as err:
+            # Non-critical - just log warning
+            logger.warning(f"Failed to store branch metadata for {active_segment_id}: {err}")
 
     if next_segment_id:
         # Create next segment

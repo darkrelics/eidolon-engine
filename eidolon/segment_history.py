@@ -122,6 +122,10 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
         update_expressions.append("DecisionMadeAt = :decision_made_at")
         expression_values[":decision_made_at"] = segment_data["DecisionMadeAt"]
 
+    if segment_data.get("BranchMetadata"):
+        update_expressions.append("BranchMetadata = :branch_metadata")
+        expression_values[":branch_metadata"] = segment_data["BranchMetadata"]
+
     try:
         update_kwargs = {
             "Key": {"CharacterID": character_id, "ActiveSegmentID": active_segment_id},

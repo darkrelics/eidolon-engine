@@ -1,0 +1,468 @@
+{
+  "Stories": [
+    {
+      "Story": {
+        "StoryID": "branch-test-001",
+        "Title": "The Forked Path",
+        "Description": "A test story demonstrating weighted branching with prerequisites",
+        "NarrativeText": "You stand at a mysterious crossroads where multiple paths diverge. Each path leads to a different challenge, and the way forward depends on your abilities and the whims of fate.",
+        "StoryType": "repeatable",
+        "EstimatedDuration": 600,
+        "Prerequisites": {
+          "MinSkills": {},
+          "RequiredItems": [],
+          "RequiredRooms": []
+        },
+        "RewardTiers": {
+          "Death": "No rewards",
+          "Failure": "Minimal rewards",
+          "Minimal": "Basic rewards",
+          "Normal": "Good rewards",
+          "Exceptional": "Excellent rewards"
+        },
+        "FirstSegmentID": "segment-crossroads",
+        "CreatedAt": "2025-09-30T10:00:00Z"
+      },
+      "Segments": [
+        {
+          "StoryID": "branch-test-001",
+          "SegmentID": "segment-crossroads",
+          "SegmentType": "mechanical",
+          "SegmentDuration": 120,
+          "SegmentTitle": "The Crossroads",
+          "SegmentActivity": "Examining the mysterious crossroads",
+          "Challenges": [
+            {
+              "Skill": "perception",
+              "Attribute": "intelligence",
+              "Difficulty": 6,
+              "AttemptCount": 2,
+              "Description": "You examine the paths before you"
+            }
+          ],
+          "Results": {
+            "Death": {
+              "Narrative": "The crossroads claims you, and darkness descends.",
+              "Effects": {
+                "State": "dead"
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "",
+                  "Weight": 1.0,
+                  "Label": "death_end"
+                }
+              ]
+            },
+            "Failure": {
+              "Narrative": "Unable to discern the paths, you stumble onto the easiest route.",
+              "Effects": {
+                "Room": 1
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-easy",
+                  "Weight": 1.0,
+                  "Label": "failure_easy_path"
+                }
+              ]
+            },
+            "Minimal": {
+              "Narrative": "You barely make out some details. The paths before you seem unclear.",
+              "Effects": {
+                "Room": 2
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-easy",
+                  "Weight": 0.7,
+                  "Label": "minimal_to_easy"
+                },
+                {
+                  "NextSegmentID": "segment-medium",
+                  "Weight": 0.3,
+                  "Label": "minimal_to_medium"
+                }
+              ],
+              "FallbackSegmentID": "segment-easy"
+            },
+            "Normal": {
+              "Narrative": "Your perception reveals two distinct paths ahead.",
+              "Effects": {
+                "Room": 2
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-medium",
+                  "Weight": 0.6,
+                  "Label": "normal_to_medium"
+                },
+                {
+                  "NextSegmentID": "segment-hard",
+                  "Weight": 0.4,
+                  "Label": "normal_to_hard",
+                  "Prerequisites": {
+                    "MinSkills": {
+                      "perception": 5
+                    }
+                  }
+                }
+              ],
+              "FallbackSegmentID": "segment-medium"
+            },
+            "Exceptional": {
+              "Narrative": "Your keen senses reveal hidden paths that few can see!",
+              "Effects": {
+                "Room": 2
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-hard",
+                  "Weight": 0.5,
+                  "Label": "exceptional_to_hard"
+                },
+                {
+                  "NextSegmentID": "segment-expert",
+                  "Weight": 0.5,
+                  "Label": "exceptional_to_expert",
+                  "Prerequisites": {
+                    "MinSkills": {
+                      "perception": 7,
+                      "agility": 5
+                    }
+                  }
+                }
+              ],
+              "FallbackSegmentID": "segment-hard"
+            }
+          }
+        },
+        {
+          "StoryID": "branch-test-001",
+          "SegmentID": "segment-easy",
+          "SegmentType": "rest",
+          "SegmentDuration": 60,
+          "SegmentTitle": "The Easy Path",
+          "SegmentActivity": "Following the well-traveled road",
+          "RestBenefit": {
+            "Description": "The easy path allows you to rest and recover."
+          },
+          "Results": {
+            "Normal": {
+              "Narrative": "The well-traveled road proves uneventful but restful.",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "easy_to_finale"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StoryID": "branch-test-001",
+          "SegmentID": "segment-medium",
+          "SegmentType": "mechanical",
+          "SegmentDuration": 120,
+          "SegmentTitle": "The Winding Path",
+          "SegmentActivity": "Navigating the twisting trail",
+          "Challenges": [
+            {
+              "Skill": "agility",
+              "Attribute": "coordination",
+              "Difficulty": 7,
+              "AttemptCount": 1,
+              "Description": "You navigate treacherous terrain"
+            }
+          ],
+          "Results": {
+            "Death": {
+              "Narrative": "A misstep sends you tumbling into the abyss.",
+              "Effects": {
+                "State": "dead"
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": null,
+                  "Weight": 1.0,
+                  "Label": "death_end"
+                }
+              ]
+            },
+            "Failure": {
+              "Narrative": "You stumble through, battered and bruised.",
+              "Effects": {
+                "Wounds": ["bashing", "bashing"],
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "medium_failure_continue"
+                }
+              ]
+            },
+            "Minimal": {
+              "Narrative": "You barely manage the winding path, taking minor injuries.",
+              "Effects": {
+                "Wounds": ["bashing"],
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "medium_minimal_continue"
+                }
+              ]
+            },
+            "Normal": {
+              "Narrative": "You skillfully navigate the winding path.",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "medium_normal_continue"
+                }
+              ]
+            },
+            "Exceptional": {
+              "Narrative": "You dance through the treacherous terrain with grace!",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "medium_exceptional_continue"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StoryID": "branch-test-001",
+          "SegmentID": "segment-hard",
+          "SegmentType": "mechanical",
+          "SegmentDuration": 180,
+          "SegmentTitle": "The Dangerous Path",
+          "SegmentActivity": "Braving the perilous route",
+          "Challenges": [
+            {
+              "Skill": "perception",
+              "Attribute": "intelligence",
+              "Difficulty": 8,
+              "AttemptCount": 2,
+              "Description": "You search for hidden dangers"
+            },
+            {
+              "Skill": "agility",
+              "Attribute": "coordination",
+              "Difficulty": 8,
+              "AttemptCount": 1,
+              "Description": "You dodge falling rocks"
+            }
+          ],
+          "Results": {
+            "Death": {
+              "Narrative": "The dangerous path proves too much, and you fall to your doom.",
+              "Effects": {
+                "State": "dead"
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": null,
+                  "Weight": 1.0,
+                  "Label": "death_end"
+                }
+              ]
+            },
+            "Failure": {
+              "Narrative": "You barely survive the treacherous path, badly wounded.",
+              "Effects": {
+                "Wounds": ["lethal", "bashing"],
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "hard_failure_survive"
+                }
+              ]
+            },
+            "Minimal": {
+              "Narrative": "You push through with determination, taking significant damage.",
+              "Effects": {
+                "Wounds": ["bashing", "bashing"],
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "hard_minimal_continue"
+                }
+              ]
+            },
+            "Normal": {
+              "Narrative": "You successfully navigate the dangerous path.",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "hard_normal_succeed"
+                }
+              ]
+            },
+            "Exceptional": {
+              "Narrative": "You master the perilous route with exceptional skill!",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "hard_exceptional_master"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StoryID": "branch-test-001",
+          "SegmentID": "segment-expert",
+          "SegmentType": "mechanical",
+          "SegmentDuration": 180,
+          "SegmentTitle": "The Expert's Route",
+          "SegmentActivity": "Taking the master's path",
+          "Challenges": [
+            {
+              "Skill": "perception",
+              "Attribute": "intelligence",
+              "Difficulty": 10,
+              "AttemptCount": 3,
+              "Description": "You spot the hidden path only masters can see"
+            }
+          ],
+          "Results": {
+            "Death": {
+              "Narrative": "The expert path was beyond your abilities.",
+              "Effects": {
+                "State": "dead"
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": null,
+                  "Weight": 1.0,
+                  "Label": "death_end"
+                }
+              ]
+            },
+            "Failure": {
+              "Narrative": "Even with your expertise, the path proves challenging.",
+              "Effects": {
+                "Wounds": ["bashing"],
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "expert_failure_continue"
+                }
+              ]
+            },
+            "Minimal": {
+              "Narrative": "You barely manage the expert route.",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "expert_minimal_continue"
+                }
+              ]
+            },
+            "Normal": {
+              "Narrative": "Your expert skills serve you well on this hidden path.",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "expert_normal_succeed"
+                }
+              ]
+            },
+            "Exceptional": {
+              "Narrative": "You traverse the expert route with absolute mastery!",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "expert_exceptional_master"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StoryID": "branch-test-001",
+          "SegmentID": "segment-finale",
+          "SegmentType": "decision",
+          "SegmentDuration": 300,
+          "SegmentTitle": "The Final Choice",
+          "SegmentActivity": "Deciding your fate",
+          "DecisionText": "You arrive at a mysterious shrine. The air crackles with ancient power. Do you investigate the shrine or move on to safety?",
+          "DecisionOptions": {
+            "investigate": {
+              "Text": "Investigate the shrine",
+              "Description": "Examine the mysterious shrine and its secrets",
+              "NextSegmentID": null
+            },
+            "move_on": {
+              "Text": "Move on to safety",
+              "Description": "Leave the shrine behind and return home",
+              "NextSegmentID": null
+            }
+          },
+          "TimeoutBehavior": {
+            "Type": "weighted",
+            "Branches": [
+              {
+                "Decision": "investigate",
+                "Weight": 0.6
+              },
+              {
+                "Decision": "move_on",
+                "Weight": 0.4
+              }
+            ]
+          },
+          "DefaultDecision": "move_on"
+        }
+      ]
+    }
+  ]
+}

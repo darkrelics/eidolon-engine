@@ -33,28 +33,3 @@ def validate_advancement_message(msg: dict) -> dict:
         logger.debug(f"Optional fields present in advancement message: {', '.join(present_optional)}")
 
     return msg
-
-
-def validate_batch_messages(messages: list, validator_func) -> tuple:
-    """
-    Validate a batch of messages and separate valid from invalid.
-
-    Args:
-        messages: List of message dictionaries
-        validator_func: Validation function to apply to each message
-
-    Returns:
-        Tuple of (valid_messages, invalid_messages) where invalid_messages
-        contains tuples of (message, error_string)
-    """
-    valid = []
-    invalid = []
-
-    for msg in messages:
-        try:
-            validated = validator_func(msg)
-            valid.append(validated)
-        except ValueError as err:
-            invalid.append((msg, str(err)))
-
-    return valid, invalid

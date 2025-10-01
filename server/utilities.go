@@ -8,7 +8,6 @@ Copyright 2024-2025 Jason E. Robinson
 package main
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -91,20 +90,6 @@ func SafeSendString(ch chan<- string, msg string, recipientName string) bool {
 	select {
 	case ch <- msg:
 		return true
-	default:
-		Logger.Warn("Channel send failed", "recipient", recipientName, "messageLength", len(msg))
-		return false
-	}
-}
-
-// SafeSendStringContext sends a string to a channel with context cancellation support
-func SafeSendStringContext(ctx context.Context, ch chan<- string, msg string, recipientName string) bool {
-	select {
-	case ch <- msg:
-		return true
-	case <-ctx.Done():
-		Logger.Debug("Channel send cancelled", "recipient", recipientName, "reason", ctx.Err())
-		return false
 	default:
 		Logger.Warn("Channel send failed", "recipient", recipientName, "messageLength", len(msg))
 		return false
