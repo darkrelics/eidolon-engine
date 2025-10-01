@@ -231,7 +231,9 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     return overall_outcome, results
 
 
-def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str, character: dict, random_seed: int = None) -> tuple:
+def determine_next_segment(
+    segment_def: dict, active_segment: dict, outcome: str, character: dict, random_seed: int = None
+) -> tuple:
     """
     Determine the next segment ID based on segment type and outcome.
 
@@ -285,9 +287,11 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
                         "Decision": b["Decision"],
                         "Weight": b["Weight"],
                         "Label": f"timeout_{b['Decision']}",
-                        "NextSegmentID": decision_options.get(b["Decision"], {}).get("NextSegmentID")
-                        if isinstance(decision_options.get(b["Decision"]), dict)
-                        else decision_options.get(b["Decision"]),
+                        "NextSegmentID": (
+                            decision_options.get(b["Decision"], {}).get("NextSegmentID")
+                            if isinstance(decision_options.get(b["Decision"]), dict)
+                            else decision_options.get(b["Decision"])
+                        ),
                     }
                     for b in branches
                 ]
@@ -298,7 +302,9 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
                     from eidolon.branching import select_weighted_branch
 
                     idx, selected = select_weighted_branch(available, random_seed)
-                    logger.info(f"Using weighted timeout for {active_segment_id}: decision={selected['Decision']}, next={selected['NextSegmentID']}")
+                    logger.info(
+                        f"Using weighted timeout for {active_segment_id}: decision={selected['Decision']}, next={selected['NextSegmentID']}"
+                    )
                     return selected["NextSegmentID"], {
                         "SelectionMethod": "weighted_timeout",
                         "Decision": selected["Decision"],
