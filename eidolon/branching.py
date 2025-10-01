@@ -129,7 +129,7 @@ def select_weighted_branch(branches: list) -> tuple:
     validate_branch_weights(branch_dicts)
 
     # Generate random value using cryptographically secure randomness
-    selection = secrets.randbelow(RANDOM_PRECISION) / float(RANDOM_PRECISION)
+    selection = secrets.randbelow(RANDOM_SCALE_FACTOR) / float(RANDOM_SCALE_FACTOR)
 
     # Weighted selection using cumulative distribution
     cumulative = 0.0
