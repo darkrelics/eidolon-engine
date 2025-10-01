@@ -247,7 +247,6 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
     Returns:
         Tuple of (next_segment_id, branch_metadata)
     """
-
     segment_type = segment_def.get("SegmentType")
     segment_id = segment_def.get("SegmentID", "unknown")
     active_segment_id = active_segment.get("ActiveSegmentID", "unknown")
