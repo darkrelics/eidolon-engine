@@ -272,12 +272,12 @@ def main():
         total_segments += segment_count
 
         if errors:
-            print(f"  ❌ {len(errors)} error(s) found:")
+            print(f"  [FAIL] {len(errors)} error(s) found:")
             for error in errors:
                 print(f"    - {error}")
             total_errors.extend(errors)
         else:
-            print(f"  ✅ Valid ({segment_count} segments)")
+            print(f"  [PASS] Valid ({segment_count} segments)")
 
     print(f"\n{'='*60}")
     print(f"Validation Summary:")
@@ -286,10 +286,10 @@ def main():
     print(f"  Total errors: {len(total_errors)}")
 
     if total_errors:
-        print(f"\n❌ Validation FAILED")
+        print(f"\n[FAIL] Validation FAILED")
         return 1
     else:
-        print(f"\n✅ All stories valid")
+        print(f"\n[PASS] All stories valid")
         return 0
 
 
