@@ -48,7 +48,7 @@
               },
               "Branches": [
                 {
-                  "NextSegmentID": null,
+                  "NextSegmentID": "",
                   "Weight": 1.0,
                   "Label": "death_end"
                 }
