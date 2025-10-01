@@ -8,6 +8,9 @@ import secrets
 
 from eidolon.logger import logger
 
+# Random selection precision (1,000,000 provides 6 decimal places)
+RANDOM_PRECISION = 1_000_000
+
 
 def validate_branch_weights(branches: list) -> bool:
     """
@@ -126,7 +129,7 @@ def select_weighted_branch(branches: list) -> tuple:
     validate_branch_weights(branch_dicts)
 
     # Generate random value using cryptographically secure randomness
-    selection = secrets.randbelow(1_000_000) / 1_000_000.0
+    selection = secrets.randbelow(RANDOM_PRECISION) / float(RANDOM_PRECISION)
 
     # Weighted selection using cumulative distribution
     cumulative = 0.0

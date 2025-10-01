@@ -25,7 +25,7 @@ def validate_branch_weights(branches: list, segment_id: str, outcome: str) -> li
 
     if abs(total_weight - 1.0) > tolerance:
         errors.append(
-            f"Segment {segment_id}, outcome {outcome}: " f"weights sum to {total_weight}, expected 1.0 (tolerance: {tolerance})"
+            f"Segment {segment_id}, outcome {outcome}: weights sum to {total_weight}, expected 1.0 (tolerance: {tolerance})"
         )
 
     # Check individual branch structure
@@ -57,7 +57,7 @@ def validate_prerequisites(prereqs: dict, segment_id: str, branch_idx: int) -> l
     else:
         for skill, value in min_skills.items():
             if not isinstance(value, (int, float)):
-                errors.append(f"Segment {segment_id}, branch {branch_idx}: " f"MinSkills.{skill} must be numeric")
+                errors.append(f"Segment {segment_id}, branch {branch_idx}: MinSkills.{skill} must be numeric")
 
     # Check MinAttributes structure
     min_attrs = prereqs.get("MinAttributes", {})
@@ -66,7 +66,7 @@ def validate_prerequisites(prereqs: dict, segment_id: str, branch_idx: int) -> l
     else:
         for attr, value in min_attrs.items():
             if not isinstance(value, (int, float)):
-                errors.append(f"Segment {segment_id}, branch {branch_idx}: " f"MinAttributes.{attr} must be numeric")
+                errors.append(f"Segment {segment_id}, branch {branch_idx}: MinAttributes.{attr} must be numeric")
 
     # Check RequiredItems structure
     required_items = prereqs.get("RequiredItems", [])
@@ -102,7 +102,7 @@ def validate_segment_branches(segment: dict, segment_ids: set) -> list:
                     next_id = branch.get("NextSegmentID")
                     if next_id and next_id not in segment_ids:
                         errors.append(
-                            f"Segment {segment_id}, outcome {outcome}, branch {i}: " f"NextSegmentID '{next_id}' not found in story"
+                            f"Segment {segment_id}, outcome {outcome}, branch {i}: NextSegmentID '{next_id}' not found in story"
                         )
 
                     # Validate prerequisites
@@ -113,7 +113,7 @@ def validate_segment_branches(segment: dict, segment_ids: set) -> list:
             # Check fallback
             fallback = outcome_data.get("FallbackSegmentID")
             if fallback and fallback not in segment_ids:
-                errors.append(f"Segment {segment_id}, outcome {outcome}: " f"FallbackSegmentID '{fallback}' not found in story")
+                errors.append(f"Segment {segment_id}, outcome {outcome}: FallbackSegmentID '{fallback}' not found in story")
 
     # Check decision segments for weighted timeouts
     elif segment_type == "decision":
@@ -132,7 +132,7 @@ def validate_segment_branches(segment: dict, segment_ids: set) -> list:
                 for i, branch in enumerate(branches):
                     decision = branch.get("Decision")
                     if decision not in decision_options:
-                        errors.append(f"Segment {segment_id}, timeout branch {i}: " f"Decision '{decision}' not in DecisionOptions")
+                        errors.append(f"Segment {segment_id}, timeout branch {i}: Decision '{decision}' not in DecisionOptions")
 
     return errors
 
