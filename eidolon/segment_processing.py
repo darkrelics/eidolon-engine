@@ -6,6 +6,7 @@ Provides functions for processing different segment types.
 
 from botocore.exceptions import ClientError
 
+from eidolon.branching import select_next_branch, select_weighted_branch
 from eidolon.character_data import apply_character_updates
 from eidolon.character_story import apply_story_outcome_effects
 from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY
@@ -231,9 +232,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     return overall_outcome, results
 
 
-def determine_next_segment(
-    segment_def: dict, active_segment: dict, outcome: str, character: dict, random_seed: int = None
-) -> tuple:
+def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str, character: dict) -> tuple:
     """
     Determine the next segment ID based on segment type and outcome.
 
@@ -244,12 +243,10 @@ def determine_next_segment(
         active_segment: Active segment record
         outcome: Segment outcome
         character: Character record for prerequisite checking
-        random_seed: Optional seed for deterministic testing
 
     Returns:
         Tuple of (next_segment_id, branch_metadata)
     """
-    from eidolon.branching import select_next_branch
 
     segment_type = segment_def.get("SegmentType")
     segment_id = segment_def.get("SegmentID", "unknown")
@@ -299,9 +296,7 @@ def determine_next_segment(
                 # Filter and select
                 available = [(i, b) for i, b in enumerate(weighted_branches) if b.get("NextSegmentID")]
                 if available:
-                    from eidolon.branching import select_weighted_branch
-
-                    idx, selected = select_weighted_branch(available, random_seed)
+                    idx, selected = select_weighted_branch(available)
                     logger.info(
                         f"Using weighted timeout for {active_segment_id}: decision={selected['Decision']}, next={selected['NextSegmentID']}"
                     )
@@ -324,7 +319,7 @@ def determine_next_segment(
 
         # No valid decision path found
         logger.warning(f"No decision made for {active_segment_id} and no default available - story ends")
-        return None, {"SelectionMethod": "no_decision"}
+        return "", {"SelectionMethod": "no_decision"}
 
     elif segment_type in ["mechanical", "rest"]:
         # Rest segments always use Normal outcome
@@ -337,20 +332,20 @@ def determine_next_segment(
         results = segment_def.get("Results", {})
         if not isinstance(results, dict):
             logger.warning(f"Results is not a dict for {segment_id} - story ends")
-            return None, {"SelectionMethod": "invalid_results"}
+            return "", {"SelectionMethod": "invalid_results"}
 
         # Get outcome-specific result
         outcome_result = results.get(outcome_key)
         if not outcome_result:
             logger.warning(f"No result found for outcome '{outcome_key}' in {segment_id} - story ends")
-            return None, {"SelectionMethod": "no_outcome_result"}
+            return "", {"SelectionMethod": "no_outcome_result"}
 
         if not isinstance(outcome_result, dict):
             logger.warning(f"Outcome result for '{outcome_key}' is not a dict in {segment_id} - story ends")
-            return None, {"SelectionMethod": "invalid_outcome_result"}
+            return "", {"SelectionMethod": "invalid_outcome_result"}
 
         # Use weighted branching system
-        branch_result = select_next_branch(outcome_result, character, random_seed)
+        branch_result = select_next_branch(outcome_result, character)
 
         next_segment_id = branch_result["NextSegmentID"]
         branch_metadata = branch_result["BranchMetadata"]
@@ -364,4 +359,4 @@ def determine_next_segment(
 
     # Unknown segment type
     logger.error(f"Unknown segment type '{segment_type}' for {segment_id} - story ends")
-    return None, {"SelectionMethod": "unknown_segment_type"}
+    return "", {"SelectionMethod": "unknown_segment_type"}

@@ -71,9 +71,8 @@ def check_branch_prerequisites(branch: dict, character: dict) -> bool:
     required_items = prereqs.get("RequiredItems", [])
     if required_items:
         char_inventory = character.get("Inventory", {})
-        # Inventory is {slot: itemID}, need to check if any items exist
-        # This is a simplified check - assumes presence of any item passes
-        # TODO: Enhance with item prototype validation when item system is ready
+        # Simplified check - assumes presence of any item passes
+        # Item prototype validation will be added when item system is implemented
         if not char_inventory:
             logger.debug(f"Branch {branch.get('Label', 'unlabeled')} filtered: no inventory")
             return False
@@ -102,15 +101,14 @@ def filter_branches_by_prerequisites(branches: list, character: dict) -> list:
     return available
 
 
-def select_weighted_branch(branches: list, random_seed: int = None) -> tuple:
+def select_weighted_branch(branches: list) -> tuple:
     """
     Select a branch using weighted random selection.
 
-    Uses cryptographically secure randomness unless seed provided for testing.
+    Uses cryptographically secure randomness.
 
     Args:
         branches: List of (index, branch) tuples (already filtered)
-        random_seed: Optional seed for deterministic testing (do not use in production)
 
     Returns:
         Tuple of (original_index, selected_branch)
@@ -127,17 +125,8 @@ def select_weighted_branch(branches: list, random_seed: int = None) -> tuple:
     # Validate weights
     validate_branch_weights(branch_dicts)
 
-    # Generate random value
-    if random_seed is not None:
-        # Deterministic for testing only
-        logger.warning(f"Using deterministic random seed {random_seed} - DO NOT USE IN PRODUCTION")
-        import random
-
-        rng = random.Random(random_seed)
-        selection = rng.random()
-    else:
-        # Cryptographically secure randomness for production
-        selection = secrets.randbelow(1_000_000) / 1_000_000.0
+    # Generate random value using cryptographically secure randomness
+    selection = secrets.randbelow(1_000_000) / 1_000_000.0
 
     # Weighted selection using cumulative distribution
     cumulative = 0.0
@@ -155,18 +144,17 @@ def select_weighted_branch(branches: list, random_seed: int = None) -> tuple:
     return branches[-1]
 
 
-def select_next_branch(outcome_result: dict, character: dict, random_seed: int = None) -> dict:
+def select_next_branch(outcome_result: dict, character: dict) -> dict:
     """
     Select next branch from outcome result using weighted random selection.
 
     Args:
         outcome_result: Result dict from segment definition containing Branches array
         character: Character record for prerequisite checking
-        random_seed: Optional seed for deterministic selection (testing only)
 
     Returns:
         Dict with:
-          - NextSegmentID: Selected segment ID (or None if story ends)
+          - NextSegmentID: Selected segment ID (or empty string if story ends)
           - BranchMetadata: Tracking info for history
 
     Raises:
@@ -178,8 +166,8 @@ def select_next_branch(outcome_result: dict, character: dict, random_seed: int =
     if not branches:
         logger.info("No branches defined, story ends")
         return {
-            "NextSegmentID": None,
-            "BranchMetadata": {"SelectionMethod": "no_branches", "BranchLabel": None, "BranchIndex": None},
+            "NextSegmentID": "",
+            "BranchMetadata": {"SelectionMethod": "no_branches", "BranchLabel": "", "BranchIndex": -1},
         }
 
     # Filter by prerequisites
@@ -187,7 +175,7 @@ def select_next_branch(outcome_result: dict, character: dict, random_seed: int =
 
     if not available:
         # No branches passed prerequisites - use fallback or end story
-        fallback = outcome_result.get("FallbackSegmentID")
+        fallback = outcome_result.get("FallbackSegmentID", "")
         if fallback:
             logger.warning(f"No branches passed prerequisites, using fallback: {fallback}")
             return {
@@ -195,7 +183,7 @@ def select_next_branch(outcome_result: dict, character: dict, random_seed: int =
                 "BranchMetadata": {
                     "SelectionMethod": "prerequisite_fallback",
                     "BranchLabel": "fallback",
-                    "BranchIndex": None,
+                    "BranchIndex": -1,
                     "TotalBranches": len(branches),
                     "AvailableBranches": 0,
                 },
@@ -203,11 +191,11 @@ def select_next_branch(outcome_result: dict, character: dict, random_seed: int =
         else:
             logger.warning("No branches passed prerequisites and no fallback defined, story ends")
             return {
-                "NextSegmentID": None,
+                "NextSegmentID": "",
                 "BranchMetadata": {
                     "SelectionMethod": "no_available_branches",
-                    "BranchLabel": None,
-                    "BranchIndex": None,
+                    "BranchLabel": "",
+                    "BranchIndex": -1,
                     "TotalBranches": len(branches),
                     "AvailableBranches": 0,
                 },
@@ -225,15 +213,14 @@ def select_next_branch(outcome_result: dict, character: dict, random_seed: int =
         renormalized.append((idx, normalized_branch))
 
     # Select weighted branch
-    selected_idx, selected_branch = select_weighted_branch(renormalized, random_seed)
+    selected_idx, selected_branch = select_weighted_branch(renormalized)
 
     return {
-        "NextSegmentID": selected_branch.get("NextSegmentID"),
+        "NextSegmentID": selected_branch.get("NextSegmentID", ""),
         "BranchMetadata": {
             "SelectionMethod": "weighted_random",
-            "BranchLabel": selected_branch.get("Label"),
+            "BranchLabel": selected_branch.get("Label", ""),
             "BranchIndex": selected_idx,
-            "RandomSeed": random_seed,
             "TotalBranches": len(branches),
             "AvailableBranches": len(available),
         },
