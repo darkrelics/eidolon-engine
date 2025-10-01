@@ -8,8 +8,8 @@ import secrets
 
 from eidolon.logger import logger
 
-# Random selection precision (1,000,000 provides 6 decimal places)
-RANDOM_PRECISION = 1_000_000
+# Scale factor for weighted random selection (1,000,000 = 6 decimal places; chosen to minimize floating point errors)
+RANDOM_SCALE_FACTOR = 1_000_000
 
 
 def validate_branch_weights(branches: list) -> bool:
