@@ -230,8 +230,6 @@ def resolve_opposed_check_with_xp(
         if "AttributeXP" not in xp_accumulator:
             xp_accumulator["AttributeXP"] = {}
         attr_xp_amount = xp_amount * ATTRIBUTE_XP_RATIO
-        xp_accumulator["AttributeXP"][attribute_name] = (
-            xp_accumulator["AttributeXP"].get(attribute_name, 0) + attr_xp_amount
-        )
+        xp_accumulator["AttributeXP"][attribute_name] = xp_accumulator["AttributeXP"].get(attribute_name, 0) + attr_xp_amount
 
     return result

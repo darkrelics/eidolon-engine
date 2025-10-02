@@ -169,7 +169,6 @@ class ApiStack(Stack):
                 history_resource = segment_resource.add_resource("history")
                 self._add_lambda_integration(history_resource, "GET", "api-segment-history", authorizer)
 
-
     def _add_lambda_integration(
         self, resource: apigateway.Resource, method: str, function_name: str, authorizer: apigateway.CognitoUserPoolsAuthorizer
     ) -> None:
