@@ -11,36 +11,6 @@ from eidolon.logger import logger
 from eidolon.time_utils import now_unix
 
 
-def segment_already_in_history(character_id: str, active_segment_id: str) -> bool:
-    """
-    Check if segment has already been recorded in history.
-
-    Used for idempotency: prevents duplicate effect application if Lambda retries.
-
-    Args:
-        character_id: Character UUID
-        active_segment_id: Active segment UUID
-
-    Returns:
-        True if segment exists in history, False otherwise
-    """
-    try:
-        result = dynamo.get_item(
-            TableName.SEGMENT_HISTORY,
-            Key={"CharacterID": character_id, "ActiveSegmentID": active_segment_id},
-        )
-
-        exists = result is not None
-        if exists:
-            logger.info(f"Segment {active_segment_id} found in history (idempotency check)")
-
-        return exists
-
-    except ClientError as err:
-        logger.error(f"Failed to check segment history for {active_segment_id}: {err}", exc_info=True)
-        return False
-
-
 def record_segment_history(character_id: str, story_id: str, active_segment_id: str, segment_data: dict) -> None:
     """
     Update segment history record with completion data.
