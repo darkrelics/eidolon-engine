@@ -1588,10 +1588,23 @@ void main() {
 
 **Error Handling Chain:**
 
-```
-UI Layer → Provider Layer → Service Layer → BaseApiService → HTTP Client
-    ↑              ↑              ↑              ↑
-  User Feedback  State Updates  Business Logic  Network Errors
+```mermaid
+graph LR
+    UI[UI Layer] --> Provider[Provider Layer]
+    Provider --> Service[Service Layer]
+    Service --> Base[BaseApiService]
+    Base --> HTTP[HTTP Client]
+
+    HTTP -.->|Network Errors| Base
+    Base -.->|Business Logic| Service
+    Service -.->|State Updates| Provider
+    Provider -.->|User Feedback| UI
+
+    style UI fill:#e1f5ff
+    style Provider fill:#d4edda
+    style Service fill:#fff3cd
+    style Base fill:#f8d7da
+    style HTTP fill:#e2e3e5
 ```
 
 **Performance Optimizations:**

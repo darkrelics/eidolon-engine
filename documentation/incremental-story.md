@@ -94,40 +94,51 @@ Stories exist in one of these states relative to a character:
 
 ### State Transitions
 
-```
-Available → Active
-  Trigger: POST /story/start
-  Lambda: api-story-start
-  Actions:
-    - Create ActiveSegment record for first segment
-    - Set character GameMode = "Incremental"
-    - Set character ActiveStoryID and ActiveSegmentID
-    - Queue mechanical segments for processing
-    - Enable polling infrastructure
-    - Create StoryHistory entry
+```mermaid
+stateDiagram-v2
+    [*] --> Available
+    Available --> Active: POST /story/start<br/>(api-story-start)
+    Active --> Completed: Final segment completes<br/>(ops-story-advance)
+    Active --> Abandoned: POST /story/abandon<br/>(api-story-abandon)
+    Completed --> [*]
+    Abandoned --> [*]
 
-Active → Completed (Success or Failure)
-  Trigger: Final segment completes (any outcome including death/failure)
-  Lambda: ops-story-advance
-  Actions:
-    - Apply final character updates and rewards
-    - Move StoryID to CompletedStories (even for death/failure)
-    - Clear ActiveStoryID and ActiveSegmentID
-    - Set GameMode = "None"
-    - Update StoryHistory with FinalOutcome (death/failure/minimal/normal/exceptional)
-    - Delete ActiveSegment record
-  Note: Death/failure are completed attempts with negative outcomes, not abandonments
+    note right of Available
+        Story listed in character's
+        AvailableStories array
+    end note
 
-Active → Abandoned
-  Trigger: POST /story/abandon (player-initiated quit)
-  Lambda: api-story-abandon
-  Actions:
-    - Move StoryID to AbandonedStories
-    - Clear ActiveStoryID and ActiveSegmentID
-    - Set GameMode = "None"
-    - Update StoryHistory with FinalOutcome = "abandoned"
-    - Mark current ActiveSegment Status="abandoned" and ProcessingStatus="processed" so pollers ignore it (record retained for audit)
-  Note: Only player-initiated quits count as abandoned, not story failures
+    note right of Active
+        Actions on activation:
+        - Create ActiveSegment for first segment
+        - Set GameMode = "Incremental"
+        - Set ActiveStoryID and ActiveSegmentID
+        - Queue mechanical segments
+        - Enable polling infrastructure
+        - Create StoryHistory entry
+    end note
+
+    note right of Completed
+        Actions on completion:
+        - Apply final updates and rewards
+        - Move to CompletedStories
+        - Clear ActiveStoryID/ActiveSegmentID
+        - Set GameMode = "None"
+        - Update StoryHistory with FinalOutcome
+        - Delete ActiveSegment record
+        Note: Death/failure are completed
+        attempts with negative outcomes
+    end note
+
+    note right of Abandoned
+        Actions on abandonment:
+        - Move to AbandonedStories
+        - Clear ActiveStoryID/ActiveSegmentID
+        - Set GameMode = "None"
+        - Update StoryHistory (abandoned)
+        - Mark ActiveSegment as abandoned
+        Note: Only player-initiated quits
+    end note
 ```
 
 ### Story Lifecycle
@@ -185,70 +196,87 @@ suggesting it would store a request ID, the implementation uses a simple boolean
 
 #### Mechanical Segments
 
-```
-Created → pending/false + IMMEDIATE QUEUE
-  Trigger: Story start or previous segment advancement
-  Lambda: api-story-start OR ops-story-advance
-  Actions:
-    - Create ActiveSegment with ProcessingStatus="pending"
-    - Set timers (StartTime, EndTime)
-    - IMMEDIATELY queue to SEGMENT_QUEUE_URL for processing
+```mermaid
+stateDiagram-v2
+    [*] --> pending: Created
+    pending --> processing: SQS message received
+    processing --> processed: Processing completes
+    processed --> [*]: EndTime reached
 
-pending/false → processing/true
-  Trigger: SQS message received from immediate queueing
-  Lambda: ops-segment-process (via SQS)
-  Actions:
-    - Atomically transition ProcessingStatus from pending to processing
-    - Process challenges and combat
-    - Apply XP and wounds immediately
-    - Store results in segment
+    note right of pending
+        Trigger: Story start or segment advancement
+        Lambda: api-story-start / ops-story-advance
+        Actions:
+        - Create ActiveSegment (status="pending")
+        - Set timers (StartTime, EndTime)
+        - IMMEDIATELY queue to SEGMENT_QUEUE_URL
+    end note
 
-processing/true → processed/false
-  Trigger: Processing completes
-  Lambda: ops-segment-process
-  Actions:
-    - Update segment with results
-    - ProcessingStatus set to processed
-    - Mark ProcessingStatus as "processed"
+    note right of processing
+        Trigger: SQS message from immediate queueing
+        Lambda: ops-segment-process (via SQS)
+        Actions:
+        - Atomic transition pending → processing
+        - Process challenges and combat
+        - Apply XP and wounds immediately
+        - Store results in segment
+    end note
 
-processed/false → [deleted]
-  Trigger: EndTime reached (within 30 seconds)
-  Lambda: ops-segment-poller → ops-story-advance
-  Actions:
-    - Apply CharacterUpdates
-    - Create next segment or complete story
-    - Copy to SegmentHistory
-    - Delete from ActiveSegments
+    note right of processed
+        Trigger: Processing completes
+        Lambda: ops-segment-process
+        Actions:
+        - Update segment with results
+        - Set ProcessingStatus = "processed"
+    end note
+
+    note left of [*]
+        Trigger: EndTime reached (within 30s)
+        Lambda: ops-segment-poller → ops-story-advance
+        Actions:
+        - Apply CharacterUpdates
+        - Create next segment or complete story
+        - Copy to SegmentHistory
+        - Delete from ActiveSegments
+    end note
 ```
 
 #### Decision Segments
 
-```
-Created → processed/false
-  Trigger: Story advancement
-  Lambda: ops-story-advance
-  Actions:
-    - Create ActiveSegment with ProcessingStatus="processed"
-    - Set Decision to DefaultDecision
-    - Set NextSegmentID based on default choice
-    - Set timers (StartTime, EndTime)
+```mermaid
+stateDiagram-v2
+    [*] --> processed: Created (with default)
+    processed --> processed: Player updates decision
+    processed --> [*]: EndTime reached
 
-processed/false (decision updated)
-  Trigger: Player makes decision
-  Lambda: api-segment-decision
-  Actions:
-    - Update Decision field
-    - Update NextSegmentID based on new choice
-    - ProcessingStatus remains "processed"
+    note right of processed
+        Created: Story advancement
+        Lambda: ops-story-advance
+        Actions:
+        - Create ActiveSegment (status="processed")
+        - Set Decision = DefaultDecision
+        - Set NextSegmentID from default choice
+        - Set timers (StartTime, EndTime)
+    end note
 
-processed/false → [deleted]
-  Trigger: EndTime reached (within 30 seconds)
-  Lambda: ops-segment-poller → ops-story-advance
-  Actions:
-    - Use Decision field to determine path
-    - Create next segment based on NextSegmentID
-    - Copy to SegmentHistory
-    - Delete from ActiveSegments
+    note left of processed
+        Decision Update: Player makes choice
+        Lambda: api-segment-decision
+        Actions:
+        - Update Decision field
+        - Update NextSegmentID based on choice
+        - ProcessingStatus remains "processed"
+    end note
+
+    note left of [*]
+        Trigger: EndTime reached (within 30s)
+        Lambda: ops-segment-poller → ops-story-advance
+        Actions:
+        - Use Decision field to determine path
+        - Create next segment (NextSegmentID)
+        - Copy to SegmentHistory
+        - Delete from ActiveSegments
+    end note
 ```
 
 ### Segment Types and Processing
@@ -625,22 +653,40 @@ The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **t
 
 The polling system follows this state machine:
 
-```
-1. INITIAL STATE: Parameter="stop", Rule=DISABLED
-   └─> Player starts story (api-story-start)
-       └─> Sets Parameter="run", Enables Rule → POLLING ACTIVE
+```mermaid
+stateDiagram-v2
+    [*] --> Initial: System startup
+    Initial --> PollingActive: Player starts story
+    PollingActive --> PollingStopped: No segments found / Story completes
+    PollingStopped --> PollingActive: Active segments found
+    PollingStopped --> Initial: No active segments
 
-2. POLLING ACTIVE: Parameter="run", Rule=ENABLED
-   ├─> Poller finds no segments (ops-segment-poller)
-   │   └─> Sets Parameter="stop" → POLLING STOPPED
-   └─> Story completes with no other active segments (ops-story-advance)
-       └─> Sets Parameter="stop" → POLLING STOPPED
+    note right of Initial
+        State: Parameter="stop", Rule=DISABLED
+    end note
 
-3. POLLING STOPPED: Parameter="stop", Rule=ENABLED
-   ├─> Poller finds active segments (ops-segment-poller)
-   │   └─> Sets Parameter="run" → POLLING ACTIVE
-   └─> Poller finds no active segments (ops-segment-poller)
-       └─> Disables Rule → INITIAL STATE
+    note right of PollingActive
+        State: Parameter="run", Rule=ENABLED
+        Trigger: api-story-start
+        Actions:
+        - Sets SSM parameter to "run"
+        - Enables EventBridge rule
+    end note
+
+    note left of PollingStopped
+        State: Parameter="stop", Rule=ENABLED
+        Triggers:
+        - ops-segment-poller finds no segments
+        - ops-story-advance completes last story
+        Actions:
+        - Sets SSM parameter to "stop"
+    end note
+
+    note left of Initial
+        Return to initial state:
+        - ops-segment-poller finds no active segments
+        - Disables EventBridge rule
+    end note
 ```
 
 **Key Design Principles**:

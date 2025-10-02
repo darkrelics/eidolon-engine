@@ -4,27 +4,32 @@
 
 ### 1.1 System Architecture
 
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Flutter Web    │────▶│   API Gateway    │────▶│ Lambda Functions│
-│ (Incremental)   │     │  api.{domain}    │     │  16 Functions   │
-└─────────────────┘     └──────────────────┘     └────────┬────────┘
-                                                           │
-                    ┌──────────────────────────────────────┼────────────┐
-                    │                                      │            │
-              ┌─────▼─────┐                        ┌──────▼──────┐     │
-              │ DynamoDB  │                        │ EventBridge │     │
-              │ 14 Tables │                        │   (1 min)   │     │
-              └───────────┘                        └──────┬──────┘     │
-                                                          │            │
-                                                   ┌──────▼──────┐     │
-                                                   │  SQS Queue  │─────┘
-                                                   │ (Processing)│
-                                                   └─────────────┘
-                                                   ┌─────────────┐
-                                                   │  SQS Queue  │─────┘
-                                                   │ (Advancement)│
-                                                   └─────────────┘
+```mermaid
+graph TB
+    Flutter[Flutter Web<br/>Incremental UI]
+
+    subgraph "AWS Cloud"
+        APIGW[API Gateway<br/>api.domain]
+        Lambda[Lambda Functions<br/>16 Functions]
+        DynamoDB[(DynamoDB<br/>14 Tables)]
+        EventBridge[EventBridge<br/>1 min Poller]
+        ProcessQ[SQS Queue<br/>Processing]
+        AdvanceQ[SQS Queue<br/>Advancement]
+    end
+
+    Flutter -->|HTTPS| APIGW
+    APIGW -->|Invoke| Lambda
+    Lambda -->|Read/Write| DynamoDB
+    Lambda -->|Enqueue| ProcessQ
+    EventBridge -->|Trigger| Lambda
+    Lambda -->|Enqueue| AdvanceQ
+    ProcessQ -->|Trigger| Lambda
+    AdvanceQ -->|Trigger| Lambda
+
+    style Flutter fill:#02569B,stroke:#014B87,stroke-width:2px,color:#fff
+    style Lambda fill:#FF9900,stroke:#CC7A00,stroke-width:2px,color:#000
+    style DynamoDB fill:#4053D6,stroke:#2E3B99,stroke-width:2px,color:#fff
+    style EventBridge fill:#E7157B,stroke:#B8115F,stroke-width:2px,color:#fff
 ```
 
 **Infrastructure Context:** See [Deployment Guide](deployment.md#system-architecture) for the canonical infrastructure summary that all incremental components rely on.
