@@ -13,7 +13,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 
 **Ship Gate:** Robust progression logic with no state corruption or duplicate rewards.
 
-**Current Status (2025-10-02):** Task 1 Phase 1 complete (6 hours). State machine module created with atomic GameMode and ProcessingStatus transitions. Documentation updated with state diagrams. Unit tests and integration testing remain.
+**Current Status (2025-10-02):** Task 1 Phases 1-2 complete. State machine module created with atomic transitions, integrated into existing codebase. Documentation updated with state diagrams. Phase 3 (testing) pending.
 
 ---
 
@@ -33,7 +33,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 **Goal:** Prevent illegal or inconsistent state transitions in the incremental game loop.
 
 **Priority:** HIGH (Priority Item #1)
-**Status:** 🔄 In Progress (Phase 1 Complete)
+**Status:** 🔄 In Progress (Phases 1-2 Complete, Phase 3 Pending)
 
 #### Subtasks
 
@@ -43,7 +43,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 | Implement Segment ProcessingStatus transitions | ✅ Complete | Atomic claim/mark functions |
 | Implement Story Lifecycle state machine | ✅ Complete | StoryLifecycle enum defined |
 | Create state transition helper functions | ✅ Complete | state_machines.py module |
-| Write unit tests for all transitions | ⏳ Pending | Valid + invalid transitions |
+| Integration testing for state transitions | ⏳ Pending | End-to-end story flow validation |
 | Create state diagrams in documentation | ✅ Complete | 3 Mermaid diagrams in architecture.md |
 
 **Implementation Details:**
@@ -68,11 +68,11 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - On abandonment: Move to `AbandonedStories`, clear active state
 
 **Acceptance Criteria:**
-- [ ] All unit tests for state transitions pass
+- [ ] Integration testing validates state transitions in full story run
 - [x] Concurrent story start requests: only one succeeds, other blocked (conditional writes implemented)
 - [ ] During full story run, logs show correct state transitions (pending integration testing)
 - [x] Documentation updated with state diagrams
-- [ ] Issue #491 can be closed (pending unit tests)
+- [ ] Issue #491 can be closed (pending integration testing)
 
 **Files Created:**
 - `eidolon/state_machines.py` - State machine module with enums and transition functions
@@ -84,18 +84,27 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - `lambda/api_story_start.py` - Cleaned up imports (uses state machine via story_active)
 - `documentation/architecture.md` - Added 3 state machine diagrams (lines 274-424)
 
-**Phase 1 Accomplishments:**
+**Phase 1 Accomplishments (Create State Machine Module):**
 - ✅ Created `state_machines.py` with GameMode, ProcessingStatus, StoryLifecycle enums
 - ✅ Implemented `set_character_game_mode()` with atomic DynamoDB conditional writes
 - ✅ Implemented `claim_segment_for_processing()` for atomic pending → processing transition
 - ✅ Implemented `mark_segment_processed()` with idempotency support
+- ✅ Implemented `reset_segment_to_pending()` for stuck segment recovery
 - ✅ Added state diagrams to architecture.md (Character GameMode, Segment ProcessingStatus, Story Lifecycle)
-- ✅ Updated existing code to use new state machine functions
+
+**Phase 2 Accomplishments (Integration):**
+- ✅ Updated `segment_polling.py` to delegate to state machine for claim operation
+- ✅ Updated `story_active.py` to use `set_character_game_mode()` for transitions
+- ✅ Updated `character_story.py` to use state machine for reset operation
+- ✅ Cleaned up imports in `api_story_start.py`
+- ✅ Fixed Pylance type checking issues with type ignore comments
 - ✅ All linter checks passed
 
-**Remaining Work:**
-- Unit tests for all state transitions
-- Integration testing with full story run
+**Phase 3 Remaining Work (Testing & Documentation):**
+- ⏳ Integration testing with full story run
+- ⏳ Manual verification of state transitions in production-like environment
+
+**Note:** Per project policy (see documentation/unit-tests.md), this project does not implement unit tests. Integration testing and manual verification provide sufficient validation for well-designed code.
 
 ---
 
@@ -104,19 +113,22 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 **Goal:** Guarantee effects are applied all-or-nothing with no duplicate rewards on retries.
 
 **Priority:** HIGH (Priority Item #1)
-**Status:** ⏳ Not Started
+**Status:** 🔄 Deferred (Currency aspects moved to R6)
+
+**Note:** Currency system implementation deferred to R6 (Economy & Balance). Basic accounting/banking processes should all be created together. This task will be completed in two parts:
+- **R1**: Idempotency and atomic effects application (non-currency)
+- **R6**: Currency system with full economy implementation
 
 #### Subtasks
 
 | Subtask | Status | Notes |
 |---------|--------|-------|
-| Design effects application routine | ⏳ Pending | Consolidate all updates |
-| Implement idempotency key mechanism | ⏳ Pending | Use ActiveSegmentID |
-| Add Currency field to Character schema | ⏳ Pending | Integer gold field |
-| Implement currency rewards in outcomes | ⏳ Pending | story_rewards.py |
-| Evaluate DynamoDB transactions vs conditionals | ⏳ Pending | Cost/complexity tradeoff |
-| Write duplicate processing tests | ⏳ Pending | Verify no double rewards |
-| Document atomicity approach | ⏳ Pending | In architecture.md |
+| Design effects application routine | ⏳ R1 | Consolidate all updates (XP, items, wounds) |
+| Implement idempotency key mechanism | ⏳ R1 | Use ActiveSegmentID |
+| Add Currency field to Character schema | 🔄 R6 | Deferred to Economy release |
+| Implement currency rewards in outcomes | 🔄 R6 | Deferred to Economy release |
+| Write duplicate processing tests | ⏳ R1 | Verify no double rewards |
+| Document atomicity approach | ⏳ R1 | In architecture.md |
 
 **Implementation Details:**
 
@@ -131,33 +143,45 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - Consider `Characters.LastProcessedSegmentID` field
 - Log segment ID in history to detect replays
 
-**Currency Implementation:**
-- Add `Gold` (integer) field to Character table
+**Currency Implementation (Deferred to R6):**
+- Add `Gold` (integer) field to Character table (Python int, no overflow risk)
 - Update schema to include `rewards.resources.gold`
 - Implement currency increment in outcome application
-- Add bounds checking (prevent overflow/negative)
+- Validate non-negative (prevent bugs from causing negative currency)
+- **Rationale:** All economy/banking/currency features should be designed and implemented together in R6
 
-**Transaction Strategy:**
-- Current approach: conditional writes with `ProcessingStatus` guard
-- DynamoDB transactions optional (higher cost, stronger atomicity)
-- Group related updates with conditional expressions
-- Set `SegmentOutcomeApplied = segmentID` in character update
+**Atomicity Strategy:**
+- Use DynamoDB conditional writes exclusively (transactions untenable due to cost/performance)
+- `ProcessingStatus` field prevents duplicate processing at segment level
+- Single-table updates with conditional expressions for Characters table
+- Idempotency key: `LastProcessedSegmentID` in Character record
+- Items use generated UUIDs - simple `put_item` (cheaper than conditional expression)
+- Design to avoid multi-table atomicity requirements
 
-**Acceptance Criteria:**
+**Design Principle:** Keep related data in the same table when atomicity is required. Character XP, wounds, and state live in Characters table for single atomic update. Items table uses UUID primary keys for natural idempotency without conditional writes.
+
+**Acceptance Criteria (R1 Scope):**
 - [ ] Story completion yields consistent DB results
-- [ ] Double-invocation of ops-story-advance doesn't duplicate rewards
-- [ ] Currency rewards properly granted for stories that specify them
+- [ ] Double-invocation of ops-story-advance doesn't duplicate XP/item rewards
 - [ ] Test logs confirm no partial updates in failure scenarios
-- [ ] Issue #726 tasks completed (currency system implemented)
+- [ ] Idempotency mechanism prevents duplicate processing
+- [ ] Issue #726 partially complete (atomicity done, currency deferred to R6)
 
-**Files to Modify/Create:**
-- `eidolon/segment_processing.py`
-- `eidolon/effects.py` (new)
-- `eidolon/story_rewards.py`
-- `eidolon/items.py`
-- `eidolon/character_story.py`
-- `deployment/stacks/dynamodb_stack.py` (add Currency field)
-- `documentation/incremental-design.md`
+**Deferred to R6:**
+- [ ] Currency rewards properly granted for stories that specify them
+- [ ] Full economy system with banking/trading processes
+
+**Files to Modify/Create (R1 Scope):**
+- `eidolon/segment_processing.py` - Effects consolidation
+- `eidolon/effects.py` (new) - Atomic effects application
+- `eidolon/story_rewards.py` - XP and item rewards
+- `eidolon/items.py` - Item reward validation
+- `eidolon/character_story.py` - Story outcome effects
+- `documentation/incremental-design.md` - Atomicity documentation
+
+**Deferred to R6:**
+- `deployment/stacks/dynamodb_stack.py` - Currency field addition
+- Currency reward logic in story_rewards.py
 
 ---
 
@@ -356,7 +380,7 @@ curl -X POST https://api.domain.com/story/start \
 
 | Criterion | Target | Status | Notes |
 |-----------|--------|--------|-------|
-| State machines formalized | ✅ Pass | 🔄 In Progress | Phase 1 complete, unit tests pending |
+| State machines formalized | ✅ Pass | 🔄 In Progress | Phases 1-2 complete, integration testing pending |
 | Atomic effects application | ✅ Pass | ⏳ Not Started | No duplicate rewards |
 | Idempotency verified | ✅ Pass | ⏳ Not Started | Retry scenarios tested |
 | Multi-story support | ✅ Pass | ⏳ Not Started | ≥2 stories in manifest |
@@ -370,15 +394,15 @@ curl -X POST https://api.domain.com/story/start \
 
 ## Overall R1 Progress
 
-### Progress Summary: 17% Complete
+### Progress Summary: 20% Complete
 
 | Task | Progress | Notes |
 |------|----------|-------|
-| Task 1: State Machines | 60% | Phase 1 complete (implementation + diagrams) |
+| Task 1: State Machines | 80% | Phases 1-2 complete (implementation + integration) |
 | Task 2: Atomic Updates | 0% | Not started |
 | Task 3: Story Manifest | 0% | Not started |
 | Task 4: API Documentation | 0% | Not started |
-| **Overall** | **17%** | 1 of 4 tasks in progress |
+| **Overall** | **20%** | 1 of 4 tasks in progress |
 
 **Note:** Combat system work on inc-24 is separate from formal R1 plan. Combat rework addresses specific issues but is not part of the R1 deliverables per the program plan.
 
@@ -390,9 +414,9 @@ curl -X POST https://api.domain.com/story/start \
 - Task 1: State machine formalization in progress (Phase 1 complete)
 
 **Next Steps:**
-- Complete Task 1: Unit tests and integration testing
+- Complete Task 1: Integration testing and manual verification
 - Start Task 2: Atomic effects application
-- Complete Task 2: Currency and idempotency
+- Complete Task 2: Idempotency (currency deferred to R6)
 - Complete Task 3: Story manifest generation
 - Complete Task 4: API documentation
 
@@ -445,24 +469,26 @@ curl -X POST https://api.domain.com/story/start \
 
 ## Testing Strategy
 
-### Unit Tests
-- State transition helpers with all valid/invalid combinations
-- Outcome application logic with various difficulty results
-- Currency bounds checking (overflow, negative)
+**Note:** Per project policy (documentation/unit-tests.md), this project does NOT implement unit tests. Testing focuses on integration and manual verification of actual system behavior.
 
 ### Integration Tests
 - Full story playthrough: create character → start story → complete
 - Concurrent story starts (verify only one succeeds)
 - Duplicate segment processing (verify idempotency)
-
-### Property-Based Tests
-- Segment completion run twice yields same final state
-- Random event sequences don't lead to inconsistent states
+- End-to-end state transitions in production-like environment
 
 ### Manual Tests
 - Multiple stories in manifest
 - Story start with/without prerequisites
 - Character state after story completion/abandonment
+- State transition verification through logs and database inspection
+- Race condition scenarios (concurrent API calls)
+
+### Observability & Validation
+- Production monitoring for actual behavior patterns
+- Log analysis for state transition verification
+- DynamoDB conditional write failures indicate race conditions (expected behavior)
+- Code review for correctness and design quality
 
 ---
 

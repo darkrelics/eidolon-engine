@@ -2272,9 +2272,11 @@ Future<T> retryWithBackoff<T>(
 
 ## 9. Testing Guidelines
 
-### 9.1 Unit Test Patterns
+**Project Policy:** This project does NOT implement unit tests for backend code. See `documentation/unit-tests.md` for rationale. Flutter client uses built-in widget/integration testing.
 
-Mock-based testing for service layer:
+### 9.1 Flutter Widget Test Patterns
+
+Flutter provides widget testing for UI components:
 
 ```dart
 class TestApiService {
@@ -2296,7 +2298,9 @@ class TestApiService {
 }
 ```
 
-### 9.2 Integration Test Patterns
+**Note:** Flutter client testing is appropriate because it validates UI behavior, not business logic.
+
+### 9.2 Flutter Integration Test Patterns
 
 Full app integration testing:
 
@@ -4527,104 +4531,73 @@ This comprehensive error handling system ensures the Incremental client provides
 
 ## 9. Testing Guidelines
 
-### 9.1 Unit Test Patterns
+**Project Policy:** This project does NOT implement unit tests. See `documentation/unit-tests.md` for rationale.
 
-These unit test patterns demonstrate how to mock DynamoDB operations and validate complex business logic like prerequisite checking and transaction structure, ensuring code correctness without requiring actual AWS resources.
+### 9.1 Integration Test Patterns (Backend)
+
+Integration tests validate actual system behavior using local DynamoDB or test AWS accounts. These examples show the testing approach without relying on unit test mocking.
 
 ```python
-import pytest
-from unittest.mock import Mock, patch
+# Example: Integration test with actual DynamoDB
+# These tests use real AWS resources (local or test account)
+import boto3
 from decimal import Decimal
 
-class TestStoryProcessing:
-    @pytest.fixture
-    def mock_character(self):
-        return {
-            'CharacterID': 'test-char-001',
-            'PlayerID': 'test-player-001',
-            'GameMode': 'None',
-            'Skills': {'perception': Decimal('5'), 'survival': Decimal('3')},
-            'Attributes': {'agility': Decimal('3'), 'strength': Decimal('4')},
-            'MaxHealth': 10,
-            'Wounds': []
-        }
+# Setup test database connection
+dynamodb = boto3.resource('dynamodb', endpoint_url='http://localhost:8000')  # DynamoDB Local
 
-    @pytest.fixture
-    def mock_story(self):
-        return {
-            'StoryID': 'test-story-001',
-            'Title': 'Test Adventure',
-            'FirstSegmentID': 'seg-001',
-            'Prerequisites': {
-                'minSkills': {'survival': 2},
-                'requiredItems': []
-            }
-        }
+def test_story_start_integration():
+    """Integration test: Start story and verify state changes."""
+    # Create test character in actual DynamoDB
+    characters_table = dynamodb.Table('characters')
+    test_character = {
+        'CharacterID': 'integration-test-001',
+        'PlayerID': 'test-player',
+        'GameMode': 'None',
+        'Skills': {'survival': Decimal('3')},
+    }
+    characters_table.put_item(Item=test_character)
 
-    def test_validate_prerequisites(self, mock_character, mock_story):
-        """Test story prerequisite validation."""
-        # Character meets requirements
-        assert validate_prerequisites(mock_character, mock_story['Prerequisites']) == True
+    # Actually call the Lambda function or service layer
+    from lambda.api_story_start import start_story
+    result = start_story('integration-test-001', 'test-story-001', 'test-player')
 
-        # Character lacks skill
-        mock_story['Prerequisites']['minSkills']['combat'] = 10
-        assert validate_prerequisites(mock_character, mock_story['Prerequisites']) == False
+    # Verify actual database changes
+    updated_char = characters_table.get_item(Key={'CharacterID': 'integration-test-001'})
+    assert updated_char['Item']['GameMode'] == 'Incremental'
+    assert updated_char['Item']['ActiveStoryID'] == 'test-story-001'
 
-    @patch('boto3.client')
-    def test_start_story_transaction(self, mock_boto, mock_character):
-        """Test atomic story start."""
-        mock_dynamodb = Mock()
-        mock_boto.return_value = mock_dynamodb
-
-        # Execute transaction
-        start_story('test-char-001', 'test-story-001')
-
-        # Verify transaction structure
-        mock_dynamodb.transact_write_items.assert_called_once()
-        transaction = mock_dynamodb.transact_write_items.call_args[0][0]
-
-        assert len(transaction['TransactItems']) == 2
-        assert 'Update' in transaction['TransactItems'][0]
-        assert 'Put' in transaction['TransactItems'][1]
+    # Cleanup
+    characters_table.delete_item(Key={'CharacterID': 'integration-test-001'})
 ```
 
-### 9.2 Integration Test Patterns
+### 9.2 Manual Testing Workflows
 
-Integration tests validate the complete polling workflow by creating segments in various states and verifying that the poller correctly identifies and processes ready and stuck segments according to business rules.
+The primary testing approach is manual verification of system behavior:
 
-```python
-class TestSegmentPolling:
-    @pytest.fixture
-    def setup_test_segments(self, dynamodb_table):
-        """Create test segments with various states."""
-        current_time = int(time.time())
+**Story Flow Testing:**
+1. Create test character via API
+2. Start story via `POST /story/start`
+3. Verify `GameMode = "Incremental"` in DynamoDB Characters table
+4. Verify ActiveSegment created with `ProcessingStatus = "pending"`
+5. Wait for segment to process
+6. Verify `ProcessingStatus` transitions: `pending` → `processing` → `processed`
+7. Check CloudWatch logs for state transition logging
+8. Complete story and verify `GameMode` returns to `"None"`
 
-        segments = [
-            {
-                'ActiveSegmentID': 'ready-001',
-                'EndTime': current_time - 60,  # Past due
-                'ProcessingStatus': 'processed'
-            },
-            {
-                'ActiveSegmentID': 'stuck-001',
-                'EndTime': current_time + 600,  # Still has 10 min to go
-                'ProcessingStatus': 'processing',  # Stuck in processing
-                'StartTime': current_time - 400  # Started >5 min ago (stuck threshold)
-            },
-            {
-                'ActiveSegmentID': 'future-001',
-                'EndTime': current_time + 3600,  # 1 hour future
-                'ProcessingStatus': 'pending'
-            }
-        ]
+**Concurrent Request Testing:**
+1. Use `curl` or Postman to send 2+ simultaneous `/story/start` requests
+2. Verify only one succeeds (others get 409 Conflict)
+3. Check DynamoDB for conditional write metrics
 
-        for segment in segments:
-            dynamodb_table.put_item(Item=segment)
+**State Machine Validation:**
+1. Attempt to start story with character already in Incremental mode (should fail)
+2. Verify logs show GameMode validation
+3. Test story abandonment resets GameMode correctly
 
-        return segments
+### 9.3 Flutter Client Testing
 
-    def test_polling_discovers_segments(self, setup_test_segments):
-        """Test poller finds ready and stuck segments."""
+Client testing uses Flutter's built-in test framework:
         event = {}  # EventBridge event
         context = Mock()
 

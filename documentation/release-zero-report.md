@@ -700,15 +700,17 @@ The inc-23 branch represents the production-ready baseline with all core infrast
    - Test combat outcomes
 
 2. **Integration Testing**
-   - pytest framework for Lambda testing
+   - End-to-end Lambda testing with local DynamoDB
    - Test state machine transitions
    - Test idempotency keys
    - Test race conditions
 
 3. **State Machine Validation**
-   - Fuzzing for illegal state transitions
-   - Verify GameMode enforcement
-   - Test ProcessingStatus atomicity
+   - Manual verification of state transitions
+   - Verify GameMode enforcement via logs and DB inspection
+   - Test ProcessingStatus atomicity through concurrent requests
+
+**Note:** Per project policy (documentation/unit-tests.md), we do not implement unit tests. Integration testing and manual verification provide sufficient validation.
 
 ### R1 Medium-Term Actions
 

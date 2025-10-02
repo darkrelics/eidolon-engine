@@ -14,7 +14,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome
 from eidolon.polling import update_polling_state
 from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
-from eidolon.segment_history import record_segment_history
+from eidolon.segment_history import record_segment_history, segment_already_in_history
 from eidolon.segment_polling import check_active_segments_exist, delete_active_segment
 from eidolon.segment_processing import determine_next_segment, process_decision_segment
 from eidolon.segment_state import create_next_active_segment, mark_segment_as_completed, update_segment_processing_status
@@ -57,6 +57,11 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     outcome = active_segment.get("Outcome", "normal")
 
     logger.info(f"Advancing story for {character_id}")
+
+    # Idempotency check - skip if segment already in history
+    if segment_already_in_history(character_id, active_segment_id):  # type: ignore
+        logger.info(f"Segment {active_segment_id} already in history, skipping effect application")
+        return {"success": True, "skipped": True, "reason": "Already processed"}
 
     # Story history should already exist (created when story started)
 
