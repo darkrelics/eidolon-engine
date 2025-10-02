@@ -27,7 +27,7 @@ The incremental module serves as:
 
 ### Segment Types
 
-Canonical segment definitions live in [Incremental Requirements](incremental-requirements.md#24-segment-types); the system supports decision, mechanical, and rest segments.
+Canonical segment definitions live in [Incremental Requirements](incremental-requirements.md#24-segment-types); the system supports decision and mechanical segments.
 
 ### Character Integration
 

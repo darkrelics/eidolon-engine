@@ -35,9 +35,6 @@ def route_segment_processing(segment_def: dict, character: dict, active_segment:
 
     if segment_type == "mechanical":
         return process_mechanical_segment(segment_def, character, active_segment)
-    elif segment_type == "rest":
-        logger.debug(f"Rest segment processed for {active_segment.get('ActiveSegmentID')}")
-        return "normal", {}
     elif segment_type == "decision":
         outcome = process_decision_segment(active_segment, segment_def)
         return outcome, {}
@@ -236,7 +233,9 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
     """
     Determine the next segment ID based on segment type and outcome.
 
-    Uses weighted branching for mechanical/rest segments.
+    Each segment type has distinct logic:
+    - Mechanical: Uses Results.{Outcome}.Branches for outcome-based branching
+    - Decision: Uses DecisionOptions with optional weighted timeout
 
     Args:
         segment_def: Segment definition from Segments table
@@ -251,11 +250,9 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
     segment_id = segment_def.get("SegmentID", "unknown")
     active_segment_id = active_segment.get("ActiveSegmentID", "unknown")
 
-    # Debug logging
     logger.debug(f"determine_next_segment called for {active_segment_id}")
     logger.debug(f"  segment_type: {segment_type}")
     logger.debug(f"  outcome: {outcome}")
-    logger.debug(f"  Results keys: {list(segment_def.get('Results', {}).keys())}")
 
     if segment_type == "decision":
         # Use decision to determine next segment (player choice)
@@ -320,12 +317,9 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         logger.warning(f"No decision made for {active_segment_id} and no default available - story ends")
         return "", {"SelectionMethod": "no_decision"}
 
-    elif segment_type in ["mechanical", "rest"]:
-        # Rest segments always use Normal outcome
-        if segment_type == "rest":
-            outcome_key = "Normal"
-        else:
-            outcome_key = map_outcome_to_key(outcome or "normal")
+    elif segment_type == "mechanical":
+        # Mechanical segments: outcome-based branching (Death, Failure, Minimal, Normal, Exceptional)
+        outcome_key = map_outcome_to_key(outcome or "normal")
 
         # Get results dict
         results = segment_def.get("Results", {})
@@ -343,14 +337,14 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
             logger.warning(f"Outcome result for '{outcome_key}' is not a dict in {segment_id} - story ends")
             return "", {"SelectionMethod": "invalid_outcome_result"}
 
-        # Use weighted branching system
+        # Use weighted branching system for mechanical outcomes
         branch_result = select_next_branch(outcome_result, character)
 
         next_segment_id = branch_result["NextSegmentID"]
         branch_metadata = branch_result["BranchMetadata"]
 
         if next_segment_id:
-            logger.info(f"Using weighted branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
+            logger.info(f"Mechanical outcome branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
         else:
             logger.info(f"No next segment for outcome '{outcome_key}' in {segment_id} - story ends")
 

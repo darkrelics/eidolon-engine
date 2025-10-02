@@ -7,7 +7,7 @@ The Eidolon Engine's incremental game mode features a story-driven progression s
 ### Core Concepts
 
 - **Story**: A complete narrative arc available to characters based on their archetype and progress
-- **Segment**: A single timed activity within a story (mechanical challenges, decisions, or rest periods) — see [Incremental Requirements](incremental-requirements.md#24-segment-types) for canonical definitions
+- **Segment**: A single timed activity within a story (mechanical challenges or decisions) — see [Incremental Requirements](incremental-requirements.md#24-segment-types) for canonical definitions
 - **Front-loaded Processing**: All outcomes are calculated when segments start, not when they end
 - **Event-driven Advancement**: A polling system checks every minute for completed segments
 - **Mode Exclusivity**: Characters can only be active in one game mode at a time (MUD or Incremental); refer to [Character Mode Workflow](incremental-mud-workflow.md) for the full lifecycle
@@ -35,10 +35,10 @@ The Segments table contains prototype definitions for all story segments:
 
 - **StoryID** (HASH): Parent story UUID
 - **SegmentID** (RANGE): Segment UUID
-- **SegmentType**: decision, mechanical, or rest
+- **SegmentType**: decision or mechanical
 - **SegmentDuration**: Time in seconds for completion
 - **DecisionOptions**: For decisions, maps choice ID to next segment ID
-- **Results**: For mechanical/rest segments, outcome-specific branches (see Weighted Branching below)
+- **Results**: For mechanical segments, outcome-specific branches (see Weighted Branching below)
 - **Challenges**: List of skill/attribute challenges
 - **Combat**: Combat configuration if applicable
 - **TimeoutBehavior**: For decisions, optional weighted timeout branches
@@ -96,7 +96,7 @@ Stories exist in one of these states relative to a character:
 
 ```
 Available → Active
-  Trigger: POST /stories/start
+  Trigger: POST /story/start
   Lambda: api-story-start
   Actions:
     - Create ActiveSegment record for first segment
@@ -119,7 +119,7 @@ Active → Completed (Success or Failure)
   Note: Death/failure are completed attempts with negative outcomes, not abandonments
 
 Active → Abandoned
-  Trigger: POST /stories/abandon (player-initiated quit)
+  Trigger: POST /story/abandon (player-initiated quit)
   Lambda: api-story-abandon
   Actions:
     - Move StoryID to AbandonedStories
@@ -133,17 +133,20 @@ Active → Abandoned
 ### Story Lifecycle
 
 1. **Initialization** (from prototype):
+
    - Story definitions loaded from Story table
    - Available stories determined by archetype and prerequisites
    - Added to character's AvailableStories list
 
 2. **Activation**:
+
    - Player selects story via api-story-start
    - First segment copied from Segments table
    - ActiveSegment instance created with calculated outcomes
    - Character state atomically updated
 
 3. **Progression**:
+
    - Segments advance one by one
    - Each segment completion triggers next segment creation
    - Story remains active until terminal outcome or completion
@@ -218,27 +221,6 @@ processed/false → [deleted]
     - Delete from ActiveSegments
 ```
 
-#### Rest Segments
-
-```
-Created → processed/false
-  Trigger: Story advancement or player-initiated rest
-  Lambda: ops-story-advance OR api-segment-rest
-  Actions:
-    - Create ActiveSegment with ProcessingStatus="processed"
-    - Set Outcome="normal"
-    - Set NextSegmentID based on story flow
-    - Set timers (StartTime, EndTime)
-
-processed/false → [deleted]
-  Trigger: EndTime reached (within 30 seconds)
-  Lambda: ops-segment-poller → ops-story-advance
-  Actions:
-    - Create next segment or complete story
-    - Copy to SegmentHistory
-    - Delete from ActiveSegments
-```
-
 #### Decision Segments
 
 ```
@@ -287,21 +269,9 @@ processed/false → [deleted]
 - NextSegmentID is always set (either default or player's choice)
 - Timer expiry uses whatever Decision is currently set
 
-#### Rest Segments
+#### Wound Healing
 
-Rest segments are special 15-minute rest periods that allow characters to take a break between story adventures. Rest segments:
-
-- Created with ProcessingStatus="processed" immediately (no processing needed)
-- Can be story-driven or player-initiated via POST /segments/rest endpoint
-- Provide a 15-minute rest period (REST_SEGMENT_DURATION = 900 seconds)
-- Do NOT automatically heal wounds - wounds heal independently based on their HealAt timestamps
-- During the 15-minute rest, any bashing wounds that are 15+ minutes old will naturally heal
-- Lethal (6 hours) and aggravated (7 days) wounds are unlikely to heal during the short rest period
-- Always have Outcome="normal" with no decision points
-- Pre-populated with narrative text and NextSegmentID
-- Character remains in "rest" mode until segment completion
-
-Note: Wound healing is time-based and independent of rest segments. Wounds heal based on their type:
+Wound healing is time-based and independent of segments. Wounds heal based on their type:
 
 - Bashing wounds: heal after 15 minutes from infliction
 - Lethal wounds: heal after 6 hours from infliction
@@ -441,14 +411,14 @@ Decision segments can use weighted random selection on timeout instead of a fixe
 {
   "SegmentType": "decision",
   "DecisionOptions": {
-    "investigate": {"NextSegmentID": "seg-investigate"},
-    "flee": {"NextSegmentID": "seg-flee"}
+    "investigate": { "NextSegmentID": "seg-investigate" },
+    "flee": { "NextSegmentID": "seg-flee" }
   },
   "TimeoutBehavior": {
     "Type": "weighted",
     "Branches": [
-      {"Decision": "investigate", "Weight": 0.7},
-      {"Decision": "flee", "Weight": 0.3}
+      { "Decision": "investigate", "Weight": 0.7 },
+      { "Decision": "flee", "Weight": 0.3 }
     ]
   },
   "DefaultDecision": "flee"
@@ -460,6 +430,7 @@ If TimeoutBehavior is not specified, the system falls back to DefaultDecision.
 **Validation:**
 
 Use `scripts_python/validate_branching.py` to validate:
+
 - Branch weights sum to 1.0 (tolerance: 0.001)
 - NextSegmentIDs reference valid segments in the story
 - Prerequisite structure is valid
@@ -477,23 +448,27 @@ Use `scripts_python/validate_branching.py` to validate:
 ### Segment Lifecycle
 
 1. **Creation** (from prototype):
+
    - Segment definition loaded from Segments table
    - ActiveSegment instance created with UUID
    - All outcomes calculated immediately (front-loaded)
    - ClientEvents generated for entire duration
 
 2. **Processing** (mechanical only):
+
    - Poller detects segment ready for processing
    - Queued to SQS for ops-segment-process
    - Challenges evaluated, combat simulated
    - XP and wounds applied to character
 
 3. **Waiting**:
+
    - Segment timer runs (SegmentDuration)
    - Client displays events over time
    - No server processing during wait
 
 4. **Advancement**:
+
    - Poller detects EndTime reached
    - Queued to SQS for ops-story-advance
    - Character updates applied
@@ -541,21 +516,12 @@ All Lambda functions are deployed with:
 - Clears character active state
 - Records in StoryHistory
 
-**api-segment-rest** (Logical ID: `ApiSegmentRestFunction`):
-
-- Initiates healing rest for wounded characters
-- Creates a special rest segment with calculated healing times
-- Validates character is not in an active story
-- Sets character GameMode to "Incremental" during rest
-- Healing duration based on wound severity (bashing/lethal/aggravated)
-- Automatically heals wounds when segment completes
-
 ### Processing Layer Functions
 
 **ops-segment-poller** (Logical ID: `OpsSegmentPollerFunction`):
 
-- **Trigger**: EventBridge rule `eidolon-segment-poller` (1-minute schedule)
-- Reads SSM parameter `/eidolon/segment-poller-state` for "run"/"stop" state
+- **Trigger**: EventBridge rule `eidolon-story-poller` (1-minute schedule)
+- Reads SSM parameter `/eidolon/story/config` for "run"/"stop" state
 - Queries for segments with EndTime <= now
 - Sends ALL completed segments to `eidolon-advancement-queue`
 - **Polling State Management**:
@@ -563,7 +529,7 @@ All Lambda functions are deployed with:
   - If parameter="stop": Checks for active segments
     - If active segments exist: Sets parameter back to "run"
     - If no active segments: Disables EventBridge rule
-- Environment: `SSM_POLLER_STATE_PARAMETER`, queue URLs
+- Environment: `SSM_POLLER_STATE_PARAMETER` (defaults to `/eidolon/story/config`), queue URLs
 
 **ops-segment-process** (Logical ID: `OpsSegmentProcessFunction`):
 
@@ -579,7 +545,7 @@ All Lambda functions are deployed with:
 
 - **Trigger**: SQS `eidolon-advancement-queue`
 - Claims segment by checking ProcessingStatus for idempotency
-- Processes simple segments (rest/decision) if not already processed
+- Processes simple segments (decision) if not already processed
 - Applies deferred CharacterUpdates (combat rewards, story effects)
 - Creates next segment or completes story
 - **Polling Management**: When story completes (next_segment_id is None):
@@ -637,21 +603,21 @@ The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **t
 - Process segments directly (all processing goes through SQS queues)
 - Create segments (only api-story-start and ops-story-advance create segments)
 
-**SSM Parameter** (`/eidolon/segment-poller-state`):
+**SSM Parameter** (`/eidolon/story/config`):
 
-- Stores polling state: "run" or "stop"
+- Stores polling state: "run" or "stop" (string values, not JSON)
 - Checked by poller each invocation
 - **State Transitions**:
   - Set to "run" by: api-story-start, ops-segment-poller (when finding active segments)
   - Set to "stop" by: ops-story-advance (when completing last story), ops-segment-poller (when no segments to process)
 
-**EventBridge Rule** (`eidolon-segment-poller`):
+**EventBridge Rule** (`eidolon-story-poller`):
 
 - Schedule: rate(1 minute)
 - Target: ops-segment-poller Lambda
 - State: DISABLED by default
 - **Enable/Disable Authority**:
-  - ONLY api-story-start can enable the rule
+  - api-story-start can enable the rule
   - ONLY ops-segment-poller can disable the rule (when parameter="stop" and no active segments)
 - Race condition window: <100ms between final check and disable (acceptable)
 

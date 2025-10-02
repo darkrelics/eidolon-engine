@@ -232,18 +232,6 @@ class ApiService extends BaseApiService {
 
   /// Rest instead of continuing.
   ///
-  /// Initiates a rest period for the character to recover health.
-  Future<Map<String, dynamic>> rest(String characterId) async {
-    debugPrint('ApiService: Initiating rest for character: $characterId');
-
-    final json = await post<Map<String, dynamic>>(
-      '/segment/rest',
-      body: {'CharacterID': characterId},
-    );
-
-    debugPrint('ApiService: Rest initiated successfully');
-    return json;
-  }
 
   /// Get available archetypes.
   ///

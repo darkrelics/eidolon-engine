@@ -27,20 +27,18 @@ This document defines the functional and non-functional requirements for the Inc
 **FR-004**: The system SHALL support three segment types:
 
 1. **Decision Segments**
+
    - Present choices to players
    - Apply default decision on timeout
    - Link to different segments based on choice
 
 2. **Mechanical Segments**
+
    - Execute skill challenges and/or combat encounters
    - Calculate outcomes based on character abilities
    - Track wounds and health for combat
    - Award experience for all attempts
    - Support both static checks (vs difficulty) and opposed checks (vs opponents)
-
-3. **Rest Segments**
-   - Allow wound healing over time
-   - Provide story pacing
 
 **FR-005**: Segments SHALL have configurable durations from 1 minute to 24 hours.
 

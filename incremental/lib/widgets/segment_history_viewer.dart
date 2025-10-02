@@ -306,8 +306,6 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
         return Icons.fork_right;
       case 'mechanical':
         return Icons.settings;
-      case 'rest':
-        return Icons.hotel;
       default:
         return Icons.help_outline;
     }
@@ -342,8 +340,6 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
         return Colors.blue;
       case 'mechanical':
         return Colors.orange;
-      case 'rest':
-        return Colors.green;
       default:
         return Colors.grey;
     }

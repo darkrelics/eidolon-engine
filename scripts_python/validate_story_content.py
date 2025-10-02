@@ -84,21 +84,6 @@ def validate_decision_segment(segment: dict):
     return errors, warnings
 
 
-def validate_rest_segment(segment: dict):
-    """Validate a rest segment structure."""
-    errors = []
-    warnings = []
-
-    # SegmentDuration must be positive int
-    duration = segment.get("SegmentDuration")
-    if duration is None:
-        errors.append("  - Missing SegmentDuration")
-    elif not isinstance(duration, int) or duration <= 0:
-        errors.append("  - SegmentDuration must be positive int")
-
-    return errors, warnings
-
-
 def validate_story_content(story_file: Path) -> bool:
     """
     Validate all segments in a story file.
@@ -118,15 +103,32 @@ def validate_story_content(story_file: Path) -> bool:
         print(f"ERROR: Failed to load story file: {err}")
         return False
 
-    if "Segments" not in story_data:
-        print("ERROR: No Segments array in story data")
+    # Handle both formats:
+    # 1. Flat format: {"Segments": [...]}
+    # 2. DynamoDB format: {"Stories": [{"Story": {...}, "Segments": [...]}]}
+    segments_to_validate = []
+
+    if "Segments" in story_data:
+        # Flat format
+        segments_to_validate = story_data["Segments"]
+    elif "Stories" in story_data:
+        # DynamoDB wrapper format
+        for story_entry in story_data["Stories"]:
+            if "Segments" in story_entry:
+                segments_to_validate.extend(story_entry["Segments"])
+    else:
+        print("ERROR: No Segments array or Stories wrapper in story data")
+        return False
+
+    if not segments_to_validate:
+        print("ERROR: No segments found to validate")
         return False
 
     total_errors = 0
     total_warnings = 0
 
     # Validate each segment
-    for segment in story_data["Segments"]:
+    for segment in segments_to_validate:
         segment_id = segment.get("SegmentID", "unknown")
         segment_type = segment.get("SegmentType", "unknown")
 
@@ -141,8 +143,6 @@ def validate_story_content(story_file: Path) -> bool:
             errors, warnings = validate_mechanical_segment(segment)
         elif segment_type == "decision":
             errors, warnings = validate_decision_segment(segment)
-        elif segment_type == "rest":
-            errors, warnings = validate_rest_segment(segment)
         else:
             errors.append(f"  - Unknown segment type: {segment_type}")
 
@@ -177,15 +177,32 @@ def validate_story_content(story_file: Path) -> bool:
 
 
 def main():
-    """Run validation on test_story.json."""
-    story_file = Path(__file__).parent.parent / "data" / "test_story.json"
+    """Run validation on provided story files or default test files."""
+    if len(sys.argv) > 1:
+        # Validate files passed as arguments
+        all_passed = True
+        for file_path in sys.argv[1:]:
+            story_file = Path(file_path)
+            if not story_file.exists():
+                print(f"ERROR: Story file not found: {story_file}")
+                all_passed = False
+                continue
 
-    if not story_file.exists():
-        print(f"ERROR: Story file not found: {story_file}")
-        return 1
+            print(f"\nValidating: {story_file.name}")
+            if not validate_story_content(story_file):
+                all_passed = False
 
-    success = validate_story_content(story_file)
-    return 0 if success else 1
+        return 0 if all_passed else 1
+    else:
+        # Default: validate test_story.json
+        story_file = Path(__file__).parent.parent / "data" / "test_story.json"
+
+        if not story_file.exists():
+            print(f"ERROR: Story file not found: {story_file}")
+            return 1
+
+        success = validate_story_content(story_file)
+        return 0 if success else 1
 
 
 if __name__ == "__main__":

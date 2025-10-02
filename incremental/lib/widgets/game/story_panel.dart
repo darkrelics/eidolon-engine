@@ -18,7 +18,6 @@ class StoryPanel extends StatefulWidget {
   final Function(StoryMetadata)? onStorySelect;
   final Function(String)? onDecisionSelect;
   final VoidCallback? onAbandonStory;
-  final VoidCallback? onRestSegment;
   final VoidCallback? onReturnToStories;
   final bool isDecisionSubmitting;
 
@@ -33,7 +32,6 @@ class StoryPanel extends StatefulWidget {
     this.onStorySelect,
     this.onDecisionSelect,
     this.onAbandonStory,
-    this.onRestSegment,
     this.onReturnToStories,
     this.isDecisionSubmitting = false,
   });
@@ -209,7 +207,6 @@ class _StoryPanelState extends State<StoryPanel> {
       segmentHistory: widget.segmentHistory,
       onDecisionSelect: widget.onDecisionSelect,
       onAbandonStory: widget.onAbandonStory,
-      onRestSegment: widget.onRestSegment,
       onRefresh: widget.onRefresh,
       isDecisionSubmitting: widget.isDecisionSubmitting,
     );

@@ -27,7 +27,6 @@ All 15 Lambda functions are fully implemented and operational in production:
 - `api-story-start` - Begin new story
 - `api-story-abandon` - Exit active story
 - `api-segment-decision` - Submit player choice
-- `api-segment-rest` - Initiate healing segment
 - `api-segment-status` - Check segment readiness
 - `api-segment-history` - Retrieve past segments
 
@@ -70,7 +69,6 @@ logical_id_map = {
     "api-character-list": "ApiCharacterListFunction",
     "api-segment-decision": "ApiSegmentDecisionFunction",
     "api-segment-history": "ApiSegmentHistoryFunction",
-    "api-segment-rest": "ApiSegmentRestFunction",
     "api-segment-status": "ApiSegmentStatusFunction",
     "api-story-abandon": "ApiStoryAbandonFunction",
     "api-story-start": "ApiStoryStartFunction",
@@ -150,6 +148,7 @@ All Lambda functions must follow these parameter standards:
   - Example: `/characters?characterId=123`
   - Use `get_query_parameter()` from `eidolon.requests`
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
+
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
@@ -169,11 +168,13 @@ Lambda functions are deployed through the modular CDK stack system:
 ### CDK Stack Deployment (Lambda Stack #3)
 
 1. **CodeBuild Process** (Stack #1):
+
    - Builds Lambda layer from `requirements/lambda-requirements.txt`
    - Packages each function with `eidolon` modules
    - Uploads artifacts to S3 bucket
 
 2. **Lambda Stack Deployment** (Stack #3):
+
    - Creates shared execution role
    - Deploys Lambda layer
    - Creates 16 functions with fixed logical IDs
@@ -543,6 +544,7 @@ Some Lambda functions apply transformations to data before returning responses:
 The `api_get_character.py` function applies several transformations for client compatibility:
 
 1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
+
    - Database: `{"RightHand": "sword-uuid"}`
    - Response adds: `{"InventoryDetails": {"RightHand": {"ItemID": "sword-uuid", "Name": "Iron Sword", ...}}}`
 

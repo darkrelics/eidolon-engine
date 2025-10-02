@@ -64,7 +64,6 @@ def get_lambda_function_arns(region: str) -> dict:
         "api-segment-decision",
         "api-segment-status",
         "api-segment-history",
-        "api-segment-rest",
     ]
 
     for function_name in api_functions:

@@ -199,7 +199,6 @@ class StoryStack(Stack):
             ("api-story-history", "api_story_history.lambda_handler"),
             ("api-segment-decision", "api_segment_decision.lambda_handler"),
             ("api-segment-history", "api_segment_history.lambda_handler"),
-            ("api-segment-rest", "api_segment_rest.lambda_handler"),
             ("api-segment-status", "api_segment_status.lambda_handler"),
             # Operations functions
             ("ops-segment-poller", "ops_segment_poller.lambda_handler"),
@@ -241,7 +240,6 @@ class StoryStack(Stack):
             "api-story-history": "ApiStoryHistoryFunction",
             "api-segment-decision": "ApiSegmentDecisionFunction",
             "api-segment-history": "ApiSegmentHistoryFunction",
-            "api-segment-rest": "ApiSegmentRestFunction",
             "api-segment-status": "ApiSegmentStatusFunction",
             "ops-segment-poller": "OpsSegmentPollerFunction",
             "ops-segment-process": "OpsSegmentProcessFunction",

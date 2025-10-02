@@ -592,41 +592,6 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
-  Future<void> _handleRestSegment() async {
-    debugPrint('GameScreen: Rest segment triggered');
-
-    try {
-      if (mounted) {
-        setState(() {
-          _isLoading = true;
-        });
-      }
-
-      // Call the rest endpoint directly
-      await _rateLimiter.limiter.executeHumanDriven(
-        GlobalRateLimiter.restCharacter,
-        () => _apiService.rest(_character!.id),
-        throwOnRateLimit: true,
-      );
-
-      // Reload character data only (history is loaded on completion screens)
-      await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Resting...'), duration: Duration(seconds: 2)));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
-        );
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      }
-    }
-  }
 
   Future<void> _handleStoryCompletion({bool refreshCharacter = true, bool showMessage = true, Map<String, dynamic>? finalActiveSegment}) async {
     debugPrint('GameScreen: Handling story completion');
@@ -1012,7 +977,6 @@ class _GameScreenState extends State<GameScreen> {
             onStorySelect: _handleStorySelect,
             onDecisionSelect: _handleDecisionSelect,
             onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
-            onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
             isDecisionSubmitting: _isSubmittingDecision,
           ),
@@ -1044,7 +1008,6 @@ class _GameScreenState extends State<GameScreen> {
             onStorySelect: _handleStorySelect,
             onDecisionSelect: _handleDecisionSelect,
             onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
-            onRestSegment: _handleRestSegment,
             onReturnToStories: _handleReturnToStories,
             isDecisionSubmitting: _isSubmittingDecision,
           ),
@@ -1071,7 +1034,6 @@ class _GameScreenState extends State<GameScreen> {
           onStorySelect: _handleStorySelect,
           onDecisionSelect: _handleDecisionSelect,
           onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
-          onRestSegment: _handleRestSegment,
           onReturnToStories: _handleReturnToStories,
           isDecisionSubmitting: _isSubmittingDecision,
         );

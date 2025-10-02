@@ -117,6 +117,64 @@ Located in `eidolon/requests.py`:
 2. Remove flexible field parsing
 3. Ensure all responses use PascalCase
 
+## Story Data Validation
+
+### Local Validation
+
+Story content files can be validated locally before committing:
+
+```bash
+# Validate branching (weights, prerequisites, references)
+python3 scripts_python/validate_branching.py data/test_story.json
+
+# Validate content structure (segments, challenges, decisions)
+python3 scripts_python/validate_story_content.py data/test_story.json
+
+# Validate multiple files
+python3 scripts_python/validate_branching.py data/*.json
+```
+
+### CI Validation
+
+Story validation runs automatically via GitHub Actions:
+
+**Workflow:** `.github/workflows/story-validation.yml`
+
+**Triggers:**
+
+- Pull requests modifying `data/**/*.json`
+- Pushes to `develop`, `qa`, or `prod` branches
+- Changes to validation scripts or schemas
+
+**Validators:**
+
+1. **validate_branching.py** — Checks:
+
+   - Branch weights sum to 1.0 (tolerance: 0.001)
+   - NextSegmentID references valid segments
+   - Prerequisites structure (MinSkills, MinAttributes, RequiredItems)
+   - No circular dependencies
+
+2. **validate_story_content.py** — Checks:
+   - Segment type structure (mechanical, decision)
+   - Results/Challenges/Combat/DecisionOptions validity
+   - Required fields present
+   - Type correctness
+
+**Data Formats Supported:**
+
+- Flat format: `{"Segments": [...]}`
+- DynamoDB format: `{"Stories": [{"Story": {...}, "Segments": [...]}]}`
+
+### Validation Failures
+
+If validation fails:
+
+1. Check the CI output for specific error messages
+2. Fix the story data locally
+3. Re-run validators locally to confirm fix
+4. Push the corrected changes
+
 ## Best Practices
 
 1. **Always validate** API responses before use
@@ -124,3 +182,5 @@ Located in `eidolon/requests.py`:
 3. **Test edge cases** like missing/null fields
 4. **Document schemas** for new endpoints
 5. **Keep validation logic centralized**
+6. **Validate story data** before committing to repository
+7. **Run local validators** during content authoring

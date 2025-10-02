@@ -101,8 +101,6 @@ class NotificationService {
             : 'Decision Submitted';
       case 'mechanical':
         return 'Actions Processed';
-      case 'rest':
-        return 'Rest Complete';
       case 'narrative':
         return 'Story Progressed';
       default:
@@ -116,8 +114,6 @@ class NotificationService {
         return Icons.psychology;
       case 'mechanical':
         return Icons.settings;
-      case 'rest':
-        return Icons.hotel;
       case 'narrative':
         return Icons.auto_stories;
       default:
@@ -145,8 +141,6 @@ class NotificationService {
         return Colors.blue;
       case 'mechanical':
         return Colors.orange;
-      case 'rest':
-        return Colors.green;
       case 'narrative':
         return Colors.purple;
       default:

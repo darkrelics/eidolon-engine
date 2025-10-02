@@ -29,6 +29,7 @@ All error responses use this exact format:
 ```
 
 **HTTP Status Codes:**
+
 - `400` - Bad Request: Invalid parameters, malformed JSON, validation failures
 - `401` - Unauthorized: Missing/invalid JWT token, authentication failures
 - `403` - Forbidden: Valid auth but access denied (character not owned, story not available)
@@ -146,6 +147,7 @@ Retrieves complete character data including active story and segment information
 **Authentication:** Required
 
 **Query Parameters:**
+
 - `CharacterID` (required): UUID of the character to retrieve
 
 **Response:**
@@ -227,6 +229,7 @@ Deletes a character belonging to the authenticated player.
 **Authentication:** Required
 
 **Query Parameters:**
+
 - `CharacterID` (required): UUID of the character to delete
 
 **Response:**
@@ -339,6 +342,7 @@ Gets the current status of an active segment, including timing information.
 **Authentication:** Required
 
 **Query Parameters:**
+
 - `CharacterID` (required): UUID of the character
 
 **Response (Active Segment):**
@@ -390,6 +394,7 @@ Retrieves historical segment data for a character.
 **Authentication:** Required
 
 **Query Parameters:**
+
 - `CharacterID` (required): UUID of the character
 
 **Response:**
@@ -408,44 +413,14 @@ Retrieves historical segment data for a character.
       "CompletedAt": "2025-01-15T14:30:00Z",
       "StoryTitle": "The Goblin's Ambush",
       "Outcome": "exceptional",
-      "SkillXPAwarded": {"Stealth": 5, "Combat": 10},
-      "AttributeXPAwarded": {"Agility": 2}
+      "SkillXPAwarded": { "Stealth": 5, "Combat": 10 },
+      "AttributeXPAwarded": { "Agility": 2 }
     }
   ]
 }
 ```
 
-### Character Rest
-
-Initiates a rest segment for character healing.
-
-**Endpoint:** `POST /segment/rest`
-
-**Authentication:** Required
-
-**Request Body:**
-
-```json
-{
-  "CharacterID": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**Response:**
-
-```json
-{
-  "Segment": {
-    "ActiveSegmentID": "rest_segment_uuid",
-    "SegmentType": "rest",
-    "Status": "active",
-    "StartTime": 1704900000,
-    "EndTime": 1704903600,
-    "HealingAmount": 2
-  }
-}
-```
-Client Cadence (Incremental mode)
+## Client Cadence (Incremental mode)
 
 - After `POST /story/start`, the client updates the UI with the first segment immediately.
 - First `GET /segment/status` occurs 60 seconds after `StartTime`.

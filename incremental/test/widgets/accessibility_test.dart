@@ -23,9 +23,7 @@ void main() {
       final semantics = tester.getSemantics(find.byType(Container));
       expect(semantics.label, equals('Test Button'));
       expect(semantics.hint, equals('Tap to perform action'));
-      // TODO: Update to use new flagsCollection API once documentation is available
-      // The hasFlag method is deprecated and flagsCollection API needs proper syntax
-      // expect(semantics.hasFlag(SemanticsFlag.isButton), isTrue);
+      expect(semantics.flagsCollection.isButton, isTrue);
     });
 
     testWidgets('AccessibleHealthBar renders without errors', (

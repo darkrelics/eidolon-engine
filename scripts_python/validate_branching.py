@@ -82,8 +82,8 @@ def validate_segment_branches(segment: dict, segment_ids: set) -> list:
     segment_id = segment.get("SegmentID", "unknown")
     segment_type = segment.get("SegmentType")
 
-    # Check mechanical/rest segments for branching
-    if segment_type in ["mechanical", "rest"]:
+    # Check mechanical segments for branching
+    if segment_type == "mechanical":
         results = segment.get("Results", {})
 
         for outcome, outcome_data in results.items():
@@ -160,7 +160,7 @@ def detect_circular_dependencies(segments: list) -> list:
                 if next_id:
                     successors.add(next_id)
 
-        elif segment_type in ["mechanical", "rest"]:
+        elif segment_type == "mechanical":
             results = segment.get("Results", {})
             for outcome_data in results.values():
                 if not isinstance(outcome_data, dict):

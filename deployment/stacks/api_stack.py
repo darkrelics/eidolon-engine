@@ -169,9 +169,6 @@ class ApiStack(Stack):
                 history_resource = segment_resource.add_resource("history")
                 self._add_lambda_integration(history_resource, "GET", "api-segment-history", authorizer)
 
-            if "api-segment-rest" in self.lambda_arns:
-                rest_resource = segment_resource.add_resource("rest")
-                self._add_lambda_integration(rest_resource, "POST", "api-segment-rest", authorizer)
 
     def _add_lambda_integration(
         self, resource: apigateway.Resource, method: str, function_name: str, authorizer: apigateway.CognitoUserPoolsAuthorizer
@@ -295,7 +292,6 @@ class ApiStack(Stack):
             "api-character-list": "ImportApiCharacterList",
             "api-segment-decision": "ImportApiSegmentDecision",
             "api-segment-history": "ImportApiSegmentHistory",
-            "api-segment-rest": "ImportApiSegmentRest",
             "api-segment-status": "ImportApiSegmentStatus",
             "api-story-abandon": "ImportApiStoryAbandon",
             "api-story-history": "ImportApiStoryHistory",
