@@ -133,17 +133,20 @@ Active → Abandoned
 ### Story Lifecycle
 
 1. **Initialization** (from prototype):
+
    - Story definitions loaded from Story table
    - Available stories determined by archetype and prerequisites
    - Added to character's AvailableStories list
 
 2. **Activation**:
+
    - Player selects story via api-story-start
    - First segment copied from Segments table
    - ActiveSegment instance created with calculated outcomes
    - Character state atomically updated
 
 3. **Progression**:
+
    - Segments advance one by one
    - Each segment completion triggers next segment creation
    - Story remains active until terminal outcome or completion
@@ -453,14 +456,14 @@ Decision segments can use weighted random selection on timeout instead of a fixe
 {
   "SegmentType": "decision",
   "DecisionOptions": {
-    "investigate": {"NextSegmentID": "seg-investigate"},
-    "flee": {"NextSegmentID": "seg-flee"}
+    "investigate": { "NextSegmentID": "seg-investigate" },
+    "flee": { "NextSegmentID": "seg-flee" }
   },
   "TimeoutBehavior": {
     "Type": "weighted",
     "Branches": [
-      {"Decision": "investigate", "Weight": 0.7},
-      {"Decision": "flee", "Weight": 0.3}
+      { "Decision": "investigate", "Weight": 0.7 },
+      { "Decision": "flee", "Weight": 0.3 }
     ]
   },
   "DefaultDecision": "flee"
@@ -472,6 +475,7 @@ If TimeoutBehavior is not specified, the system falls back to DefaultDecision.
 **Validation:**
 
 Use `scripts_python/validate_branching.py` to validate:
+
 - Branch weights sum to 1.0 (tolerance: 0.001)
 - NextSegmentIDs reference valid segments in the story
 - Prerequisite structure is valid
@@ -489,23 +493,27 @@ Use `scripts_python/validate_branching.py` to validate:
 ### Segment Lifecycle
 
 1. **Creation** (from prototype):
+
    - Segment definition loaded from Segments table
    - ActiveSegment instance created with UUID
    - All outcomes calculated immediately (front-loaded)
    - ClientEvents generated for entire duration
 
 2. **Processing** (mechanical only):
+
    - Poller detects segment ready for processing
    - Queued to SQS for ops-segment-process
    - Challenges evaluated, combat simulated
    - XP and wounds applied to character
 
 3. **Waiting**:
+
    - Segment timer runs (SegmentDuration)
    - Client displays events over time
    - No server processing during wait
 
 4. **Advancement**:
+
    - Poller detects EndTime reached
    - Queued to SQS for ops-story-advance
    - Character updates applied

@@ -9,7 +9,7 @@ updates:
     groups:
       git-actions-updates:
         applies-to: version-updates
-        update-types: ["major","minor", "patch"]
+        update-types: ["major", "minor", "patch"]
         patterns: ["*"]
       git-action-security:
         applies-to: security-updates
@@ -24,7 +24,7 @@ updates:
     groups:
       go-package-updates:
         applies-to: version-updates
-        update-types: ["major","minor", "patch"]
+        update-types: ["major", "minor", "patch"]
         patterns: ["*"]
       go-package-security:
         applies-to: security-updates

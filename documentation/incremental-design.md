@@ -394,8 +394,8 @@ The story system supports weighted random branching with conditional prerequisit
           "Weight": 0.6,
           "Label": "successful_path",
           "Prerequisites": {
-            "MinSkills": {"perception": 5},
-            "MinAttributes": {"intelligence": 3},
+            "MinSkills": { "perception": 5 },
+            "MinAttributes": { "intelligence": 3 },
             "RequiredItems": ["torch-prototype"]
           }
         },
@@ -427,14 +427,14 @@ Decision segments can use weighted random selection on timeout instead of fixed 
 {
   "SegmentType": "decision",
   "DecisionOptions": {
-    "choice1": {"NextSegmentID": "seg-1"},
-    "choice2": {"NextSegmentID": "seg-2"}
+    "choice1": { "NextSegmentID": "seg-1" },
+    "choice2": { "NextSegmentID": "seg-2" }
   },
   "TimeoutBehavior": {
     "Type": "weighted",
     "Branches": [
-      {"Decision": "choice1", "Weight": 0.7},
-      {"Decision": "choice2", "Weight": 0.3}
+      { "Decision": "choice1", "Weight": 0.7 },
+      { "Decision": "choice2", "Weight": 0.3 }
     ]
   }
 }
@@ -443,6 +443,7 @@ Decision segments can use weighted random selection on timeout instead of fixed 
 **Branch Tracking:**
 
 All branch selections are stored in `BranchMetadata`:
+
 - `SelectionMethod`: How branch was chosen (weighted_random, prerequisite_fallback, player_decision)
 - `BranchLabel`: Analytics label for the branch
 - `BranchIndex`: Which branch was selected

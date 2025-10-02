@@ -22,12 +22,12 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 
 ### R0.1 Exit Criteria Status — FINAL
 
-| Criterion | Status | Notes |
-|-----------|--------|-------|
-| Fresh clone can deploy | 🟡 Deferred to R0.2 | CDK stacks defined, not yet deployed to AWS |
-| Docs match code | ✅ Pass | Comprehensive documentation aligned with implementation |
-| **CI gates bad stories** | ✅ **COMPLETE** | **.github/workflows/story-validation.yml live** |
-| Dashboard/alarm exist | 🟡 Not priority | CloudWatch stack exists, deployment deferred |
+| Criterion                | Status              | Notes                                                   |
+| ------------------------ | ------------------- | ------------------------------------------------------- |
+| Fresh clone can deploy   | 🟡 Deferred to R0.2 | CDK stacks defined, not yet deployed to AWS             |
+| Docs match code          | ✅ Pass             | Comprehensive documentation aligned with implementation |
+| **CI gates bad stories** | ✅ **COMPLETE**     | **.github/workflows/story-validation.yml live**         |
+| Dashboard/alarm exist    | 🟡 Not priority     | CloudWatch stack exists, deployment deferred            |
 
 ---
 
@@ -39,17 +39,17 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 
 **Status:** ✅ All stacks defined, not yet deployed
 
-| Stack | Purpose | Components | Status |
-|-------|---------|------------|--------|
-| `dynamodb_stack.py` | Database tables | 14 tables, 3 GSIs | Defined |
-| `lambda_stack.py` | Shared Lambda resources | Layer, IAM role, policies | Defined |
-| `character_stack.py` | Character API | 7 Lambda functions | Defined |
-| `story_stack.py` | Story/segment API + ops | 10 Lambda functions, 2 SQS queues, EventBridge | Defined |
-| `api_stack.py` | API Gateway | REST API, authorizer | Defined |
-| `client_stack.py` | CloudFront + S3 | CDN, static hosting | Defined |
-| `cloudwatch_stack.py` | Observability | Log group, metrics namespace, IAM policy | Defined |
-| `s3_stack.py` | Artifact storage | Lambda code bucket | Defined |
-| `player_stack.py` | Cognito integration | User pool triggers | Defined |
+| Stack                 | Purpose                 | Components                                     | Status  |
+| --------------------- | ----------------------- | ---------------------------------------------- | ------- |
+| `dynamodb_stack.py`   | Database tables         | 14 tables, 3 GSIs                              | Defined |
+| `lambda_stack.py`     | Shared Lambda resources | Layer, IAM role, policies                      | Defined |
+| `character_stack.py`  | Character API           | 7 Lambda functions                             | Defined |
+| `story_stack.py`      | Story/segment API + ops | 10 Lambda functions, 2 SQS queues, EventBridge | Defined |
+| `api_stack.py`        | API Gateway             | REST API, authorizer                           | Defined |
+| `client_stack.py`     | CloudFront + S3         | CDN, static hosting                            | Defined |
+| `cloudwatch_stack.py` | Observability           | Log group, metrics namespace, IAM policy       | Defined |
+| `s3_stack.py`         | Artifact storage        | Lambda code bucket                             | Defined |
+| `player_stack.py`     | Cognito integration     | User pool triggers                             | Defined |
 
 **Critical Dependency:** All stacks reference each other correctly via CDK constructs. Deployment order managed by `deploy_mode.py`.
 
@@ -62,6 +62,7 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 **Status:** ✅ All code written, not yet deployed
 
 **Story/Segment Functions (10):**
+
 - `api_story_start.py` — POST /story/start
 - `api_story_abandon.py` — POST /story/abandon
 - `api_story_history.py` — GET /story/history
@@ -74,6 +75,7 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 - `ops_story_advance.py` — SQS-triggered story advancement
 
 **Character Functions (7):**
+
 - `api_character_add.py` — POST /character
 - `api_character_delete.py` — DELETE /character
 - `api_character_get.py` — GET /character (includes available stories)
@@ -93,6 +95,7 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 **Status:** ✅ Comprehensive library, production-ready code
 
 **Core Categories:**
+
 - **State Management:** `segment_state.py`, `story_active.py`, `story_completion.py`
 - **Processing:** `segment_processing.py`, `segment_challenges.py`, `segment_combat.py`
 - **Data Access:** `character_data.py`, `story_retrieval.py`, `dynamo.py`
@@ -114,6 +117,7 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 **Status:** ✅ Comprehensive, well-maintained
 
 **Incremental Subsystem Docs (10 files):**
+
 1. `incremental.md` — Overview and entry point
 2. `incremental-requirements.md` — Functional/non-functional requirements
 3. `incremental-design.md` — Technical architecture (7,000+ lines)
@@ -126,6 +130,7 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 10. `release-zero-report.md` — This document
 
 **Supporting Docs:**
+
 - `deployment.md` — CDK deployment procedures
 - `lambda-functions.md` — Lambda design patterns
 - `schema.md` — DynamoDB table structures
@@ -135,6 +140,7 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 ### 2.2 Documentation Quality
 
 **Strengths:**
+
 - ✅ Architecture diagrams (ASCII art for terminal rendering)
 - ✅ State machine definitions with transition rules
 - ✅ API request/response examples
@@ -142,6 +148,7 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 - ✅ Design rationale captured (polling vs WebSockets, UUIDv7 vs UUIDv4, etc.)
 
 **Gaps Identified:**
+
 - ⚠️ No C4-style diagrams (mentioned in R0 objectives, not yet created)
 - ⚠️ Glossary incomplete (some DynamoDB field definitions missing)
 - ⚠️ No "Incremental Subsystem Overview" single-page summary (R0 objective)
@@ -149,9 +156,11 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 ### 2.3 R0 Objective: Create Architecture Module
 
 **Program Plan Task:**
+
 > Create an "Incremental Subsystem Overview" doc module under `/documentation/incremental/architecture.md`
 
 **Assessment:**
+
 - **Current State:** Content exists but scattered across `incremental-design.md`, `incremental-requirements.md`, `incremental-story.md`
 - **Gap:** No single entry-point document with unified architecture view
 - **Recommendation:** Create `incremental/architecture.md` that consolidates:
@@ -174,12 +183,14 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 **Purpose:** Validate weighted branching configuration
 
 **Checks:**
+
 - Branch weights sum to 1.0 (tolerance: 0.001)
 - All `NextSegmentID` fields reference valid segments
 - `Prerequisites` structure correct (MinSkills, MinAttributes, RequiredItems)
 - No circular dependencies in branch chains
 
 **Test Results:**
+
 ```bash
 $ python3 scripts_python/validate_branching.py data/test_story_branching.json
 Validating test_story.json...
@@ -203,15 +214,18 @@ Validation Summary:
 **Purpose:** Validate segment structure (mechanical, decision, rest)
 
 **Checks:**
+
 - Results, Challenges, Combat structure
 - DecisionOptions for decision segments
 - Narrative and Effects validation
 
 **Fix Applied:** Updated to handle both data formats:
+
 - Flat format: `{"Segments": [...]}`
 - DynamoDB wrapper: `{"Stories": [{"Story": {...}, "Segments": [...]}]}`
 
 **Test Results:**
+
 ```bash
 $ python3 scripts_python/validate_story_content.py data/test_story.json data/test_story_branching.json
 
@@ -233,6 +247,7 @@ Validating: test_story_branching.json
 **Purpose:** Validate Twine export format for content authoring
 
 **Coverage:**
+
 - Twine metadata (creator, creatorVersion, ifid)
 - Passage structure (id, name, text, links, position, tags)
 - Story navigation (startNode, passages array)
@@ -240,12 +255,14 @@ Validating: test_story_branching.json
 **Gap:** Schema is for **Twine format**, not **DynamoDB format**. The program plan calls for separate schemas for `story` and `segments` table records.
 
 **Recommendation:** Create two additional schemas:
+
 1. `schemas/story-table.schema.json` — For `story` table records
 2. `schemas/segments-table.schema.json` — For `segments` table records
 
 ### 3.3 R0 Objective: CI Story Validation — ✅ COMPLETE
 
 **Program Plan Task:**
+
 > Spin up story-schema validation in CI (pre-commit & PR). Add JSON Schema to repo; implement validation step in CI; fail PRs if invalid.
 
 **Implementation Status:** ✅ **COMPLETE**
@@ -258,13 +275,13 @@ name: Story Validation
 on:
   pull_request:
     paths:
-      - 'data/**/*.json'
-      - 'incremental/schemas/**/*.json'
-      - 'scripts_python/validate_*.py'
+      - "data/**/*.json"
+      - "incremental/schemas/**/*.json"
+      - "scripts_python/validate_*.py"
   push:
     branches: [develop, qa, prod]
     paths:
-      - 'data/**/*.json'
+      - "data/**/*.json"
 
 jobs:
   validate-stories:
@@ -274,7 +291,7 @@ jobs:
       - name: Set up Python 3.12
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - name: Install validation dependencies
         run: pip install jsonschema
       - name: Validate story branching
@@ -290,6 +307,7 @@ jobs:
 ```
 
 **Acceptance Criteria — All Met:**
+
 - ✅ Invalid story files fail PR checks
 - ✅ Validation errors display in GitHub UI
 - ✅ Docs updated in `validation-strategy.md` with local validation instructions
@@ -309,15 +327,18 @@ jobs:
 **Components:**
 
 #### Log Group
+
 - **Name:** `/eidolon/server`
 - **Retention:** 1 year (365 days)
 - **Removal Policy:** RETAIN (survives stack deletion)
 
 #### Metrics Namespace
+
 - **Name:** `eidolon/metrics`
 - **Usage:** Custom business metrics (story starts, completions, outcomes)
 
 #### IAM Policy
+
 - **Name:** `eidolon-cloudwatch-policy`
 - **Permissions:**
   - `logs:CreateLogStream`, `logs:PutLogEvents`, `logs:DescribeLogStreams`
@@ -330,17 +351,20 @@ jobs:
 **Status:** ✅ Production-ready
 
 **Features:**
+
 - Centralized logger configuration
 - Environment-driven log level (`LOG_LEVEL` env var)
 - Request context logging (user, function, memory, time remaining)
 - Consistent format across all 44 eidolon modules
 
 **Log Levels:**
+
 - `DEBUG` — Detailed event/context dumps
 - `INFO` — Function name, user, high-level flow (default)
 - `WARNING/ERROR/CRITICAL` — Exceptions and failures
 
 **Log Envelope:**
+
 ```python
 logger.info(f"Function: {context.function_name}")
 logger.info(f"User: {claims.get('cognito:username')}")
@@ -352,9 +376,11 @@ logger.debug(f"Event: {json.dumps(event, indent=2)}")
 ### 4.3 R0 Objective: Observability Skeleton
 
 **Program Plan Task:**
+
 > Structured logs + minimal CloudWatch dashboard to watch request volume, errors, latencies. Adopt log envelope (requestId, userId, characterId, storyId, segmentId, outcomeId); emit custom metrics; wire one dashboard + one alarm for 5xx spikes.
 
 **Current State:**
+
 - ✅ CloudWatch stack defined
 - ✅ Logging utilities implemented with consistent envelope
 - ✅ Metrics namespace defined (`eidolon/metrics`)
@@ -386,6 +412,7 @@ logger.info("Story started", extra={
 
 **Custom Metrics:**
 No explicit `cloudwatch:PutMetricData` calls found in code. Metrics should track:
+
 - Story starts (by StoryID)
 - Segment processing duration (by SegmentType)
 - Story completions (by FinalOutcome: death/failure/minimal/normal/exceptional)
@@ -395,6 +422,7 @@ No explicit `cloudwatch:PutMetricData` calls found in code. Metrics should track
 Cannot be created until infrastructure is deployed and generating real logs/metrics.
 
 **Recommended Next Steps:**
+
 1. Deploy CloudWatch stack to AWS
 2. Deploy Lambda functions and generate test traffic
 3. Create dashboard with queries:
@@ -412,7 +440,8 @@ Cannot be created until infrastructure is deployed and generating real logs/metr
 
 **Issue Title:** "Deployment Labeling"
 
-**Issue Body:** *(Retrieved via gh issue view)*
+**Issue Body:** _(Retrieved via gh issue view)_
+
 ```
 Fix mislabeled deployment outputs that confuse testers.
 Adjust deployment/deploy.py labeling ("Portal" vs "Inspector/Portal");
@@ -422,11 +451,13 @@ update docs.
 **Code Review:** `deployment/deploy.py`
 
 **Findings:**
+
 - Line 18: `client_host: str = "portal"` (default value)
 - Line 64: User prompted for "Client Host (e.g., portal)"
 - Lines referencing "portal" as subdomain for CloudFront distribution
 
 **Assessment:**
+
 - ✅ Deployment script correctly uses "portal" terminology
 - ✅ No references to "Inspector" found in incremental deployment code
 - ⚠️ Issue may reference MUD-specific deployment confusion (outside incremental scope)
@@ -438,6 +469,7 @@ update docs.
 **Location:** `deployment/deploy_mode.py`
 
 **Modes Supported:**
+
 - `mud` — MUD server only
 - `incremental` — Story system only
 - `hybrid` — Both systems (default)
@@ -452,16 +484,17 @@ update docs.
 
 **Location:** `data/`
 
-| File | Type | Segments | Features Tested | Status |
-|------|------|----------|-----------------|--------|
-| `test_story.json` | Repeatable story | 11 | Mechanical, decision, rest segments | ✅ Valid |
-| `test_story_branching.json` | Test story | 6 | Weighted branching, prerequisites | ✅ Valid |
-| `test_opponents.json` | Combat data | N/A | Opponent definitions for combat | ✅ Valid |
-| `test_archetypes.json` | Character classes | N/A | Player archetype definitions | ✅ Valid |
+| File                        | Type              | Segments | Features Tested                     | Status   |
+| --------------------------- | ----------------- | -------- | ----------------------------------- | -------- |
+| `test_story.json`           | Repeatable story  | 11       | Mechanical, decision, rest segments | ✅ Valid |
+| `test_story_branching.json` | Test story        | 6        | Weighted branching, prerequisites   | ✅ Valid |
+| `test_opponents.json`       | Combat data       | N/A      | Opponent definitions for combat     | ✅ Valid |
+| `test_archetypes.json`      | Character classes | N/A      | Player archetype definitions        | ✅ Valid |
 
 ### 6.2 Test Coverage
 
 **Validated Scenarios:**
+
 - ✅ Linear story progression (test_story.json segments 1-11)
 - ✅ Weighted random branching (test_story_branching.json)
 - ✅ Prerequisite gating (MinSkills, MinAttributes)
@@ -472,6 +505,7 @@ update docs.
 - ✅ Combat encounters (OpponentID references)
 
 **Missing Scenarios:**
+
 - ⚠️ Story with `StoryType: "one-time"` (only repeatable exists)
 - ⚠️ Story with `StoryType: "daily"` (cooldown testing)
 - ⚠️ Item prerequisite testing (RequiredItems not exercised)
@@ -490,6 +524,7 @@ update docs.
 **Impact:** Story data errors are now blocked by CI
 
 **Completed Actions:**
+
 1. ✅ Created `.github/workflows/story-validation.yml`
 2. ✅ Fixed `validate_story_content.py` to handle DynamoDB wrapper format
 3. ✅ Tested both validators with all test data - passing
@@ -504,6 +539,7 @@ update docs.
 **Impact:** AWS observability not a priority for R0
 
 **Current State:**
+
 - CloudWatch stack defined and ready to deploy
 - Logging infrastructure complete
 - Dashboard/alarms deferred to R0.2 or R2
@@ -517,6 +553,7 @@ update docs.
 **Impact:** New developers lack single-page architecture reference
 
 **Recommendation:** Create `documentation/incremental/architecture.md` consolidating:
+
 - System diagram (Lambda → DynamoDB → SQS → EventBridge)
 - Table reference (keys, GSIs, indexes)
 - State machine summaries
@@ -531,6 +568,7 @@ update docs.
 **Impact:** Content validation uses Twine schema only
 
 **Recommendation:** Create JSON Schema files for:
+
 - `story` table records
 - `segments` table records
 
@@ -567,6 +605,7 @@ update docs.
 **Objective 1:** Establish shared definitions of terms, tables, and flows
 
 **Status:** ✅ **MET**
+
 - 30 documentation files define all terms, tables, and flows
 - State machines documented in `incremental-story.md` and issue #491
 - Table schemas in `schema.md` and CDK stack definitions
@@ -575,6 +614,7 @@ update docs.
 **Objective 2:** Stand up CI and thin "safety harness" before deeper changes
 
 **Status:** ⚠️ **PARTIAL**
+
 - CI exists for Python analysis (Ruff, Bandit, Pylint)
 - CI missing for story validation
 - Safety harness (validation tooling) exists but not gated in CI
@@ -582,6 +622,7 @@ update docs.
 **Objective 3:** Documentation module under `/documentation/incremental/architecture.md`
 
 **Status:** ⚠️ **PARTIAL**
+
 - Content exists but scattered across multiple docs
 - Single consolidated architecture doc not yet created
 - Diagrams exist (ASCII art) but not C4-style
@@ -589,6 +630,7 @@ update docs.
 **Objective 4:** Story schema validation in CI
 
 **Status:** ❌ **NOT MET**
+
 - Schema exists (`story.schema.json`)
 - Validators exist and work
 - CI workflow not created
@@ -596,6 +638,7 @@ update docs.
 **Objective 5:** Observability skeleton for incremental flows
 
 **Status:** 🟡 **DEFINED, NOT DEPLOYED**
+
 - CloudWatch stack defined
 - Logging utilities implemented
 - Dashboard and alarms cannot exist until deployed
@@ -603,17 +646,18 @@ update docs.
 **Objective 6:** Deployment naming hygiene
 
 **Status:** ✅ **MET** (or N/A for incremental)
+
 - Deployment script uses clear "portal" terminology
 - Issue #690 appears MUD-specific
 
 ### Exit Criteria Matrix
 
-| Criterion | Status | Blocker? | Action Required |
-|-----------|--------|----------|-----------------|
-| Fresh clone can deploy | 🟡 Untested | No | Deploy to AWS dev environment (R0.2) |
-| Docs match code | ✅ Pass | No | None |
-| CI gates bad stories | ✅ **COMPLETE** | ~~YES~~ | ~~Create story-validation.yml workflow~~ **DONE** |
-| Dashboard/alarm exist | 🟡 Defined | No | Not priority - deferred |
+| Criterion              | Status          | Blocker? | Action Required                                   |
+| ---------------------- | --------------- | -------- | ------------------------------------------------- |
+| Fresh clone can deploy | 🟡 Untested     | No       | Deploy to AWS dev environment (R0.2)              |
+| Docs match code        | ✅ Pass         | No       | None                                              |
+| CI gates bad stories   | ✅ **COMPLETE** | ~~YES~~  | ~~Create story-validation.yml workflow~~ **DONE** |
+| Dashboard/alarm exist  | 🟡 Defined      | No       | Not priority - deferred                           |
 
 ---
 
@@ -628,6 +672,7 @@ update docs.
 **Recommendation:** Split R0 into two phases:
 
 #### **R0.1: Baseline Preparation** ✅ **COMPLETE**
+
 - ✅ Audit documentation
 - ✅ Evaluate validation tooling
 - ✅ Assess observability infrastructure
@@ -635,6 +680,7 @@ update docs.
 - ✅ Fix `validate_story_content.py` format handling (DynamoDB wrapper support)
 
 #### **R0.2: Initial Deployment** (New Phase)
+
 - Deploy CDK stacks to AWS dev environment
 - Verify all 14 DynamoDB tables created
 - Verify all 17 Lambda functions deployed
@@ -642,6 +688,7 @@ update docs.
 - Capture deployment lessons learned
 
 **Exit Criteria for R0.2:**
+
 - All stacks deploy without errors
 - `aws lambda list-functions` shows 17 functions
 - `aws dynamodb list-tables` shows 14 tables
@@ -657,6 +704,7 @@ update docs.
 **Recommendation:** Rename R1 to "Integration Testing & Hardening"
 
 **Revised R1 Tasks:**
+
 1. Integration tests for deployed Lambda functions
 2. State transition tests (fuzzing for illegal states)
 3. Idempotency tests (replay same request, verify no duplicate rewards)
@@ -679,6 +727,7 @@ update docs.
 ### Next Actions (R0.2 Phase - Optional)
 
 2. **Deploy to AWS Dev Environment** (4-6 hours)
+
    - Run `python3 deployment/deploy.py` (incremental mode)
    - Capture all stack outputs
    - Document deployment process
@@ -694,12 +743,14 @@ update docs.
 ### Short-Term Actions (R1)
 
 4. **Create CloudWatch Dashboard** (4 hours)
+
    - Lambda invocation counts
    - Error rates by function
    - P50/P95 latency
    - Story outcome distribution
 
 5. **Write Integration Tests** (8-12 hours)
+
    - pytest framework for Lambda testing
    - Test state machine transitions
    - Test idempotency keys
@@ -724,6 +775,7 @@ update docs.
 ### Release 0.1 Status: ✅ **COMPLETE**
 
 **Completed Deliverables:**
+
 - ✅ All infrastructure defined and ready to deploy
 - ✅ Comprehensive documentation (30 files)
 - ✅ Production-ready code (17 Lambda functions, 44 eidolon modules)
@@ -733,17 +785,20 @@ update docs.
 - ✅ Observability foundation in place
 
 **Deferred to R0.2 (Optional Deployment Phase):**
+
 - 🟡 Infrastructure deployment to AWS
 - 🟡 CloudWatch dashboard creation (not priority)
 - 🟡 Smoke tests (requires AWS deployment)
 
 **R0.1 Achievement:** Story validation is now **enforced via GitHub Actions**. Any PR modifying story data will automatically validate:
+
 - Branch weights sum to 1.0
 - Segment structure correctness
 - Prerequisites validity
 - NextSegmentID references
 
 **Next Phase Options:**
+
 1. **R0.2:** Deploy to AWS, run smoke tests, capture deployment lessons
 2. **R1:** Integration testing and hardening (if deployment done separately)
 3. **R5:** Content pipeline and authoring tools (if skipping deployment for now)
@@ -755,6 +810,7 @@ The incremental subsystem has **completed its baseline story validation objectiv
 ## Appendix A: File Inventory
 
 ### Documentation (30 files)
+
 - Core: `incremental.md`, `incremental-requirements.md`, `incremental-design.md`
 - API: `incremental-api.md`, `lambda-functions.md`
 - Data: `schema.md`, `incremental-story.md`
@@ -763,27 +819,32 @@ The incremental subsystem has **completed its baseline story validation objectiv
 - Reports: `comprehensive_review.md`, `release-minus-one-report.md`, `release-zero-report.md`
 
 ### Infrastructure (12 CDK stacks)
+
 - `dynamodb_stack.py`, `lambda_stack.py`, `story_stack.py`, `character_stack.py`
 - `api_stack.py`, `client_stack.py`, `cloudwatch_stack.py`, `s3_stack.py`
 - `player_stack.py`, `codebuild_stack.py`
 
 ### Lambda Functions (17 files)
+
 - API: 11 functions (story_start, story_abandon, segment_decision, etc.)
 - Ops: 3 functions (segment_poller, segment_process, story_advance)
 - Cognito: 2 functions (player_new, player_delete)
 
 ### Eidolon Library (44 modules)
+
 - State: 3 files (segment_state, story_active, story_completion)
 - Processing: 6 files (segment_processing, challenges, combat, mechanics, branching)
 - Data: 8 files (character_data, story_retrieval, dynamo, items, etc.)
 - Infrastructure: 5 files (logger, environment, cors, responses, requests)
 
 ### Validation (2 scripts + 1 schema)
+
 - `validate_branching.py` — ✅ Works
 - `validate_story_content.py` — ⚠️ Format fix needed
 - `story.schema.json` — ✅ Twine format
 
 ### Test Data (4 files)
+
 - `test_story.json` — 11 segments
 - `test_story_branching.json` — 6 segments
 - `test_opponents.json` — Combat definitions
@@ -800,6 +861,7 @@ The incremental subsystem has **completed its baseline story validation objectiv
 **Workflow Details:** See Section 3.3 for complete implementation.
 
 **GitHub Issues Updated:**
+
 - Issue #598 - CI pipeline completion noted
 - Issue #597 - Validator completion noted
 - Issue #603 - Observability foundation noted (dashboard not priority)

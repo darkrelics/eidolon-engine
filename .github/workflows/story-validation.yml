@@ -3,13 +3,13 @@ name: Story Validation
 on:
   pull_request:
     paths:
-      - 'data/**/*.json'
-      - 'incremental/schemas/**/*.json'
-      - 'scripts_python/validate_*.py'
+      - "data/**/*.json"
+      - "incremental/schemas/**/*.json"
+      - "scripts_python/validate_*.py"
   push:
     branches: [develop, qa, prod]
     paths:
-      - 'data/**/*.json'
+      - "data/**/*.json"
 
 permissions:
   pull-requests: read

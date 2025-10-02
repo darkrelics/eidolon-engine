@@ -26,22 +26,22 @@ The incremental game subsystem is **substantially implemented** in code but docu
 
 **Defined in:** `deployment/core/dynamodb_tables.py`
 
-| Table Name | Partition Key | Sort Key | GSIs | Status |
-|------------|--------------|----------|------|--------|
-| players | PlayerID (S) | - | - | ✅ Defined |
-| characters | CharacterID (S) | - | CharacterNameIndex | ✅ Defined |
-| rooms | RoomID (N) | - | - | ✅ Defined |
-| exits | ExitID (S) | - | - | ✅ Defined |
-| items | ItemID (S) | - | - | ✅ Defined |
-| prototypes | PrototypeID (S) | - | - | ✅ Defined |
-| archetypes | ArchetypeName (S) | - | - | ✅ Defined |
-| motd | MotdID (S) | - | - | ✅ Defined |
-| story | StoryID (S) | - | - | ✅ Defined |
-| segments | StoryID (S) | SegmentID (S) | - | ✅ Defined |
-| active_segments | ActiveSegmentID (S) | - | CharacterID-index, EndTimeIndex | ✅ Defined |
-| story_history | CharacterID (S) | StoryInstanceID (S) | - | ✅ Defined |
-| segment_history | CharacterID (S) | ActiveSegmentID (S) | - | ✅ Defined |
-| opponents | OpponentID (S) | - | - | ✅ Defined |
+| Table Name      | Partition Key       | Sort Key            | GSIs                            | Status     |
+| --------------- | ------------------- | ------------------- | ------------------------------- | ---------- |
+| players         | PlayerID (S)        | -                   | -                               | ✅ Defined |
+| characters      | CharacterID (S)     | -                   | CharacterNameIndex              | ✅ Defined |
+| rooms           | RoomID (N)          | -                   | -                               | ✅ Defined |
+| exits           | ExitID (S)          | -                   | -                               | ✅ Defined |
+| items           | ItemID (S)          | -                   | -                               | ✅ Defined |
+| prototypes      | PrototypeID (S)     | -                   | -                               | ✅ Defined |
+| archetypes      | ArchetypeName (S)   | -                   | -                               | ✅ Defined |
+| motd            | MotdID (S)          | -                   | -                               | ✅ Defined |
+| story           | StoryID (S)         | -                   | -                               | ✅ Defined |
+| segments        | StoryID (S)         | SegmentID (S)       | -                               | ✅ Defined |
+| active_segments | ActiveSegmentID (S) | -                   | CharacterID-index, EndTimeIndex | ✅ Defined |
+| story_history   | CharacterID (S)     | StoryInstanceID (S) | -                               | ✅ Defined |
+| segment_history | CharacterID (S)     | ActiveSegmentID (S) | -                               | ✅ Defined |
+| opponents       | OpponentID (S)      | -                   | -                               | ✅ Defined |
 
 **Note:** Wounds are correctly stored in `Character.Wounds` field (LIST of MAP with DamageType and HealAt). No separate wounds table exists or is needed.
 
@@ -50,6 +50,7 @@ The incremental game subsystem is **substantially implemented** in code but docu
 **Defined in:** `deployment/stacks/story_stack.py`, `deployment/stacks/character_stack.py`
 
 **Story Functions (10):**
+
 - `api-story-start` - Start a story, create first segment, queue processing
 - `api-story-abandon` - Player-initiated story quit
 - `api-story-history` - Retrieve completed story history
@@ -62,6 +63,7 @@ The incremental game subsystem is **substantially implemented** in code but docu
 - `ops-story-advance` - SQS-triggered story progression
 
 **Character Functions (7):**
+
 - `api-character-add` - Create new character
 - `api-character-delete` - Delete character
 - `api-character-get` - Get character details
@@ -77,6 +79,7 @@ The incremental game subsystem is **substantially implemented** in code but docu
 **Defined in:** `deployment/stacks/story_stack.py`
 
 1. **eidolon-processing-queue**
+
    - Feeds: `ops-segment-process`
    - Purpose: Mechanical segment outcome calculation
    - Config: 90s visibility timeout, 1-day retention, batch size 10
@@ -120,6 +123,7 @@ The incremental game subsystem is **substantially implemented** in code but docu
 **Implemented in:** `eidolon/character_data.py`, Lambda functions
 
 **States:**
+
 ```
        ┌─────────────┐
        │    None     │ ◄── Normal/default state
@@ -139,12 +143,14 @@ The incremental game subsystem is **substantially implemented** in code but docu
 ```
 
 **Allowed Transitions:**
+
 - `None → Incremental`: `api-story-start` or `api-segment-rest` sets GameMode
 - `Incremental → None`: `ops-story-advance` on story completion/death
 - `None → MUD`: MUD login (not in scope)
 - `MUD → None`: MUD logout (not in scope)
 
 **Forbidden Transitions:**
+
 - `MUD ↔ Incremental`: **NOT ALLOWED** - must return to None first
 - Character must complete current mode before switching to other mode
 
@@ -157,11 +163,13 @@ The incremental game subsystem is **substantially implemented** in code but docu
 **Implemented in:** `eidolon/segment_state.py`, `eidolon/segment_polling.py`
 
 **States:**
+
 ```
 pending → processing → processed → [deleted]
 ```
 
 **Transitions:**
+
 - `Created → pending`: Mechanical segments start in pending
 - `Created → processed`: Decision/rest segments start in processed
 - `pending → processing`: Atomic claim by `ops-segment-process` via `claim_segment_for_processing()`
@@ -177,16 +185,19 @@ pending → processing → processed → [deleted]
 **Implemented in:** `eidolon/story_active.py`, `eidolon/story_completion.py`
 
 **States (relative to character):**
+
 ```
 Available → Active → Completed/Abandoned
 ```
 
 **Transitions:**
+
 - `Available → Active`: `api-story-start` sets `Character.ActiveStoryID`
 - `Active → Completed`: `ops-story-advance` on final segment with any outcome (death/failure/success)
 - `Active → Abandoned`: `api-story-abandon` on player quit
 
 **History Tracking:**
+
 - `StoryHistory` record created on start with `StoryInstanceID` (UUIDv7)
 - `FinalOutcome` updated on completion: death/failure/minimal/normal/exceptional/abandoned
 
@@ -198,22 +209,23 @@ Available → Active → Completed/Abandoned
 
 ### Implemented Endpoints
 
-| Method | Path | Lambda | Purpose | Doc Status |
-|--------|------|--------|---------|------------|
-| POST | /story/start | api-story-start | Start story | ✅ Documented |
-| POST | /story/abandon | api-story-abandon | Quit story | ✅ Documented |
-| GET | /story/history | api-story-history | Get history | ⚠️ Partial |
-| POST | /segment/decision | api-segment-decision | Record choice | ✅ Documented |
-| GET | /segment/history | api-segment-history | Get history | ⚠️ Partial |
-| POST | /segment/rest | api-segment-rest | Initiate rest | ✅ Documented |
-| GET | /segment/status | api-segment-status | Get current | ⚠️ Partial |
-| POST | /character | api-character-add | Create character | ✅ Documented |
-| DELETE | /character | api-character-delete | Delete character | ✅ Documented |
-| GET | /character | api-character-get | **Get character + available stories** | ✅ Documented |
-| GET | /character/list | api-character-list | List characters | ✅ Documented |
-| GET | /archetype | api-archetype-list | List archetypes | ✅ Documented |
+| Method | Path              | Lambda               | Purpose                               | Doc Status    |
+| ------ | ----------------- | -------------------- | ------------------------------------- | ------------- |
+| POST   | /story/start      | api-story-start      | Start story                           | ✅ Documented |
+| POST   | /story/abandon    | api-story-abandon    | Quit story                            | ✅ Documented |
+| GET    | /story/history    | api-story-history    | Get history                           | ⚠️ Partial    |
+| POST   | /segment/decision | api-segment-decision | Record choice                         | ✅ Documented |
+| GET    | /segment/history  | api-segment-history  | Get history                           | ⚠️ Partial    |
+| POST   | /segment/rest     | api-segment-rest     | Initiate rest                         | ✅ Documented |
+| GET    | /segment/status   | api-segment-status   | Get current                           | ⚠️ Partial    |
+| POST   | /character        | api-character-add    | Create character                      | ✅ Documented |
+| DELETE | /character        | api-character-delete | Delete character                      | ✅ Documented |
+| GET    | /character        | api-character-get    | **Get character + available stories** | ✅ Documented |
+| GET    | /character/list   | api-character-list   | List characters                       | ✅ Documented |
+| GET    | /archetype        | api-archetype-list   | List archetypes                       | ✅ Documented |
 
 **Note:** Story listing is embedded in `GET /character` endpoint. When character has no active story, the response includes `AvailableStories` array with:
+
 - Prerequisite checking via `check_story_prerequisites()`
 - Cooldown calculation via `get_story_cooldown()` (one-time, daily, repeatable)
 - Availability status and timing
@@ -223,10 +235,10 @@ Available → Active → Completed/Abandoned
 
 ### Missing Endpoints (Optional Enhancement)
 
-| Method | Path | Purpose | Priority |
-|--------|------|---------|----------|
-| GET | /story/{id} | Get single story details | 🟡 LOW |
-| GET | /story/index | Get story manifest | 🟢 NICE-TO-HAVE |
+| Method | Path         | Purpose                  | Priority        |
+| ------ | ------------ | ------------------------ | --------------- |
+| GET    | /story/{id}  | Get single story details | 🟡 LOW          |
+| GET    | /story/index | Get story manifest       | 🟢 NICE-TO-HAVE |
 
 **Status:** Story browsing functionality is **complete** - no blocking gaps for client development
 
@@ -239,6 +251,7 @@ Available → Active → Completed/Abandoned
 **Location:** `scripts_python/`
 
 1. **validate_story_content.py** ✅ WORKS
+
    - Validates segment structure (mechanical, decision, rest)
    - Checks Results, Challenges, Combat, DecisionOptions
    - **Issue:** Expects top-level "Segments" array but test data has "Stories" wrapper
@@ -257,10 +270,12 @@ Available → Active → Completed/Abandoned
 **Status:** ✅ EXISTS (JSON Schema draft-07)
 
 **Covers:**
+
 - Twine export format (name, startNode, passages, metadata)
 - Passage structure (id, name, text, links, position, tags)
 
 **Gap:** Schema is for Twine format, not final DynamoDB format. Need separate schema for:
+
 - `story` table records (StoryID, Title, StoryType, Prerequisites, etc.)
 - `segments` table records (SegmentID, SegmentType, Challenges, Combat, Results, etc.)
 
@@ -282,29 +297,34 @@ Available → Active → Completed/Abandoned
 **Location:** `eidolon/`
 
 **State Management:**
+
 - `state.py` - Deployment state tracking (infrastructure, not game state)
 - `segment_state.py` - Active segment state transitions
 - `story_active.py` - Story activation logic
 - `story_completion.py` - Story completion/abandonment
 
 **Core Processing:**
+
 - `segment_processing.py` - Route segment processing by type
 - `segment_challenges.py` - Skill challenge resolution
 - `segment_combat.py` - Combat simulation
 - `mechanics.py` - Opposed checks, static checks, XP calculation
 
 **Data Access:**
+
 - `character_data.py` - Character CRUD operations
 - `story_retrieval.py` - Story/segment loading
 - `segment_core.py` - Segment definition access
 - `dynamo.py` - DynamoDB wrapper with table name enum
 
 **Validation:**
+
 - `story_validation.py` - Story eligibility, prerequisites
 - `validation.py` - UUID, string, numeric validation
 - `validation_messages.py` - Standardized error messages
 
 **Utilities:**
+
 - `polling.py` - Polling infrastructure control
 - `sqs.py` - Queue message sending
 - `ssm.py` - Parameter store access
@@ -315,11 +335,13 @@ Available → Active → Completed/Abandoned
 - `logger.py` - Structured logging
 
 **Integration:**
+
 - `cognito.py` - User authentication
 - `s3.py` - Asset storage
 - `environment.py` - Environment variable access
 
 **Missing Modules:**
+
 - ❌ Currency/gold management (stub exists in `story_rewards.py`)
 - ❌ DynamoDB transaction wrapper (currently uses individual writes)
 - ❌ Story index/manifest generation (not needed - server-side filtering)
@@ -335,6 +357,7 @@ Available → Active → Completed/Abandoned
 **Issue Says:** "Fresh → Progressing → Resting → Prestiged" with "Prestige" and "offline progression"
 
 **Reality:**
+
 - No Prestige system in design or code
 - No offline progression system
 - State machines already implemented: GameMode, ProcessingStatus, Story lifecycle
@@ -346,6 +369,7 @@ Available → Active → Completed/Abandoned
 **Issue Says:** "Apply XP, items, health, death, room transitions atomically"
 
 **Reality:**
+
 - XP application: ✅ Implemented via `ResolveStaticCheckWithXP`/`ResolveOpposedCheckWithXP`
 - Wounds: ✅ Implemented in `apply_story_outcome_effects()` (`character_story.py:382-403`)
 - Death: ✅ Handled in story outcomes
@@ -361,6 +385,7 @@ Available → Active → Completed/Abandoned
 **Issue Says:** "Create formal JSON Schema"
 
 **Reality:**
+
 - Schema exists: `incremental/schemas/story.schema.json`
 - Validation exists: `validate_story_content.py`, `validate_branching.py`
 - Gap: Schema is for Twine format, need DynamoDB format schema
@@ -388,6 +413,7 @@ Available → Active → Completed/Abandoned
 **Status:** COMPLETE - embedded in `GET /character` endpoint
 
 **Implementation:**
+
 - Story listing: `get_stories_with_character()` in `eidolon/character_story.py:218-291`
 - Prerequisite checking: `check_story_prerequisites()` in `eidolon/character_story.py:116-144`
 - Cooldown logic: `get_story_cooldown()` in `eidolon/character_story.py:66-113`
@@ -395,6 +421,7 @@ Available → Active → Completed/Abandoned
 - Returns: title, description, duration, prerequisites, rewards, availability, cooldown
 
 **Client Flow:**
+
 1. GET /character returns `AvailableStories` array when no active story
 2. Client displays story list with availability status
 3. Client calls POST /story/start with selected StoryID
@@ -404,6 +431,7 @@ Available → Active → Completed/Abandoned
 ### 2. Story Effects System ✅ MOSTLY COMPLETE
 
 **Implemented:**
+
 - XP awards ✅ `segment_processing.py` via mechanics
 - Wounds ✅ `apply_story_outcome_effects()` in `character_story.py:360-420`
 - Death handling ✅ Story outcomes
@@ -411,6 +439,7 @@ Available → Active → Completed/Abandoned
 - Item rewards ✅ `add_items_to_inventory()` in `items.py:93-153`, called from `segment_processing.py:228`
 
 **Missing:**
+
 - Currency/gold rewards (TODO comment in `story_rewards.py:66-67`)
 - Atomic transaction wrapper (individual writes, no DynamoDB transactions)
 - Idempotency key management (conditional writes provide idempotency via ProcessingStatus)
@@ -422,12 +451,14 @@ Available → Active → Completed/Abandoned
 **Status:** Not needed - story listing is server-side
 
 **Rationale:**
+
 - Stories are filtered per-character (prerequisites, cooldowns)
 - Character archetype determines available stories
 - Server-side filtering ensures security and correctness
 - No static manifest can represent character-specific availability
 
 **If needed for performance:**
+
 - Could cache story metadata (title, description, duration) in S3
 - Would still require server-side eligibility check
 - Current approach is simpler and more correct
@@ -435,11 +466,13 @@ Available → Active → Completed/Abandoned
 ### 4. Documentation Gaps (MEDIUM PRIORITY)
 
 **Needs Creation:**
+
 - API reference with all endpoints, request/response schemas, error codes
 - Story format specification (DynamoDB schema vs. Twine schema)
 - Deployment runbook with validation steps
 
 **Updated:**
+
 - ✅ `schema.md` - Wounds storage already correctly documented
 - ✅ Issue #491 - Removed "Prestige", documented actual state machines
 - ✅ Issue #726 - Marked items/rooms complete, noted only currency missing
@@ -449,6 +482,7 @@ Available → Active → Completed/Abandoned
 ### 5. CI Integration (LOW PRIORITY)
 
 **Exists but not integrated:**
+
 - Story validation scripts work locally (`validate_branching.py` passes all tests)
 - Need GitHub Actions workflow for PR validation
 - Schema validation on `data/*.json` changes
@@ -476,21 +510,25 @@ Available → Active → Completed/Abandoned
 ### Recommended New R0 (Immediate Actions)
 
 1. ~~**Fix SSM parameter name discrepancy**~~ ✅ NO ISSUE
+
    - Code correctly uses `/eidolon/story/config` with "run"/"stop" string values
    - CDK creates parameter with JSON default but code overwrites it correctly
    - No alignment needed
 
 2. **Create DynamoDB schema files**
+
    - `schemas/story-table.schema.json` - Story records
    - `schemas/segments-table.schema.json` - Segment records
    - Update `validate_story_content.py` to validate against correct schema
 
 3. **Create API specification document**
+
    - Document all 15 implemented endpoints
    - Define missing endpoints (/story, /story/{id})
    - Request/response examples for each
 
 4. **Add story validation to CI**
+
    - Create `.github/workflows/story-validation.yml`
    - Run on PR when `data/*.json` changes
    - Block merge on validation failure
@@ -503,11 +541,13 @@ Available → Active → Completed/Abandoned
 ### Recommended New R1 (Core Functionality Completion)
 
 1. ~~**Implement story browsing API**~~ ✅ COMPLETE
+
    - Already implemented in `GET /character` endpoint
    - `get_stories_with_character()` handles filtering
    - Client development not blocked
 
 2. **Complete effects system** (optional enhancements)
+
    - ~~Item rewards~~ ✅ Implemented
    - ~~Room teleportation~~ ✅ Implemented
    - Add currency/gold system (TODO in `story_rewards.py`)
@@ -607,25 +647,30 @@ Phase 5: Client Enablement (Ready)
 ## Appendix: File Locations Quick Reference
 
 ### Infrastructure
+
 - CDK Stacks: `deployment/stacks/`
 - Table Definitions: `deployment/core/dynamodb_tables.py`
 - Lambda Packaging: `deployment/lambda_functions.py`
 
 ### Lambda Functions
+
 - Source: `lambda/*.py` (17 files)
 - Dependencies: `eidolon/*.py` (44 files)
 
 ### Story Content
+
 - Test Data: `data/test_story*.json`
 - Schema: `incremental/schemas/story.schema.json`
 - Validation: `scripts_python/validate_*.py`
 
 ### Documentation
+
 - Architecture: `documentation/incremental-*.md`
 - Mechanics: `documentation/mechanics.md`
 - Schema: `documentation/schema.md`
 
 ### Client (Flutter)
+
 - Source: `incremental/` (not audited in this report)
 
 ---

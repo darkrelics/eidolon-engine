@@ -141,12 +141,15 @@ Story validation runs automatically via GitHub Actions:
 **Workflow:** `.github/workflows/story-validation.yml`
 
 **Triggers:**
+
 - Pull requests modifying `data/**/*.json`
 - Pushes to `develop`, `qa`, or `prod` branches
 - Changes to validation scripts or schemas
 
 **Validators:**
+
 1. **validate_branching.py** — Checks:
+
    - Branch weights sum to 1.0 (tolerance: 0.001)
    - NextSegmentID references valid segments
    - Prerequisites structure (MinSkills, MinAttributes, RequiredItems)
@@ -159,12 +162,14 @@ Story validation runs automatically via GitHub Actions:
    - Type correctness
 
 **Data Formats Supported:**
+
 - Flat format: `{"Segments": [...]}`
 - DynamoDB format: `{"Stories": [{"Story": {...}, "Segments": [...]}]}`
 
 ### Validation Failures
 
 If validation fails:
+
 1. Check the CI output for specific error messages
 2. Fix the story data locally
 3. Re-run validators locally to confirm fix

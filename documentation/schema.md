@@ -304,21 +304,21 @@ In this example:
 
 ## Segments Table
 
-| Field             | Type      | Key       | Description                                                               |
-| ----------------- | --------- | --------- | ------------------------------------------------------------------------- |
-| `StoryID`         | `STRING`  | **HASH**  | UUID of the parent story.                                                 |
-| `SegmentID`       | `STRING`  | **RANGE** | UUID of the segment.                                                      |
-| `SegmentType`     | `STRING`  |           | Type: decision, mechanical, or rest.                                      |
-| `SegmentActivity`     | `STRING`  |           | Activity indicator text shown while the segment is active.                |
-| `SegmentTitle`   | `STRING`  |           | Title text displayed on the segment card (e.g., "Walking through the forest"). |
-| `SegmentDuration` | `NUMBER`  |           | Time in seconds for this segment.                                         |
-| `DecisionText`    | `STRING`  |           | For decision segments: the choice presented.                              |
-| `DecisionOptions` | `MAP`     |           | For decision segments: map of option ID to next segment ID.               |
-| `DefaultDecision` | `STRING`  |           | For decision segments: which option to auto-select.                       |
-| `Challenges`      | `LIST`    |           | For mechanical segments: list of skill/attribute challenges.              |
-| `Combat`          | `MAP`     |           | For mechanical segments: combat configuration (if applicable).            |
-| `Results`         | `MAP`     |           | For mechanical segments: outcome-based results (see structure below).     |
-| `RestSegment`     | `BOOLEAN` |           | Indicates if this is a rest segment.                                      |
+| Field             | Type      | Key       | Description                                                                    |
+| ----------------- | --------- | --------- | ------------------------------------------------------------------------------ |
+| `StoryID`         | `STRING`  | **HASH**  | UUID of the parent story.                                                      |
+| `SegmentID`       | `STRING`  | **RANGE** | UUID of the segment.                                                           |
+| `SegmentType`     | `STRING`  |           | Type: decision, mechanical, or rest.                                           |
+| `SegmentActivity` | `STRING`  |           | Activity indicator text shown while the segment is active.                     |
+| `SegmentTitle`    | `STRING`  |           | Title text displayed on the segment card (e.g., "Walking through the forest"). |
+| `SegmentDuration` | `NUMBER`  |           | Time in seconds for this segment.                                              |
+| `DecisionText`    | `STRING`  |           | For decision segments: the choice presented.                                   |
+| `DecisionOptions` | `MAP`     |           | For decision segments: map of option ID to next segment ID.                    |
+| `DefaultDecision` | `STRING`  |           | For decision segments: which option to auto-select.                            |
+| `Challenges`      | `LIST`    |           | For mechanical segments: list of skill/attribute challenges.                   |
+| `Combat`          | `MAP`     |           | For mechanical segments: combat configuration (if applicable).                 |
+| `Results`         | `MAP`     |           | For mechanical segments: outcome-based results (see structure below).          |
+| `RestSegment`     | `BOOLEAN` |           | Indicates if this is a rest segment.                                           |
 
 **Primary Key:** StoryID (HASH), SegmentID (RANGE)
 
@@ -359,7 +359,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 | `StoryInstanceID`  | `STRING` |          | UUIDv7 of the story instance for history tracking.                          |
 | `SegmentID`        | `STRING` |          | UUID of the current segment definition.                                     |
 | `SegmentType`      | `STRING` |          | Type of segment: decision, mechanical, or rest.                             |
-| `SegmentTitle`    | `STRING` |          | Title text cached for the segment card header.                               |
+| `SegmentTitle`     | `STRING` |          | Title text cached for the segment card header.                              |
 | `Status`           | `STRING` |          | Segment status: active, completed, or abandoned.                            |
 | `StartTime`        | `NUMBER` |          | Unix timestamp when segment started.                                        |
 | `EndTime`          | `NUMBER` | **GSI**  | Unix timestamp when segment will complete.                                  |
@@ -419,16 +419,19 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 **Lifecycle:**
 
 1. **Creation**: Record created when story starts via `create_story_history_entry()`
+
    - Generates UUIDv7 StoryInstanceID for time-ordered unique identification
    - Sets StartedAt timestamp
    - Initializes empty SegmentHistory list and XP maps
 
 2. **During Play**:
+
    - ActiveSegmentIDs added to SegmentHistory list as segments are created (not just completed)
    - XP accumulates in SkillXPAwarded/AttributeXPAwarded maps via `update_story_history_xp()`
    - Creates complete audit trail of all segments attempted
 
 3. **Completion (Success or Failure)**: When story reaches its conclusion via `complete_story()`
+
    - Sets FinishedAt timestamp and FinalOutcome (death/failure/minimal/normal/exceptional)
    - Death and failure outcomes are still considered "completed" attempts, not abandonments
    - Story added to character's CompletedStories list (regardless of outcome)
@@ -436,6 +439,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
    - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
 
 4. **Abandonment (Player-Initiated)**: When player voluntarily quits via `api_story_abandon`
+
    - Sets FinishedAt timestamp and FinalOutcome to "abandoned"
    - Story added to character's AbandonedStories list (not CompletedStories)
    - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
