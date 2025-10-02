@@ -15,7 +15,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome
 from eidolon.polling import update_polling_state
 from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
-from eidolon.segment_history import insert_rest_segment, record_segment_history
+from eidolon.segment_history import record_segment_history
 from eidolon.segment_polling import check_active_segments_exist, delete_active_segment
 from eidolon.segment_processing import determine_next_segment, process_decision_segment
 from eidolon.segment_state import create_next_active_segment, mark_segment_as_completed, update_segment_processing_status
@@ -61,9 +61,9 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
     # Story history should already exist (created when story started)
 
-    # Handle simple segments (rest/decision) that need their outcome determined
+    # Handle decision segments that need their outcome determined
     if is_simple_segment(segment_type):  # type: ignore
-        logger.info(f"Processing simple segment for {active_segment_id}")
+        logger.info(f"Processing decision segment for {active_segment_id}")
 
         # Get segment definition
         segment_def = get_segment_definition(story_id, segment_id)  # type: ignore
@@ -71,11 +71,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         # Get character data for processing
         character = get_character(character_id)  # type: ignore
 
-        # Process based on type
-        if segment_type == "rest":
-            outcome, _ = "normal", {}
-            character_updates = {}
-        elif segment_type == "decision":
+        # Process decision segment
+        if segment_type == "decision":
             outcome = process_decision_segment(active_segment, segment_def)
             character_updates = {}
         else:
@@ -154,29 +151,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # Get character for branching prerequisites
     character = get_character(character_id)  # type: ignore
 
-    # Check if we need to insert a rest segment for unconscious character
-    if new_character_state == CharState.UNCONSCIOUS.value:
-        try:
-            # Insert a rest segment after current segment
-            rest_segment_id = insert_rest_segment(
-                story_id,  # type: ignore
-                segment_id,  # type: ignore
-                rest_duration=900,  # 15 minutes to heal
-                time_remaining=0,  # Current segment is done
-            )
-
-            # Override next segment to be the rest segment
-            next_segment_id = rest_segment_id
-            branch_metadata = {"SelectionMethod": "unconscious_rest_segment"}
-
-            logger.info(f"Inserted rest segment for unconscious character for {character_id}")
-        except Exception as err:
-            logger.error(f"Failed to insert rest segment for unconscious character for {character_id} Error: {err}", exc_info=True)
-            # Fall back to normal next segment determination
-            next_segment_id, branch_metadata = determine_next_segment(segment_def, active_segment, outcome, character)
-    else:
-        # Determine next segment normally with weighted branching
-        next_segment_id, branch_metadata = determine_next_segment(segment_def, active_segment, outcome, character)
+    # Determine next segment with weighted branching
+    next_segment_id, branch_metadata = determine_next_segment(segment_def, active_segment, outcome, character)
 
     # Store branch metadata in current segment history before advancing
     if branch_metadata:

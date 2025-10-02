@@ -11,7 +11,6 @@ class ActiveStoryWidget extends StatefulWidget {
   final List<Map<String, dynamic>> segmentHistory;
   final Function(String)? onDecisionSelect;
   final VoidCallback? onAbandonStory;
-  final VoidCallback? onRestSegment;
   final VoidCallback? onContinue;
   final VoidCallback? onRefresh;
   final bool isDecisionSubmitting;
@@ -22,7 +21,6 @@ class ActiveStoryWidget extends StatefulWidget {
     this.segmentHistory = const [],
     this.onDecisionSelect,
     this.onAbandonStory,
-    this.onRestSegment,
     this.onContinue,
     this.onRefresh,
     this.isDecisionSubmitting = false,
@@ -68,7 +66,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
           if (storyData != null) ...[_StoryCard(story: storyData), const SizedBox(height: 16)],
 
           // Action Buttons
-          _ActionButtons(onRest: widget.onRestSegment, onAbandon: widget.onAbandonStory),
+          _ActionButtons(onAbandon: widget.onAbandonStory),
           const SizedBox(height: 20),
 
           // Active Segment
@@ -227,10 +225,9 @@ class _TypeBadge extends StatelessWidget {
 }
 
 class _ActionButtons extends StatelessWidget {
-  final VoidCallback? onRest;
   final VoidCallback? onAbandon;
 
-  const _ActionButtons({this.onRest, this.onAbandon});
+  const _ActionButtons({this.onAbandon});
 
   @override
   Widget build(BuildContext context) {
@@ -239,14 +236,6 @@ class _ActionButtons extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (onRest != null)
-          OutlinedButton.icon(
-            onPressed: onRest,
-            icon: const Icon(Icons.hotel),
-            label: const Text('Rest'),
-            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10)),
-          ),
-        if (onRest != null && onAbandon != null) const SizedBox(width: 12),
         if (onAbandon != null)
           OutlinedButton.icon(
             onPressed: onAbandon,

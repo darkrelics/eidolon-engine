@@ -84,21 +84,6 @@ def validate_decision_segment(segment: dict):
     return errors, warnings
 
 
-def validate_rest_segment(segment: dict):
-    """Validate a rest segment structure."""
-    errors = []
-    warnings = []
-
-    # SegmentDuration must be positive int
-    duration = segment.get("SegmentDuration")
-    if duration is None:
-        errors.append("  - Missing SegmentDuration")
-    elif not isinstance(duration, int) or duration <= 0:
-        errors.append("  - SegmentDuration must be positive int")
-
-    return errors, warnings
-
-
 def validate_story_content(story_file: Path) -> bool:
     """
     Validate all segments in a story file.
@@ -158,8 +143,6 @@ def validate_story_content(story_file: Path) -> bool:
             errors, warnings = validate_mechanical_segment(segment)
         elif segment_type == "decision":
             errors, warnings = validate_decision_segment(segment)
-        elif segment_type == "rest":
-            errors, warnings = validate_rest_segment(segment)
         else:
             errors.append(f"  - Unknown segment type: {segment_type}")
 

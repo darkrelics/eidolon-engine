@@ -396,8 +396,6 @@ class ActiveStoryDisplay extends StatelessWidget {
         return Icons.alt_route;
       case 'narrative':
         return Icons.description;
-      case 'rest':
-        return Icons.bed;
       default:
         return Icons.help_outline;
     }

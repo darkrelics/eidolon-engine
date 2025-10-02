@@ -68,7 +68,6 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 - `api_story_history.py` — GET /story/history
 - `api_segment_decision.py` — POST /segment/decision
 - `api_segment_history.py` — GET /segment/history
-- `api_segment_rest.py` — POST /segment/rest
 - `api_segment_status.py` — GET /segment/status
 - `ops_segment_poller.py` — EventBridge-triggered polling (1 min)
 - `ops_segment_process.py` — SQS-triggered mechanical processing
@@ -211,7 +210,7 @@ Validation Summary:
 
 #### ✅ **validate_story_content.py** — FIXED & PRODUCTION READY
 
-**Purpose:** Validate segment structure (mechanical, decision, rest)
+**Purpose:** Validate segment structure (mechanical, decision)
 
 **Checks:**
 
@@ -486,7 +485,7 @@ update docs.
 
 | File                        | Type              | Segments | Features Tested                     | Status   |
 | --------------------------- | ----------------- | -------- | ----------------------------------- | -------- |
-| `test_story.json`           | Repeatable story  | 11       | Mechanical, decision, rest segments | ✅ Valid |
+| `test_story.json`           | Repeatable story  | 11       | Mechanical, decision segments       | ✅ Valid |
 | `test_story_branching.json` | Test story        | 6        | Weighted branching, prerequisites   | ✅ Valid |
 | `test_opponents.json`       | Combat data       | N/A      | Opponent definitions for combat     | ✅ Valid |
 | `test_archetypes.json`      | Character classes | N/A      | Player archetype definitions        | ✅ Valid |
@@ -501,7 +500,6 @@ update docs.
 - ✅ Fallback handling (FallbackSegmentID)
 - ✅ Multiple outcome paths (Death, Failure, Minimal, Normal, Exceptional)
 - ✅ Decision segment timeouts
-- ✅ Rest segment healing
 - ✅ Combat encounters (OpponentID references)
 
 **Missing Scenarios:**

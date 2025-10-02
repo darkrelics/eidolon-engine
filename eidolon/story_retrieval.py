@@ -305,11 +305,6 @@ def enrich_segment_with_narrative(segment_data: dict, active_segment: dict) -> d
 
                 segment_data["NextSegmentID"] = next_segment_id
 
-            elif segment_type == "rest":
-                segment_data["Narrative"] = "You have rested and recovered."
-                segment_data["Effects"] = {}
-                segment_data["NextSegmentID"] = segment_def.get("NextSegmentID")
-
             elif segment_type == "decision":
                 decision = active_segment.get("Decision")
                 decision_options = segment_def.get("DecisionOptions", {})

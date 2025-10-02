@@ -170,7 +170,7 @@ All functions use:
 
 - Triggered by `eidolon-advancement-queue`
 - Claims segment with ProcessingStatus state transition to prevent duplicates
-- Processes simple segments (rest/decision) if not already processed
+- Processes simple segments (decision) if not already processed
 - Applies CharacterUpdates (XP, wounds, room changes)
 - Creates next segment if story continues
 - Resets GameMode="None" if story ends
@@ -259,7 +259,7 @@ Avoid transactions for high-frequency operations:
 3. Poller: Check processing status and handle by type:
    - Processed segments → Story Advancement Queue
    - Unprocessed mechanical → Mark exceptional → Advancement Queue
-   - Unprocessed decision/rest → Advancement Queue (natural fallbacks)
+   - Unprocessed decision → Advancement Queue (natural fallbacks)
 4. Poller: Find stuck mechanical segments (>5min old) → Processing Queue retry
 5. SQS: Trigger ops_advance_story for advancement messages
 6. SQS: Trigger ops_segment_process for retry messages
@@ -276,10 +276,10 @@ Avoid transactions for high-frequency operations:
 - **5-15 minutes**: Stuck detection - retry if EndTime > 90 seconds remaining
 - **EndTime reached**: Auto-mark as "exceptional" outcome (player protection)
 
-**Timeline for Decision/Rest Segments:**
+**Timeline for Decision Segments:**
 
 - **Any time**: No processing needed, advance with natural fallbacks
-- **EndTime reached**: Apply DefaultDecision (decision) or normal advancement (rest)
+- **EndTime reached**: Apply DefaultDecision
 
 #### **Timeout Resolution by Type**
 
@@ -520,7 +520,7 @@ incremental/lib/
 
 **Story Panel States:**
 
-- **Active Story**: Story card, rest/abandon buttons, current segment, segment history
+- **Active Story**: Story card, abandon button, current segment, segment history
 - **No Active Story**: Available stories grid (default view)
 - **History View**: Chronologically ordered completed stories (most recent first)
 
@@ -652,14 +652,13 @@ class ServerAuthoritativePolling {
 
 **All Segment Types Use Same Pattern:**
 
-1. Wait 60 seconds for server processing (mechanical segments) or immediate availability (decision/rest)
+1. Wait 60 seconds for server processing (mechanical segments) or immediate availability (decision)
 2. Get character state to check story completion
 3. Get segment status to determine remaining time
 4. Wait server-specified time
 5. Repeat until `activeSegmentID == null`
 
 **Decision Segments**: Server provides timing - client waits and polls normally
-**Rest Segments**: Server calculates healing time - client waits and polls normally  
 **Mechanical Segments**: Server processes outcomes - client waits and polls normally
 
 #### **What NOT to Implement**
@@ -813,7 +812,6 @@ lambda_configs = [
     # Story API functions
     ("api-segment-decision", "api_segment_decision.lambda_handler"),
     ("api-segment-history", "api_segment_history.lambda_handler"),
-    ("api-segment-rest", "api_segment_rest.lambda_handler"),
     ("api-segment-status", "api_segment_status.lambda_handler"),
     ("api-story-abandon", "api_story_abandon.lambda_handler"),
     ("api-story-start", "api_story_start.lambda_handler"),

@@ -520,9 +520,6 @@ def store_story(story_data):
                     segment_item["Challenges"] = segment.get("Challenges", [])
                     segment_item["Combat"] = segment.get("Combat", {})
                     segment_item["Results"] = segment.get("Results", {})
-                elif segment["SegmentType"] == "rest":
-                    segment_item["NextSegmentID"] = segment.get("NextSegmentID")
-                    segment_item["RestBenefit"] = segment.get("RestBenefit", {})
                 else:
                     print(f"Unknown segment type: {segment['SegmentType']}")
 
@@ -810,11 +807,6 @@ def display_story(story_data):
                 combat = segment.get("Combat", {})
                 if combat:
                     print(f"    Combat: Opponent ID: {combat.get('OpponentID', 'None')}, Max Rounds: {combat.get('MaxRounds', 0)}")
-            elif segment.get("SegmentType") == "rest":
-                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
-                rest_benefit = segment.get("RestBenefit", {})
-                if rest_benefit:
-                    print(f"    Rest Benefit: {rest_benefit}")
             else:
                 print(f"    Unknown segment type: {segment.get('SegmentType')}")
                 print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")

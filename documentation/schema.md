@@ -308,7 +308,7 @@ In this example:
 | ----------------- | --------- | --------- | ------------------------------------------------------------------------------ |
 | `StoryID`         | `STRING`  | **HASH**  | UUID of the parent story.                                                      |
 | `SegmentID`       | `STRING`  | **RANGE** | UUID of the segment.                                                           |
-| `SegmentType`     | `STRING`  |           | Type: decision, mechanical, or rest.                                           |
+| `SegmentType`     | `STRING`  |           | Type: decision or mechanical.                                                  |
 | `SegmentActivity` | `STRING`  |           | Activity indicator text shown while the segment is active.                     |
 | `SegmentTitle`    | `STRING`  |           | Title text displayed on the segment card (e.g., "Walking through the forest"). |
 | `SegmentDuration` | `NUMBER`  |           | Time in seconds for this segment.                                              |
@@ -318,7 +318,6 @@ In this example:
 | `Challenges`      | `LIST`    |           | For mechanical segments: list of skill/attribute challenges.                   |
 | `Combat`          | `MAP`     |           | For mechanical segments: combat configuration (if applicable).                 |
 | `Results`         | `MAP`     |           | For mechanical segments: outcome-based results (see structure below).          |
-| `RestSegment`     | `BOOLEAN` |           | Indicates if this is a rest segment.                                           |
 
 **Primary Key:** StoryID (HASH), SegmentID (RANGE)
 
@@ -358,7 +357,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 | `StoryID`          | `STRING` |          | UUID of the story being played.                                             |
 | `StoryInstanceID`  | `STRING` |          | UUIDv7 of the story instance for history tracking.                          |
 | `SegmentID`        | `STRING` |          | UUID of the current segment definition.                                     |
-| `SegmentType`      | `STRING` |          | Type of segment: decision, mechanical, or rest.                             |
+| `SegmentType`      | `STRING` |          | Type of segment: decision or mechanical.                                    |
 | `SegmentTitle`     | `STRING` |          | Title text cached for the segment card header.                              |
 | `Status`           | `STRING` |          | Segment status: active, completed, or abandoned.                            |
 | `StartTime`        | `NUMBER` |          | Unix timestamp when segment started.                                        |
@@ -462,7 +461,7 @@ Records the complete history of each segment played by a character. This table s
 | `StoryInstanceID`  | `STRING` |           | **Yes**  | UUIDv7 of the story instance from StoryHistory.                   |
 | `StoryID`          | `STRING` |           | **Yes**  | UUID of the parent story.                                         |
 | `SegmentID`        | `STRING` |           | **Yes**  | UUID of the segment definition.                                   |
-| `SegmentType`      | `STRING` |           | **Yes**  | Type: mechanical, decision, or rest.                              |
+| `SegmentType`      | `STRING` |           | **Yes**  | Type: mechanical or decision.                                     |
 | `StartTime`        | `NUMBER` |           | **Yes**  | Unix timestamp when segment started.                              |
 | `EndTime`          | `NUMBER` |           | **Yes**  | Unix timestamp when segment will end.                             |
 | `ProcessedAt`      | `NUMBER` |           | No       | Unix timestamp when outcomes were calculated.                     |

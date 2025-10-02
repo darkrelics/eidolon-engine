@@ -140,14 +140,51 @@
         {
           "StoryID": "branch-test-001",
           "SegmentID": "segment-easy",
-          "SegmentType": "rest",
+          "SegmentType": "mechanical",
           "SegmentDuration": 60,
           "SegmentTitle": "The Easy Path",
           "SegmentActivity": "Following the well-traveled road",
-          "RestBenefit": {
-            "Description": "The easy path allows you to rest and recover."
-          },
+          "Challenges": [],
           "Results": {
+            "Death": {
+              "Narrative": "An unexpected danger on the easy path proves fatal.",
+              "Effects": {
+                "State": "dead"
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": null,
+                  "Weight": 1.0,
+                  "Label": "death_end"
+                }
+              ]
+            },
+            "Failure": {
+              "Narrative": "You lose your way on the easy path and must turn back.",
+              "Effects": {
+                "Room": 1
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": null,
+                  "Weight": 1.0,
+                  "Label": "failure_lost"
+                }
+              ]
+            },
+            "Minimal": {
+              "Narrative": "The easy path is uneventful. You make some progress.",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "minimal_continue"
+                }
+              ]
+            },
             "Normal": {
               "Narrative": "The well-traveled road proves uneventful but restful.",
               "Effects": {
@@ -158,6 +195,19 @@
                   "NextSegmentID": "segment-finale",
                   "Weight": 1.0,
                   "Label": "easy_to_finale"
+                }
+              ]
+            },
+            "Exceptional": {
+              "Narrative": "The easy path reveals hidden shortcuts! You make excellent time.",
+              "Effects": {
+                "Room": 3
+              },
+              "Branches": [
+                {
+                  "NextSegmentID": "segment-finale",
+                  "Weight": 1.0,
+                  "Label": "exceptional_continue"
                 }
               ]
             }

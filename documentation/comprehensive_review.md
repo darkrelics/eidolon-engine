@@ -38,7 +38,7 @@ The weighted branching system has been successfully implemented and integrated i
 - **Status:** Fully integrated
 - **Changes:**
   - Imports `select_next_branch` and `select_weighted_branch` at module level (no dynamic imports)
-  - `determine_next_segment()` updated to use weighted branching for mechanical/rest segments
+  - `determine_next_segment()` updated to use weighted branching for mechanical segments
   - Weighted timeout behavior for decision segments
   - Branch metadata stored in ActiveSegments table
 

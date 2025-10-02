@@ -56,7 +56,6 @@ The incremental game subsystem is **substantially implemented** in code but docu
 - `api-story-history` - Retrieve completed story history
 - `api-segment-decision` - Record player choice in decision segment
 - `api-segment-history` - Retrieve completed segment history
-- `api-segment-rest` - Initiate healing rest period
 - `api-segment-status` - Get current segment state
 - `ops-segment-poller` - EventBridge-triggered 1-minute polling
 - `ops-segment-process` - SQS-triggered segment outcome calculation
@@ -144,7 +143,7 @@ The incremental game subsystem is **substantially implemented** in code but docu
 
 **Allowed Transitions:**
 
-- `None → Incremental`: `api-story-start` or `api-segment-rest` sets GameMode
+- `None → Incremental`: `api-story-start` sets GameMode
 - `Incremental → None`: `ops-story-advance` on story completion/death
 - `None → MUD`: MUD login (not in scope)
 - `MUD → None`: MUD logout (not in scope)
@@ -171,7 +170,7 @@ pending → processing → processed → [deleted]
 **Transitions:**
 
 - `Created → pending`: Mechanical segments start in pending
-- `Created → processed`: Decision/rest segments start in processed
+- `Created → processed`: Decision segments start in processed
 - `pending → processing`: Atomic claim by `ops-segment-process` via `claim_segment_for_processing()`
 - `processing → processed`: After outcome calculation in `update_active_segment_outcome()`
 - `processed → [deleted]`: After `ops-story-advance` copies to history
@@ -216,7 +215,6 @@ Available → Active → Completed/Abandoned
 | GET    | /story/history    | api-story-history    | Get history                           | ⚠️ Partial    |
 | POST   | /segment/decision | api-segment-decision | Record choice                         | ✅ Documented |
 | GET    | /segment/history  | api-segment-history  | Get history                           | ⚠️ Partial    |
-| POST   | /segment/rest     | api-segment-rest     | Initiate rest                         | ✅ Documented |
 | GET    | /segment/status   | api-segment-status   | Get current                           | ⚠️ Partial    |
 | POST   | /character        | api-character-add    | Create character                      | ✅ Documented |
 | DELETE | /character        | api-character-delete | Delete character                      | ✅ Documented |
@@ -252,7 +250,7 @@ Available → Active → Completed/Abandoned
 
 1. **validate_story_content.py** ✅ WORKS
 
-   - Validates segment structure (mechanical, decision, rest)
+   - Validates segment structure (mechanical, decision)
    - Checks Results, Challenges, Combat, DecisionOptions
    - **Issue:** Expects top-level "Segments" array but test data has "Stories" wrapper
    - **Fix Required:** Update script to handle actual data format

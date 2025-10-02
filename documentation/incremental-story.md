@@ -7,7 +7,7 @@ The Eidolon Engine's incremental game mode features a story-driven progression s
 ### Core Concepts
 
 - **Story**: A complete narrative arc available to characters based on their archetype and progress
-- **Segment**: A single timed activity within a story (mechanical challenges, decisions, or rest periods) — see [Incremental Requirements](incremental-requirements.md#24-segment-types) for canonical definitions
+- **Segment**: A single timed activity within a story (mechanical challenges or decisions) — see [Incremental Requirements](incremental-requirements.md#24-segment-types) for canonical definitions
 - **Front-loaded Processing**: All outcomes are calculated when segments start, not when they end
 - **Event-driven Advancement**: A polling system checks every minute for completed segments
 - **Mode Exclusivity**: Characters can only be active in one game mode at a time (MUD or Incremental); refer to [Character Mode Workflow](incremental-mud-workflow.md) for the full lifecycle
@@ -35,10 +35,10 @@ The Segments table contains prototype definitions for all story segments:
 
 - **StoryID** (HASH): Parent story UUID
 - **SegmentID** (RANGE): Segment UUID
-- **SegmentType**: decision, mechanical, or rest
+- **SegmentType**: decision or mechanical
 - **SegmentDuration**: Time in seconds for completion
 - **DecisionOptions**: For decisions, maps choice ID to next segment ID
-- **Results**: For mechanical/rest segments, outcome-specific branches (see Weighted Branching below)
+- **Results**: For mechanical segments, outcome-specific branches (see Weighted Branching below)
 - **Challenges**: List of skill/attribute challenges
 - **Combat**: Combat configuration if applicable
 - **TimeoutBehavior**: For decisions, optional weighted timeout branches
@@ -221,27 +221,6 @@ processed/false → [deleted]
     - Delete from ActiveSegments
 ```
 
-#### Rest Segments
-
-```
-Created → processed/false
-  Trigger: Story advancement or player-initiated rest
-  Lambda: ops-story-advance OR api-segment-rest
-  Actions:
-    - Create ActiveSegment with ProcessingStatus="processed"
-    - Set Outcome="normal"
-    - Set NextSegmentID based on story flow
-    - Set timers (StartTime, EndTime)
-
-processed/false → [deleted]
-  Trigger: EndTime reached (within 30 seconds)
-  Lambda: ops-segment-poller → ops-story-advance
-  Actions:
-    - Create next segment or complete story
-    - Copy to SegmentHistory
-    - Delete from ActiveSegments
-```
-
 #### Decision Segments
 
 ```
@@ -290,33 +269,9 @@ processed/false → [deleted]
 - NextSegmentID is always set (either default or player's choice)
 - Timer expiry uses whatever Decision is currently set
 
-#### Rest Segments
+#### Wound Healing
 
-Rest segments are special 15-minute rest periods that allow characters to take a break between story adventures. Rest segments:
-
-- Created with ProcessingStatus="processed" immediately (no processing needed)
-- Can be story-driven or player-initiated via POST /segments/rest endpoint
-- Provide a 15-minute rest period (REST_SEGMENT_DURATION = 900 seconds)
-- Do NOT automatically heal wounds - wounds heal independently based on their HealAt timestamps
-- During the 15-minute rest, any bashing wounds that are 15+ minutes old will naturally heal
-- Lethal (6 hours) and aggravated (7 days) wounds are unlikely to heal during the short rest period
-- Always have Outcome="normal" with no decision points
-- Pre-populated with SegmentTitle, SegmentActivity, NarrativeText, and NextSegmentID
-- Character remains in "rest" mode until segment completion
-
-**Rest Segment Insertion Logic:**
-
-When a player requests a rest segment via POST /segments/rest, the system evaluates where to insert it:
-
-1. **If current segment is the final segment:** Cannot insert rest (raises error)
-2. **If current segment has ≥30 seconds remaining:** Insert rest after current segment
-3. **If current segment has <30 seconds remaining:** Evaluate next segment
-   - If next segment is final: Cannot insert rest (raises error)
-   - If next segment is not final: Insert rest after next segment
-
-Only the current and next segments are evaluated. Rest segments are always inserted as soon as possible in the story chain.
-
-Note: Wound healing is time-based and independent of rest segments. Wounds heal based on their type:
+Wound healing is time-based and independent of segments. Wounds heal based on their type:
 
 - Bashing wounds: heal after 15 minutes from infliction
 - Lethal wounds: heal after 6 hours from infliction
@@ -561,16 +516,6 @@ All Lambda functions are deployed with:
 - Clears character active state
 - Records in StoryHistory
 
-**api-segment-rest** (Logical ID: `ApiSegmentRestFunction`):
-
-- Initiates healing rest for wounded characters (POST /segment/rest)
-- Creates a special rest segment with calculated healing times
-- Validates character is not in an active story
-- Sets character GameMode to "Incremental" during rest
-- Healing duration based on wound severity (bashing/lethal/aggravated)
-- Automatically heals wounds when segment completes
-- **Polling Management**: Enables polling infrastructure like api-story-start
-
 ### Processing Layer Functions
 
 **ops-segment-poller** (Logical ID: `OpsSegmentPollerFunction`):
@@ -600,7 +545,7 @@ All Lambda functions are deployed with:
 
 - **Trigger**: SQS `eidolon-advancement-queue`
 - Claims segment by checking ProcessingStatus for idempotency
-- Processes simple segments (rest/decision) if not already processed
+- Processes simple segments (decision) if not already processed
 - Applies deferred CharacterUpdates (combat rewards, story effects)
 - Creates next segment or completes story
 - **Polling Management**: When story completes (next_segment_id is None):
@@ -663,7 +608,7 @@ The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **t
 - Stores polling state: "run" or "stop" (string values, not JSON)
 - Checked by poller each invocation
 - **State Transitions**:
-  - Set to "run" by: api-story-start, api-segment-rest, ops-segment-poller (when finding active segments)
+  - Set to "run" by: api-story-start, ops-segment-poller (when finding active segments)
   - Set to "stop" by: ops-story-advance (when completing last story), ops-segment-poller (when no segments to process)
 
 **EventBridge Rule** (`eidolon-story-poller`):
@@ -672,7 +617,7 @@ The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **t
 - Target: ops-segment-poller Lambda
 - State: DISABLED by default
 - **Enable/Disable Authority**:
-  - api-story-start and api-segment-rest can enable the rule
+  - api-story-start can enable the rule
   - ONLY ops-segment-poller can disable the rule (when parameter="stop" and no active segments)
 - Race condition window: <100ms between final check and disable (acceptable)
 

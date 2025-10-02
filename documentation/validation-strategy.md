@@ -156,7 +156,7 @@ Story validation runs automatically via GitHub Actions:
    - No circular dependencies
 
 2. **validate_story_content.py** — Checks:
-   - Segment type structure (mechanical, decision, rest)
+   - Segment type structure (mechanical, decision)
    - Results/Challenges/Combat/DecisionOptions validity
    - Required fields present
    - Type correctness

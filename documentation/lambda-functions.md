@@ -27,7 +27,6 @@ All 15 Lambda functions are fully implemented and operational in production:
 - `api-story-start` - Begin new story
 - `api-story-abandon` - Exit active story
 - `api-segment-decision` - Submit player choice
-- `api-segment-rest` - Initiate healing segment
 - `api-segment-status` - Check segment readiness
 - `api-segment-history` - Retrieve past segments
 
@@ -70,7 +69,6 @@ logical_id_map = {
     "api-character-list": "ApiCharacterListFunction",
     "api-segment-decision": "ApiSegmentDecisionFunction",
     "api-segment-history": "ApiSegmentHistoryFunction",
-    "api-segment-rest": "ApiSegmentRestFunction",
     "api-segment-status": "ApiSegmentStatusFunction",
     "api-story-abandon": "ApiStoryAbandonFunction",
     "api-story-start": "ApiStoryStartFunction",

@@ -635,48 +635,6 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /segment/rest:
-    post:
-      tags:
-        - Segments
-      summary: Insert a rest segment
-      description: Inserts a rest segment into the flow to allow healing.
-      operationId: insertRest
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [CharacterID]
-              properties:
-                CharacterID:
-                  type: string
-                  format: uuid
-      responses:
-        "200":
-          description: Rest segment created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RestResponse"
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "422":
-          description: Cannot insert rest at this point
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-
 components:
   securitySchemes:
     CognitoAuth:
@@ -1183,7 +1141,7 @@ components:
           description: UUID of the segment definition
         SegmentType:
           type: string
-          enum: [mechanical, decision, rest]
+          enum: [mechanical, decision]
           description: Type of segment
         Status:
           type: string
@@ -1579,19 +1537,6 @@ components:
           items:
             $ref: "#/components/schemas/SegmentHistoryItem"
       required: [CharacterID, Segments]
-
-    RestResponse:
-      type: object
-      properties:
-        Success:
-          type: boolean
-        RestSegmentId:
-          type: string
-        InsertedAfter:
-          type: string
-        Message:
-          type: string
-      required: [Success]
 
     AbandonResponse:
       type: object

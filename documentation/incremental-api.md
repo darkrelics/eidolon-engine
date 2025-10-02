@@ -420,38 +420,7 @@ Retrieves historical segment data for a character.
 }
 ```
 
-### Character Rest
-
-Initiates a rest segment for character healing.
-
-**Endpoint:** `POST /segment/rest`
-
-**Authentication:** Required
-
-**Request Body:**
-
-```json
-{
-  "CharacterID": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**Response:**
-
-```json
-{
-  "Segment": {
-    "ActiveSegmentID": "rest_segment_uuid",
-    "SegmentType": "rest",
-    "Status": "active",
-    "StartTime": 1704900000,
-    "EndTime": 1704903600,
-    "HealingAmount": 2
-  }
-}
-```
-
-Client Cadence (Incremental mode)
+## Client Cadence (Incremental mode)
 
 - After `POST /story/start`, the client updates the UI with the first segment immediately.
 - First `GET /segment/status` occurs 60 seconds after `StartTime`.

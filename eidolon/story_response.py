@@ -111,9 +111,6 @@ def format_story_segment_response(active_segment: dict, story_metadata: dict, se
 
         response["Segment"]["Outcome"] = active_segment.get("Outcome")
 
-    elif segment_type == "rest":
-        response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))
-
     else:
         logger.warning(f"Unknown segment type for {active_segment.get('SegmentID')}")
         response["Segment"]["Description"] = segment_data.get("Description", segment_data.get("Narrative", ""))

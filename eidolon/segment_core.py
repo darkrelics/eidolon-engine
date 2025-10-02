@@ -12,7 +12,7 @@ from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
 
 # Valid segment types for the incremental game
-VALID_SEGMENT_TYPES = ["mechanical", "decision", "rest"]
+VALID_SEGMENT_TYPES = ["mechanical", "decision"]
 MECHANICAL_ONLY_TYPES = ["mechanical"]
 
 
@@ -37,7 +37,7 @@ def is_simple_segment(segment_type: str) -> bool:
     """
     Check if a segment type can be processed directly by the poller.
 
-    Simple segments (rest and decision) don't require complex processing
+    Simple segments (decision) don't require complex processing
     and can be handled directly without queuing.
 
     Args:
@@ -46,7 +46,7 @@ def is_simple_segment(segment_type: str) -> bool:
     Returns:
         True if segment can be processed directly
     """
-    return segment_type.lower() in ["rest", "decision"]
+    return segment_type.lower() == "decision"
 
 
 def get_active_segment(active_segment_id: str) -> dict:

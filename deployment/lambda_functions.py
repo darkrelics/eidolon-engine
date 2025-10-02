@@ -266,7 +266,6 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
         "api-story-history",
         "api-segment-decision",
         "api-segment-history",
-        "api-segment-rest",
         "api-segment-status",
         "ops-segment-poller",
         "ops-segment-process",

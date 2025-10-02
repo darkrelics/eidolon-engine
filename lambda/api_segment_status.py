@@ -154,19 +154,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
                     response["NextSegmentID"] = next_segment_id
 
-                elif segment_type == "rest":
-                    # Get rest segment results
-                    rest_results = segment_def.get("Results", {})
-                    if isinstance(rest_results, dict) and "Normal" in rest_results:
-                        normal_result = rest_results["Normal"]
-                        response["Narrative"] = normal_result.get("Narrative", "")
-                        response["Effects"] = normal_result.get("Effects", {})
-                        response["NextSegmentID"] = normal_result.get("NextSegmentID")
-                    else:
-                        response["Narrative"] = ""
-                        response["Effects"] = {}
-                        response["NextSegmentID"] = segment_def.get("NextSegmentID")
-
                 elif segment_type == "decision":
                     decision = active_segment.get("Decision")
                     decision_options = segment_def.get("DecisionOptions", {})
@@ -230,10 +217,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             # If DecisionOptions not in active segment, get from definition
             if not response.get("DecisionOptions"):
                 response["DecisionOptions"] = segment_def.get("DecisionOptions", {})
-
-    # Include healing data for rest segments
-    if segment_type == "rest":
-        response["HealingApplied"] = active_segment.get("HealingApplied")
 
     # Include story information for consistent display
     if story_id:

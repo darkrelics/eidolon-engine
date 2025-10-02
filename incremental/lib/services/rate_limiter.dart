@@ -224,7 +224,6 @@ class GlobalRateLimiter {
   static const String startStory = 'api_start_story';
   static const String submitDecision = 'api_submit_decision';
   static const String submitOutcome = 'api_submit_outcome';
-  static const String restCharacter = 'api_rest_character';
   static const String abandonStory = 'api_abandon_story';
   static const String getSegmentStatus = 'api_get_segment_status';
   static const String getAvailableStories = 'api_get_available_stories';

@@ -71,7 +71,7 @@ def lambda_handler(event: dict, context: object) -> dict:
     Lambda handler to process segments.
 
     Triggered by SQS with ActiveSegmentID messages.
-    Processes all segment types (mechanical, rest, decision).
+    Processes all segment types (mechanical, decision).
 
     Args:
         event: SQS event with ActiveSegmentID messages

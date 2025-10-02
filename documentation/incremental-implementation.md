@@ -504,7 +504,7 @@ Represents the current segment state with timing and narrative data:
 class ActiveSegment {
   final String id;
   final String segmentId;
-  final String segmentType;        // "mechanical", "decision", "rest"
+  final String segmentType;        // "mechanical", "decision"
   final String status;             // "active", "completed"
   final DateTime startTime;
   final DateTime endTime;
@@ -2537,58 +2537,28 @@ def apply_unconscious_damage(character, new_damage_type):
     return wounds
 ```
 
-### 4.4 Rest Segments and Healing Mechanics
+### 4.4 Healing Mechanics
 
-Rest segments provide pacing in stories and allow characters time to recover. However, healing checks are not limited to rest segments - they occur at the start of EVERY segment.
+Healing checks occur at the start of EVERY segment.
 
 #### Healing Process
 
-When any new segment is created (mechanical, decision, or rest), the system automatically:
+When any new segment is created (mechanical or decision), the system automatically:
 
 2. Checks if the character is dead - dead characters do not heal
 3. Removes wounds that have passed their `HealAt` timestamp (for living characters)
 4. Updates the character's Wounds array
 5. Logs the healing results
 
-#### Rest Segment Implementation
+#### Healing System Notes
 
-Rest segments themselves are simple time delays with no challenges or decisions:
-
-#### Segment Definition Example
-
-A rest segment in the Segments table:
-
-```json
-{
-  "StoryID": "forest-adventure-001",
-  "SegmentID": "seg-rest-001",
-  "SegmentType": "rest",
-  "SegmentActivity": "Resting and recovering from wounds",
-  "SegmentTitle": "Rest and Recovery",
-  "NarrativeText": "You take time to rest and recover from your wounds. Your body slowly heals as you regain your strength.",
-  "SegmentDuration": 900,
-  "Results": {
-    "Normal": {
-      "Narrative": "Your rest was restorative. You feel refreshed and ready to continue.",
-      "Effects": {},
-      "NextSegmentID": "seg-forest-003"
-    }
-  },
-  "IsTemporary": true
-}
-```
-
-#### Key Points
-
-- **Healing at story start**: Wounds are also healed when starting a new story (in `start_story()`)
+- **Healing at story start**: Wounds are healed when starting a new story (in `start_story()`)
 - **Healing on character retrieval**: The `api_get_character` endpoint heals expired wounds before returning character data
 - **Dead characters don't heal**: Characters with `CharState` of "dead" skip healing entirely
-- **Rest segments are passive**: They provide narrative pacing but have no active mechanics
 - **Healing is time-based**: Wounds heal based on their `HealAt` timestamp, not segment type
 - **Non-blocking**: Healing failures don't prevent segment creation or character retrieval
-- **Consistent outcome**: Rest segments always result in "normal" outcome
 
-This design ensures characters naturally recover over time regardless of segment type, while rest segments provide narrative breathing room in the story flow.
+This design ensures characters naturally recover over time regardless of segment type.
 
 ## 5. Processing Flow Implementation
 
