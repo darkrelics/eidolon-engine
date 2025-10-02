@@ -304,20 +304,20 @@ In this example:
 
 ## Segments Table
 
-| Field             | Type      | Key       | Description                                                                    |
-| ----------------- | --------- | --------- | ------------------------------------------------------------------------------ |
-| `StoryID`         | `STRING`  | **HASH**  | UUID of the parent story.                                                      |
-| `SegmentID`       | `STRING`  | **RANGE** | UUID of the segment.                                                           |
-| `SegmentType`     | `STRING`  |           | Type: decision or mechanical.                                                  |
-| `SegmentActivity` | `STRING`  |           | Activity indicator text shown while the segment is active.                     |
-| `SegmentTitle`    | `STRING`  |           | Title text displayed on the segment card (e.g., "Walking through the forest"). |
-| `SegmentDuration` | `NUMBER`  |           | Time in seconds for this segment.                                              |
-| `DecisionText`    | `STRING`  |           | For decision segments: the choice presented.                                   |
-| `DecisionOptions` | `MAP`     |           | For decision segments: map of option ID to next segment ID.                    |
-| `DefaultDecision` | `STRING`  |           | For decision segments: which option to auto-select.                            |
-| `Challenges`      | `LIST`    |           | For mechanical segments: list of skill/attribute challenges.                   |
-| `Combat`          | `MAP`     |           | For mechanical segments: combat configuration (if applicable).                 |
-| `Results`         | `MAP`     |           | For mechanical segments: outcome-based results (see structure below).          |
+| Field             | Type     | Key       | Description                                                                    |
+| ----------------- | -------- | --------- | ------------------------------------------------------------------------------ |
+| `StoryID`         | `STRING` | **HASH**  | UUID of the parent story.                                                      |
+| `SegmentID`       | `STRING` | **RANGE** | UUID of the segment.                                                           |
+| `SegmentType`     | `STRING` |           | Type: decision or mechanical.                                                  |
+| `SegmentActivity` | `STRING` |           | Activity indicator text shown while the segment is active.                     |
+| `SegmentTitle`    | `STRING` |           | Title text displayed on the segment card (e.g., "Walking through the forest"). |
+| `SegmentDuration` | `NUMBER` |           | Time in seconds for this segment.                                              |
+| `DecisionText`    | `STRING` |           | For decision segments: the choice presented.                                   |
+| `DecisionOptions` | `MAP`    |           | For decision segments: map of option ID to next segment ID.                    |
+| `DefaultDecision` | `STRING` |           | For decision segments: which option to auto-select.                            |
+| `Challenges`      | `LIST`   |           | For mechanical segments: list of skill/attribute challenges.                   |
+| `Combat`          | `MAP`    |           | For mechanical segments: combat configuration (if applicable).                 |
+| `Results`         | `MAP`    |           | For mechanical segments: outcome-based results (see structure below).          |
 
 **Primary Key:** StoryID (HASH), SegmentID (RANGE)
 

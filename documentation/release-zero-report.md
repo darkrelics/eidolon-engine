@@ -483,12 +483,12 @@ update docs.
 
 **Location:** `data/`
 
-| File                        | Type              | Segments | Features Tested                     | Status   |
-| --------------------------- | ----------------- | -------- | ----------------------------------- | -------- |
-| `test_story.json`           | Repeatable story  | 11       | Mechanical, decision segments       | ✅ Valid |
-| `test_story_branching.json` | Test story        | 6        | Weighted branching, prerequisites   | ✅ Valid |
-| `test_opponents.json`       | Combat data       | N/A      | Opponent definitions for combat     | ✅ Valid |
-| `test_archetypes.json`      | Character classes | N/A      | Player archetype definitions        | ✅ Valid |
+| File                        | Type              | Segments | Features Tested                   | Status   |
+| --------------------------- | ----------------- | -------- | --------------------------------- | -------- |
+| `test_story.json`           | Repeatable story  | 11       | Mechanical, decision segments     | ✅ Valid |
+| `test_story_branching.json` | Test story        | 6        | Weighted branching, prerequisites | ✅ Valid |
+| `test_opponents.json`       | Combat data       | N/A      | Opponent definitions for combat   | ✅ Valid |
+| `test_archetypes.json`      | Character classes | N/A      | Player archetype definitions      | ✅ Valid |
 
 ### 6.2 Test Coverage
 
