@@ -2563,11 +2563,18 @@ A rest segment in the Segments table:
   "StoryID": "forest-adventure-001",
   "SegmentID": "seg-rest-001",
   "SegmentType": "rest",
-  "SegmentActivity": "Resting at the campfire",
-  "SegmentTitle": "You rest by the warm campfire, tending to your wounds",
-  "SegmentDuration": 600, // 10 minutes
-  "RestSegment": true,
-  "NextSegmentID": "seg-forest-003"
+  "SegmentActivity": "Resting and recovering from wounds",
+  "SegmentTitle": "Rest and Recovery",
+  "NarrativeText": "You take time to rest and recover from your wounds. Your body slowly heals as you regain your strength.",
+  "SegmentDuration": 900,
+  "Results": {
+    "Normal": {
+      "Narrative": "Your rest was restorative. You feel refreshed and ready to continue.",
+      "Effects": {},
+      "NextSegmentID": "seg-forest-003"
+    }
+  },
+  "IsTemporary": true
 }
 ```
 

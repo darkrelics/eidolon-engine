@@ -222,42 +222,40 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
     next_segment_id = normal_result.get("NextSegmentID") if isinstance(normal_result, dict) else None
 
     if not next_segment_id:
-        logger.warning(f"Cannot insert rest - current segment has no normal outcome NextSegmentID for {story_id}")
-        raise ValueError("Cannot insert rest segment - current segment has no normal outcome continuation")
+        # Current segment is the final segment - cannot insert rest
+        logger.warning(f"Cannot insert rest - current segment is the final segment for {story_id}")
+        raise ValueError("Cannot insert rest segment - current segment is the final segment in the story")
 
+    # Check if current segment has enough time remaining (>=30 seconds)
     if time_remaining >= min_time_required:
+        # Insert rest after current segment
         insertion_point_id = current_segment_id
         rest_next_segment_id = next_segment_id
         logger.info(f"Inserting rest after current segment with {time_remaining}s remaining for {story_id}")
     else:
-        checked_segments = {current_segment_id}
-        while next_segment_id and next_segment_id not in checked_segments:
-            try:
-                next_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id})
-                if not next_segment:
-                    raise ValueError(f"Next segment not found: {next_segment_id}")
-            except ClientError as err:
-                logger.error(f"Failed to get next segment for {next_segment_id} Error: {err}", exc_info=True)
-                raise RuntimeError(f"Failed to get next segment: {err}") from err
+        # Current segment has <30 seconds, evaluate next segment
+        try:
+            next_segment = dynamo.get_item(TableName.SEGMENTS, {"StoryID": story_id, "SegmentID": next_segment_id})
+            if not next_segment:
+                raise ValueError(f"Next segment not found: {next_segment_id}")
+        except ClientError as err:
+            logger.error(f"Failed to get next segment for {next_segment_id} Error: {err}", exc_info=True)
+            raise RuntimeError(f"Failed to get next segment: {err}") from err
 
-            segment_duration = next_segment.get("SegmentDuration", 300)
-            if segment_duration >= min_time_required:
-                insertion_point_id = next_segment_id
-                # Get the next segment ID from this segment's Normal outcome
-                next_results = next_segment.get("Results", {})
-                next_normal = next_results.get("Normal", {})
-                rest_next_segment_id = next_normal.get("NextSegmentID") if isinstance(next_normal, dict) else None
-                logger.info(f"Inserting rest after segment {next_segment_id} for {story_id}")
-                break
+        # Get the segment after next
+        next_results = next_segment.get("Results", {})
+        next_normal = next_results.get("Normal", {})
+        segment_after_next = next_normal.get("NextSegmentID") if isinstance(next_normal, dict) else None
 
-            checked_segments.add(next_segment_id)
-            # Get the next segment ID from this segment's Normal outcome
-            next_results = next_segment.get("Results", {})
-            next_normal = next_results.get("Normal", {})
-            next_segment_id = next_normal.get("NextSegmentID") if isinstance(next_normal, dict) else None
-        else:
-            logger.warning(f"Cannot insert rest - no suitable segment found for {story_id}")
-            raise ValueError("Cannot insert rest segment - no suitable segment with enough time found")
+        if not segment_after_next:
+            # Next segment is the final segment - cannot insert rest
+            logger.warning(f"Cannot insert rest - next segment is the final segment for {story_id}")
+            raise ValueError("Cannot insert rest segment - next segment is the final segment in the story")
+
+        # Insert rest after next segment
+        insertion_point_id = next_segment_id
+        rest_next_segment_id = segment_after_next
+        logger.info(f"Inserting rest after next segment {next_segment_id} for {story_id}")
 
     rest_segment_id = str(uuid7())
 
@@ -266,8 +264,9 @@ def insert_rest_segment(story_id: str, current_segment_id: str, rest_duration: i
         "SegmentID": rest_segment_id,
         "SegmentType": "rest",
         "SegmentDuration": rest_duration,
-        "Title": "Rest and Recovery",
-        "Prompt": "You take time to rest and recover from your wounds. Your body slowly heals as you regain your strength.",
+        "SegmentTitle": "Rest and Recovery",
+        "SegmentActivity": "Resting and recovering from wounds",
+        "NarrativeText": "You take time to rest and recover from your wounds. Your body slowly heals as you regain your strength.",
         "Results": {
             "Normal": {
                 "Narrative": "Your rest was restorative. You feel refreshed and ready to continue.",

@@ -298,8 +298,20 @@ Rest segments are special 15-minute rest periods that allow characters to take a
 - During the 15-minute rest, any bashing wounds that are 15+ minutes old will naturally heal
 - Lethal (6 hours) and aggravated (7 days) wounds are unlikely to heal during the short rest period
 - Always have Outcome="normal" with no decision points
-- Pre-populated with narrative text and NextSegmentID
+- Pre-populated with SegmentTitle, SegmentActivity, NarrativeText, and NextSegmentID
 - Character remains in "rest" mode until segment completion
+
+**Rest Segment Insertion Logic:**
+
+When a player requests a rest segment via POST /segments/rest, the system evaluates where to insert it:
+
+1. **If current segment is the final segment:** Cannot insert rest (raises error)
+2. **If current segment has ≥30 seconds remaining:** Insert rest after current segment
+3. **If current segment has <30 seconds remaining:** Evaluate next segment
+   - If next segment is final: Cannot insert rest (raises error)
+   - If next segment is not final: Insert rest after next segment
+
+Only the current and next segments are evaluated. Rest segments are always inserted as soon as possible in the story chain.
 
 Note: Wound healing is time-based and independent of rest segments. Wounds heal based on their type:
 
