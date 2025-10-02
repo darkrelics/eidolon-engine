@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
+from eidolon.state_machines import claim_segment_for_processing as state_machine_claim
 from eidolon.time_utils import now_unix
 
 
@@ -181,25 +182,12 @@ def claim_segment_for_processing(active_segment_id: str) -> bool:
     """
     Attempt to claim a segment for processing using optimistic locking.
 
+    Delegates to state machine implementation for atomic transition.
+
     Args:
         active_segment_id: Active segment UUID
 
     Returns:
         True if successfully claimed, False if already being processed
     """
-    try:
-        dynamo.update_item(
-            TableName.ACTIVE_SEGMENTS,
-            Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :processing",
-            ConditionExpression="attribute_exists(ActiveSegmentID) AND ProcessingStatus = :pending",
-            ExpressionAttributeValues={":processing": "processing", ":pending": "pending"},
-        )
-        logger.info(f"Successfully claimed segment for processing for {active_segment_id}")
-        return True
-    except ClientError as err:
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            logger.info(f"Segment already being processed for {active_segment_id}")
-            return False
-        logger.error(f"Failed to claim segment for processing for {active_segment_id} Error: {err}", exc_info=True)
-        return False
+    return state_machine_claim(active_segment_id)

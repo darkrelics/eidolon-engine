@@ -13,6 +13,7 @@ from eidolon.character_segment import character_get_active_segment
 from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time
+from eidolon.state_machines import GameMode, set_character_game_mode
 from eidolon.validation import validate_uuid
 
 
@@ -300,6 +301,8 @@ def reset_character_game_mode(character_id: str) -> None:
     - Clears ActiveStoryID
     - Clears ActiveSegmentID
 
+    Delegates to state machine for transition validation.
+
     Args:
         character_id: Character UUID
 
@@ -310,18 +313,16 @@ def reset_character_game_mode(character_id: str) -> None:
     if not character_id:
         raise ValueError("Character ID cannot be empty")
 
-    try:
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET GameMode = :none REMOVE ActiveStoryID, ActiveSegmentID",
-            ExpressionAttributeValues={":none": "None"},
-        )
-        logger.info(f"Reset character game mode and cleared active story fields for {character_id}")
+    # Use state machine to transition back to None
+    success = set_character_game_mode(
+        character_id=character_id,
+        new_mode=GameMode.NONE.value,
+    )
 
-    except ClientError as err:
-        logger.error(f"Failed to reset character state for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to reset character state: {err}") from err
+    if not success:
+        logger.warning(f"Failed to reset GameMode for {character_id} (may already be None)")
+
+    logger.info(f"Reset character game mode and cleared active story fields for {character_id}")
 
 
 def character_get_active_story(character: dict) -> dict:

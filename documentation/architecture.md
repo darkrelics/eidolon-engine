@@ -271,6 +271,158 @@ stateDiagram-v2
 - **MUD**: Character active in traditional MUD gameplay
 - **Incremental**: Character active in story progression
 
+**Character GameMode State Machine:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> None: Character created
+    None --> Incremental: Start story<br/>(api-story-start)
+    None --> MUD: Enter MUD<br/>(future implementation)
+    Incremental --> None: Story completes<br/>(ops-story-advance)
+    Incremental --> None: Story abandoned<br/>(api-story-abandon)
+    MUD --> None: Exit MUD<br/>(future implementation)
+    None --> [*]
+
+    note right of None
+        Allowed transitions:
+        - None → Incremental (story start)
+        - None → MUD (enter MUD)
+
+        No direct transitions between
+        Incremental and MUD allowed.
+        Must return to None first.
+    end note
+
+    note right of Incremental
+        Character state when in Incremental:
+        - GameMode = "Incremental"
+        - ActiveStoryID set (UUID)
+        - ActiveSegmentID set (UUID)
+
+        Validation on story start:
+        - GameMode MUST be "None"
+        - ActiveStoryID MUST be null
+        - ActiveSegmentID MUST be null
+    end note
+
+    note left of MUD
+        Character state when in MUD:
+        - GameMode = "MUD"
+        - MUD-specific fields active
+
+        Future implementation will
+        follow same exclusive access
+        pattern as Incremental.
+    end note
+```
+
+**Segment ProcessingStatus State Machine:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: Segment created
+    pending --> processing: ops-segment-process<br/>claims segment
+    processing --> processed: Processing completes<br/>successfully
+    processed --> [*]
+
+    note right of pending
+        Initial state when ActiveSegment created.
+
+        Segment awaits processing by:
+        - ops-segment-process (mechanical)
+        - ops-story-advance (decision/all)
+    end note
+
+    note right of processing
+        Atomic transition using DynamoDB
+        conditional write:
+
+        ConditionExpression:
+        "ProcessingStatus = :pending"
+
+        Only ONE Lambda can claim
+        the segment for processing.
+        Prevents duplicate processing.
+    end note
+
+    note left of processed
+        Terminal state indicating:
+        - Outcome calculated
+        - CharacterUpdates applied
+        - Segment safe to advance
+
+        Idempotent: Multiple attempts
+        to mark processed are safe.
+        Uses conditional write to
+        prevent state corruption.
+    end note
+```
+
+**Story Lifecycle State Machine:**
+
+```mermaid
+stateDiagram-v2
+    [*] --> Available
+    Available --> Active: Story started<br/>(api-story-start)
+    Active --> Completed: Final segment completes<br/>(ops-story-advance)
+    Active --> Abandoned: Story abandoned<br/>(api-story-abandon)
+    Completed --> Available: Cooldown expires<br/>(daily/repeatable)
+    Completed --> [*]: One-time story
+    Abandoned --> Available: Can retry
+
+    note right of Available
+        Story in AvailableStories array.
+
+        Prerequisites checked:
+        - Skill requirements met
+        - Required items present
+        - Cooldown expired (if any)
+
+        Cooldown types:
+        - one-time: Permanent after completion
+        - daily: Reset at UTC midnight
+        - repeatable: No cooldown
+    end note
+
+    note right of Active
+        Character fields during Active:
+        - ActiveStoryID = story UUID
+        - ActiveSegmentID = current segment
+        - GameMode = "Incremental"
+
+        StoryHistory entry created with:
+        - StoryInstanceID (UUIDv7)
+        - StartedAt timestamp
+        - SegmentHistory array
+    end note
+
+    note left of Completed
+        On completion:
+        - Add to CompletedStories set
+        - Clear ActiveStoryID
+        - Clear ActiveSegmentID
+        - Set GameMode = "None"
+        - Update StoryHistory:
+          * FinishedAt timestamp
+          * FinalOutcome
+          * TotalXP earned
+    end note
+
+    note left of Abandoned
+        On abandonment:
+        - Add to AbandonedStories set
+        - Clear ActiveStoryID
+        - Clear ActiveSegmentID
+        - Set GameMode = "None"
+        - Update StoryHistory:
+          * AbandonedAt timestamp
+          * No FinalOutcome
+
+        Abandoned stories can be
+        retried immediately.
+    end note
+```
+
 **Automatic Recovery Paths:**
 
 1. **Character Retrieval Cleanup**: `api-character-get` resets GameMode to "None" if no valid ActiveStoryID/ActiveSegmentID exists

@@ -560,8 +560,6 @@ update docs.
 - State machine summaries
 - Hot path flows
 
-**Effort:** 4-6 hours
-
 **Target:** R1 (after deployment, include lessons learned)
 
 #### 🟡 **DynamoDB Schema Files**
@@ -573,8 +571,6 @@ update docs.
 - `story` table records
 - `segments` table records
 
-**Effort:** 2-3 hours
-
 **Target:** R1 or R5 (Content Pipeline)
 
 #### 🟡 **Structured Logging Enhancement**
@@ -583,8 +579,6 @@ update docs.
 
 **Recommendation:** Migrate from f-string logging to structured JSON logging with explicit fields (characterId, storyId, segmentId)
 
-**Effort:** 6-8 hours (touch all 17 Lambda functions)
-
 **Target:** R2 (Observability & Diagnostics)
 
 #### 🟡 **Test Data Expansion**
@@ -592,8 +586,6 @@ update docs.
 **Impact:** Missing validation for one-time and daily story types
 
 **Recommendation:** Add `test_story_onetime.json` and `test_story_daily.json`
-
-**Effort:** 1-2 hours
 
 **Target:** R5 (Content Pipeline) or R6 (Economy & Balance)
 
@@ -707,26 +699,26 @@ The inc-23 branch represents the production-ready baseline with all core infrast
    - Update combat processing logic
    - Test combat outcomes
 
-2. **Integration Testing** (8-12 hours)
+2. **Integration Testing**
    - pytest framework for Lambda testing
    - Test state machine transitions
    - Test idempotency keys
    - Test race conditions
 
-3. **State Machine Validation** (4 hours)
+3. **State Machine Validation**
    - Fuzzing for illegal state transitions
    - Verify GameMode enforcement
    - Test ProcessingStatus atomicity
 
 ### R1 Medium-Term Actions
 
-4. **Failure Injection Testing** (8 hours)
+4. **Failure Injection Testing**
    - DynamoDB throttling scenarios
    - Lambda timeout handling
    - SQS message replay
    - EventBridge polling failures
 
-5. **Performance Optimization** (4-6 hours)
+5. **Performance Optimization**
    - Lambda cold start reduction
    - DynamoDB query optimization
    - Client polling efficiency
