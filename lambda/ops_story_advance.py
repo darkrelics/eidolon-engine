@@ -9,7 +9,6 @@ Triggered by SQS to apply character updates and progress stories.
 
 from eidolon.character_data import get_character
 from eidolon.character_segment import update_character_active_segment
-from eidolon.constants import CharState
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome

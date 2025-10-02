@@ -5,7 +5,6 @@ Provides functions for recording segment history.
 """
 
 from botocore.exceptions import ClientError
-from uuid_extension import uuid7
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
