@@ -119,7 +119,10 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 effective_score = best_attempt.get("EffectiveScore", 0)
                 difficulty = best_attempt.get("Difficulty", 0)
 
-                # Calculate variance modifier based on experience.md formula
+                # Calculate variance modifier:
+                # - Max XP when S = D (equal difficulty)
+                # - Reduced XP when S > D (quadratic reduction based on ratio)
+                # - Current formula works for both S > D and D > S cases
                 if effective_score > 0 and difficulty > 0:
                     ratio = min(effective_score, difficulty) / max(effective_score, difficulty)
                     variance_modifier = ratio**2
@@ -129,9 +132,14 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 # Calculate base XP with variance modifier
                 xp_amount = BASE_XP * variance_modifier
 
-                # Apply failure penalty if challenge wasn't passed
+                # Apply failure penalty based on difficulty vs skill:
+                # - If S > D: 0% XP on failure (failing easy challenge = no reward)
+                # - If D >= S: 50% XP on failure (failing hard challenge = some reward)
                 if not passed:
-                    xp_amount *= FAILURE_XP_PENALTY
+                    if effective_score > difficulty:
+                        xp_amount = 0.0  # No XP for failing an easy challenge
+                    else:
+                        xp_amount *= FAILURE_XP_PENALTY  # 50% XP for failing hard challenge
 
                 # Award XP to skill (full amount)
                 if skill:
