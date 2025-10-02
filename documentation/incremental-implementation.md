@@ -2560,6 +2560,437 @@ When any new segment is created (mechanical or decision), the system automatical
 
 This design ensures characters naturally recover over time regardless of segment type.
 
+### 4.5 Combat System Redesign (Dual Action System)
+
+**Status:** Proposed redesign to improve combat tactics and skill utilization
+
+The current combat system has been evaluated and a redesign is proposed to better utilize character skills and provide more tactical depth. The new system introduces separate offensive and defensive actions per combat round.
+
+**Key Design Decisions:**
+- **All rounds processed at once** - no tick-based processing, async Lambda handles full combat
+- **Character action determined at combat start** - consistency until inventory/magic systems enable dynamic choices
+- **Combat awards XP** - both offensive and defensive skills gain experience
+- **Critical hits at sigma > 3.0** - deals 2 wounds instead of 1
+- **Opponent WeaponType used now** - determines wound type (lethal/bashing/aggravated)
+- **Simultaneous resolution** - both combatants act each round, damage applied when: (offensive_success AND NOT defensive_success)
+- **MaxRounds timeout = FAILURE** - opponent escapes if combat not resolved in time
+- **Victory quality based on wounds** - 0 wounds = exceptional, 1-2 = normal, 3+ = minimal
+
+#### 4.5.1 Design Principles
+
+**Dual Action System**
+
+Each combat round consists of:
+1. **Character Offensive Action** - attempts to deal damage
+2. **Character Defensive Action** - attempts to avoid damage
+3. **Opponent Offensive Action** - attempts to deal damage
+4. **Opponent Defensive Action** - attempts to avoid damage
+
+**Action Resolution**
+- **Offensive Success** AND **Defensive Failure** → Damage dealt
+- **Offensive Failure** OR **Defensive Success** → No damage
+- Both combatants resolve actions simultaneously each round
+- Damage applied based on: `(attacker_offensive_success AND defender_defensive_failure)`
+
+**Combat Processing**
+- Process ALL rounds specified in `Combat.MaxRounds` in a single execution
+- No tick-based processing - async Lambda handles full combat duration
+- Character's best action determined once at combat start
+- Action remains consistent throughout the encounter (until inventory/magic systems enable dynamic choices)
+
+#### 4.5.2 Combat Actions
+
+**Character Offensive Actions**
+
+Character automatically selects the highest-rated combination:
+
+| Action | Calculation | Notes |
+|--------|-------------|-------|
+| **Arcane** | Intelligence + Arcane | Magical attack |
+| **Brawling** | Strength + Brawling | Unarmed combat |
+| **Melee** | Strength + Melee | Melee weapons |
+| **Archery** | Agility + Archery | Ranged weapons |
+
+**Character Defensive Actions**
+
+Defensive action is determined by offensive action chosen:
+
+| Offensive Action | Defensive Action | Calculation |
+|-----------------|------------------|-------------|
+| Melee | **Parry** | Strength + Parry |
+| Arcane, Brawling, Archery | **Dodge** | Agility + Dodge |
+
+**Rationale:** Melee combat allows blocking/parrying with weapon. Other styles require mobility/dodging.
+
+**Opponent Actions**
+
+Opponents use the same system but configured via opponent data.
+
+#### 4.5.3 Combat Flow
+
+**Combat Start Sequence:**
+```
+1. Determine character's best offensive action (calculated once)
+2. Determine character's defensive action (based on offensive choice)
+3. Get opponent's offensive/defensive actions from data
+4. Process all MaxRounds rounds
+```
+
+**Per-Round Sequence:**
+```
+1. Character offensive check vs Opponent defensive rating → (char_off_success, char_off_sigma)
+2. Opponent offensive check vs Character defensive rating → (opp_off_success, opp_off_sigma)
+3. Character defensive check vs Opponent offensive rating → (char_def_success, char_def_sigma)
+4. Opponent defensive check vs Character offensive rating → (opp_def_success, opp_def_sigma)
+5. Apply damage:
+   - Character takes damage IF (opp_off_success AND NOT char_def_success)
+   - Opponent takes damage IF (char_off_success AND NOT opp_def_success)
+6. Check victory conditions after damage applied
+7. Log round results
+8. Continue to next round or end combat
+```
+
+**Example Combat:**
+```
+Character: Wizard (determined at combat start)
+  - Arcane (Int 3 + Arcane 1) = 4
+  - Brawling (Str 1 + Brawling 0) = 1
+  - Melee (Str 1 + Melee 0) = 1
+  - Archery (Agi 1 + Archery 0) = 1
+  → Best: Arcane (4)
+  → Defense: Dodge (Agi 1 + Dodge 0) = 1
+
+Opponent: Goblin Scout
+  - Offensive: Melee (8)
+  - Defensive: Parry (7)
+  - WeaponType: lethal
+
+Round 1 Resolution:
+  1. Wizard Arcane (4) vs Goblin Parry (7) → SUCCESS, sigma=1.2
+  2. Goblin Melee (8) vs Wizard Dodge (1) → SUCCESS, sigma=3.5 (CRITICAL!)
+  3. Wizard Dodge (1) vs Goblin Melee (8) → FAILURE, sigma=-2.1
+  4. Goblin Parry (7) vs Wizard Arcane (4) → SUCCESS, sigma=0.8
+
+  Result:
+  - Wizard attack: SUCCESS but Goblin PARRIED → No damage to goblin
+  - Goblin attack: SUCCESS and Wizard FAILED DODGE → Damage to wizard
+    - Sigma 3.5 > 3.0 → CRITICAL HIT → 2 wounds
+    - WeaponType: lethal → 2 lethal wounds added to wizard
+```
+
+#### 4.5.4 Damage System
+
+**Damage Amount**
+- **Critical Hit** (sigma > 3.0) → 2 wounds
+- **Normal Hit** (sigma ≤ 3.0) → 1 wound
+
+**Wound Type**
+- Determined by attacker's `WeaponType` attribute:
+  - `"lethal"` → lethal wounds
+  - `"bashing"` → bashing wounds
+  - `"aggravated"` → aggravated wounds
+
+**Experience Points**
+- Combat actions MUST award XP for skill improvement
+- Use XP-granting opposed check function (not the current `resolve_opposed_check()`)
+- XP awarded for:
+  - Offensive skill used (Arcane/Brawling/Melee/Archery)
+  - Defensive skill used (Parry/Dodge)
+- Both successful and failed checks grant XP based on difficulty
+
+**Future Enhancements (With Inventory/Equipment)**
+
+When inventory/equipment is implemented:
+- Weapon damage bonuses (modify base damage)
+- Armor damage reduction
+- Special weapon effects (poison, fire, etc.)
+- Equipment-based critical multipliers
+- Shield bonuses to Parry
+
+#### 4.5.5 Data Schema Changes
+
+**Current Opponent Schema Issues**
+
+The current opponent schema defines many fields that are unused:
+
+```json
+{
+  "CombatRating": 8,      // UNUSED - code expects Attributes.Strength
+  "DefenseRating": 7,     // UNUSED - code expects Skills.Dodge/Parry
+  "DamageRating": 6,      // UNUSED
+  "Toughness": 5,         // UNUSED
+  "ArmorRating": 1,       // UNUSED
+  "WeaponType": "lethal", // UNUSED
+  "WeaponDamage": 2,      // UNUSED
+  "Health": 6             // ONLY USED FIELD
+}
+```
+
+**Proposed Opponent Schema (Immediate Implementation)**
+
+```json
+{
+  "OpponentID": "...",
+  "Name": "Goblin Scout",
+  "Description": "...",
+
+  // Combat ratings
+  "OffensiveAction": "Melee",  // Arcane|Brawling|Melee|Archery
+  "OffensiveRating": 8,        // Total skill for offense
+  "DefensiveAction": "Parry",  // Parry|Dodge
+  "DefensiveRating": 7,        // Total skill for defense
+
+  "Health": 6,
+  "WeaponType": "lethal",      // USED NOW: Determines wound type
+
+  // Future use (when inventory ready)
+  "WeaponDamage": 2,           // RESERVED for damage bonuses
+  "ArmorRating": 1,            // RESERVED for damage reduction
+
+  "LootTable": [...],
+  "Tags": [...]
+}
+```
+
+**Future Opponent Schema (With Inventory/Equipment)**
+
+```json
+{
+  "OpponentID": "...",
+  "Name": "Goblin Scout",
+
+  // Full stat system (like characters)
+  "Attributes": {
+    "Strength": 2,
+    "Agility": 2,
+    "Intelligence": 1,
+    "Endurance": 1
+  },
+  "Skills": {
+    "Melee": 3,
+    "Archery": 0,
+    "Brawling": 1,
+    "Arcane": 0,
+    "Parry": 2,
+    "Dodge": 1
+  },
+
+  "Health": 6,
+
+  // Equipment (when inventory ready)
+  "Equipment": [
+    {
+      "PrototypeID": "rusty-sword",
+      "Slot": "mainhand",
+      "DamageBonus": 2,
+      "DamageType": "lethal"
+    },
+    {
+      "PrototypeID": "leather-armor",
+      "Slot": "torso",
+      "ArmorRating": 1
+    }
+  ],
+
+  "LootTable": [...],
+  "Tags": [...]
+}
+```
+
+#### 4.5.6 Implementation Plan
+
+**Immediate Implementation**
+
+✅ Can be implemented now
+
+Changes needed:
+
+1. **Remove COMBAT_ROUNDS_PER_TICK** and tick-based processing:
+   - Process all rounds in `Combat.MaxRounds` in single execution
+   - Remove `CombatState.Round` tracking between ticks
+   - Simplify to full combat resolution
+
+2. **Update `process_combat_segment()` function:**
+   - Calculate character's best offensive action (once at combat start)
+   - Determine character's defensive action (based on offensive choice)
+   - Process all rounds with 4 opposed checks per round:
+     - Character offensive vs Opponent defensive
+     - Opponent offensive vs Character defensive
+     - Character defensive vs Opponent offensive
+     - Opponent defensive vs Character offensive
+   - Apply damage based on: `(offensive_success AND NOT defensive_success)`
+   - Use **XP-granting** opposed check function (not current `resolve_opposed_check()`)
+   - Critical hits: sigma > 3.0 deals 2 wounds
+   - Normal hits: sigma ≤ 3.0 deals 1 wound
+   - Use opponent's `WeaponType` to determine wound type
+
+3. **Update opponent data schema:**
+   - Add `OffensiveAction` (Arcane|Brawling|Melee|Archery)
+   - Add `OffensiveRating` (total skill value)
+   - Add `DefensiveAction` (Parry|Dodge)
+   - Add `DefensiveRating` (total skill value)
+   - Use existing `WeaponType` field
+   - Keep existing `Health`
+   - Reserve `WeaponDamage` and `ArmorRating` for future use
+
+4. **New helper functions:**
+   ```python
+   def get_character_best_offensive_action(attributes, skills) -> tuple[str, float]:
+       """Determine character's best offensive action."""
+       actions = {
+           "Arcane": attributes.get("Intelligence", 0) + skills.get("Arcane", 0),
+           "Brawling": attributes.get("Strength", 0) + skills.get("Brawling", 0),
+           "Melee": attributes.get("Strength", 0) + skills.get("Melee", 0),
+           "Archery": attributes.get("Agility", 0) + skills.get("Archery", 0),
+       }
+       best_action = max(actions.items(), key=lambda x: x[1])
+       return best_action[0], best_action[1]
+
+   def get_character_defensive_rating(offensive_action: str, attributes, skills) -> tuple[str, float]:
+       """Determine character's defensive action and rating based on offensive action."""
+       if offensive_action == "Melee":
+           defensive_action = "Parry"
+           rating = attributes.get("Strength", 0) + skills.get("Parry", 0)
+       else:
+           defensive_action = "Dodge"
+           rating = attributes.get("Agility", 0) + skills.get("Dodge", 0)
+       return defensive_action, rating
+   ```
+
+5. **Update victory conditions:**
+   - Character reaches 0 health → DEATH outcome
+   - Opponent defeated → Outcome based on wounds taken (exceptional/normal/minimal)
+   - MaxRounds exceeded → Opponent escapes → FAILURE outcome
+
+**Future Enhancements (With Inventory/Equipment)**
+
+⏳ Requires inventory/equipment system
+
+Changes for later:
+
+1. Equipment modifiers:
+   - Weapon damage bonuses from `WeaponDamage`
+   - Armor damage reduction from `ArmorRating`
+   - Equipment stat bonuses
+   - Shield bonuses to Parry
+
+2. Opponent full stats:
+   - Use Attributes + Skills like characters (instead of ratings)
+   - Equipment system for opponents
+   - Dynamic action selection for opponents
+
+3. Advanced combat features:
+   - Enhanced critical hits with equipment multipliers
+   - Special weapon abilities (reach, enchantments)
+   - Status effects (poison, paralysis, bleeding)
+   - Weapon durability
+   - Combat maneuvers (disarm, trip, grapple)
+
+#### 4.5.7 Migration Strategy
+
+**Updating Existing Opponent Data**
+
+1. Analyze current opponent stats
+2. Map to new schema:
+   - `CombatRating` → `OffensiveRating`
+   - `DefenseRating` → `DefensiveRating`
+   - Determine logical action types based on description/tags
+3. Update all opponent records in test_opponents.json
+4. Remove deprecated fields (but keep reserved fields)
+
+**Backward Compatibility**
+
+- Keep old fields during transition
+- Provide fallback logic if new fields missing
+- Log warnings for deprecated data usage
+
+#### 4.5.8 Combat Outcome Determination
+
+**Victory Conditions (checked after each round):**
+
+Priority order:
+1. **Character Death:** Character reaches 0 health → DEATH outcome
+2. **Opponent Defeat:** Opponent reaches 0 health → Victory (quality based on wounds)
+3. **Max Rounds:** All rounds completed without decisive outcome → FAILURE (opponent escapes)
+
+**Victory Quality (when opponent defeated):**
+
+Based on wounds taken by character during combat:
+- **0 wounds** → EXCEPTIONAL outcome (flawless victory)
+- **1-2 wounds** → NORMAL outcome (clean victory)
+- **3+ wounds** → MINIMAL outcome (costly victory)
+
+**Combat Log Structure:**
+
+Each round logs:
+```python
+{
+    "Round": 1,
+    "CharacterOffensive": {
+        "Action": "Arcane",
+        "Rating": 4,
+        "Success": True,
+        "Sigma": 1.23
+    },
+    "CharacterDefensive": {
+        "Action": "Dodge",
+        "Rating": 1,
+        "Success": False,
+        "Sigma": -2.1
+    },
+    "OpponentOffensive": {
+        "Action": "Melee",
+        "Rating": 8,
+        "Success": True,
+        "Sigma": 3.5
+    },
+    "OpponentDefensive": {
+        "Action": "Parry",
+        "Rating": 7,
+        "Success": True,
+        "Sigma": 0.8
+    },
+    "Damage": {
+        "CharacterTook": 2,     # Critical hit (sigma > 3.0)
+        "CharacterWoundType": "lethal",
+        "OpponentTook": 0,      # Attack was parried
+        "OpponentWoundType": null
+    }
+}
+```
+
+#### 4.5.9 Benefits of Redesign
+
+1. **Immediate implementation:** Works now without inventory system
+2. **Clear upgrade path:** Natural enhancements when inventory/magic systems ready
+3. **Full skill utilization:** All combat skills (Arcane, Brawling, Melee, Archery, Parry, Dodge) become meaningful
+4. **Tactical depth:** Action selection matters, defensive actions provide counterplay
+5. **XP progression:** Combat trains relevant skills through XP awards
+6. **Balanced mechanics:** Both sides use same resolution system
+7. **Testable:** Each component can be unit tested independently
+8. **Scalable:** Async processing handles any combat duration
+9. **Backward compatible:** Can migrate existing opponents with data transformation
+
+#### 4.5.10 Current Implementation Issues
+
+The existing combat system has these critical issues that the redesign addresses:
+
+1. **Stat Schema Mismatch:** Code expects `Attributes.Strength` and `Skills.Melee` but opponents have `CombatRating` instead, causing opponents to always have 0 combat effectiveness.
+
+2. **Unused Stats:** 8 of 9 opponent fields are defined but never used in combat calculations.
+
+3. **No XP Awards:** Combat uses `resolve_opposed_check()` which doesn't award XP, preventing skill growth from combat experience.
+
+4. **Tick-Based Processing:** Uses `COMBAT_ROUNDS_PER_TICK` to process combat in chunks, adding unnecessary complexity since async Lambda can handle full combat.
+
+5. **Limited Skill Usage:** Only Strength+Melee and Agility+Dodge are used, ignoring Arcane, Brawling, Archery, and Parry skills.
+
+6. **No Defensive Actions:** Character cannot actively defend - only opponent's accuracy determines if damage is taken.
+
+7. **Inconsistent Constants:** Opponent attacks use hardcoded sigma thresholds instead of defined constants.
+
+8. **Complex Damage Calculation:** Current system has multiple damage levels (1/2/3 wounds) based on sigma, making balance unpredictable.
+
 ## 5. Processing Flow Implementation
 
 ### 5.1 Polling System Implementation

@@ -195,6 +195,29 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             # Also store wounds in results for CharacterUpdates (for client display)
             results["WoundUpdates"] = wound_updates
 
+        # Apply combat XP immediately to database
+        combat_xp = combat_state.get("XPUpdates", {})
+        if combat_xp:
+            try:
+                character_id = character.get("CharacterID")
+                if character_id:
+                    apply_character_updates(character_id, combat_xp)
+                logger.info(f"Applied combat XP to database for {character.get('CharacterID')}")
+            except Exception as err:
+                logger.error(f"Failed to apply combat XP for {character.get('CharacterID')} Error: {err}", exc_info=True)
+
+            # Merge combat XP into results (for client display)
+            if "XPUpdates" in results:
+                # Merge with challenge XP
+                if "SkillXP" in combat_xp:
+                    for skill, xp in combat_xp["SkillXP"].items():
+                        results["XPUpdates"]["SkillXP"][skill] = results["XPUpdates"]["SkillXP"].get(skill, 0) + xp
+                if "AttributeXP" in combat_xp:
+                    for attr, xp in combat_xp["AttributeXP"].items():
+                        results["XPUpdates"]["AttributeXP"][attr] = results["XPUpdates"]["AttributeXP"].get(attr, 0) + xp
+            else:
+                results["XPUpdates"] = combat_xp
+
     # Determine overall outcome
     if not outcomes:
         logger.warning(f"Mechanical segment has no challenges or combat for {segment_def.get('SegmentID')}")

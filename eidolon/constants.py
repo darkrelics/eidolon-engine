@@ -22,14 +22,6 @@ SIGMA_MINIMAL = -3.0  # -3+ sigma for minimal success
 # Combat constants
 DEFAULT_COMBAT_ROUNDS = 10  # Default max rounds if not specified in segment
 MAX_COMBAT_ROUNDS = 100  # Maximum rounds before combat times out (safety limit)
-COMBAT_TIMEOUT_OUTCOME = "failure"  # Outcome when combat exceeds max rounds
-
-# Mechanical combat processing cadence
-COMBAT_ROUNDS_PER_TICK = 5  # Rounds to simulate per processing pass
-
-# Combat damage classification (based on sigma)
-COMBAT_SIGMA_CRITICAL = 2.0  # Critical hit threshold
-COMBAT_SIGMA_SOLID = 1.0  # Solid hit threshold
 
 # Player durability thresholds
 PLAYER_DEATH_LETHAL_WOUNDS = 5  # Lethal wounds causing death
@@ -38,7 +30,6 @@ PLAYER_INCAPACITATED_TOTAL_WOUNDS = 10  # Total wounds causing incapacitation
 # Opponent defeat heuristics
 DEFAULT_OPPONENT_HEALTH = 5  # Default opponent health when unknown
 COMBAT_OPPONENT_WOUNDS_MULTIPLIER_FOR_DEFEAT = 2  # Total wounds vs health
-COMBAT_DOMINANCE_RATIO = 2.0  # Ratio to determine dominant damage dealer
 
 # Opposed check mechanics (MUD mechanics)
 OPPOSED_SHIFT = 0.20  # How much rating difference matters

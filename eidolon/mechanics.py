@@ -144,7 +144,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
 
 def resolve_opposed_check(aggressor: float, defender: float) -> dict:
     """
-    Resolve an opposed check using MUD mechanics.
+    Resolve an opposed check using MUD mechanics (without XP).
 
     Args:
         aggressor: Aggressor's rating
@@ -173,3 +173,65 @@ def resolve_opposed_check(aggressor: float, defender: float) -> dict:
     success: bool = sigma >= 0
 
     return {"Success": success, "Sigma": sigma}
+
+
+def resolve_opposed_check_with_xp(
+    character_id: str,
+    aggressor: float,
+    defender: float,
+    skill_name: str,
+    attribute_name: str,
+    xp_accumulator: dict,
+) -> dict:
+    """
+    Resolve an opposed check using MUD mechanics and accumulate XP.
+
+    Args:
+        character_id: Character UUID for XP tracking
+        aggressor: Aggressor's rating
+        defender: Defender's rating
+        skill_name: Name of skill to award XP to
+        attribute_name: Name of attribute to award XP to
+        xp_accumulator: Dict to accumulate XP (modified in place)
+
+    Returns:
+        Dict:
+            - Success: bool
+            - Sigma: float
+    """
+    from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY
+
+    # Resolve the check
+    result = resolve_opposed_check(aggressor, defender)
+
+    # Calculate XP based on difficulty
+    difficulty = defender
+    effective_score = aggressor
+    diff = effective_score - difficulty
+
+    # Base XP calculation (same as skill challenges)
+    xp_amount = BASE_XP + abs(diff) * 0.5
+
+    # Apply penalty for failure
+    if not result["Success"]:
+        if diff >= 0:
+            xp_amount = 0.0  # No XP for failing an easy check
+        else:
+            xp_amount *= FAILURE_XP_PENALTY  # 50% XP for failing hard check
+
+    # Accumulate skill XP
+    if skill_name:
+        if "SkillXP" not in xp_accumulator:
+            xp_accumulator["SkillXP"] = {}
+        xp_accumulator["SkillXP"][skill_name] = xp_accumulator["SkillXP"].get(skill_name, 0) + xp_amount
+
+    # Accumulate attribute XP (10% of skill XP)
+    if attribute_name:
+        if "AttributeXP" not in xp_accumulator:
+            xp_accumulator["AttributeXP"] = {}
+        attr_xp_amount = xp_amount * ATTRIBUTE_XP_RATIO
+        xp_accumulator["AttributeXP"][attribute_name] = (
+            xp_accumulator["AttributeXP"].get(attribute_name, 0) + attr_xp_amount
+        )
+
+    return result
