@@ -225,12 +225,12 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             sigma = -opp_off_result["Sigma"]  # Invert to get opponent's perspective
             damage = 2 if sigma > 3.0 else 1  # Critical hit = 2 wounds, normal = 1 wound
 
-            # Check if character is unconscious (health = 0)
-            current_health = character_max_health - len(player_wounds)
-            is_unconscious = current_health <= 0
-
             # Apply wounds using opponent's weapon type
             for _ in range(damage):
+                # Check if character is unconscious BEFORE applying this wound
+                current_health = character_max_health - len(player_wounds)
+                is_unconscious = current_health <= 0
+
                 damage_type = opponent_weapon_type
 
                 # Special rule: bashing damage to unconscious characters converts to lethal
