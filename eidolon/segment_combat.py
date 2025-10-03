@@ -131,6 +131,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     )
 
     # Get opponent stats
+    opponent_name = opponent.get("Name", "Unknown Opponent")
     opponent_health = opponent.get("Health", 5)
     opponent_weapon_type = opponent.get("WeaponType", "bashing")
     opp_off_action = opponent.get("OffensiveAction", "Melee")
@@ -273,6 +274,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                 "Victor": "opponent",
                 "OpponentDefeated": False,
                 "OpponentID": opponent_id,
+                "OpponentName": opponent_name,
                 "XPUpdates": xp_accumulator,
             }
 
@@ -286,6 +288,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                 "Victor": "opponent",
                 "OpponentDefeated": False,
                 "OpponentID": opponent_id,
+                "OpponentName": opponent_name,
                 "XPUpdates": xp_accumulator,
             }
 
@@ -316,6 +319,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                 "Victor": "player",
                 "OpponentDefeated": True,
                 "OpponentID": opponent_id,
+                "OpponentName": opponent_name,
                 "XPUpdates": xp_accumulator,
             }
 
@@ -329,5 +333,6 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         "Victor": "opponent",
         "OpponentDefeated": False,
         "OpponentID": opponent_id,
+        "OpponentName": opponent_name,
         "XPUpdates": xp_accumulator,
     }

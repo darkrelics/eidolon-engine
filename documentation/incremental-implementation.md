@@ -3436,9 +3436,28 @@ class _GameScreenState extends State<GameScreen> {
 
 Combat events use template-based narrative generation to create engaging descriptions from combat round data. The `CombatNarrative` utility class transforms structured combat data into dynamic, varied combat text.
 
-#### Implementation
+#### System Architecture
 
-Located in `incremental/lib/utils/combat_narrative.dart`, this utility provides:
+**Backend (`eidolon/segment_combat.py`):**
+- Stores `OpponentName` in CombatState for client use
+- Provides full combat round data including offensive/defensive actions
+- No server-side narrative generation - keeps backend data-focused
+
+**Frontend (`incremental/lib/utils/combat_narrative.dart`):**
+- Client-side template engine for combat narratives
+- Generates text on-demand from combat data
+- Easily modifiable templates without backend deployment
+
+#### Implementation Files
+
+**Backend:**
+- `eidolon/segment_combat.py` - Adds `OpponentName` to CombatState (lines 134, 277, 291, 322, 336)
+
+**Frontend:**
+- `incremental/lib/utils/combat_narrative.dart` - Template-based narrative generator
+- `incremental/lib/widgets/story/active_story_widget.dart` - Integration into UI (lines 6, 79, 105-107, 262-272, 510-528)
+
+#### Features
 
 - **Template-based narratives** for all offensive actions (Melee, Brawling, Archery, Arcane)
 - **Success/failure variations** with randomized templates for variety
@@ -3446,27 +3465,30 @@ Located in `incremental/lib/utils/combat_narrative.dart`, this utility provides:
 - **Severity descriptors** based on sigma values and damage dealt
 - **Character/opponent name substitution** for personalized narratives
 
-#### Usage Example
+#### Client Integration
+
+The combat narrative generator is integrated into `_SimpleSegmentCard` widget in `active_story_widget.dart`:
 
 ```dart
 import 'package:eidolon_incremental/utils/combat_narrative.dart';
 
-// Generate narrative from combat event
-final event = clientEvents.firstWhere(
-  (e) => e['EventType'] == 'combat',
-  orElse: () => null,
-);
+// In _SimpleSegmentCard builder
+final combatState = segment['CombatState'] as Map<String, dynamic>?;
+final opponentName = combatState?['OpponentName'] as String?;
 
-if (event != null && CombatNarrative.isCombatEvent(event)) {
-  final narrative = CombatNarrative.generateEventNarrative(
-    event,
-    characterName: character.name,
-    opponentName: 'the gremlin',
-  );
-  // narrative = "You unleash arcane energy that strikes the gremlin with
-  // solid power. The gremlin swings their blade at you, but the attack
-  // is deflected while you parry expertly."
-}
+displayText = clientEvents
+    .map((event) {
+      if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
+        return CombatNarrative.generateEventNarrative(
+          event,
+          characterName: characterName ?? 'You',
+          opponentName: opponentName,
+        );
+      }
+      return event['Description']?.toString() ?? '';
+    })
+    .where((desc) => desc.isNotEmpty)
+    .join('\n\n');
 ```
 
 #### Template Structure
@@ -3478,20 +3500,42 @@ static const _offensiveTemplates = {
   'Melee': {
     'success': [
       '{attacker} swings their blade at {defender}, landing a {severity} strike',
-      // ... more variations
+      // ... more variations (4 per category)
     ],
     'failure': [
       '{attacker} swings at {defender}, but the attack is deflected',
-      // ... more variations
+      // ... more variations (4 per category)
     ],
   },
-  // ... Brawling, Archery, Arcane
+  // ... Brawling, Archery, Arcane (4 actions total)
 };
 ```
 
 Defensive actions (Dodge/Parry) are appended to failed attacks when the defense succeeds:
 - "...but the attack is deflected **while the gremlin evades with quick reflexes**"
 - "...but the attack is deflected **as you parry expertly**"
+
+#### Example Output
+
+**Input Data (from backend):**
+```json
+{
+  "EventType": "combat",
+  "Title": "Round 1",
+  "Description": "Combat round",
+  "Data": {
+    "CharacterOffensive": {"Action": "Arcane", "Success": true, "Sigma": 2.5},
+    "OpponentDefensive": {"Action": "Dodge", "Success": false},
+    "Damage": {"OpponentTook": 1}
+  }
+}
+```
+
+**Generated Narrative:**
+```
+Arthos unleashes arcane energy that strikes the gremlin with solid power.
+The gremlin swings their blade at Arthos, but the attack is deflected as Arthos parries expertly.
+```
 
 This creates varied, informative combat text that reflects both offensive actions and successful defensive maneuvers.
 
