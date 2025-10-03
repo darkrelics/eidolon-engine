@@ -371,8 +371,6 @@ class _SimpleSegmentCard extends StatelessWidget {
       hasTimerExpired = true;
     }
 
-    final bool isProcessed = processingStatus == 'processed';
-
     // For active segments, only reveal results when:
     // 1. The segment is marked as complete (IsComplete flag), OR
     // 2. The timer has expired
