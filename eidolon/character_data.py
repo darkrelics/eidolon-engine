@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from botocore.exceptions import ClientError
 
-from eidolon.constants import CharState, MAX_SKILL_LEVEL
+from eidolon.constants import MAX_SKILL_LEVEL, CharState
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes

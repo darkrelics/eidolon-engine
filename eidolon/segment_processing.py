@@ -9,7 +9,7 @@ from botocore.exceptions import ClientError
 from eidolon.branching import select_next_branch, select_weighted_branch
 from eidolon.character_data import apply_character_updates
 from eidolon.character_story import apply_story_outcome_effects
-from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY
+from eidolon.constants import ATTRIBUTE_XP_RATIO
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import add_items_to_inventory
 from eidolon.logger import logger
