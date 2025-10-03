@@ -98,9 +98,9 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
     processing_status = active_segment.get("ProcessingStatus", "")
 
-    # IsComplete only when BOTH timer expired AND processing complete
-    # This prevents race condition where client polls before async processing finishes
-    is_complete = timer_expired and processing_status == "processed"
+    # IsComplete means timer has expired (client can switch to completed card)
+    # This is separate from whether processing is done
+    is_complete = timer_expired
 
     # Calculate next poll time for client guidance using constant delay
     if not is_complete:
@@ -128,15 +128,17 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         "Duration": duration,
     }
 
-    # Only include result data if segment is fully processed
-    # Mechanical segments need processing before results are available
+    # Include result data if segment is fully processed
+    # Results are included even if timer hasn't expired yet, so client has them ready
+    # Client controls when to display completed card based on timer
     segment_type = active_segment.get("SegmentType", "").lower()
     story_id = active_segment.get("StoryID")
     segment_id = active_segment.get("SegmentID")
 
     segment_def = None
 
-    # Only include outcome/results data when processing is complete
+    # Include outcome/results data when processing is complete (even if timer not expired)
+    # Client will display them when IsComplete=true (timer expires)
     if processing_status == "processed":
         # Include narrative and events for display
         response["SegmentTitle"] = active_segment.get("SegmentTitle")

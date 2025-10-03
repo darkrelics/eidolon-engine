@@ -62,20 +62,9 @@ def new_segment_response(active_segment: dict, segment: dict) -> dict:
     if segment_type == "decision":
         response["DecisionOptions"] = segment.get("DecisionOptions", {})
 
-    # Include client events if available
-    response["ClientEvents"] = active_segment.get("ClientEvents", [])
-
-    # Include challenge results if available
-    response["ChallengeResults"] = active_segment.get("ChallengeResults", [])
-
-    # Include combat state if available
-    response["CombatState"] = active_segment.get("CombatState")
-
-    # Include outcome if available
-    response["Outcome"] = active_segment.get("Outcome")
-
-    # Include character updates if available
-    response["CharacterUpdates"] = active_segment.get("CharacterUpdates")
+    # Note: Do NOT include outcome/results data in initial response
+    # These are only populated after processing completes
+    # Client should poll segment-status API to get results
 
     return {
         "Success": True,
