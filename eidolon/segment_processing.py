@@ -119,36 +119,27 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 effective_score = best_attempt.get("EffectiveScore", 0)
                 difficulty = best_attempt.get("Difficulty", 0)
 
-                # Calculate variance modifier:
-                # - Max XP when S = D (equal difficulty)
-                # - Reduced XP when S > D (quadratic reduction based on ratio)
-                # - Current formula works for both S > D and D > S cases
-                if effective_score > 0 and difficulty > 0:
-                    ratio = min(effective_score, difficulty) / max(effective_score, difficulty)
-                    variance_modifier = ratio**2
-                else:
-                    variance_modifier = 1.0  # Default if can't calculate
+                # Calculate skill increase directly using same formula as combat
+                from eidolon.mechanics import calculate_skill_increase
 
-                # Calculate base XP with variance modifier
-                xp_amount = BASE_XP * variance_modifier
+                # Get current skill and attribute values from character
+                current_skill = float(character.get("Skills", {}).get(skill, 0))
+                current_attribute = float(character.get("Attributes", {}).get(attribute, 0))
 
-                # Apply failure penalty based on difficulty vs skill:
-                # - If S > D: 0% XP on failure (failing easy challenge = no reward)
-                # - If D >= S: 50% XP on failure (failing hard challenge = some reward)
-                if not passed:
-                    if effective_score > difficulty:
-                        xp_amount = 0.0  # No XP for failing an easy challenge
-                    else:
-                        xp_amount *= FAILURE_XP_PENALTY  # 50% XP for failing hard challenge
-
-                # Award XP to skill (full amount)
+                # Calculate skill increase
                 if skill:
-                    skill_xp[skill] = skill_xp.get(skill, 0) + xp_amount
+                    skill_increase = calculate_skill_increase(effective_score, difficulty, current_skill, passed)
+                    if skill_increase > 0:
+                        skill_xp[skill] = skill_xp.get(skill, 0) + skill_increase
 
-                # Award XP to attribute (10% of skill XP)
+                # Calculate attribute increase (uses attribute score for increment)
                 if attribute:
-                    attr_xp_amount = xp_amount * ATTRIBUTE_XP_RATIO
-                    attribute_xp[attribute] = attribute_xp.get(attribute, 0) + attr_xp_amount
+                    attr_increase = (
+                        calculate_skill_increase(effective_score, difficulty, current_attribute, passed)
+                        * ATTRIBUTE_XP_RATIO
+                    )
+                    if attr_increase > 0:
+                        attribute_xp[attribute] = attribute_xp.get(attribute, 0) + attr_increase
 
         if skill_xp or attribute_xp:
             xp_updates = {}

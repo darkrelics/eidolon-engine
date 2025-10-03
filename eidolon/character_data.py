@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from botocore.exceptions import ClientError
 
-from eidolon.constants import CharState
+from eidolon.constants import CharState, MAX_SKILL_LEVEL
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes
@@ -328,7 +328,8 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
     """
     Apply accumulated updates to character.
 
-    Handles skill XP, attribute XP, wounds, and room changes.
+    Handles skill increases, attribute increases, wounds, and room changes.
+    SkillXP/AttributeXP contain direct skill level increases (not raw XP).
 
     Args:
         character_id: Character UUID
@@ -343,31 +344,36 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
 
     logger.info(f"Applying character updates for {character_id}: {updates}")
 
+    # Get current character data to calculate new levels
+    character = get_character(character_id)
+    current_skills = character.get("Skills", {})
+    current_attributes = character.get("Attributes", {})
+
     update_expressions = []
     expression_names = {}
     expression_values = {}
 
-    # Apply skill XP updates
-    skill_xp = updates.get("SkillXP", {})
-    for skill, xp_value in skill_xp.items():
-        if xp_value > 0:
+    # Apply skill increases (SkillXP contains direct increase amounts)
+    skill_increases = updates.get("SkillXP", {})
+    for skill, increase_amount in skill_increases.items():
+        if increase_amount > 0:
+            current_level = float(current_skills.get(skill, 0))
+            new_level = min(current_level + increase_amount, MAX_SKILL_LEVEL)
             safe_skill = skill.replace("-", "_")
-            update_expressions.append(
-                f"Skills.#skill_{safe_skill} = if_not_exists(Skills.#skill_{safe_skill}, :zero) + :xp_{safe_skill}"
-            )
+            update_expressions.append(f"Skills.#skill_{safe_skill} = :level_{safe_skill}")
             expression_names[f"#skill_{safe_skill}"] = skill
-            expression_values[f":xp_{safe_skill}"] = Decimal(str(xp_value))
+            expression_values[f":level_{safe_skill}"] = Decimal(str(new_level))
 
-    # Apply attribute XP updates
-    attribute_xp = updates.get("AttributeXP", {})
-    for attribute, xp_value in attribute_xp.items():
-        if xp_value > 0:
+    # Apply attribute increases (AttributeXP contains direct increase amounts)
+    attribute_increases = updates.get("AttributeXP", {})
+    for attribute, increase_amount in attribute_increases.items():
+        if increase_amount > 0:
+            current_level = float(current_attributes.get(attribute, 0))
+            new_level = min(current_level + increase_amount, MAX_SKILL_LEVEL)
             safe_attr = attribute.replace("-", "_")
-            update_expressions.append(
-                f"Attributes.#attr_{safe_attr} = if_not_exists(Attributes.#attr_{safe_attr}, :zero) + :xp_{safe_attr}"
-            )
+            update_expressions.append(f"Attributes.#attr_{safe_attr} = :level_{safe_attr}")
             expression_names[f"#attr_{safe_attr}"] = attribute
-            expression_values[f":xp_{safe_attr}"] = Decimal(str(xp_value))
+            expression_values[f":level_{safe_attr}"] = Decimal(str(new_level))
 
     # Apply wounds
     wounds = updates.get("Wounds")
@@ -380,10 +386,6 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
     if room_id is not None:
         update_expressions.append("RoomID = :room")
         expression_values[":room"] = room_id
-
-    # Set common values - only add :zero if we have skill or attribute XP updates
-    if (skill_xp or updates.get("AttributeXP")) and ":zero" not in expression_values:
-        expression_values[":zero"] = Decimal("0")
 
     # Execute update if there are changes
     if update_expressions:

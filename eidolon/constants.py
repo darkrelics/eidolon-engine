@@ -13,6 +13,8 @@ BASE_XP = 0.25  # Base experience per action
 FAILURE_XP_PENALTY = 0.5  # Failed actions give 50% XP (when D >= S; 0% XP when S > D)
 ATTRIBUTE_XP_RATIO = 0.1  # Attributes gain 10% of skill XP
 
+MAX_SKILL_LEVEL = 10.0  # Hard cap on skill/attribute values
+
 # Sigma thresholds for challenge outcomes
 SIGMA_EXCEPTIONAL = 3.0  # 3+ sigma for exceptional success
 SIGMA_NORMAL = 0.0  # 0+ sigma for normal success
