@@ -15,6 +15,11 @@ ATTRIBUTE_XP_RATIO = 0.1  # Attributes gain 10% of skill XP
 
 MAX_SKILL_LEVEL = 10.0  # Hard cap on skill/attribute values
 
+# Segment polling behavior
+# Aligned with EventBridge 1-minute heartbeat for segment processing
+INITIAL_POLL_DELAY = 60  # Seconds to wait before first poll after segment starts
+RETRY_POLL_DELAY = 60  # Seconds between subsequent polls if not complete
+
 # Sigma thresholds for challenge outcomes
 SIGMA_EXCEPTIONAL = 3.0  # 3+ sigma for exceptional success
 SIGMA_NORMAL = 0.0  # 0+ sigma for normal success

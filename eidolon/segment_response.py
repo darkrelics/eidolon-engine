@@ -4,6 +4,7 @@ Segment response formatting utilities.
 Provides functions for formatting segment data for API responses.
 """
 
+from eidolon.constants import INITIAL_POLL_DELAY
 from eidolon.time_utils import from_unix, now_unix
 
 
@@ -29,6 +30,12 @@ def new_segment_response(active_segment: dict, segment: dict) -> dict:
 
     duration = end_time_unix - start_time_unix
 
+    # Calculate when client should start polling
+    # Use constant delay to prevent immediate polling and system overwhelm
+    poll_delay = min(INITIAL_POLL_DELAY, duration)  # Cap at segment duration if shorter
+    poll_after_unix = start_time_unix + poll_delay
+    poll_after = from_unix(poll_after_unix)
+
     # Build complete segment response matching segment status API format
     response = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID", ""),
@@ -40,6 +47,7 @@ def new_segment_response(active_segment: dict, segment: dict) -> dict:
         "TimeRemaining": duration,  # Full duration initially
         "StartTime": start_time,
         "EndTime": end_time,
+        "PollAfter": poll_after,  # Tell client when to start polling
         "ProcessingStatus": active_segment.get("ProcessingStatus", "pending"),
         "SegmentType": segment.get("SegmentType", "mechanical"),
         "SegmentActivity": active_segment.get("SegmentActivity", segment.get("SegmentActivity", "Starting your adventure...")),

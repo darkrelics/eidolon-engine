@@ -11,6 +11,7 @@ import time
 from typing import Optional
 
 from eidolon.cognito import extract_player_id
+from eidolon.constants import RETRY_POLL_DELAY
 from eidolon.cors import cors_handler
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import verify_character_ownership
@@ -91,11 +92,23 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         # Calculate duration from stored times
         duration = max(60, end_time_unix - start_time_unix)
 
-    # Calculate status using Unix timestamps
-    is_complete = end_time_unix <= now
+    # Calculate timer status
+    timer_expired = end_time_unix <= now
     time_remaining = max(0, int(end_time_unix - now))
 
     processing_status = active_segment.get("ProcessingStatus", "")
+
+    # IsComplete only when BOTH timer expired AND processing complete
+    # This prevents race condition where client polls before async processing finishes
+    is_complete = timer_expired and processing_status == "processed"
+
+    # Calculate next poll time for client guidance using constant delay
+    if not is_complete:
+        next_poll_delay = min(RETRY_POLL_DELAY, time_remaining)  # Cap at time remaining
+        poll_after_unix = int(now + next_poll_delay)
+        poll_after = from_unix(poll_after_unix)
+    else:
+        poll_after = None  # No more polling needed
 
     response = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
@@ -107,6 +120,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         "TimeRemaining": time_remaining,
         "StartTime": from_unix(start_time_unix),
         "EndTime": from_unix(end_time_unix),
+        "PollAfter": poll_after,  # When client should poll next
         "ProcessingStatus": processing_status,
         "SegmentType": active_segment.get("SegmentType"),
         "SegmentActivity": active_segment.get("SegmentActivity", ""),
@@ -114,15 +128,16 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         "Duration": duration,
     }
 
-    # Only include narrative data if segment is processed or if it's not a mechanical segment
-    # Mechanical segments need processing before narrative is available
+    # Only include result data if segment is fully processed
+    # Mechanical segments need processing before results are available
     segment_type = active_segment.get("SegmentType", "").lower()
     story_id = active_segment.get("StoryID")
     segment_id = active_segment.get("SegmentID")
 
     segment_def = None
 
-    if segment_type != "mechanical" or processing_status == "processed":
+    # Only include outcome/results data when processing is complete
+    if processing_status == "processed":
         # Include narrative and events for display
         response["SegmentTitle"] = active_segment.get("SegmentTitle")
         response["ClientEvents"] = active_segment.get("ClientEvents", [])
