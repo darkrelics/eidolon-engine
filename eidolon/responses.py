@@ -22,25 +22,6 @@ def decimal_to_json_serializable(obj):
     return obj
 
 
-def _pydantic_to_jsonable(data):
-    """
-    Convert Pydantic BaseModel(s) to JSON-serializable dicts.
-
-    - If Pydantic isn't installed, returns data unchanged.
-    - Recurses into lists/dicts and converts any nested BaseModel values.
-    """
-    # Duck-typing: if it looks like a Pydantic v2 model, use model_dump
-    if hasattr(data, "model_dump") and callable(getattr(data, "model_dump")):
-        try:
-            return data.model_dump(by_alias=True, exclude_none=True)
-        except TypeError:
-            # If signature differs, fall back to default call
-            return data.model_dump()
-    if isinstance(data, list):
-        return [_pydantic_to_jsonable(v) for v in data]
-    if isinstance(data, dict):
-        return {k: _pydantic_to_jsonable(v) for k, v in data.items()}
-    return data
 
 
 def success_response(data=None, status_code: int = 200, headers=None) -> dict:
@@ -66,8 +47,6 @@ def success_response(data=None, status_code: int = 200, headers=None) -> dict:
     elif isinstance(data, str):
         body = json.dumps({"Message": data})
     else:
-        # First convert Pydantic models (if present), then handle Decimals
-        data = _pydantic_to_jsonable(data)
         data = decimal_to_json_serializable(data)
         body = json.dumps(data)
 
@@ -103,9 +82,7 @@ def create_response(status_code: int, body: dict) -> dict:
     Returns:
         API Gateway response dict.
     """
-    # Allow callers to pass Pydantic models too
-    body_jsonable = _pydantic_to_jsonable(body)
-    body_jsonable = decimal_to_json_serializable(body_jsonable)
+    body_jsonable = decimal_to_json_serializable(body)
     return {
         "statusCode": status_code,
         "headers": {"Content-Type": "application/json"},
