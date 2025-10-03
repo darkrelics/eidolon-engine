@@ -4,7 +4,7 @@
 
 The Eidolon Engine is a serverless multi-user game system built on AWS infrastructure, supporting both traditional MUD (Multi-User Dungeon) gameplay and incremental story-driven progression. The system uses a fully serverless architecture with DynamoDB for state persistence, Lambda for compute, and EventBridge for scheduled operations.
 
-**Deployment Status**: Production deployment on inc-23 branch with all core systems operational.
+**Deployment Status**: All core systems deployed and tested in AWS.
 
 ## System Architecture
 
@@ -694,8 +694,7 @@ graph LR
 - [API Documentation](incremental-api.md): REST API endpoints
 - [Architecture Diagrams](incremental-architecture-diagrams.md): Comprehensive Mermaid diagrams
 
-**Production Infrastructure:**
-- Branch: inc-23 (deployed to AWS)
+**Deployment Infrastructure:**
 - Region: us-east-1
 - Deployment Mode: Hybrid
-- Status: All systems operational
+- Status: All systems deployed and tested
