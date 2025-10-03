@@ -333,9 +333,9 @@ class _SimpleSegmentCard extends StatelessWidget {
     }
 
     final statusStr = segment['Status']?.toString().toLowerCase();
-    final isSegmentComplete = segment['IsComplete'] == true || statusStr == 'complete' || statusStr == 'completed';
+    final isSegmentComplete = statusStr == 'complete' || statusStr == 'completed';
     final isStoryComplete = segment['StoryComplete'] == true;
-    // For active segments, only consider segment completion, not story completion
+    // For active segments, only consider segment completion status, not story completion
     // Story might be complete while the final segment is still running
     final isCompleteFlag = isActive ? isSegmentComplete : (isSegmentComplete || isStoryComplete);
 
@@ -371,13 +371,10 @@ class _SimpleSegmentCard extends StatelessWidget {
       hasTimerExpired = true;
     }
 
-    // For active segments, only reveal results when:
-    // 1. The segment is marked as complete (IsComplete flag), OR
-    // 2. The timer has expired
-    //
+    // For active segments, only reveal results when the timer has expired.
     // The backend sends ProcessingStatus="processed" with results early so the client has them ready,
-    // but the client should wait for the timer before displaying. For historical (non-active) segments,
-    // we can reveal immediately if processed.
+    // but the client waits for the timer before displaying them (proper UX pacing).
+    // For historical (non-active) segments, we can reveal immediately if processed or flagged complete.
     final bool shouldRevealResults =
         !isActive ||
         isCompleteFlag ||

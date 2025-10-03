@@ -98,17 +98,15 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
     processing_status = active_segment.get("ProcessingStatus", "")
 
-    # IsComplete means timer has expired (client can switch to completed card)
-    # This is separate from whether processing is done
-    is_complete = timer_expired
-
     # Calculate next poll time for client guidance using constant delay
-    if not is_complete:
+    # Client uses ProcessingStatus to determine when backend is done
+    # Client uses local timer (EndTime/TimeRemaining) to determine when to display results
+    if processing_status != "processed":
         next_poll_delay = min(RETRY_POLL_DELAY, time_remaining)  # Cap at time remaining
         poll_after_unix = int(now + next_poll_delay)
         poll_after = from_unix(poll_after_unix)
     else:
-        poll_after = None  # No more polling needed
+        poll_after = None  # No more polling needed when processed
 
     response = {
         "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
@@ -116,7 +114,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         "StoryInstanceID": active_segment.get("StoryInstanceID"),
         "SegmentID": active_segment.get("SegmentID"),
         "Status": active_segment.get("Status", "active"),
-        "IsComplete": is_complete,
         "TimeRemaining": time_remaining,
         "StartTime": from_unix(start_time_unix),
         "EndTime": from_unix(end_time_unix),

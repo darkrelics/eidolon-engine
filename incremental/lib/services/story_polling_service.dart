@@ -167,7 +167,7 @@ class StoryPollingService {
   }
 
   static bool _isProcessed(Map<String, dynamic> segmentOrStatus) {
-    final storyComplete = segmentOrStatus['StoryComplete'] == true || segmentOrStatus['IsComplete'] == true;
+    final storyComplete = segmentOrStatus['StoryComplete'] == true;
     if (storyComplete) return true;
     final proc = segmentOrStatus['ProcessingStatus']?.toString().toLowerCase();
     if (proc == 'processed') return true;
