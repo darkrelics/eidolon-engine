@@ -1,8 +1,8 @@
 # Release 1 Report — State Management, Atomic Updates, and Content Model Foundation
 
-**Date:** 2025-10-02
-**Branch:** inc-24
-**Status:** In Progress
+**Date:** 2025-10-03
+**Branch:** inc-25
+**Status:** Complete (R1 scope) - Post-release refinements ongoing
 **Previous Release:** R0 (inc-23 deployed to AWS)
 
 ---
@@ -13,7 +13,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 
 **Ship Gate:** Robust progression logic with no state corruption or duplicate rewards.
 
-**Current Status (2025-10-02):** Task 1 Phases 1-2 complete. State machine module created with atomic transitions, integrated into existing codebase. Documentation updated with state diagrams. Phase 3 (testing) pending.
+**Current Status (2025-10-03):** R1 completed on inc-24 branch. All four tasks complete: state machines implemented, atomic effects validated, story discovery functional, API documented. Branch inc-25 contains post-R1 work: client-side improvements (combat narratives, UI enhancements), documentation updates (architecture, implementation guides), and bug fixes. Total codebase: 9,521 lines Python (eidolon), 2,679 lines Python (lambda), 13 documented API endpoints. Code quality: 1 minor linting issue (unused variable).
 
 ---
 
@@ -392,19 +392,55 @@ curl -X POST https://api.domain.com/story/start \
 
 ---
 
+## Post-R1 Work (inc-25 Branch)
+
+**Branch:** inc-25 (21 commits since inc-24 merge)
+**Focus:** Client-side improvements and documentation refinement
+
+### Changes in inc-25:
+
+**Client Enhancements:**
+- ✅ Added combat narrative system (`combat_narrative.dart`, 255 lines) for rich combat feedback
+- ✅ Enhanced game screen UI with improved story panel layout
+- ✅ Fixed segment card display issues
+- ✅ Improved polling service reliability
+- ✅ Better segment history visualization
+
+**Backend Refinements:**
+- ✅ Character data improvements (health, XP calculations)
+- ✅ Combat mechanics refinements
+- ✅ Segment processing improvements
+- ✅ Response formatting updates
+
+**Documentation:**
+- ✅ Updated release-zero-report.md
+- ✅ Updated release-minus-one-report.md
+- ✅ Expanded incremental-implementation.md (196 new lines)
+- ✅ Architecture documentation refinements
+
+**Code Quality:**
+- ✅ Applied Python autoformatting
+- ✅ Reduced redundant database calls
+- ✅ 1 minor linting issue remaining (unused variable)
+
+**Note:** inc-25 work is **not** part of R1 formal scope. These are post-release improvements that enhance user experience and system reliability without changing R1 objectives or acceptance criteria.
+
+---
+
 ## Timeline Recommendation
 
 **Current Status:**
-- ✅ Task 1: State machines complete
-- ✅ Task 2: Atomic updates complete (currency deferred to R6)
+- ✅ Task 1: State machines complete (inc-24)
+- ✅ Task 2: Atomic updates complete (inc-24, currency deferred to R6)
 - ✅ Task 3: Story discovery complete (via existing implementation)
-- ✅ Task 4: API documentation complete
+- ✅ Task 4: API documentation complete (13 endpoints documented)
 
 **R1 Complete - Ready for R1.1:**
 - All backend robustness objectives achieved
 - API fully documented for client development
 - Multi-story support functional
 - State management proven reliable
+- Client experience enhanced through inc-25 improvements
 
 ---
 
