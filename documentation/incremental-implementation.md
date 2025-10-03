@@ -3455,7 +3455,9 @@ Combat events use template-based narrative generation to create engaging descrip
 
 **Frontend:**
 - `incremental/lib/utils/combat_narrative.dart` - Template-based narrative generator
-- `incremental/lib/widgets/story/active_story_widget.dart` - Integration into UI (lines 6, 79, 105-107, 262-272, 510-528)
+- `incremental/lib/widgets/story/active_story_widget.dart` - Integration into active story display
+- `incremental/lib/widgets/game/story_panel.dart` - Integration into completed segment cards
+- `incremental/lib/widgets/segment_history_viewer.dart` - Integration into segment history viewer
 
 #### Features
 
@@ -3464,11 +3466,13 @@ Combat events use template-based narrative generation to create engaging descrip
 - **Defensive action integration** (Dodge, Parry) appended to failed attacks
 - **Severity descriptors** based on sigma values and damage dealt
 - **Character/opponent name substitution** for personalized narratives
+- **Universal integration** across active segments, completed segments, and history viewer
 
 #### Client Integration
 
-The combat narrative generator is integrated into `_SimpleSegmentCard` widget in `active_story_widget.dart`:
+The combat narrative generator is integrated in multiple locations for consistent combat display:
 
+**Active Story Display (`active_story_widget.dart`):**
 ```dart
 import 'package:eidolon_incremental/utils/combat_narrative.dart';
 
@@ -3489,6 +3493,87 @@ displayText = clientEvents
     })
     .where((desc) => desc.isNotEmpty)
     .join('\n\n');
+```
+
+**Completed Segment Cards (`story_panel.dart`):**
+```dart
+String _extractSegmentNarrative(Map<String, dynamic> segment) {
+  final clientEvents = segment['ClientEvents'] as List<dynamic>?;
+  if (clientEvents != null && clientEvents.isNotEmpty) {
+    final characterName = widget.character.name;
+    final opponentName = _extractOpponentName(segment);
+
+    final descriptions = clientEvents
+        .map((event) {
+          if (event is! Map<String, dynamic>) return event.toString();
+
+          // Check if this is a combat event and use combat narrative
+          if (CombatNarrative.isCombatEvent(event)) {
+            return CombatNarrative.generateEventNarrative(
+              event,
+              characterName: characterName,
+              opponentName: opponentName,
+            );
+          }
+
+          return event['Description']?.toString() ?? '';
+        })
+        .where((text) => text.trim().isNotEmpty)
+        .toList();
+
+    return descriptions.join('\n\n');
+  }
+  // ... fallback logic
+}
+
+// Helper to extract opponent name from segment data
+String _extractOpponentName(Map<String, dynamic> segment) {
+  final opponentData = segment['Opponent'] as Map<String, dynamic>?;
+  if (opponentData != null) {
+    final name = opponentData['Name'] ?? opponentData['OpponentName'];
+    if (name is String && name.isNotEmpty) return name;
+  }
+
+  // Check ClientEvents for opponent information
+  final clientEvents = segment['ClientEvents'] as List<dynamic>?;
+  if (clientEvents != null) {
+    for (final event in clientEvents) {
+      if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
+        final data = event['Data'] as Map<String, dynamic>?;
+        final oppOffensive = data?['OpponentOffensive'] as Map<String, dynamic>?;
+        if (oppOffensive != null) {
+          final name = oppOffensive['Name'];
+          if (name is String && name.isNotEmpty) return name;
+        }
+      }
+    }
+  }
+
+  return 'the opponent';
+}
+```
+
+**Segment History Viewer (`segment_history_viewer.dart`):**
+```dart
+Widget _buildEventSummary(Map<String, dynamic> event) {
+  final eventType = event['eventType'] as String? ?? event['EventType'] as String?;
+
+  // Use combat narrative for combat events
+  String description;
+  if (CombatNarrative.isCombatEvent(event)) {
+    final characterName = _extractCharacterName(event);
+    final opponentName = _extractOpponentNameFromEvent(event);
+    description = CombatNarrative.generateEventNarrative(
+      event,
+      characterName: characterName,
+      opponentName: opponentName,
+    );
+  } else {
+    description = event['description'] as String? ?? event['Description'] as String? ?? '';
+  }
+
+  // ... render UI with description
+}
 ```
 
 #### Template Structure
