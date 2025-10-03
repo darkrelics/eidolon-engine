@@ -137,13 +137,19 @@ class _GameScreenState extends State<GameScreen> {
     _storyCompletionNotified = false;
   }
 
-  Future<void> _loadCharacterData({CharacterLoadRateLimitStrategy strategy = CharacterLoadRateLimitStrategy.automated}) {
+  Future<void> _loadCharacterData({
+    CharacterLoadRateLimitStrategy strategy = CharacterLoadRateLimitStrategy.automated,
+    bool showLoadingIndicator = true,
+  }) {
     final activeLoad = _activeCharacterLoad;
     if (activeLoad != null) {
       return activeLoad;
     }
 
-    final future = _loadCharacterDataInternal(strategy: strategy);
+    final future = _loadCharacterDataInternal(
+      strategy: strategy,
+      showLoadingIndicator: showLoadingIndicator,
+    );
     _activeCharacterLoad = future;
     future.whenComplete(() {
       if (identical(_activeCharacterLoad, future)) {
@@ -154,7 +160,10 @@ class _GameScreenState extends State<GameScreen> {
     return future;
   }
 
-  Future<void> _loadCharacterDataInternal({required CharacterLoadRateLimitStrategy strategy}) async {
+  Future<void> _loadCharacterDataInternal({
+    required CharacterLoadRateLimitStrategy strategy,
+    required bool showLoadingIndicator,
+  }) async {
     debugPrint('GameScreen: Loading character data');
     if (_characterInfo == null) return;
 
@@ -163,8 +172,10 @@ class _GameScreenState extends State<GameScreen> {
     try {
       if (mounted) {
         setState(() {
-          _isLoading = true;
           _error = null;
+          if (showLoadingIndicator) {
+            _isLoading = true;
+          }
         });
       }
 
@@ -173,12 +184,12 @@ class _GameScreenState extends State<GameScreen> {
 
       if (mounted) {
         setState(() {
+          _isLoading = false;
           final newCharacterId = character?.id;
           if (previousCharacterId != newCharacterId) {
             _resetForNewCharacter();
           }
           _character = character;
-          _isLoading = false;
           _error = null;
           if (character?.activeSegmentID != null) {
             _storyCompletionNotified = false;
@@ -236,7 +247,10 @@ class _GameScreenState extends State<GameScreen> {
       // Empty callback - we just want the cooldown timer
     });
 
-    return _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
+    return _loadCharacterData(
+      strategy: CharacterLoadRateLimitStrategy.immediate,
+      showLoadingIndicator: false,
+    );
   }
 
   // Orchestration is handled by StoryPollingService
@@ -661,7 +675,10 @@ class _GameScreenState extends State<GameScreen> {
 
       // Now reload character - this will clear ActiveStoryID/ActiveSegmentID
       if (refreshCharacter) {
-        await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
+        await _loadCharacterData(
+          strategy: CharacterLoadRateLimitStrategy.immediate,
+          showLoadingIndicator: false,
+        );
       }
 
       // Fetch backend history and merge with our local history
@@ -767,7 +784,10 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Reload character to get available stories
-    await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
+    await _loadCharacterData(
+      strategy: CharacterLoadRateLimitStrategy.immediate,
+      showLoadingIndicator: false,
+    );
     // Clear segment history after story completion
     if (mounted) {
       setState(() {
