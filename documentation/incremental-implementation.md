@@ -3432,7 +3432,70 @@ class _GameScreenState extends State<GameScreen> {
 }
 ```
 
-### 6.3 Progressive Event Display
+### 6.3 Combat Narrative Generation
+
+Combat events use template-based narrative generation to create engaging descriptions from combat round data. The `CombatNarrative` utility class transforms structured combat data into dynamic, varied combat text.
+
+#### Implementation
+
+Located in `incremental/lib/utils/combat_narrative.dart`, this utility provides:
+
+- **Template-based narratives** for all offensive actions (Melee, Brawling, Archery, Arcane)
+- **Success/failure variations** with randomized templates for variety
+- **Defensive action integration** (Dodge, Parry) appended to failed attacks
+- **Severity descriptors** based on sigma values and damage dealt
+- **Character/opponent name substitution** for personalized narratives
+
+#### Usage Example
+
+```dart
+import 'package:eidolon_incremental/utils/combat_narrative.dart';
+
+// Generate narrative from combat event
+final event = clientEvents.firstWhere(
+  (e) => e['EventType'] == 'combat',
+  orElse: () => null,
+);
+
+if (event != null && CombatNarrative.isCombatEvent(event)) {
+  final narrative = CombatNarrative.generateEventNarrative(
+    event,
+    characterName: character.name,
+    opponentName: 'the gremlin',
+  );
+  // narrative = "You unleash arcane energy that strikes the gremlin with
+  // solid power. The gremlin swings their blade at you, but the attack
+  // is deflected while you parry expertly."
+}
+```
+
+#### Template Structure
+
+Each offensive action has success and failure templates:
+
+```dart
+static const _offensiveTemplates = {
+  'Melee': {
+    'success': [
+      '{attacker} swings their blade at {defender}, landing a {severity} strike',
+      // ... more variations
+    ],
+    'failure': [
+      '{attacker} swings at {defender}, but the attack is deflected',
+      // ... more variations
+    ],
+  },
+  // ... Brawling, Archery, Arcane
+};
+```
+
+Defensive actions (Dodge/Parry) are appended to failed attacks when the defense succeeds:
+- "...but the attack is deflected **while the gremlin evades with quick reflexes**"
+- "...but the attack is deflected **as you parry expertly**"
+
+This creates varied, informative combat text that reflects both offensive actions and successful defensive maneuvers.
+
+### 6.4 Progressive Event Display
 
 This widget progressively reveals story events over the segment duration, creating an engaging narrative experience by timing event display to match the segment's progress rather than showing all events immediately.
 
@@ -3488,7 +3551,7 @@ class _StoryEventDisplayState extends State<StoryEventDisplay> {
 }
 ```
 
-### 6.4 Character Model Updates
+### 6.5 Character Model Updates
 
 The Flutter Character model now includes direct properties for story state, eliminating the need for complex state determination logic:
 

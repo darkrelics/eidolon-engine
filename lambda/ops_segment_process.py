@@ -58,7 +58,7 @@ def process_segment(active_segment: dict) -> None:
 
     # Persist results
     try:
-        update_active_segment_outcome(active_segment_id, outcome, results, segment_def, character)  # type: ignore
+        update_active_segment_outcome(active_segment_id, outcome, results, segment_def)  # type: ignore
     except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to update segment outcome for {active_segment_id}: {err}", exc_info=True)
         raise

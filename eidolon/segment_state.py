@@ -7,14 +7,13 @@ Provides functions for managing segment status and progression.
 from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
-from eidolon.combat_narrative import generate_combat_narrative
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.segment_core import extract_character_updates_from_results, validate_segment_outcome_results
 from eidolon.time_utils import future_unix, now_unix
 
 
-def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def=None, character=None) -> None:
+def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def=None) -> None:
     """
     Update active segment with outcome but keep status as active until timer expires.
 
@@ -23,7 +22,6 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         outcome: Outcome type
         results: Challenge or combat results
         segment_def: Optional segment definition containing Results narratives
-        character: Optional character data for generating combat narratives
     """
     if not outcome:
         logger.warning(f"No outcome computed for {active_segment_id}; defaulting to 'normal'")
@@ -91,33 +89,12 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
     if combat_state:
         combat_log = combat_state.get("CombatLog", [])
-
-        # Get character and opponent names for narrative generation
-        character_name = "You"
-        opponent_name = "the opponent"
-
-        if character:
-            character_name = character.get("CharacterName", "You")
-
-        # Fetch opponent name if we have an OpponentID
-        opponent_id = combat_state.get("OpponentID")
-        if opponent_id:
-            try:
-                opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
-                if opponent:
-                    opponent_name = opponent.get("Name", "the opponent")
-            except Exception as err:
-                logger.warning(f"Failed to fetch opponent name for {opponent_id}: {err}")
-
         for round_data in combat_log[:5]:
-            # Generate narrative description for this combat round
-            description = generate_combat_narrative(round_data, character_name, opponent_name)
-
             client_events.append(
                 {
                     "EventType": "combat",
                     "Title": f"Round {round_data.get('Round', 0)}",
-                    "Description": description,
+                    "Description": "Combat round",
                     "Data": round_data,
                 }
             )
