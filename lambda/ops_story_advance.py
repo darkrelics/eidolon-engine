@@ -84,7 +84,6 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         active_segment["ProcessingStatus"] = "processed"
 
     # Check for death outcome and apply character state changes
-    new_character_state = None
     if outcome == "death" and character_id:
         try:
             # Get current character to check wounds
@@ -92,7 +91,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             wounds = character.get("Wounds", [])
 
             # Apply death or unconscious state based on wounds
-            new_character_state = apply_death_or_unconscious_outcome(character_id, outcome, wounds)
+            apply_death_or_unconscious_outcome(character_id, outcome, wounds)
 
             logger.info(f"Applied character state change for death outcome for {character_id}")
         except Exception as err:

@@ -10,8 +10,15 @@ from datetime import timedelta
 from enum import Enum
 
 BASE_XP = 0.25  # Base experience per action
-FAILURE_XP_PENALTY = 0.5  # Failed actions give 50% XP
+FAILURE_XP_PENALTY = 0.5  # Failed actions give 50% XP (when D >= S; 0% XP when S > D)
 ATTRIBUTE_XP_RATIO = 0.1  # Attributes gain 10% of skill XP
+
+MAX_SKILL_LEVEL = 10.0  # Hard cap on skill/attribute values
+
+# Segment polling behavior
+# Aligned with EventBridge 1-minute heartbeat for segment processing
+INITIAL_POLL_DELAY = 60  # Seconds to wait before first poll after segment starts
+RETRY_POLL_DELAY = 60  # Seconds between subsequent polls if not complete
 
 # Sigma thresholds for challenge outcomes
 SIGMA_EXCEPTIONAL = 3.0  # 3+ sigma for exceptional success
@@ -22,14 +29,6 @@ SIGMA_MINIMAL = -3.0  # -3+ sigma for minimal success
 # Combat constants
 DEFAULT_COMBAT_ROUNDS = 10  # Default max rounds if not specified in segment
 MAX_COMBAT_ROUNDS = 100  # Maximum rounds before combat times out (safety limit)
-COMBAT_TIMEOUT_OUTCOME = "failure"  # Outcome when combat exceeds max rounds
-
-# Mechanical combat processing cadence
-COMBAT_ROUNDS_PER_TICK = 5  # Rounds to simulate per processing pass
-
-# Combat damage classification (based on sigma)
-COMBAT_SIGMA_CRITICAL = 2.0  # Critical hit threshold
-COMBAT_SIGMA_SOLID = 1.0  # Solid hit threshold
 
 # Player durability thresholds
 PLAYER_DEATH_LETHAL_WOUNDS = 5  # Lethal wounds causing death
@@ -38,7 +37,6 @@ PLAYER_INCAPACITATED_TOTAL_WOUNDS = 10  # Total wounds causing incapacitation
 # Opponent defeat heuristics
 DEFAULT_OPPONENT_HEALTH = 5  # Default opponent health when unknown
 COMBAT_OPPONENT_WOUNDS_MULTIPLIER_FOR_DEFEAT = 2  # Total wounds vs health
-COMBAT_DOMINANCE_RATIO = 2.0  # Ratio to determine dominant damage dealer
 
 # Opposed check mechanics (MUD mechanics)
 OPPOSED_SHIFT = 0.20  # How much rating difference matters

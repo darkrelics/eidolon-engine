@@ -1,33 +1,35 @@
 # Release 0 Report — Repo Baseline & Documentation Alignment
 
 **Date:** 2025-10-01
-**Updated:** 2025-10-01 (R0.1 completion)
-**Release Phase:** R0.1 — Story Validation via GitHub Actions
+**Updated:** 2025-10-02 (R0 completion)
+**Release Phase:** R0 — Complete
 **Status:** ✅ COMPLETE
 
 ---
 
 ## Executive Summary
 
-Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon Engine incremental subsystem via GitHub Actions. This report documents the completion status and remaining work deferred to future releases.
+Release 0 (R0) establishes the foundation for the Eidolon Engine incremental subsystem with complete infrastructure deployment, comprehensive documentation, and validation tooling. The inc-23 branch is successfully deployed to AWS with all core systems operational.
 
-### Key Findings — Updated with Completion Status
+### Key Achievements — R0 Complete
 
-1. ✅ **Infrastructure Defined** — All CDK stacks, Lambda functions, and supporting code exist
-2. ✅ **Documentation Comprehensive** — 30 markdown files covering architecture, design, and implementation
-3. ✅ **Validation Tooling Complete** — Both validators working and tested
-4. ✅ **CI Integration Complete** — Story validation enforced via GitHub Actions
-5. ✅ **Observability Foundation Ready** — CloudWatch stack, logging utilities, and metrics namespace defined
-6. ✅ **Deployment Labeling Correct** — Issue #690 confirmed as MUD-specific, not incremental
+1. ✅ **Infrastructure Deployed** — inc-23 branch deployed to AWS with all 10 CDK stacks operational
+2. ✅ **Documentation Comprehensive** — 30+ markdown files covering architecture, design, and implementation
+3. ✅ **Architecture Consolidated** — Created `architecture.md` combining system overview, deployment details, and state machines
+4. ✅ **Diagrams Modernized** — Converted all ASCII art diagrams to Mermaid.js format
+5. ✅ **Validation Tooling Complete** — Both validators working and enforced via GitHub Actions
+6. ✅ **CI Integration Complete** — Story validation enforced via `.github/workflows/story-validation.yml`
+7. ✅ **Schema Documentation Complete** — All 14 DynamoDB tables documented in `schema.md`
 
-### R0.1 Exit Criteria Status — FINAL
+### R0 Exit Criteria Status — FINAL
 
-| Criterion                | Status              | Notes                                                   |
-| ------------------------ | ------------------- | ------------------------------------------------------- |
-| Fresh clone can deploy   | 🟡 Deferred to R0.2 | CDK stacks defined, not yet deployed to AWS             |
-| Docs match code          | ✅ Pass             | Comprehensive documentation aligned with implementation |
-| **CI gates bad stories** | ✅ **COMPLETE**     | **.github/workflows/story-validation.yml live**         |
-| Dashboard/alarm exist    | 🟡 Not priority     | CloudWatch stack exists, deployment deferred            |
+| Criterion                | Status          | Notes                                                        |
+| ------------------------ | --------------- | ------------------------------------------------------------ |
+| Fresh clone can deploy   | ✅ **COMPLETE** | inc-23 deployed to AWS, all systems operational              |
+| Docs match code          | ✅ **COMPLETE** | Comprehensive documentation aligned with implementation      |
+| CI gates bad stories     | ✅ **COMPLETE** | `.github/workflows/story-validation.yml` enforcing validation |
+| Architecture docs exist  | ✅ **COMPLETE** | Created consolidated `architecture.md` with Mermaid diagrams |
+| Dashboard/alarm exist    | 🟡 **DEFERRED** | Deferred until revenue generation (per stakeholder decision) |
 
 ---
 
@@ -37,29 +39,30 @@ Release 0.1 (R0.1) establishes story validation infrastructure for the Eidolon E
 
 **Location:** `deployment/stacks/`
 
-**Status:** ✅ All stacks defined, not yet deployed
+**Status:** ✅ All stacks deployed to AWS (inc-23 branch)
 
-| Stack                 | Purpose                 | Components                                     | Status  |
-| --------------------- | ----------------------- | ---------------------------------------------- | ------- |
-| `dynamodb_stack.py`   | Database tables         | 14 tables, 3 GSIs                              | Defined |
-| `lambda_stack.py`     | Shared Lambda resources | Layer, IAM role, policies                      | Defined |
-| `character_stack.py`  | Character API           | 7 Lambda functions                             | Defined |
-| `story_stack.py`      | Story/segment API + ops | 10 Lambda functions, 2 SQS queues, EventBridge | Defined |
-| `api_stack.py`        | API Gateway             | REST API, authorizer                           | Defined |
-| `client_stack.py`     | CloudFront + S3         | CDN, static hosting                            | Defined |
-| `cloudwatch_stack.py` | Observability           | Log group, metrics namespace, IAM policy       | Defined |
-| `s3_stack.py`         | Artifact storage        | Lambda code bucket                             | Defined |
-| `player_stack.py`     | Cognito integration     | User pool triggers                             | Defined |
+| Stack                 | Purpose                 | Components                                     | Status     |
+| --------------------- | ----------------------- | ---------------------------------------------- | ---------- |
+| `dynamodb_stack.py`   | Database tables         | 14 tables, 3 GSIs                              | ✅ Deployed |
+| `lambda_stack.py`     | Shared Lambda resources | Layer, IAM role, policies                      | ✅ Deployed |
+| `character_stack.py`  | Character API           | 7 Lambda functions                             | ✅ Deployed |
+| `story_stack.py`      | Story/segment API + ops | 10 Lambda functions, 2 SQS queues, EventBridge | ✅ Deployed |
+| `api_stack.py`        | API Gateway             | REST API, authorizer                           | ✅ Deployed |
+| `client_stack.py`     | CloudFront + S3         | CDN, static hosting                            | ✅ Deployed |
+| `cloudwatch_stack.py` | Observability           | Log group, metrics namespace, IAM policy       | ✅ Deployed |
+| `s3_stack.py`         | Artifact storage        | Lambda code bucket                             | ✅ Deployed |
+| `codebuild_stack.py`  | Build infrastructure    | CodeBuild projects, artifacts bucket           | ✅ Deployed |
+| `player_stack.py`     | Cognito integration     | User pool triggers                             | ✅ Deployed |
 
-**Critical Dependency:** All stacks reference each other correctly via CDK constructs. Deployment order managed by `deploy_mode.py`.
+**Deployment Info:** All stacks operational in production on inc-23 branch. Deployment order managed by `deploy.py`.
 
 ### 1.2 Lambda Functions
 
 **Location:** `lambda/`
 
-**Count:** 17 Python files (API handlers + operational functions)
+**Count:** 16 Python files (API handlers + operational functions)
 
-**Status:** ✅ All code written, not yet deployed
+**Status:** ✅ All functions deployed to AWS (inc-23 branch)
 
 **Story/Segment Functions (10):**
 
@@ -557,8 +560,6 @@ update docs.
 - State machine summaries
 - Hot path flows
 
-**Effort:** 4-6 hours
-
 **Target:** R1 (after deployment, include lessons learned)
 
 #### 🟡 **DynamoDB Schema Files**
@@ -570,8 +571,6 @@ update docs.
 - `story` table records
 - `segments` table records
 
-**Effort:** 2-3 hours
-
 **Target:** R1 or R5 (Content Pipeline)
 
 #### 🟡 **Structured Logging Enhancement**
@@ -580,8 +579,6 @@ update docs.
 
 **Recommendation:** Migrate from f-string logging to structured JSON logging with explicit fields (characterId, storyId, segmentId)
 
-**Effort:** 6-8 hours (touch all 17 Lambda functions)
-
 **Target:** R2 (Observability & Diagnostics)
 
 #### 🟡 **Test Data Expansion**
@@ -589,8 +586,6 @@ update docs.
 **Impact:** Missing validation for one-time and daily story types
 
 **Recommendation:** Add `test_story_onetime.json` and `test_story_daily.json`
-
-**Effort:** 1-2 hours
 
 **Target:** R5 (Content Pipeline) or R6 (Economy & Balance)
 
@@ -617,29 +612,31 @@ update docs.
 - CI missing for story validation
 - Safety harness (validation tooling) exists but not gated in CI
 
-**Objective 3:** Documentation module under `/documentation/incremental/architecture.md`
+**Objective 3:** Documentation module under `/documentation/architecture.md`
 
-**Status:** ⚠️ **PARTIAL**
+**Status:** ✅ **COMPLETE**
 
-- Content exists but scattered across multiple docs
-- Single consolidated architecture doc not yet created
-- Diagrams exist (ASCII art) but not C4-style
+- Created consolidated `architecture.md` combining all architectural documentation
+- Content from incremental-design.md, deployment.md, and incremental-story.md integrated
+- All diagrams converted from ASCII art to Mermaid.js format
+- Comprehensive coverage of system architecture, subsystems, deployment, and mechanics
 
 **Objective 4:** Story schema validation in CI
 
-**Status:** ❌ **NOT MET**
+**Status:** ✅ **COMPLETE**
 
 - Schema exists (`story.schema.json`)
-- Validators exist and work
-- CI workflow not created
+- Both validators working (`validate_branching.py`, `validate_story_content.py`)
+- CI workflow created (`.github/workflows/story-validation.yml`)
+- Story validation enforced on all PRs
 
 **Objective 5:** Observability skeleton for incremental flows
 
-**Status:** 🟡 **DEFINED, NOT DEPLOYED**
+**Status:** ✅ **DEPLOYED** (dashboards/alarms deferred)
 
-- CloudWatch stack defined
-- Logging utilities implemented
-- Dashboard and alarms cannot exist until deployed
+- CloudWatch stack deployed to AWS
+- Logging utilities implemented and operational
+- Dashboard and alarms deferred until revenue generation (per stakeholder decision)
 
 **Objective 6:** Deployment naming hygiene
 
@@ -650,156 +647,127 @@ update docs.
 
 ### Exit Criteria Matrix
 
-| Criterion              | Status          | Blocker? | Action Required                                   |
-| ---------------------- | --------------- | -------- | ------------------------------------------------- |
-| Fresh clone can deploy | 🟡 Untested     | No       | Deploy to AWS dev environment (R0.2)              |
-| Docs match code        | ✅ Pass         | No       | None                                              |
-| CI gates bad stories   | ✅ **COMPLETE** | ~~YES~~  | ~~Create story-validation.yml workflow~~ **DONE** |
-| Dashboard/alarm exist  | 🟡 Defined      | No       | Not priority - deferred                           |
+| Criterion              | Status          | Blocker? | Action Required |
+| ---------------------- | --------------- | -------- | --------------- |
+| Fresh clone can deploy | ✅ **COMPLETE** | No       | None - deployed |
+| Docs match code        | ✅ **COMPLETE** | No       | None            |
+| CI gates bad stories   | ✅ **COMPLETE** | No       | None            |
+| Architecture docs      | ✅ **COMPLETE** | No       | None            |
+| Dashboard/alarm exist  | 🟡 **DEFERRED** | No       | Awaiting revenue|
 
 ---
 
-## 9. Recommended Release Plan Adjustments
+## 9. R0 Completion Summary
 
-### 9.1 R0 Should Include Initial Deployment
+### 9.1 All R0 Objectives Achieved
 
-**Current R0 Scope (Program Plan):** Documentation, CI, observability skeleton
+**R0 Scope Completed:**
+- ✅ Infrastructure deployed to AWS (inc-23 branch)
+- ✅ All 10 CDK stacks operational
+- ✅ All 16 Lambda functions deployed
+- ✅ All 14 DynamoDB tables created
+- ✅ Comprehensive documentation with consolidated `architecture.md`
+- ✅ All diagrams converted to Mermaid.js format
+- ✅ CI story validation enforced via GitHub Actions
+- ✅ Observability infrastructure deployed (dashboards/alarms deferred per stakeholder decision)
 
-**Problem:** Cannot validate "fresh clone can deploy" without deploying
+### 9.2 R0 to R1 Transition
 
-**Recommendation:** Split R0 into two phases:
+**R0 Complete - Ready for R1:**
 
-#### **R0.1: Baseline Preparation** ✅ **COMPLETE**
+The inc-23 branch represents the production-ready baseline with all core infrastructure operational. The inc-24 branch addresses combat issues and will incorporate R1 work.
 
-- ✅ Audit documentation
-- ✅ Evaluate validation tooling
-- ✅ Assess observability infrastructure
-- ✅ Create CI story validation workflow (`.github/workflows/story-validation.yml`)
-- ✅ Fix `validate_story_content.py` format handling (DynamoDB wrapper support)
-
-#### **R0.2: Initial Deployment** (New Phase)
-
-- Deploy CDK stacks to AWS dev environment
-- Verify all 14 DynamoDB tables created
-- Verify all 17 Lambda functions deployed
-- Execute smoke tests (story start → process → complete)
-- Capture deployment lessons learned
-
-**Exit Criteria for R0.2:**
-
-- All stacks deploy without errors
-- `aws lambda list-functions` shows 17 functions
-- `aws dynamodb list-tables` shows 14 tables
-- Manual story start/complete succeeds
-- CloudWatch logs captured from Lambda execution
-
-### 9.2 R1 Should Focus on Integration Testing
-
-**Current R1 Scope (Program Plan):** "Implement" state machines and atomic effects
-
-**Problem:** State machines already implemented, need testing not implementation
-
-**Recommendation:** Rename R1 to "Integration Testing & Hardening"
-
-**Revised R1 Tasks:**
-
-1. Integration tests for deployed Lambda functions
-2. State transition tests (fuzzing for illegal states)
-3. Idempotency tests (replay same request, verify no duplicate rewards)
-4. Race condition tests (concurrent segment claims)
-5. Failure injection tests (DynamoDB throttling, timeout, etc.)
-6. Document state machines with diagrams (issue #491 remaining work)
+**R1 Focus Areas:**
+1. Combat system rework (in progress on inc-24)
+2. Integration testing and hardening
+3. State machine validation
+4. Idempotency testing
+5. Failure injection testing
 
 ---
 
-## 10. Next Steps
+## 10. Next Steps - R1 Work
 
-### Immediate Actions (R0.1 - COMPLETE)
+### R0 Complete - All Actions Done
 
-1. ✅ **Create CI Story Validation Workflow** (DONE)
-   - File: `.github/workflows/story-validation.yml`
-   - Fixed `validate_story_content.py` format mismatch
-   - Tested with both test story files
-   - Documented in `validation-strategy.md`
+✅ All R0 objectives completed. The system is deployed and operational on inc-23.
 
-### Next Actions (R0.2 Phase - Optional)
+### R1 Immediate Actions (inc-24 branch)
 
-2. **Deploy to AWS Dev Environment** (4-6 hours)
+1. **Complete Combat System Rework** (in progress)
+   - Address combat mechanics issues
+   - Update combat processing logic
+   - Test combat outcomes
 
-   - Run `python3 deployment/deploy.py` (incremental mode)
-   - Capture all stack outputs
-   - Document deployment process
-   - Create deployment troubleshooting guide
-
-3. **Execute Smoke Tests** (2 hours)
-   - Manual: POST /story/start via curl/Postman
-   - Verify segment creation in DynamoDB
-   - Wait for EventBridge polling cycle
-   - Verify story completion
-   - Check CloudWatch logs
-
-### Short-Term Actions (R1)
-
-4. **Create CloudWatch Dashboard** (4 hours)
-
-   - Lambda invocation counts
-   - Error rates by function
-   - P50/P95 latency
-   - Story outcome distribution
-
-5. **Write Integration Tests** (8-12 hours)
-
-   - pytest framework for Lambda testing
+2. **Integration Testing**
+   - End-to-end Lambda testing with local DynamoDB
    - Test state machine transitions
    - Test idempotency keys
    - Test race conditions
 
-6. **Document State Machines** (4 hours)
-   - Create diagrams for issue #491
-   - Add to `incremental/architecture.md`
+3. **State Machine Validation**
+   - Manual verification of state transitions
+   - Verify GameMode enforcement via logs and DB inspection
+   - Test ProcessingStatus atomicity through concurrent requests
 
-### Medium-Term Actions (R2)
+**Note:** Per project policy (documentation/unit-tests.md), we do not implement unit tests. Integration testing and manual verification provide sufficient validation.
 
-7. **Enhanced Observability** (R2 scope)
-   - Structured JSON logging
-   - Custom metric emission
+### R1 Medium-Term Actions
+
+4. **Failure Injection Testing**
+   - DynamoDB throttling scenarios
+   - Lambda timeout handling
+   - SQS message replay
+   - EventBridge polling failures
+
+5. **Performance Optimization**
+   - Lambda cold start reduction
+   - DynamoDB query optimization
+   - Client polling efficiency
+
+### Future Releases (R2+)
+
+6. **Enhanced Observability** (deferred until revenue)
+   - CloudWatch dashboards
    - Alarms for critical failures
+   - Custom metric emission
    - Observability runbook
 
 ---
 
 ## 11. Conclusion
 
-### Release 0.1 Status: ✅ **COMPLETE**
+### Release 0 Status: ✅ **COMPLETE**
 
 **Completed Deliverables:**
 
-- ✅ All infrastructure defined and ready to deploy
-- ✅ Comprehensive documentation (30 files)
-- ✅ Production-ready code (17 Lambda functions, 44 eidolon modules)
+- ✅ All infrastructure deployed to AWS (inc-23 branch)
+- ✅ All 10 CDK stacks operational in production
+- ✅ All 16 Lambda functions deployed and functional
+- ✅ All 14 DynamoDB tables created with RemovalPolicy.RETAIN
+- ✅ Comprehensive documentation (30+ files)
+- ✅ **Consolidated architecture.md** combining system overview, deployment, and state machines
+- ✅ **All diagrams converted to Mermaid.js** for better rendering
 - ✅ **Story validation integrated into CI** (`.github/workflows/story-validation.yml`)
 - ✅ **Both validators working** (`validate_branching.py`, `validate_story_content.py`)
-- ✅ **Documentation updated** (`validation-strategy.md`)
-- ✅ Observability foundation in place
+- ✅ Production-ready code (16 Lambda functions, 44 eidolon modules)
+- ✅ Observability infrastructure deployed (dashboards/alarms deferred per stakeholder)
 
-**Deferred to R0.2 (Optional Deployment Phase):**
+**Deferred Items (per stakeholder decision):**
 
-- 🟡 Infrastructure deployment to AWS
-- 🟡 CloudWatch dashboard creation (not priority)
-- 🟡 Smoke tests (requires AWS deployment)
+- 🟡 CloudWatch dashboards and alarms (deferred until revenue generation)
 
-**R0.1 Achievement:** Story validation is now **enforced via GitHub Actions**. Any PR modifying story data will automatically validate:
+**R0 Achievement:**
 
-- Branch weights sum to 1.0
-- Segment structure correctness
-- Prerequisites validity
-- NextSegmentID references
+The Eidolon Engine incremental subsystem has a complete production-ready baseline deployed on inc-23 with:
+- Full serverless infrastructure operational on AWS
+- Comprehensive architectural documentation with modern diagrams
+- Automated story validation enforcing data quality
+- All core systems tested and working
 
-**Next Phase Options:**
+**Ready for R1:**
 
-1. **R0.2:** Deploy to AWS, run smoke tests, capture deployment lessons
-2. **R1:** Integration testing and hardening (if deployment done separately)
-3. **R5:** Content pipeline and authoring tools (if skipping deployment for now)
+The inc-24 branch is ready for R1 work focusing on combat system improvements and integration testing.
 
 The incremental subsystem has **completed its baseline story validation objective**. The CI safety harness is live and will prevent invalid story data from entering the repository.
 

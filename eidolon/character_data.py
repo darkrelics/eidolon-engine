@@ -10,7 +10,7 @@ from decimal import Decimal
 
 from botocore.exceptions import ClientError
 
-from eidolon.constants import CharState
+from eidolon.constants import MAX_SKILL_LEVEL, CharState
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes
@@ -324,15 +324,18 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}
 
 
-def apply_character_updates(character_id: str, updates: dict) -> None:
+def apply_character_updates(character_id: str, updates: dict, current_character: dict | None = None) -> None:
     """
     Apply accumulated updates to character.
 
-    Handles skill XP, attribute XP, wounds, and room changes.
+    Handles skill increases, attribute increases, wounds, and room changes.
+    SkillXP/AttributeXP contain direct skill level increases (not raw XP).
 
     Args:
         character_id: Character UUID
         updates: Dict containing CharacterUpdates from segment processing
+        current_character: Optional character dict to avoid extra DynamoDB read.
+                          If not provided, will use DynamoDB ADD operation for atomic updates.
 
     Raises:
         RuntimeError: If database update fails
@@ -347,50 +350,87 @@ def apply_character_updates(character_id: str, updates: dict) -> None:
     expression_names = {}
     expression_values = {}
 
-    # Apply skill XP updates
-    skill_xp = updates.get("SkillXP", {})
-    for skill, xp_value in skill_xp.items():
-        if xp_value > 0:
-            safe_skill = skill.replace("-", "_")
-            update_expressions.append(
-                f"Skills.#skill_{safe_skill} = if_not_exists(Skills.#skill_{safe_skill}, :zero) + :xp_{safe_skill}"
-            )
-            expression_names[f"#skill_{safe_skill}"] = skill
-            expression_values[f":xp_{safe_skill}"] = Decimal(str(xp_value))
+    # Apply skill increases using DynamoDB ADD for atomic increment
+    skill_increases = updates.get("SkillXP", {})
+    if skill_increases and current_character is None:
+        # Use atomic ADD operation when we don't have current character data
+        add_expressions = []
+        for skill, increase_amount in skill_increases.items():
+            if increase_amount > 0:
+                safe_skill = skill.replace("-", "_")
+                add_expressions.append(f"Skills.#skill_{safe_skill} :inc_{safe_skill}")
+                expression_names[f"#skill_{safe_skill}"] = skill
+                expression_values[f":inc_{safe_skill}"] = Decimal(str(increase_amount))
+        if add_expressions:
+            update_expressions.append("ADD " + ", ".join(add_expressions))
+    elif skill_increases and current_character is not None:
+        # Use SET operation when we have current character data to enforce max
+        current_skills = current_character.get("Skills", {})
+        for skill, increase_amount in skill_increases.items():
+            if increase_amount > 0:
+                current_level = float(current_skills.get(skill, 0))
+                new_level = min(current_level + increase_amount, MAX_SKILL_LEVEL)
+                safe_skill = skill.replace("-", "_")
+                update_expressions.append(f"Skills.#skill_{safe_skill} = :level_{safe_skill}")
+                expression_names[f"#skill_{safe_skill}"] = skill
+                expression_values[f":level_{safe_skill}"] = Decimal(str(new_level))
 
-    # Apply attribute XP updates
-    attribute_xp = updates.get("AttributeXP", {})
-    for attribute, xp_value in attribute_xp.items():
-        if xp_value > 0:
-            safe_attr = attribute.replace("-", "_")
-            update_expressions.append(
-                f"Attributes.#attr_{safe_attr} = if_not_exists(Attributes.#attr_{safe_attr}, :zero) + :xp_{safe_attr}"
-            )
-            expression_names[f"#attr_{safe_attr}"] = attribute
-            expression_values[f":xp_{safe_attr}"] = Decimal(str(xp_value))
+    # Apply attribute increases using DynamoDB ADD for atomic increment
+    attribute_increases = updates.get("AttributeXP", {})
+    if attribute_increases and current_character is None:
+        # Use atomic ADD operation when we don't have current character data
+        add_expressions = []
+        for attribute, increase_amount in attribute_increases.items():
+            if increase_amount > 0:
+                safe_attr = attribute.replace("-", "_")
+                add_expressions.append(f"Attributes.#attr_{safe_attr} :inc_{safe_attr}")
+                expression_names[f"#attr_{safe_attr}"] = attribute
+                expression_values[f":inc_{safe_attr}"] = Decimal(str(increase_amount))
+        if add_expressions:
+            update_expressions.append("ADD " + ", ".join(add_expressions))
+    elif attribute_increases and current_character is not None:
+        # Use SET operation when we have current character data to enforce max
+        current_attributes = current_character.get("Attributes", {})
+        for attribute, increase_amount in attribute_increases.items():
+            if increase_amount > 0:
+                current_level = float(current_attributes.get(attribute, 0))
+                new_level = min(current_level + increase_amount, MAX_SKILL_LEVEL)
+                safe_attr = attribute.replace("-", "_")
+                update_expressions.append(f"Attributes.#attr_{safe_attr} = :level_{safe_attr}")
+                expression_names[f"#attr_{safe_attr}"] = attribute
+                expression_values[f":level_{safe_attr}"] = Decimal(str(new_level))
+
+    # Separate SET expressions from ADD expressions
+    set_expressions = [expr for expr in update_expressions if not expr.startswith("ADD ")]
+    add_expressions = [expr.replace("ADD ", "") for expr in update_expressions if expr.startswith("ADD ")]
 
     # Apply wounds
     wounds = updates.get("Wounds")
     if wounds:
-        update_expressions.append("Wounds = list_append(Wounds, :new_wounds)")
+        set_expressions.append("Wounds = list_append(Wounds, :new_wounds)")
         expression_values[":new_wounds"] = wounds
 
     # Apply room change
     room_id = updates.get("Room")
     if room_id is not None:
-        update_expressions.append("RoomID = :room")
+        set_expressions.append("RoomID = :room")
         expression_values[":room"] = room_id
 
-    # Set common values - only add :zero if we have skill or attribute XP updates
-    if (skill_xp or updates.get("AttributeXP")) and ":zero" not in expression_values:
-        expression_values[":zero"] = Decimal("0")
+    # Always update timestamp
+    set_expressions.append("UpdatedAt = :updated_at")
+    expression_values[":updated_at"] = datetime.now(timezone.utc).isoformat()
 
     # Execute update if there are changes
-    if update_expressions:
+    if set_expressions or add_expressions:
         try:
-            update_expression = "SET " + ", ".join(update_expressions)
-            update_expression += ", UpdatedAt = :updated_at"
-            expression_values[":updated_at"] = datetime.now(timezone.utc).isoformat()
+            # Build update expression with SET and ADD clauses
+            update_parts = []
+            if set_expressions:
+                update_parts.append("SET " + ", ".join(set_expressions))
+            if add_expressions:
+                update_parts.append("ADD " + ", ".join(add_expressions))
+
+            update_expression = " ".join(update_parts)
 
             # Build kwargs to avoid passing None for iterable parameters
             update_kwargs = {

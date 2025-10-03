@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/providers/timer_provider.dart';
+import 'package:eidolon_incremental/utils/combat_narrative.dart';
 import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 /// Widget displaying the active story with segments
@@ -75,6 +76,7 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               key: ValueKey('active_segment_${segmentData['ActiveSegmentID'] ?? segmentData['SegmentID'] ?? segmentData.hashCode}'),
               segment: segmentData,
               isActive: true,
+              characterName: widget.character.name,
               onDecisionSelect: widget.onDecisionSelect,
               isDecisionSubmitting: widget.isDecisionSubmitting,
               onTimeout: () {
@@ -97,7 +99,12 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
               separatorBuilder: (context, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final segment = _orderedHistory[index];
-                return _SimpleSegmentCard(segment: segment, isActive: false, isDecisionSubmitting: false);
+                return _SimpleSegmentCard(
+                  segment: segment,
+                  isActive: false,
+                  characterName: widget.character.name,
+                  isDecisionSubmitting: false,
+                );
               },
             ),
           ],
@@ -258,8 +265,17 @@ class _SimpleSegmentCard extends StatelessWidget {
   final Function(String)? onDecisionSelect;
   final VoidCallback? onTimeout;
   final bool isDecisionSubmitting;
+  final String? characterName;
 
-  const _SimpleSegmentCard({super.key, required this.segment, required this.isActive, this.onDecisionSelect, this.onTimeout, this.isDecisionSubmitting = false});
+  const _SimpleSegmentCard({
+    super.key,
+    required this.segment,
+    required this.isActive,
+    this.onDecisionSelect,
+    this.onTimeout,
+    this.isDecisionSubmitting = false,
+    this.characterName,
+  });
 
   static bool _isProcessingPlaceholder(String? value) {
     if (value == null) return false;
@@ -317,9 +333,9 @@ class _SimpleSegmentCard extends StatelessWidget {
     }
 
     final statusStr = segment['Status']?.toString().toLowerCase();
-    final isSegmentComplete = segment['IsComplete'] == true || statusStr == 'complete' || statusStr == 'completed';
+    final isSegmentComplete = statusStr == 'complete' || statusStr == 'completed';
     final isStoryComplete = segment['StoryComplete'] == true;
-    // For active segments, only consider segment completion, not story completion
+    // For active segments, only consider segment completion status, not story completion
     // Story might be complete while the final segment is still running
     final isCompleteFlag = isActive ? isSegmentComplete : (isSegmentComplete || isStoryComplete);
 
@@ -355,9 +371,15 @@ class _SimpleSegmentCard extends StatelessWidget {
       hasTimerExpired = true;
     }
 
-    // For active segments: ONLY reveal results when timer expires, regardless of processing status
-    // For inactive segments: reveal if complete flag is set OR if processed
-    final bool shouldRevealResults = !isActive || isCompleteFlag || (!isActive && processingStatus == 'processed') || (isActive && hasTimerExpired);
+    // For active segments, only reveal results when the timer has expired.
+    // The backend sends ProcessingStatus="processed" with results early so the client has them ready,
+    // but the client waits for the timer before displaying them (proper UX pacing).
+    // For historical (non-active) segments, we can reveal immediately if processed or flagged complete.
+    final bool shouldRevealResults =
+        !isActive ||
+        isCompleteFlag ||
+        (!isActive && processingStatus == 'processed') ||
+        (isActive && hasTimerExpired);
     final bool waitingOnTimer = isActive && !shouldRevealResults;
 
     var processingIndicatorText = '';
@@ -483,9 +505,22 @@ class _SimpleSegmentCard extends StatelessWidget {
                   String displayText = '';
                   if (shouldRevealResults) {
                     if (clientEvents != null && clientEvents.isNotEmpty) {
-                      // Use ClientEvents descriptions joined together
+                      // Get opponent name from combat state if available
+                      final combatState = segment['CombatState'] as Map<String, dynamic>?;
+                      final opponentName = combatState?['OpponentName'] as String?;
+
+                      // Process each event, generating combat narratives where applicable
                       displayText = clientEvents
-                          .map((event) => event['Description']?.toString() ?? '')
+                          .map((event) {
+                            if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
+                              return CombatNarrative.generateEventNarrative(
+                                event,
+                                characterName: characterName ?? 'You',
+                                opponentName: opponentName,
+                              );
+                            }
+                            return event['Description']?.toString() ?? '';
+                          })
                           .where((desc) => desc.isNotEmpty)
                           .join('\n\n');
                     }

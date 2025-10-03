@@ -47,7 +47,7 @@ Retrieves all player-available archetypes for character creation.
 
 **Authentication:** Required
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -88,6 +88,11 @@ Retrieves all player-available archetypes for character creation.
 }
 ```
 
+**Error Responses:**
+
+- `401 Unauthorized` - Missing or invalid authentication token
+- `500 Internal Server Error` - Database operation failed
+
 ### List Characters
 
 Retrieves a list of all characters belonging to the authenticated player.
@@ -96,7 +101,7 @@ Retrieves a list of all characters belonging to the authenticated player.
 
 **Authentication:** Required
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -109,6 +114,11 @@ Retrieves a list of all characters belonging to the authenticated player.
   ]
 }
 ```
+
+**Error Responses:**
+
+- `401 Unauthorized` - Missing or invalid authentication token
+- `500 Internal Server Error` - Database operation failed
 
 ### Add Character
 
@@ -127,7 +137,7 @@ Creates a new character for the authenticated player.
 }
 ```
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -137,6 +147,12 @@ Creates a new character for the authenticated player.
   "Message": "Character created successfully"
 }
 ```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterName or ArchetypeName, invalid archetype, name already exists
+- `401 Unauthorized` - Missing or invalid authentication token
+- `500 Internal Server Error` - Database operation failed
 
 ### Get Character
 
@@ -150,7 +166,7 @@ Retrieves complete character data including active story and segment information
 
 - `CharacterID` (required): UUID of the character to retrieve
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -220,6 +236,14 @@ Retrieves complete character data including active story and segment information
 }
 ```
 
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterID parameter
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `404 Not Found` - Character does not exist
+- `500 Internal Server Error` - Database operation failed
+
 ### Delete Character
 
 Deletes a character belonging to the authenticated player.
@@ -232,13 +256,21 @@ Deletes a character belonging to the authenticated player.
 
 - `CharacterID` (required): UUID of the character to delete
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
   "Message": "Character deleted successfully"
 }
 ```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterID parameter, invalid UUID format
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `404 Not Found` - Character does not exist
+- `500 Internal Server Error` - Database operation failed
 
 ### Start Story
 
@@ -257,7 +289,7 @@ Starts a new story for the specified character.
 }
 ```
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -273,6 +305,14 @@ Starts a new story for the specified character.
   }
 }
 ```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterID or StoryID, invalid UUID format
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Story not available to character (prerequisites not met), character not owned by player
+- `409 Conflict` - Character already in an active story
+- `500 Internal Server Error` - Database operation failed
 
 ### Abandon Story
 
@@ -290,7 +330,7 @@ Abandons the current active story for a character.
 }
 ```
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -300,6 +340,13 @@ Abandons the current active story for a character.
   "Message": "Story abandoned successfully"
 }
 ```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterID, invalid UUID format, no active story
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `500 Internal Server Error` - Database operation failed
 
 ### Submit Segment Decision
 
@@ -318,7 +365,7 @@ Submits a player decision for the current active segment.
 }
 ```
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -333,6 +380,14 @@ Submits a player decision for the current active segment.
 }
 ```
 
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterID or Decision, invalid decision value, no active segment
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `409 Conflict` - Decision already made for this segment
+- `500 Internal Server Error` - Database operation failed
+
 ### Get Segment Status
 
 Gets the current status of an active segment, including timing information.
@@ -345,7 +400,7 @@ Gets the current status of an active segment, including timing information.
 
 - `CharacterID` (required): UUID of the character
 
-**Response (Active Segment):**
+**Response (Active Segment - 200 OK):**
 
 ```json
 {
@@ -362,7 +417,7 @@ Gets the current status of an active segment, including timing information.
 }
 ```
 
-**Response (Completed Segment):**
+**Response (Completed Segment - 200 OK):**
 
 ```json
 {
@@ -385,9 +440,69 @@ Gets the current status of an active segment, including timing information.
 }
 ```
 
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterID parameter
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `404 Not Found` - No active segment found for character
+- `500 Internal Server Error` - Database operation failed
+
+### Get Story History
+
+Retrieves story history entries for a character by story instance IDs.
+
+**Endpoint:** `GET /story/history`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+- `CharacterID` (required): UUID of the character
+- `StoryInstanceIDs` (optional): Comma-separated list of story instance UUIDs (max 10)
+
+**Alternative Request Body:**
+
+```json
+{
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "StoryInstanceIDs": ["uuid1", "uuid2"]
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "Stories": [
+    {
+      "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+      "StoryInstanceID": "uuid1",
+      "StoryID": "story_uuid",
+      "StoryTitle": "The Goblin's Ambush",
+      "StartedAt": 1705329900,
+      "CompletedAt": 1705330800,
+      "Outcome": "normal",
+      "SegmentHistory": ["seg1", "seg2", "seg3"],
+      "TotalSkillXP": {"Investigation": 15},
+      "TotalAttributeXP": {"Perception": 5}
+    }
+  ],
+  "Missing": ["uuid3"]
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterID or invalid StoryInstanceID format
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `500 Internal Server Error` - Database operation failed
+
 ### Get Segment History
 
-Retrieves historical segment data for a character.
+Retrieves completed segment history for a character's active or most recent story.
 
 **Endpoint:** `GET /segment/history`
 
@@ -397,7 +512,7 @@ Retrieves historical segment data for a character.
 
 - `CharacterID` (required): UUID of the character
 
-**Response:**
+**Response (200 OK):**
 
 ```json
 {
@@ -408,17 +523,33 @@ Retrieves historical segment data for a character.
       "ActiveSegmentID": "segment_uuid_1",
       "SegmentID": "segment_def_uuid_1",
       "SegmentType": "mechanical",
+      "SegmentTitle": "The Forest Path",
+      "SegmentActivity": "Investigating the path",
       "StartTime": "2025-01-15T14:25:00Z",
       "EndTime": "2025-01-15T14:30:00Z",
       "CompletedAt": "2025-01-15T14:30:00Z",
       "StoryTitle": "The Goblin's Ambush",
+      "StoryInstanceID": "instance_uuid",
       "Outcome": "exceptional",
+      "ClientEvents": [],
+      "CharacterUpdates": {},
       "SkillXPAwarded": { "Stealth": 5, "Combat": 10 },
-      "AttributeXPAwarded": { "Agility": 2 }
+      "AttributeXPAwarded": { "Agility": 2 },
+      "ChallengeResults": [],
+      "CombatState": {},
+      "Decision": "fight"
     }
   ]
 }
 ```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing CharacterID parameter
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `404 Not Found` - Character does not exist
+- `500 Internal Server Error` - Database operation failed
 
 ## Client Cadence (Incremental mode)
 

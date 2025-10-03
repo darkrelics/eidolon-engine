@@ -44,7 +44,7 @@ void main() {
             'ActiveSegmentID': 'test-segment-1',
             'SegmentType': 'mechanical',
             'TimeRemaining': 120,
-            'IsComplete': false,
+            'ProcessingStatus': 'pending',
           },
         },
       );
@@ -73,7 +73,7 @@ void main() {
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 60,
-          'IsComplete': false,
+          'ProcessingStatus': 'pending',
           'Story': {'Title': 'Test Story'},
         },
       );
@@ -98,7 +98,7 @@ void main() {
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 0,
-          'IsComplete': true,
+          'ProcessingStatus': 'processed',
           'StoryComplete': false,
         },
       );
@@ -123,7 +123,7 @@ void main() {
         (_) async => {
           'ActiveSegmentID': 'test-segment-1',
           'TimeRemaining': 0,
-          'IsComplete': true,
+          'ProcessingStatus': 'processed',
           'StoryComplete': true,
         },
       );

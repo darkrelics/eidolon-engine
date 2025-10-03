@@ -1,7 +1,7 @@
 """
 Segment history tracking.
 
-Provides functions for recording segment history.
+Provides functions for recording segment history and checking completion status.
 """
 
 from botocore.exceptions import ClientError
@@ -180,5 +180,3 @@ def record_abandoned_segment_history(character_id: str, story_id: str, active_se
     except ClientError as err:
         logger.error(f"Failed to record segment history for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to record segment history: {err}") from err
-
-

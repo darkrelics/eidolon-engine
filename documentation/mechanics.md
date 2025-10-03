@@ -129,7 +129,7 @@ The experience system implements continuous skill progression designed around th
 2. **Meaningful Opposition** - Challenging opponents provide more growth than trivial ones
 3. **Smooth Progression** - Skills advance continuously (0.00 to 10.00) rather than in discrete levels
 4. **Natural Soft Cap** - Exponential XP requirements create a practical limit around 6.0 without hard barriers
-5. **Failure Teaches** - Even failed attempts grant experience (at 50% rate), encouraging players to take risks
+5. **Failure Teaches** - Failed attempts against equal or harder challenges grant experience (at 50% rate), encouraging players to take risks against appropriate difficulties
 
 ### Core Mechanics
 
@@ -155,16 +155,24 @@ This creates an exponential curve where:
 
 #### Variance Modifier
 
+The variance modifier determines XP scaling based on the relationship between effective score (S) and difficulty (D):
+
 ```
-ratio = min(E_att, E_def) / max(E_att, E_def)
+ratio = min(S, D) / max(S, D)
 xp_modifier = ratio^2
 ```
 
-This ensures:
+**XP Scaling Examples:**
 
-- Even match (10 vs 10): 100% XP
-- Moderate advantage (10 vs 5): 25% XP for stronger, 400% for weaker
-- Extreme mismatch (10 vs 2): 4% XP for stronger, 2500% for weaker
+- **Even match (S=D)**: ratio = 1.0 → 100% XP (maximum reward)
+- **Character stronger (S > D)**:
+  - S=10, D=5: ratio = 0.5 → 25% XP (reduced reward for easy challenge)
+  - S=10, D=2: ratio = 0.2 → 4% XP (minimal reward for trivial challenge)
+- **Challenge harder (D > S)**:
+  - S=5, D=10: ratio = 0.5 → 25% XP (reduced from max, but still learning)
+  - S=2, D=10: ratio = 0.2 → 4% XP (very hard challenges give less XP)
+
+The quadratic scaling ensures XP rewards drop dramatically when challenges don't match character capability.
 
 ### Tuning Parameters
 
@@ -173,9 +181,24 @@ This ensures:
 Located in `eidolon/constants.py`:
 
 - `BASE_XP = 0.25` - Base experience per action
-- `FAILURE_XP_PENALTY = 0.5` - Failed actions give 50% XP
+- `FAILURE_XP_PENALTY = 0.5` - Failed actions give 50% XP (when applicable, see below)
 - `ATTRIBUTE_XP_RATIO = 0.1` - Attributes gain 10% of skill XP
 - `maxScore = 10.0` - Hard cap on progression
+
+#### **Failure Penalty Rules**
+
+The failure penalty varies based on challenge difficulty relative to character capability:
+
+- **When S > D** (character stronger than challenge): **0% XP on failure**
+  - Rationale: Failing an easy task provides no learning opportunity
+  - Example: S=8, D=5, failed → 0 XP
+
+- **When D ≥ S** (challenge equal or harder): **50% XP on failure**
+  - Rationale: Attempting difficult challenges teaches even in failure
+  - Example: S=5, D=8, failed → 50% of calculated XP
+  - Example: S=5, D=5, failed → 50% of calculated XP
+
+This prevents XP farming by repeatedly failing challenges below skill level while rewarding genuine attempts at growth.
 
 #### **Mechanics System Parameters**
 

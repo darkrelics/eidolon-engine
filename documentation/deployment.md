@@ -441,12 +441,23 @@ Each stack has its own app file:
 
 ### Direct Dependencies
 
-```
-CodeBuild → (provides artifacts for) → Lambda
-DynamoDB → (policy attached to) → Lambda
-Lambda → (functions used by) → Player, Story, API
-Player → (authorizer for) → API
-API → (URL passed to) → Client
+```mermaid
+graph LR
+    CodeBuild -->|provides artifacts for| Lambda
+    DynamoDB -->|policy attached to| Lambda
+    Lambda -->|functions used by| Player
+    Lambda -->|functions used by| Story
+    Lambda -->|functions used by| API
+    Player -->|authorizer for| API
+    API -->|URL passed to| Client
+
+    style CodeBuild fill:#e1f5ff
+    style DynamoDB fill:#fff3cd
+    style Lambda fill:#d4edda
+    style Player fill:#f8d7da
+    style Story fill:#f8d7da
+    style API fill:#d1ecf1
+    style Client fill:#e2e3e5
 ```
 
 ### Mode-Specific Dependencies

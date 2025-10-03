@@ -76,29 +76,45 @@ class _GameScreenState extends State<GameScreen> {
     if (args is Character) {
       // Direct character object with story state (from StorySelectionScreen)
       if (_character == null || _character!.id != args.id) {
-        _character = args;
-        _characterInfo = CharacterInfo(name: args.name, id: args.id, dead: args.health <= 0);
-
-        // Extract story details for later use
         final storyData = args.storyState?['Story'] as Map<String, dynamic>?;
-        if (storyData != null) {
-          _lastStoryDetails = Map<String, dynamic>.from(storyData);
-        }
+        final completedSegments = args.storyState?['CompletedSegments'] as List<dynamic>?;
 
-        // No loading state needed - we have complete character data
-        if (_isLoading && mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
+        setState(() {
+          _resetForNewCharacter();
+          _character = args;
+          _characterInfo = CharacterInfo(name: args.name, id: args.id, dead: args.health <= 0);
+          _isLoading = false;
+          _error = null;
+
+          if (storyData != null) {
+            _lastStoryDetails = Map<String, dynamic>.from(storyData);
+          }
+
+          if (completedSegments != null) {
+            _segmentHistory = completedSegments
+                .whereType<Map<String, dynamic>>()
+                .map((segment) => Map<String, dynamic>.from(segment))
+                .where(_isSegmentComplete)
+                .toList();
+          }
+
+          _synchronizeStoryCompletionState();
+        });
 
         _startOrchestrationIfNeeded();
       }
     } else if (args is CharacterInfo) {
       // Only update if it's a different character or first load
       if (_characterInfo == null || _characterInfo!.id != args.id) {
-        _characterInfo = args;
-        _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate).then((_) => _loadSegmentHistory());
+        setState(() {
+          _resetForNewCharacter();
+          _characterInfo = args;
+          _character = null;
+          _isLoading = true;
+          _error = null;
+        });
+        _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate)
+            .then((_) => _loadSegmentHistory());
       }
     } else if (args != null) {
       // Unexpected argument type provided via navigation; ignoring.
@@ -113,13 +129,27 @@ class _GameScreenState extends State<GameScreen> {
     super.dispose();
   }
 
-  Future<void> _loadCharacterData({CharacterLoadRateLimitStrategy strategy = CharacterLoadRateLimitStrategy.automated}) {
+  void _resetForNewCharacter() {
+    _runtime.cancel();
+    _orchestratedSegmentId = null;
+    _segmentHistory = <Map<String, dynamic>>[];
+    _lastStoryDetails = null;
+    _storyCompletionNotified = false;
+  }
+
+  Future<void> _loadCharacterData({
+    CharacterLoadRateLimitStrategy strategy = CharacterLoadRateLimitStrategy.automated,
+    bool showLoadingIndicator = true,
+  }) {
     final activeLoad = _activeCharacterLoad;
     if (activeLoad != null) {
       return activeLoad;
     }
 
-    final future = _loadCharacterDataInternal(strategy: strategy);
+    final future = _loadCharacterDataInternal(
+      strategy: strategy,
+      showLoadingIndicator: showLoadingIndicator,
+    );
     _activeCharacterLoad = future;
     future.whenComplete(() {
       if (identical(_activeCharacterLoad, future)) {
@@ -130,15 +160,22 @@ class _GameScreenState extends State<GameScreen> {
     return future;
   }
 
-  Future<void> _loadCharacterDataInternal({required CharacterLoadRateLimitStrategy strategy}) async {
+  Future<void> _loadCharacterDataInternal({
+    required CharacterLoadRateLimitStrategy strategy,
+    required bool showLoadingIndicator,
+  }) async {
     debugPrint('GameScreen: Loading character data');
     if (_characterInfo == null) return;
+
+    final previousCharacterId = _character?.id;
 
     try {
       if (mounted) {
         setState(() {
-          _isLoading = true;
           _error = null;
+          if (showLoadingIndicator) {
+            _isLoading = true;
+          }
         });
       }
 
@@ -147,8 +184,12 @@ class _GameScreenState extends State<GameScreen> {
 
       if (mounted) {
         setState(() {
-          _character = character;
           _isLoading = false;
+          final newCharacterId = character?.id;
+          if (previousCharacterId != newCharacterId) {
+            _resetForNewCharacter();
+          }
+          _character = character;
           _error = null;
           if (character?.activeSegmentID != null) {
             _storyCompletionNotified = false;
@@ -206,7 +247,10 @@ class _GameScreenState extends State<GameScreen> {
       // Empty callback - we just want the cooldown timer
     });
 
-    return _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
+    return _loadCharacterData(
+      strategy: CharacterLoadRateLimitStrategy.immediate,
+      showLoadingIndicator: false,
+    );
   }
 
   // Orchestration is handled by StoryPollingService
@@ -527,10 +571,16 @@ class _GameScreenState extends State<GameScreen> {
         if (mounted) {
           setState(() {
             // Update character's active segment locally
-            final updatedStoryState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{})
-              ..['ActiveSegment'] = nextSegment;
+            final updatedStoryState =
+                Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{})
+                  ..['ActiveSegment'] = nextSegment;
+
+            final dynamic nextSegmentIdValue =
+                nextSegment['ActiveSegmentID'] ?? nextSegment['SegmentID'];
+            final String? nextSegmentId = nextSegmentIdValue?.toString();
+
             _character = _character!.copyWith(
-              activeSegmentId: nextSegment['ActiveSegmentID'] as String?,
+              activeSegmentId: nextSegmentId,
               storyState: updatedStoryState,
             );
           });
@@ -625,7 +675,10 @@ class _GameScreenState extends State<GameScreen> {
 
       // Now reload character - this will clear ActiveStoryID/ActiveSegmentID
       if (refreshCharacter) {
-        await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
+        await _loadCharacterData(
+          strategy: CharacterLoadRateLimitStrategy.immediate,
+          showLoadingIndicator: false,
+        );
       }
 
       // Fetch backend history and merge with our local history
@@ -731,7 +784,10 @@ class _GameScreenState extends State<GameScreen> {
     }
 
     // Reload character to get available stories
-    await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate);
+    await _loadCharacterData(
+      strategy: CharacterLoadRateLimitStrategy.immediate,
+      showLoadingIndicator: false,
+    );
     // Clear segment history after story completion
     if (mounted) {
       setState(() {
@@ -957,6 +1013,39 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  List<Map<String, dynamic>> _buildStoryHistoryArchive() {
+    final Map<String, Map<String, dynamic>> deduped = {};
+
+    void addSegments(Iterable<Map<String, dynamic>> segments) {
+      for (final segment in segments) {
+        final copy = Map<String, dynamic>.from(segment);
+        final segmentId =
+            copy['SegmentID']?.toString() ?? copy['ActiveSegmentID']?.toString();
+        final key = segmentId ?? copy.hashCode.toString();
+        deduped[key] = copy;
+      }
+    }
+
+    final completedSegmentsDynamic =
+        _character?.storyState?['CompletedSegments'] as List<dynamic>?;
+    if (completedSegmentsDynamic != null) {
+      final completedSegments = completedSegmentsDynamic
+          .whereType<Map<String, dynamic>>()
+          .where(_isSegmentComplete)
+          .map((segment) => Map<String, dynamic>.from(segment));
+      addSegments(completedSegments);
+    }
+
+    if (_segmentHistory.isNotEmpty) {
+      final historyCopies = _segmentHistory
+          .where(_isSegmentComplete)
+          .map((segment) => Map<String, dynamic>.from(segment));
+      addSegments(historyCopies);
+    }
+
+    return deduped.values.toList(growable: false);
+  }
+
   Widget _buildDesktopLayout() {
     return Row(
       children: [
@@ -970,7 +1059,7 @@ class _GameScreenState extends State<GameScreen> {
           child: StoryPanel(
             character: _character!,
             segmentHistory: _segmentHistory,
-            storyHistoryArchive: const [],
+            storyHistoryArchive: _buildStoryHistoryArchive(),
             isLoading: _isLoading,
             error: _error,
             onRefresh: _refreshCharacterImmediate,
@@ -1001,7 +1090,7 @@ class _GameScreenState extends State<GameScreen> {
           child: StoryPanel(
             character: _character!,
             segmentHistory: _segmentHistory,
-            storyHistoryArchive: const [],
+            storyHistoryArchive: _buildStoryHistoryArchive(),
             isLoading: _isLoading,
             error: _error,
             onRefresh: _refreshCharacterImmediate,
@@ -1027,7 +1116,7 @@ class _GameScreenState extends State<GameScreen> {
         return StoryPanel(
           character: _character!,
           segmentHistory: _segmentHistory,
-          storyHistoryArchive: const [],
+          storyHistoryArchive: _buildStoryHistoryArchive(),
           isLoading: _isLoading,
           error: _error,
           onRefresh: _refreshCharacterImmediate,

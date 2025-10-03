@@ -1588,10 +1588,23 @@ void main() {
 
 **Error Handling Chain:**
 
-```
-UI Layer → Provider Layer → Service Layer → BaseApiService → HTTP Client
-    ↑              ↑              ↑              ↑
-  User Feedback  State Updates  Business Logic  Network Errors
+```mermaid
+graph LR
+    UI[UI Layer] --> Provider[Provider Layer]
+    Provider --> Service[Service Layer]
+    Service --> Base[BaseApiService]
+    Base --> HTTP[HTTP Client]
+
+    HTTP -.->|Network Errors| Base
+    Base -.->|Business Logic| Service
+    Service -.->|State Updates| Provider
+    Provider -.->|User Feedback| UI
+
+    style UI fill:#e1f5ff
+    style Provider fill:#d4edda
+    style Service fill:#fff3cd
+    style Base fill:#f8d7da
+    style HTTP fill:#e2e3e5
 ```
 
 **Performance Optimizations:**
@@ -2259,9 +2272,11 @@ Future<T> retryWithBackoff<T>(
 
 ## 9. Testing Guidelines
 
-### 9.1 Unit Test Patterns
+**Project Policy:** This project does NOT implement unit tests for backend code. See `documentation/unit-tests.md` for rationale. Flutter client uses built-in widget/integration testing.
 
-Mock-based testing for service layer:
+### 9.1 Flutter Widget Test Patterns
+
+Flutter provides widget testing for UI components:
 
 ```dart
 class TestApiService {
@@ -2283,7 +2298,9 @@ class TestApiService {
 }
 ```
 
-### 9.2 Integration Test Patterns
+**Note:** Flutter client testing is appropriate because it validates UI behavior, not business logic.
+
+### 9.2 Flutter Integration Test Patterns
 
 Full app integration testing:
 
@@ -2559,6 +2576,437 @@ When any new segment is created (mechanical or decision), the system automatical
 - **Non-blocking**: Healing failures don't prevent segment creation or character retrieval
 
 This design ensures characters naturally recover over time regardless of segment type.
+
+### 4.5 Combat System Redesign (Dual Action System)
+
+**Status:** Proposed redesign to improve combat tactics and skill utilization
+
+The current combat system has been evaluated and a redesign is proposed to better utilize character skills and provide more tactical depth. The new system introduces separate offensive and defensive actions per combat round.
+
+**Key Design Decisions:**
+- **All rounds processed at once** - no tick-based processing, async Lambda handles full combat
+- **Character action determined at combat start** - consistency until inventory/magic systems enable dynamic choices
+- **Combat awards XP** - both offensive and defensive skills gain experience
+- **Critical hits at sigma > 3.0** - deals 2 wounds instead of 1
+- **Opponent WeaponType used now** - determines wound type (lethal/bashing/aggravated)
+- **Simultaneous resolution** - both combatants act each round, damage applied when: (offensive_success AND NOT defensive_success)
+- **MaxRounds timeout = FAILURE** - opponent escapes if combat not resolved in time
+- **Victory quality based on wounds** - 0 wounds = exceptional, 1-2 = normal, 3+ = minimal
+
+#### 4.5.1 Design Principles
+
+**Dual Action System**
+
+Each combat round consists of:
+1. **Character Offensive Action** - attempts to deal damage
+2. **Character Defensive Action** - attempts to avoid damage
+3. **Opponent Offensive Action** - attempts to deal damage
+4. **Opponent Defensive Action** - attempts to avoid damage
+
+**Action Resolution**
+- **Offensive Success** AND **Defensive Failure** → Damage dealt
+- **Offensive Failure** OR **Defensive Success** → No damage
+- Both combatants resolve actions simultaneously each round
+- Damage applied based on: `(attacker_offensive_success AND defender_defensive_failure)`
+
+**Combat Processing**
+- Process ALL rounds specified in `Combat.MaxRounds` in a single execution
+- No tick-based processing - async Lambda handles full combat duration
+- Character's best action determined once at combat start
+- Action remains consistent throughout the encounter (until inventory/magic systems enable dynamic choices)
+
+#### 4.5.2 Combat Actions
+
+**Character Offensive Actions**
+
+Character automatically selects the highest-rated combination:
+
+| Action | Calculation | Notes |
+|--------|-------------|-------|
+| **Arcane** | Intelligence + Arcane | Magical attack |
+| **Brawling** | Strength + Brawling | Unarmed combat |
+| **Melee** | Strength + Melee | Melee weapons |
+| **Archery** | Agility + Archery | Ranged weapons |
+
+**Character Defensive Actions**
+
+Defensive action is determined by offensive action chosen:
+
+| Offensive Action | Defensive Action | Calculation |
+|-----------------|------------------|-------------|
+| Melee | **Parry** | Strength + Parry |
+| Arcane, Brawling, Archery | **Dodge** | Agility + Dodge |
+
+**Rationale:** Melee combat allows blocking/parrying with weapon. Other styles require mobility/dodging.
+
+**Opponent Actions**
+
+Opponents use the same system but configured via opponent data.
+
+#### 4.5.3 Combat Flow
+
+**Combat Start Sequence:**
+```
+1. Determine character's best offensive action (calculated once)
+2. Determine character's defensive action (based on offensive choice)
+3. Get opponent's offensive/defensive actions from data
+4. Process all MaxRounds rounds
+```
+
+**Per-Round Sequence:**
+```
+1. Character offensive check vs Opponent defensive rating → (char_off_success, char_off_sigma)
+2. Opponent offensive check vs Character defensive rating → (opp_off_success, opp_off_sigma)
+3. Character defensive check vs Opponent offensive rating → (char_def_success, char_def_sigma)
+4. Opponent defensive check vs Character offensive rating → (opp_def_success, opp_def_sigma)
+5. Apply damage:
+   - Character takes damage IF (opp_off_success AND NOT char_def_success)
+   - Opponent takes damage IF (char_off_success AND NOT opp_def_success)
+6. Check victory conditions after damage applied
+7. Log round results
+8. Continue to next round or end combat
+```
+
+**Example Combat:**
+```
+Character: Wizard (determined at combat start)
+  - Arcane (Int 3 + Arcane 1) = 4
+  - Brawling (Str 1 + Brawling 0) = 1
+  - Melee (Str 1 + Melee 0) = 1
+  - Archery (Agi 1 + Archery 0) = 1
+  → Best: Arcane (4)
+  → Defense: Dodge (Agi 1 + Dodge 0) = 1
+
+Opponent: Goblin Scout
+  - Offensive: Melee (8)
+  - Defensive: Parry (7)
+  - WeaponType: lethal
+
+Round 1 Resolution:
+  1. Wizard Arcane (4) vs Goblin Parry (7) → SUCCESS, sigma=1.2
+  2. Goblin Melee (8) vs Wizard Dodge (1) → SUCCESS, sigma=3.5 (CRITICAL!)
+  3. Wizard Dodge (1) vs Goblin Melee (8) → FAILURE, sigma=-2.1
+  4. Goblin Parry (7) vs Wizard Arcane (4) → SUCCESS, sigma=0.8
+
+  Result:
+  - Wizard attack: SUCCESS but Goblin PARRIED → No damage to goblin
+  - Goblin attack: SUCCESS and Wizard FAILED DODGE → Damage to wizard
+    - Sigma 3.5 > 3.0 → CRITICAL HIT → 2 wounds
+    - WeaponType: lethal → 2 lethal wounds added to wizard
+```
+
+#### 4.5.4 Damage System
+
+**Damage Amount**
+- **Critical Hit** (sigma > 3.0) → 2 wounds
+- **Normal Hit** (sigma ≤ 3.0) → 1 wound
+
+**Wound Type**
+- Determined by attacker's `WeaponType` attribute:
+  - `"lethal"` → lethal wounds
+  - `"bashing"` → bashing wounds
+  - `"aggravated"` → aggravated wounds
+
+**Experience Points**
+- Combat actions MUST award XP for skill improvement
+- Use XP-granting opposed check function (not the current `resolve_opposed_check()`)
+- XP awarded for:
+  - Offensive skill used (Arcane/Brawling/Melee/Archery)
+  - Defensive skill used (Parry/Dodge)
+- Both successful and failed checks grant XP based on difficulty
+
+**Future Enhancements (With Inventory/Equipment)**
+
+When inventory/equipment is implemented:
+- Weapon damage bonuses (modify base damage)
+- Armor damage reduction
+- Special weapon effects (poison, fire, etc.)
+- Equipment-based critical multipliers
+- Shield bonuses to Parry
+
+#### 4.5.5 Data Schema Changes
+
+**Current Opponent Schema Issues**
+
+The current opponent schema defines many fields that are unused:
+
+```json
+{
+  "CombatRating": 8,      // UNUSED - code expects Attributes.Strength
+  "DefenseRating": 7,     // UNUSED - code expects Skills.Dodge/Parry
+  "DamageRating": 6,      // UNUSED
+  "Toughness": 5,         // UNUSED
+  "ArmorRating": 1,       // UNUSED
+  "WeaponType": "lethal", // UNUSED
+  "WeaponDamage": 2,      // UNUSED
+  "Health": 6             // ONLY USED FIELD
+}
+```
+
+**Proposed Opponent Schema (Immediate Implementation)**
+
+```json
+{
+  "OpponentID": "...",
+  "Name": "Goblin Scout",
+  "Description": "...",
+
+  // Combat ratings
+  "OffensiveAction": "Melee",  // Arcane|Brawling|Melee|Archery
+  "OffensiveRating": 8,        // Total skill for offense
+  "DefensiveAction": "Parry",  // Parry|Dodge
+  "DefensiveRating": 7,        // Total skill for defense
+
+  "Health": 6,
+  "WeaponType": "lethal",      // USED NOW: Determines wound type
+
+  // Future use (when inventory ready)
+  "WeaponDamage": 2,           // RESERVED for damage bonuses
+  "ArmorRating": 1,            // RESERVED for damage reduction
+
+  "LootTable": [...],
+  "Tags": [...]
+}
+```
+
+**Future Opponent Schema (With Inventory/Equipment)**
+
+```json
+{
+  "OpponentID": "...",
+  "Name": "Goblin Scout",
+
+  // Full stat system (like characters)
+  "Attributes": {
+    "Strength": 2,
+    "Agility": 2,
+    "Intelligence": 1,
+    "Endurance": 1
+  },
+  "Skills": {
+    "Melee": 3,
+    "Archery": 0,
+    "Brawling": 1,
+    "Arcane": 0,
+    "Parry": 2,
+    "Dodge": 1
+  },
+
+  "Health": 6,
+
+  // Equipment (when inventory ready)
+  "Equipment": [
+    {
+      "PrototypeID": "rusty-sword",
+      "Slot": "mainhand",
+      "DamageBonus": 2,
+      "DamageType": "lethal"
+    },
+    {
+      "PrototypeID": "leather-armor",
+      "Slot": "torso",
+      "ArmorRating": 1
+    }
+  ],
+
+  "LootTable": [...],
+  "Tags": [...]
+}
+```
+
+#### 4.5.6 Implementation Plan
+
+**Immediate Implementation**
+
+✅ Can be implemented now
+
+Changes needed:
+
+1. **Remove COMBAT_ROUNDS_PER_TICK** and tick-based processing:
+   - Process all rounds in `Combat.MaxRounds` in single execution
+   - Remove `CombatState.Round` tracking between ticks
+   - Simplify to full combat resolution
+
+2. **Update `process_combat_segment()` function:**
+   - Calculate character's best offensive action (once at combat start)
+   - Determine character's defensive action (based on offensive choice)
+   - Process all rounds with 4 opposed checks per round:
+     - Character offensive vs Opponent defensive
+     - Opponent offensive vs Character defensive
+     - Character defensive vs Opponent offensive
+     - Opponent defensive vs Character offensive
+   - Apply damage based on: `(offensive_success AND NOT defensive_success)`
+   - Use **XP-granting** opposed check function (not current `resolve_opposed_check()`)
+   - Critical hits: sigma > 3.0 deals 2 wounds
+   - Normal hits: sigma ≤ 3.0 deals 1 wound
+   - Use opponent's `WeaponType` to determine wound type
+
+3. **Update opponent data schema:**
+   - Add `OffensiveAction` (Arcane|Brawling|Melee|Archery)
+   - Add `OffensiveRating` (total skill value)
+   - Add `DefensiveAction` (Parry|Dodge)
+   - Add `DefensiveRating` (total skill value)
+   - Use existing `WeaponType` field
+   - Keep existing `Health`
+   - Reserve `WeaponDamage` and `ArmorRating` for future use
+
+4. **New helper functions:**
+   ```python
+   def get_character_best_offensive_action(attributes, skills) -> tuple[str, float]:
+       """Determine character's best offensive action."""
+       actions = {
+           "Arcane": attributes.get("Intelligence", 0) + skills.get("Arcane", 0),
+           "Brawling": attributes.get("Strength", 0) + skills.get("Brawling", 0),
+           "Melee": attributes.get("Strength", 0) + skills.get("Melee", 0),
+           "Archery": attributes.get("Agility", 0) + skills.get("Archery", 0),
+       }
+       best_action = max(actions.items(), key=lambda x: x[1])
+       return best_action[0], best_action[1]
+
+   def get_character_defensive_rating(offensive_action: str, attributes, skills) -> tuple[str, float]:
+       """Determine character's defensive action and rating based on offensive action."""
+       if offensive_action == "Melee":
+           defensive_action = "Parry"
+           rating = attributes.get("Strength", 0) + skills.get("Parry", 0)
+       else:
+           defensive_action = "Dodge"
+           rating = attributes.get("Agility", 0) + skills.get("Dodge", 0)
+       return defensive_action, rating
+   ```
+
+5. **Update victory conditions:**
+   - Character reaches 0 health → DEATH outcome
+   - Opponent defeated → Outcome based on wounds taken (exceptional/normal/minimal)
+   - MaxRounds exceeded → Opponent escapes → FAILURE outcome
+
+**Future Enhancements (With Inventory/Equipment)**
+
+⏳ Requires inventory/equipment system
+
+Changes for later:
+
+1. Equipment modifiers:
+   - Weapon damage bonuses from `WeaponDamage`
+   - Armor damage reduction from `ArmorRating`
+   - Equipment stat bonuses
+   - Shield bonuses to Parry
+
+2. Opponent full stats:
+   - Use Attributes + Skills like characters (instead of ratings)
+   - Equipment system for opponents
+   - Dynamic action selection for opponents
+
+3. Advanced combat features:
+   - Enhanced critical hits with equipment multipliers
+   - Special weapon abilities (reach, enchantments)
+   - Status effects (poison, paralysis, bleeding)
+   - Weapon durability
+   - Combat maneuvers (disarm, trip, grapple)
+
+#### 4.5.7 Migration Strategy
+
+**Updating Existing Opponent Data**
+
+1. Analyze current opponent stats
+2. Map to new schema:
+   - `CombatRating` → `OffensiveRating`
+   - `DefenseRating` → `DefensiveRating`
+   - Determine logical action types based on description/tags
+3. Update all opponent records in test_opponents.json
+4. Remove deprecated fields (but keep reserved fields)
+
+**Backward Compatibility**
+
+- Keep old fields during transition
+- Provide fallback logic if new fields missing
+- Log warnings for deprecated data usage
+
+#### 4.5.8 Combat Outcome Determination
+
+**Victory Conditions (checked after each round):**
+
+Priority order:
+1. **Character Death:** Character reaches 0 health → DEATH outcome
+2. **Opponent Defeat:** Opponent reaches 0 health → Victory (quality based on wounds)
+3. **Max Rounds:** All rounds completed without decisive outcome → FAILURE (opponent escapes)
+
+**Victory Quality (when opponent defeated):**
+
+Based on wounds taken by character during combat:
+- **0 wounds** → EXCEPTIONAL outcome (flawless victory)
+- **1-2 wounds** → NORMAL outcome (clean victory)
+- **3+ wounds** → MINIMAL outcome (costly victory)
+
+**Combat Log Structure:**
+
+Each round logs:
+```python
+{
+    "Round": 1,
+    "CharacterOffensive": {
+        "Action": "Arcane",
+        "Rating": 4,
+        "Success": True,
+        "Sigma": 1.23
+    },
+    "CharacterDefensive": {
+        "Action": "Dodge",
+        "Rating": 1,
+        "Success": False,
+        "Sigma": -2.1
+    },
+    "OpponentOffensive": {
+        "Action": "Melee",
+        "Rating": 8,
+        "Success": True,
+        "Sigma": 3.5
+    },
+    "OpponentDefensive": {
+        "Action": "Parry",
+        "Rating": 7,
+        "Success": True,
+        "Sigma": 0.8
+    },
+    "Damage": {
+        "CharacterTook": 2,     # Critical hit (sigma > 3.0)
+        "CharacterWoundType": "lethal",
+        "OpponentTook": 0,      # Attack was parried
+        "OpponentWoundType": null
+    }
+}
+```
+
+#### 4.5.9 Benefits of Redesign
+
+1. **Immediate implementation:** Works now without inventory system
+2. **Clear upgrade path:** Natural enhancements when inventory/magic systems ready
+3. **Full skill utilization:** All combat skills (Arcane, Brawling, Melee, Archery, Parry, Dodge) become meaningful
+4. **Tactical depth:** Action selection matters, defensive actions provide counterplay
+5. **XP progression:** Combat trains relevant skills through XP awards
+6. **Balanced mechanics:** Both sides use same resolution system
+7. **Testable:** Each component can be unit tested independently
+8. **Scalable:** Async processing handles any combat duration
+9. **Backward compatible:** Can migrate existing opponents with data transformation
+
+#### 4.5.10 Current Implementation Issues
+
+The existing combat system has these critical issues that the redesign addresses:
+
+1. **Stat Schema Mismatch:** Code expects `Attributes.Strength` and `Skills.Melee` but opponents have `CombatRating` instead, causing opponents to always have 0 combat effectiveness.
+
+2. **Unused Stats:** 8 of 9 opponent fields are defined but never used in combat calculations.
+
+3. **No XP Awards:** Combat uses `resolve_opposed_check()` which doesn't award XP, preventing skill growth from combat experience.
+
+4. **Tick-Based Processing:** Uses `COMBAT_ROUNDS_PER_TICK` to process combat in chunks, adding unnecessary complexity since async Lambda can handle full combat.
+
+5. **Limited Skill Usage:** Only Strength+Melee and Agility+Dodge are used, ignoring Arcane, Brawling, Archery, and Parry skills.
+
+6. **No Defensive Actions:** Character cannot actively defend - only opponent's accuracy determines if damage is taken.
+
+7. **Inconsistent Constants:** Opponent attacks use hardcoded sigma thresholds instead of defined constants.
+
+8. **Complex Damage Calculation:** Current system has multiple damage levels (1/2/3 wounds) based on sigma, making balance unpredictable.
 
 ## 5. Processing Flow Implementation
 
@@ -2984,7 +3432,199 @@ class _GameScreenState extends State<GameScreen> {
 }
 ```
 
-### 6.3 Progressive Event Display
+### 6.3 Combat Narrative Generation
+
+Combat events use template-based narrative generation to create engaging descriptions from combat round data. The `CombatNarrative` utility class transforms structured combat data into dynamic, varied combat text.
+
+#### System Architecture
+
+**Backend (`eidolon/segment_combat.py`):**
+- Stores `OpponentName` in CombatState for client use
+- Provides full combat round data including offensive/defensive actions
+- No server-side narrative generation - keeps backend data-focused
+
+**Frontend (`incremental/lib/utils/combat_narrative.dart`):**
+- Client-side template engine for combat narratives
+- Generates text on-demand from combat data
+- Easily modifiable templates without backend deployment
+
+#### Implementation Files
+
+**Backend:**
+- `eidolon/segment_combat.py` - Adds `OpponentName` to CombatState (lines 134, 277, 291, 322, 336)
+
+**Frontend:**
+- `incremental/lib/utils/combat_narrative.dart` - Template-based narrative generator
+- `incremental/lib/widgets/story/active_story_widget.dart` - Integration into active story display
+- `incremental/lib/widgets/game/story_panel.dart` - Integration into completed segment cards
+- `incremental/lib/widgets/segment_history_viewer.dart` - Integration into segment history viewer
+
+#### Features
+
+- **Template-based narratives** for all offensive actions (Melee, Brawling, Archery, Arcane)
+- **Success/failure variations** with randomized templates for variety
+- **Defensive action integration** (Dodge, Parry) appended to failed attacks
+- **Severity descriptors** based on sigma values and damage dealt
+- **Character/opponent name substitution** for personalized narratives
+- **Universal integration** across active segments, completed segments, and history viewer
+
+#### Client Integration
+
+The combat narrative generator is integrated in multiple locations for consistent combat display:
+
+**Active Story Display (`active_story_widget.dart`):**
+```dart
+import 'package:eidolon_incremental/utils/combat_narrative.dart';
+
+// In _SimpleSegmentCard builder
+final combatState = segment['CombatState'] as Map<String, dynamic>?;
+final opponentName = combatState?['OpponentName'] as String?;
+
+displayText = clientEvents
+    .map((event) {
+      if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
+        return CombatNarrative.generateEventNarrative(
+          event,
+          characterName: characterName ?? 'You',
+          opponentName: opponentName,
+        );
+      }
+      return event['Description']?.toString() ?? '';
+    })
+    .where((desc) => desc.isNotEmpty)
+    .join('\n\n');
+```
+
+**Completed Segment Cards (`story_panel.dart`):**
+```dart
+String _extractSegmentNarrative(Map<String, dynamic> segment) {
+  final clientEvents = segment['ClientEvents'] as List<dynamic>?;
+  if (clientEvents != null && clientEvents.isNotEmpty) {
+    final characterName = widget.character.name;
+    final opponentName = _extractOpponentName(segment);
+
+    final descriptions = clientEvents
+        .map((event) {
+          if (event is! Map<String, dynamic>) return event.toString();
+
+          // Check if this is a combat event and use combat narrative
+          if (CombatNarrative.isCombatEvent(event)) {
+            return CombatNarrative.generateEventNarrative(
+              event,
+              characterName: characterName,
+              opponentName: opponentName,
+            );
+          }
+
+          return event['Description']?.toString() ?? '';
+        })
+        .where((text) => text.trim().isNotEmpty)
+        .toList();
+
+    return descriptions.join('\n\n');
+  }
+  // ... fallback logic
+}
+
+// Helper to extract opponent name from segment data
+String _extractOpponentName(Map<String, dynamic> segment) {
+  final opponentData = segment['Opponent'] as Map<String, dynamic>?;
+  if (opponentData != null) {
+    final name = opponentData['Name'] ?? opponentData['OpponentName'];
+    if (name is String && name.isNotEmpty) return name;
+  }
+
+  // Check ClientEvents for opponent information
+  final clientEvents = segment['ClientEvents'] as List<dynamic>?;
+  if (clientEvents != null) {
+    for (final event in clientEvents) {
+      if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
+        final data = event['Data'] as Map<String, dynamic>?;
+        final oppOffensive = data?['OpponentOffensive'] as Map<String, dynamic>?;
+        if (oppOffensive != null) {
+          final name = oppOffensive['Name'];
+          if (name is String && name.isNotEmpty) return name;
+        }
+      }
+    }
+  }
+
+  return 'the opponent';
+}
+```
+
+**Segment History Viewer (`segment_history_viewer.dart`):**
+```dart
+Widget _buildEventSummary(Map<String, dynamic> event) {
+  final eventType = event['eventType'] as String? ?? event['EventType'] as String?;
+
+  // Use combat narrative for combat events
+  String description;
+  if (CombatNarrative.isCombatEvent(event)) {
+    final characterName = _extractCharacterName(event);
+    final opponentName = _extractOpponentNameFromEvent(event);
+    description = CombatNarrative.generateEventNarrative(
+      event,
+      characterName: characterName,
+      opponentName: opponentName,
+    );
+  } else {
+    description = event['description'] as String? ?? event['Description'] as String? ?? '';
+  }
+
+  // ... render UI with description
+}
+```
+
+#### Template Structure
+
+Each offensive action has success and failure templates:
+
+```dart
+static const _offensiveTemplates = {
+  'Melee': {
+    'success': [
+      '{attacker} swings their blade at {defender}, landing a {severity} strike',
+      // ... more variations (4 per category)
+    ],
+    'failure': [
+      '{attacker} swings at {defender}, but the attack is deflected',
+      // ... more variations (4 per category)
+    ],
+  },
+  // ... Brawling, Archery, Arcane (4 actions total)
+};
+```
+
+Defensive actions (Dodge/Parry) are appended to failed attacks when the defense succeeds:
+- "...but the attack is deflected **while the gremlin evades with quick reflexes**"
+- "...but the attack is deflected **as you parry expertly**"
+
+#### Example Output
+
+**Input Data (from backend):**
+```json
+{
+  "EventType": "combat",
+  "Title": "Round 1",
+  "Description": "Combat round",
+  "Data": {
+    "CharacterOffensive": {"Action": "Arcane", "Success": true, "Sigma": 2.5},
+    "OpponentDefensive": {"Action": "Dodge", "Success": false},
+    "Damage": {"OpponentTook": 1}
+  }
+}
+```
+
+**Generated Narrative:**
+```
+Arthos unleashes arcane energy that strikes the gremlin with solid power.
+The gremlin swings their blade at Arthos, but the attack is deflected as Arthos parries expertly.
+```
+
+This creates varied, informative combat text that reflects both offensive actions and successful defensive maneuvers.
+
+### 6.4 Progressive Event Display
 
 This widget progressively reveals story events over the segment duration, creating an engaging narrative experience by timing event display to match the segment's progress rather than showing all events immediately.
 
@@ -3040,7 +3680,7 @@ class _StoryEventDisplayState extends State<StoryEventDisplay> {
 }
 ```
 
-### 6.4 Character Model Updates
+### 6.5 Character Model Updates
 
 The Flutter Character model now includes direct properties for story state, eliminating the need for complex state determination logic:
 
@@ -4083,104 +4723,73 @@ This comprehensive error handling system ensures the Incremental client provides
 
 ## 9. Testing Guidelines
 
-### 9.1 Unit Test Patterns
+**Project Policy:** This project does NOT implement unit tests. See `documentation/unit-tests.md` for rationale.
 
-These unit test patterns demonstrate how to mock DynamoDB operations and validate complex business logic like prerequisite checking and transaction structure, ensuring code correctness without requiring actual AWS resources.
+### 9.1 Integration Test Patterns (Backend)
+
+Integration tests validate actual system behavior using local DynamoDB or test AWS accounts. These examples show the testing approach without relying on unit test mocking.
 
 ```python
-import pytest
-from unittest.mock import Mock, patch
+# Example: Integration test with actual DynamoDB
+# These tests use real AWS resources (local or test account)
+import boto3
 from decimal import Decimal
 
-class TestStoryProcessing:
-    @pytest.fixture
-    def mock_character(self):
-        return {
-            'CharacterID': 'test-char-001',
-            'PlayerID': 'test-player-001',
-            'GameMode': 'None',
-            'Skills': {'perception': Decimal('5'), 'survival': Decimal('3')},
-            'Attributes': {'agility': Decimal('3'), 'strength': Decimal('4')},
-            'MaxHealth': 10,
-            'Wounds': []
-        }
+# Setup test database connection
+dynamodb = boto3.resource('dynamodb', endpoint_url='http://localhost:8000')  # DynamoDB Local
 
-    @pytest.fixture
-    def mock_story(self):
-        return {
-            'StoryID': 'test-story-001',
-            'Title': 'Test Adventure',
-            'FirstSegmentID': 'seg-001',
-            'Prerequisites': {
-                'minSkills': {'survival': 2},
-                'requiredItems': []
-            }
-        }
+def test_story_start_integration():
+    """Integration test: Start story and verify state changes."""
+    # Create test character in actual DynamoDB
+    characters_table = dynamodb.Table('characters')
+    test_character = {
+        'CharacterID': 'integration-test-001',
+        'PlayerID': 'test-player',
+        'GameMode': 'None',
+        'Skills': {'survival': Decimal('3')},
+    }
+    characters_table.put_item(Item=test_character)
 
-    def test_validate_prerequisites(self, mock_character, mock_story):
-        """Test story prerequisite validation."""
-        # Character meets requirements
-        assert validate_prerequisites(mock_character, mock_story['Prerequisites']) == True
+    # Actually call the Lambda function or service layer
+    from lambda.api_story_start import start_story
+    result = start_story('integration-test-001', 'test-story-001', 'test-player')
 
-        # Character lacks skill
-        mock_story['Prerequisites']['minSkills']['combat'] = 10
-        assert validate_prerequisites(mock_character, mock_story['Prerequisites']) == False
+    # Verify actual database changes
+    updated_char = characters_table.get_item(Key={'CharacterID': 'integration-test-001'})
+    assert updated_char['Item']['GameMode'] == 'Incremental'
+    assert updated_char['Item']['ActiveStoryID'] == 'test-story-001'
 
-    @patch('boto3.client')
-    def test_start_story_transaction(self, mock_boto, mock_character):
-        """Test atomic story start."""
-        mock_dynamodb = Mock()
-        mock_boto.return_value = mock_dynamodb
-
-        # Execute transaction
-        start_story('test-char-001', 'test-story-001')
-
-        # Verify transaction structure
-        mock_dynamodb.transact_write_items.assert_called_once()
-        transaction = mock_dynamodb.transact_write_items.call_args[0][0]
-
-        assert len(transaction['TransactItems']) == 2
-        assert 'Update' in transaction['TransactItems'][0]
-        assert 'Put' in transaction['TransactItems'][1]
+    # Cleanup
+    characters_table.delete_item(Key={'CharacterID': 'integration-test-001'})
 ```
 
-### 9.2 Integration Test Patterns
+### 9.2 Manual Testing Workflows
 
-Integration tests validate the complete polling workflow by creating segments in various states and verifying that the poller correctly identifies and processes ready and stuck segments according to business rules.
+The primary testing approach is manual verification of system behavior:
 
-```python
-class TestSegmentPolling:
-    @pytest.fixture
-    def setup_test_segments(self, dynamodb_table):
-        """Create test segments with various states."""
-        current_time = int(time.time())
+**Story Flow Testing:**
+1. Create test character via API
+2. Start story via `POST /story/start`
+3. Verify `GameMode = "Incremental"` in DynamoDB Characters table
+4. Verify ActiveSegment created with `ProcessingStatus = "pending"`
+5. Wait for segment to process
+6. Verify `ProcessingStatus` transitions: `pending` → `processing` → `processed`
+7. Check CloudWatch logs for state transition logging
+8. Complete story and verify `GameMode` returns to `"None"`
 
-        segments = [
-            {
-                'ActiveSegmentID': 'ready-001',
-                'EndTime': current_time - 60,  # Past due
-                'ProcessingStatus': 'processed'
-            },
-            {
-                'ActiveSegmentID': 'stuck-001',
-                'EndTime': current_time + 600,  # Still has 10 min to go
-                'ProcessingStatus': 'processing',  # Stuck in processing
-                'StartTime': current_time - 400  # Started >5 min ago (stuck threshold)
-            },
-            {
-                'ActiveSegmentID': 'future-001',
-                'EndTime': current_time + 3600,  # 1 hour future
-                'ProcessingStatus': 'pending'
-            }
-        ]
+**Concurrent Request Testing:**
+1. Use `curl` or Postman to send 2+ simultaneous `/story/start` requests
+2. Verify only one succeeds (others get 409 Conflict)
+3. Check DynamoDB for conditional write metrics
 
-        for segment in segments:
-            dynamodb_table.put_item(Item=segment)
+**State Machine Validation:**
+1. Attempt to start story with character already in Incremental mode (should fail)
+2. Verify logs show GameMode validation
+3. Test story abandonment resets GameMode correctly
 
-        return segments
+### 9.3 Flutter Client Testing
 
-    def test_polling_discovers_segments(self, setup_test_segments):
-        """Test poller finds ready and stuck segments."""
+Client testing uses Flutter's built-in test framework:
         event = {}  # EventBridge event
         context = Mock()
 

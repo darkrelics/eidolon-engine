@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
+from eidolon.state_machines import GameMode, set_character_game_mode
 
 
 def get_active_story_segment(character_id: str) -> dict:
@@ -187,59 +188,34 @@ def story_update_character(
     """
     Atomically update character to set GameMode, ActiveStoryID, and ActiveSegmentID.
 
+    Delegates to state machine for GameMode transition validation.
+
     Args:
         character_id: Character UUID
         story_id: Story UUID
         active_segment_id: Active segment UUID
+        story_instance_id: Story instance UUID to add to CompletedStories (optional)
 
     Returns:
-        DynamoDB update response
+        Empty dict for backward compatibility
 
     Raises:
         ValueError: If character state changed (race condition)
         RuntimeError: If database update fails
     """
-    update_expression = "SET GameMode = :mode, ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
+    logger.debug(f"Updating character state with GameMode=Incremental, ActiveStoryID={story_id}")
 
-    # Build condition expression - allow if GameMode is None OR (Incremental with no active story/segment)
-    condition_expression = (
-        "(GameMode = :none) OR "
-        "(GameMode = :incremental AND "
-        "(attribute_not_exists(ActiveStoryID) OR ActiveStoryID = :null) AND "
-        "(attribute_not_exists(ActiveSegmentID) OR ActiveSegmentID = :null))"
+    # Use state machine to set GameMode to Incremental
+    success = set_character_game_mode(
+        character_id=character_id,
+        new_mode=GameMode.INCREMENTAL.value,
+        active_story_id=story_id,
+        active_segment_id=active_segment_id,
+        story_instance_id=story_instance_id,
     )
 
-    try:
-        logger.debug(f"Updating character state with GameMode=Incremental, ActiveStoryID={story_id}")
-        expression_values = {
-            ":mode": "Incremental",
-            ":none": "None",
-            ":incremental": "Incremental",
-            ":null": None,
-            ":story_id": story_id,
-            ":segment_id": active_segment_id,
-        }
+    if not success:
+        logger.warning(f"Character {character_id} state changed during story start (race condition)")
+        raise ValueError("Character state conflict")
 
-        if story_instance_id:
-            update_expression += " ADD CompletedStories :story_instance"
-            expression_values[":story_instance"] = {story_instance_id}
-
-        response = dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression=update_expression,
-            ExpressionAttributeValues=expression_values,
-            ConditionExpression=condition_expression,
-        )
-    except ClientError as err:
-        error_code = err.response.get("Error", {}).get("Code", "Unknown")
-        logger.error(f"DynamoDB error updating character {character_id}: Code={error_code}, Error={err}")
-
-        if error_code == "ConditionalCheckFailedException":
-            logger.warning(f"Character {character_id} state changed during story start (race condition)")
-            raise ValueError("Character state conflict") from err
-
-        logger.error(f"Failed to update character state for {character_id}: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to update character state: {err}") from err
-
-    return response  # type: ignore
+    return {}

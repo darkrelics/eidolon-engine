@@ -9,7 +9,7 @@ from botocore.exceptions import ClientError
 from eidolon.branching import select_next_branch, select_weighted_branch
 from eidolon.character_data import apply_character_updates
 from eidolon.character_story import apply_story_outcome_effects
-from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY
+from eidolon.constants import ATTRIBUTE_XP_RATIO
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import add_items_to_inventory
 from eidolon.logger import logger
@@ -119,28 +119,27 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 effective_score = best_attempt.get("EffectiveScore", 0)
                 difficulty = best_attempt.get("Difficulty", 0)
 
-                # Calculate variance modifier based on experience.md formula
-                if effective_score > 0 and difficulty > 0:
-                    ratio = min(effective_score, difficulty) / max(effective_score, difficulty)
-                    variance_modifier = ratio**2
-                else:
-                    variance_modifier = 1.0  # Default if can't calculate
+                # Calculate skill increase directly using same formula as combat
+                from eidolon.mechanics import calculate_skill_increase
 
-                # Calculate base XP with variance modifier
-                xp_amount = BASE_XP * variance_modifier
+                # Get current skill and attribute values from character
+                current_skill = float(character.get("Skills", {}).get(skill, 0))
+                current_attribute = float(character.get("Attributes", {}).get(attribute, 0))
 
-                # Apply failure penalty if challenge wasn't passed
-                if not passed:
-                    xp_amount *= FAILURE_XP_PENALTY
-
-                # Award XP to skill (full amount)
+                # Calculate skill increase
                 if skill:
-                    skill_xp[skill] = skill_xp.get(skill, 0) + xp_amount
+                    skill_increase = calculate_skill_increase(effective_score, difficulty, current_skill, passed)
+                    if skill_increase > 0:
+                        skill_xp[skill] = skill_xp.get(skill, 0) + skill_increase
 
-                # Award XP to attribute (10% of skill XP)
+                # Calculate attribute increase (uses attribute score for increment)
                 if attribute:
-                    attr_xp_amount = xp_amount * ATTRIBUTE_XP_RATIO
-                    attribute_xp[attribute] = attribute_xp.get(attribute, 0) + attr_xp_amount
+                    attr_increase = (
+                        calculate_skill_increase(effective_score, difficulty, current_attribute, passed)
+                        * ATTRIBUTE_XP_RATIO
+                    )
+                    if attr_increase > 0:
+                        attribute_xp[attribute] = attribute_xp.get(attribute, 0) + attr_increase
 
         if skill_xp or attribute_xp:
             xp_updates = {}
@@ -186,6 +185,29 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
             # Also store wounds in results for CharacterUpdates (for client display)
             results["WoundUpdates"] = wound_updates
+
+        # Apply combat XP immediately to database
+        combat_xp = combat_state.get("XPUpdates", {})
+        if combat_xp:
+            try:
+                character_id = character.get("CharacterID")
+                if character_id:
+                    apply_character_updates(character_id, combat_xp)
+                logger.info(f"Applied combat XP to database for {character.get('CharacterID')}")
+            except Exception as err:
+                logger.error(f"Failed to apply combat XP for {character.get('CharacterID')} Error: {err}", exc_info=True)
+
+            # Merge combat XP into results (for client display)
+            if "XPUpdates" in results:
+                # Merge with challenge XP
+                if "SkillXP" in combat_xp:
+                    for skill, xp in combat_xp["SkillXP"].items():
+                        results["XPUpdates"]["SkillXP"][skill] = results["XPUpdates"]["SkillXP"].get(skill, 0) + xp
+                if "AttributeXP" in combat_xp:
+                    for attr, xp in combat_xp["AttributeXP"].items():
+                        results["XPUpdates"]["AttributeXP"][attr] = results["XPUpdates"]["AttributeXP"].get(attr, 0) + xp
+            else:
+                results["XPUpdates"] = combat_xp
 
     # Determine overall outcome
     if not outcomes:
