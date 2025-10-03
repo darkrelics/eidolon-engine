@@ -373,14 +373,16 @@ class _SimpleSegmentCard extends StatelessWidget {
 
     final bool isProcessed = processingStatus == 'processed';
 
-    // Reveal results as soon as the backend marks the segment processed, even if the timer has not
-    // technically expired yet. This avoids keeping a spinner on screen long after the server finished
-    // resolving the segment. We still fall back to the timer expiry for legacy payloads without
-    // processing hints.
+    // For active segments, only reveal results when:
+    // 1. The segment is marked as complete (IsComplete flag), OR
+    // 2. The timer has expired
+    //
+    // The backend sends ProcessingStatus="processed" with results early so the client has them ready,
+    // but the client should wait for the timer before displaying. For historical (non-active) segments,
+    // we can reveal immediately if processed.
     final bool shouldRevealResults =
         !isActive ||
         isCompleteFlag ||
-        (isActive && isProcessed) ||
         (!isActive && processingStatus == 'processed') ||
         (isActive && hasTimerExpired);
     final bool waitingOnTimer = isActive && !shouldRevealResults;
