@@ -8,9 +8,11 @@ from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
+from aws_cdk import aws_wafv2 as wafv2
 from constructs import Construct
 
 from . import stack_utilities as utils
+from . import waf_config
 
 
 class ApiStack(Stack):
@@ -65,11 +67,89 @@ class ApiStack(Stack):
         # Add system tag to all resources in this stack
         Tags.of(self).add("System", "Eidolon")
 
+        # Create WAF Web ACL for API Gateway
+        self.api_web_acl = self._create_api_waf_web_acl()
+
+        # Create WAF Web ACL for Cognito
+        self.cognito_web_acl = self._create_cognito_waf_web_acl()
+
         # Create API Gateway
         self.api = self._create_api_gateway()
 
+        # Associate WAF with API Gateway stage
+        self._associate_api_waf()
+
+        # Associate WAF with Cognito User Pool
+        self._associate_cognito_waf()
+
         # Add outputs
         self._add_outputs()
+
+    def _create_api_waf_web_acl(self):
+        """Create WAF Web ACL for API Gateway from YAML configuration."""
+        print("  Creating WAF Web ACL for API Gateway")
+
+        # Load WAF configuration from YAML
+        config = waf_config.load_waf_config("waf/api-gateway.yml")
+
+        # Create Web ACL (API Gateway requires REGIONAL scope)
+        web_acl = waf_config.create_web_acl(
+            scope="REGIONAL",
+            stack=self,
+            config=config,
+            construct_id="ApiGatewayWebACL"
+        )
+
+        return web_acl
+
+    def _create_cognito_waf_web_acl(self):
+        """Create WAF Web ACL for Cognito from YAML configuration."""
+        print("  Creating WAF Web ACL for Cognito")
+
+        # Load WAF configuration from YAML
+        config = waf_config.load_waf_config("waf/cognito.yml")
+
+        # Create Web ACL (Cognito requires REGIONAL scope)
+        web_acl = waf_config.create_web_acl(
+            scope="REGIONAL",
+            stack=self,
+            config=config,
+            construct_id="CognitoWebACL"
+        )
+
+        return web_acl
+
+    def _associate_api_waf(self) -> None:
+        """Associate WAF Web ACL with API Gateway stage."""
+        print("  Associating WAF with API Gateway stage")
+
+        # Get the stage ARN
+        # API Gateway stage ARN format: arn:aws:apigateway:region::/restapis/api-id/stages/stage-name
+        stage_arn = f"arn:aws:apigateway:{self.region}::/restapis/{self.api.rest_api_id}/stages/{self.api.deployment_stage.stage_name}"
+
+        # Associate WAF with API Gateway stage
+        wafv2.CfnWebACLAssociation(
+            self,
+            "ApiWafAssociation",
+            resource_arn=stage_arn,
+            web_acl_arn=self.api_web_acl.attr_arn
+        )
+
+    def _associate_cognito_waf(self) -> None:
+        """Associate WAF Web ACL with Cognito User Pool."""
+        if not self.cognito_user_pool_arn:
+            print("  Skipping Cognito WAF association - no User Pool ARN provided")
+            return
+
+        print("  Associating WAF with Cognito User Pool")
+
+        # Associate WAF with Cognito User Pool
+        wafv2.CfnWebACLAssociation(
+            self,
+            "CognitoWafAssociation",
+            resource_arn=self.cognito_user_pool_arn,
+            web_acl_arn=self.cognito_web_acl.attr_arn
+        )
 
     def _create_api_gateway(self) -> apigateway.RestApi:
         """Create API Gateway with Lambda integrations."""

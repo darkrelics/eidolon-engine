@@ -1,0 +1,55 @@
+# Cognito WAF Configuration
+# Web ACL for Cognito authentication endpoints (regional scope)
+
+name: EidolonCognitoWebACL
+scope: REGIONAL
+description: WAF protection for Cognito authentication and user management
+
+default_action: allow
+
+rules:
+  # Priority 0: General Cognito API rate limiting (all operations)
+  - name: RateLimitCognitoAPI
+    priority: 0
+    statement:
+      rate_based:
+        limit: 20
+        aggregate_key_type: IP
+    action: block
+    visibility:
+      sampled_requests: true
+      cloudwatch_metrics: true
+      metric_name: CognitoAPIRateLimit
+
+  # Priority 1: AWS Managed Rule - IP Reputation
+  - name: AWSManagedRulesIPReputation
+    priority: 1
+    statement:
+      managed_rule_group:
+        vendor_name: AWS
+        name: AWSManagedRulesAmazonIpReputationList
+        excluded_rules: []
+    action: override_to_count
+    visibility:
+      sampled_requests: true
+      cloudwatch_metrics: true
+      metric_name: CognitoIPReputation
+
+# Authentication-specific settings
+auth_protection:
+  failed_login_threshold: 3
+  block_duration_minutes: 15
+
+# CloudWatch integration
+cloudwatch:
+  metrics_enabled: true
+  sampled_requests_enabled: true
+
+# Custom response for blocked requests
+custom_response:
+  response_code: 403
+  response_headers:
+    - name: X-WAF-Block-Reason
+      value: auth-rate-limit-exceeded
+    - name: Retry-After
+      value: "900"

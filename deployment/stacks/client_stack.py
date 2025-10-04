@@ -12,6 +12,7 @@ from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 from . import stack_utilities as utils
+from . import waf_config
 
 
 class ClientStack(Stack):
@@ -78,6 +79,9 @@ class ClientStack(Stack):
         # Add system tag to all resources in this stack
         Tags.of(self).add("System", "Eidolon")
 
+        # Create WAF Web ACL for CloudFront
+        self.web_acl = self._create_waf_web_acl()
+
         # Create portal S3 bucket
         self.portal_bucket = self._create_portal_bucket()
 
@@ -89,6 +93,23 @@ class ClientStack(Stack):
 
         # Add outputs
         self._add_outputs()
+
+    def _create_waf_web_acl(self):
+        """Create WAF Web ACL for CloudFront from YAML configuration."""
+        print("  Creating WAF Web ACL for CloudFront")
+
+        # Load WAF configuration from YAML
+        config = waf_config.load_waf_config("waf/cloudfront-cdn.yml")
+
+        # Create Web ACL (CloudFront requires CLOUDFRONT scope in us-east-1)
+        web_acl = waf_config.create_web_acl(
+            scope="CLOUDFRONT",
+            stack=self,
+            config=config,
+            construct_id="CloudFrontWebACL"
+        )
+
+        return web_acl
 
     def _create_portal_bucket(self) -> s3.IBucket:
         """Create S3 bucket for portal."""
@@ -136,6 +157,7 @@ class ClientStack(Stack):
             default_root_object="index.html",
             certificate=certificate,
             domain_names=domain_names,
+            web_acl_id=self.web_acl.attr_arn,
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3Origin(self.portal_bucket),
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,

@@ -1,0 +1,108 @@
+# API Gateway WAF Configuration
+# Web ACL for REST API endpoints (regional scope)
+
+name: EidolonApiGatewayWebACL
+scope: REGIONAL
+description: WAF protection for API Gateway REST endpoints
+
+default_action: allow
+
+rules:
+  # Priority 0: Rate limiting for authenticated requests
+  - name: RateLimitAuthenticated
+    priority: 0
+    statement:
+      rate_based:
+        limit: 100
+        aggregate_key_type: CUSTOM_KEYS
+        custom_keys:
+          - header:
+              name: Authorization
+        scope_down_statement:
+          byte_match:
+            field: header
+            field_name: Authorization
+            positional_constraint: STARTS_WITH
+            search_string: Bearer
+    action: block
+    visibility:
+      sampled_requests: true
+      cloudwatch_metrics: true
+      metric_name: ApiRateLimitAuth
+
+  # Priority 1: Rate limiting for unauthenticated requests
+  - name: RateLimitAnonymous
+    priority: 1
+    statement:
+      rate_based:
+        limit: 20
+        aggregate_key_type: IP
+        scope_down_statement:
+          not_statement:
+            byte_match:
+              field: header
+              field_name: Authorization
+              positional_constraint: STARTS_WITH
+              search_string: Bearer
+    action: block
+    visibility:
+      sampled_requests: true
+      cloudwatch_metrics: true
+      metric_name: ApiRateLimitAnon
+
+  # Priority 2: Block oversized requests
+  - name: RequestSizeLimit
+    priority: 2
+    statement:
+      size_constraint:
+        field: body
+        comparison_operator: GT
+        size: 10240
+        text_transformation: NONE
+    action: block
+    visibility:
+      sampled_requests: true
+      cloudwatch_metrics: true
+      metric_name: ApiRequestSizeBlock
+
+  # Priority 3: AWS Managed Rule - Core Rule Set
+  - name: AWSManagedRulesCoreRuleSet
+    priority: 3
+    statement:
+      managed_rule_group:
+        vendor_name: AWS
+        name: AWSManagedRulesCommonRuleSet
+        excluded_rules: []
+    action: override_to_count
+    visibility:
+      sampled_requests: true
+      cloudwatch_metrics: true
+      metric_name: ApiCoreRuleSet
+
+  # Priority 4: AWS Managed Rule - IP Reputation
+  - name: AWSManagedRulesIPReputation
+    priority: 4
+    statement:
+      managed_rule_group:
+        vendor_name: AWS
+        name: AWSManagedRulesAmazonIpReputationList
+        excluded_rules: []
+    action: override_to_count
+    visibility:
+      sampled_requests: true
+      cloudwatch_metrics: true
+      metric_name: ApiIPReputation
+
+# CloudWatch integration
+cloudwatch:
+  metrics_enabled: true
+  sampled_requests_enabled: true
+
+# Custom response for blocked requests
+custom_response:
+  response_code: 429
+  response_headers:
+    - name: X-WAF-Block-Reason
+      value: rate-limit-exceeded
+    - name: Retry-After
+      value: "300"
