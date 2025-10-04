@@ -14,6 +14,8 @@ This document provides visual architecture diagrams for the Eidolon Engine incre
 
 ## System Context (C4 Level 1)
 
+The system context diagram shows how players interact with both game subsystems through a unified authentication layer.
+
 ```mermaid
 graph TB
     Player[Player<br/>Web Browser]
@@ -44,6 +46,8 @@ graph TB
 ---
 
 ## Container Architecture (C4 Level 2)
+
+The container architecture shows the major AWS services and how they interact to provide the incremental game system.
 
 ```mermaid
 graph TB
@@ -108,6 +112,8 @@ graph TB
 ## Component Architecture (C4 Level 3)
 
 ### Lambda Functions & Eidolon Library
+
+The component architecture details how Lambda functions interact with the shared eidolon library modules to implement game logic.
 
 ```mermaid
 graph TB
@@ -183,6 +189,8 @@ graph TB
 
 ### Character GameMode State Machine
 
+The GameMode state machine enforces exclusive access to characters, preventing simultaneous play in both MUD and Incremental modes.
+
 ```mermaid
 stateDiagram-v2
     [*] --> None: Character Created
@@ -200,7 +208,7 @@ stateDiagram-v2
 
     note right of Incremental
         No direct transition
-        between MUD ↔ Incremental
+        between MUD and Incremental
         Must return to None first
     end note
 
@@ -212,12 +220,14 @@ stateDiagram-v2
 
 ### Segment ProcessingStatus State Machine
 
+The ProcessingStatus state machine uses atomic DynamoDB conditional writes to prevent duplicate processing of segments.
+
 ```mermaid
 stateDiagram-v2
     [*] --> pending: Mechanical Segment Created
-    [*] --> processed: Decision/Rest Segment Created
+    [*] --> processed: Decision Segment Created
 
-    pending --> processing: claim_segment_for_processing()
+    pending --> processing: claim_segment_for_processing
     processing --> processed: Outcomes Calculated
 
     processed --> archived: ops-story-advance
@@ -236,21 +246,23 @@ stateDiagram-v2
 
 ### Story Lifecycle State Machine
 
+Stories transition from available to active when started, and eventually move to completed or abandoned based on player actions and outcomes.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Available: Story Defined
 
-    Available --> Active: api-story-start<br/>(Prerequisites Met)
+    Available --> Active: api-story-start<br/>Prerequisites Met
     Available --> Available: Prerequisites Not Met
 
-    Active --> Completed: Final Segment<br/>(Any Outcome)
-    Active --> Abandoned: api-story-abandon<br/>(Player Quit)
+    Active --> Completed: Final Segment<br/>Any Outcome
+    Active --> Abandoned: api-story-abandon<br/>Player Quit
 
     Completed --> [*]: Moved to StoryHistory
     Abandoned --> [*]: Moved to StoryHistory
 
     note right of Active
-        Character.ActiveStoryID set
+        Character ActiveStoryID set
         GameMode = Incremental
     end note
 
@@ -267,6 +279,8 @@ stateDiagram-v2
 
 ### Story Start Flow
 
+The story start flow validates prerequisites, creates the first segment, and queues mechanical processing immediately.
+
 ```mermaid
 sequenceDiagram
     participant C as Client
@@ -275,33 +289,35 @@ sequenceDiagram
     participant DDB as DynamoDB
     participant SQS as Processing Queue
 
-    C->>API: POST /story/start<br/>{CharacterID, StoryID}
+    C->>API: POST /story/start<br/>CharacterID, StoryID
     API->>Lambda: Invoke
 
     Lambda->>DDB: Get Character
     DDB-->>Lambda: Character Data
 
-    Lambda->>Lambda: Validate Prerequisites<br/>Check GameMode=None
+    Lambda->>Lambda: Validate Prerequisites<br/>Check GameMode = None
 
-    Lambda->>DDB: Get Story & First Segment
+    Lambda->>DDB: Get Story and First Segment
     DDB-->>Lambda: Story Definition
 
     Lambda->>Lambda: Calculate Segment EndTime<br/>Create ActiveSegmentID
 
-    Lambda->>DDB: Transaction:<br/>- Update Character (GameMode, ActiveStoryID)<br/>- Create ActiveSegment (pending)
+    Lambda->>DDB: Transaction:<br/>Update Character GameMode, ActiveStoryID<br/>Create ActiveSegment pending
     DDB-->>Lambda: Success
 
     alt Mechanical Segment
         Lambda->>SQS: Enqueue for Processing
     end
 
-    Lambda->>Lambda: Enable Poller (SSM)
+    Lambda->>Lambda: Enable Poller SSM
 
-    Lambda-->>API: Segment Details<br/>(ID, Type, EndTime)
-    API-->>C: 200 OK + Segment
+    Lambda-->>API: Segment Details<br/>ID, Type, EndTime
+    API-->>C: 200 OK with Segment
 ```
 
 ### Segment Processing Flow (Mechanical)
+
+Mechanical segments are claimed atomically, processed to calculate outcomes, and marked as processed with results stored.
 
 ```mermaid
 sequenceDiagram
@@ -310,24 +326,24 @@ sequenceDiagram
     participant DDB as DynamoDB
     participant Mech as mechanics.py
 
-    SQS->>Process: Trigger (ActiveSegmentID)
+    SQS->>Process: Trigger ActiveSegmentID
 
-    Process->>DDB: Claim Segment<br/>(pending → processing)
+    Process->>DDB: Claim Segment<br/>pending to processing
 
     alt Claim Success
         DDB-->>Process: Segment Data
 
-        Process->>Mech: ResolveStaticCheckWithXP()<br/>for each Challenge
-        Mech-->>Process: (success, sigma, xp)
+        Process->>Mech: ResolveStaticCheckWithXP<br/>for each Challenge
+        Mech-->>Process: success, sigma, xp
 
-        Process->>Mech: ResolveOpposedCheckWithXP()<br/>for Combat
-        Mech-->>Process: (attacker_dmg, defender_dmg, xp)
+        Process->>Mech: ResolveOpposedCheckWithXP<br/>for Combat
+        Mech-->>Process: attacker_dmg, defender_dmg, xp
 
-        Process->>Process: Calculate Outcome<br/>(death/failure/minimal/normal/exceptional)
+        Process->>Process: Calculate Outcome<br/>death, failure, minimal, normal, exceptional
 
         Process->>Process: Generate ClientEvents<br/>Generate CharacterUpdates
 
-        Process->>DDB: Update ActiveSegment<br/>(processing → processed)<br/>+ Outcomes + Events
+        Process->>DDB: Update ActiveSegment<br/>processing to processed<br/>with Outcomes and Events
         DDB-->>Process: Success
     else Already Claimed
         DDB-->>Process: Conditional Write Failed
@@ -337,6 +353,8 @@ sequenceDiagram
 
 ### Story Advancement Flow
 
+The advancement flow finds completed segments via polling, applies character updates, and creates the next segment or completes the story.
+
 ```mermaid
 sequenceDiagram
     participant EB as EventBridge
@@ -345,28 +363,28 @@ sequenceDiagram
     participant SQS as Advancement Queue
     participant Advance as ops-story-advance
 
-    EB->>Poller: Trigger (Every 1 min)
+    EB->>Poller: Trigger Every 1 min
 
-    Poller->>DDB: Query EndTimeIndex<br/>(EndTime <= Now)
+    Poller->>DDB: Query EndTimeIndex<br/>EndTime less than or equal Now
     DDB-->>Poller: Completed Segments
 
     loop For Each Segment
         Poller->>SQS: Enqueue to Advancement Queue
     end
 
-    SQS->>Advance: Trigger (ActiveSegmentID)
+    SQS->>Advance: Trigger ActiveSegmentID
 
-    Advance->>DDB: Get ActiveSegment + Character
-    DDB-->>Advance: Segment & Character Data
+    Advance->>DDB: Get ActiveSegment and Character
+    DDB-->>Advance: Segment and Character Data
 
-    Advance->>Advance: Apply CharacterUpdates<br/>(XP, Wounds, Items, Room)
+    Advance->>Advance: Apply CharacterUpdates<br/>XP, Wounds, Items, Room
 
     alt Story Continues
-        Advance->>Advance: Select Next Branch<br/>(Weighted Random)
+        Advance->>Advance: Select Next Branch<br/>Weighted Random
         Advance->>DDB: Create Next ActiveSegment
     else Story Ends
-        Advance->>DDB: Update Character<br/>(GameMode=None, Clear ActiveStory)
-        Advance->>DDB: Write StoryHistory<br/>(FinalOutcome, Totals)
+        Advance->>DDB: Update Character<br/>GameMode = None, Clear ActiveStory
+        Advance->>DDB: Write StoryHistory<br/>FinalOutcome, Totals
     end
 
     Advance->>DDB: Delete ActiveSegment
@@ -379,20 +397,22 @@ sequenceDiagram
 
 ### DynamoDB Table Relationships
 
+The entity relationship diagram shows how the 14 DynamoDB tables connect to support character progression and story tracking.
+
 ```mermaid
 erDiagram
     PLAYERS ||--o{ CHARACTERS : owns
-    CHARACTERS ||--o| ACTIVE_SEGMENTS : "has active"
+    CHARACTERS ||--o| ACTIVE_SEGMENTS : has_active
     CHARACTERS ||--o{ STORY_HISTORY : completed
     CHARACTERS ||--o{ SEGMENT_HISTORY : played
     CHARACTERS ||--o{ ITEMS : owns
 
     STORY ||--o{ SEGMENTS : contains
-    SEGMENTS ||--o| ACTIVE_SEGMENTS : "instantiated as"
+    SEGMENTS ||--o| ACTIVE_SEGMENTS : instantiated_as
 
     ARCHETYPES ||--o{ CHARACTERS : defines
-    PROTOTYPES ||--o{ ITEMS : "created from"
-    OPPONENTS ||--o{ SEGMENTS : "used in"
+    PROTOTYPES ||--o{ ITEMS : created_from
+    OPPONENTS ||--o{ SEGMENTS : used_in
 
     PLAYERS {
         string PlayerID PK
@@ -403,7 +423,7 @@ erDiagram
     CHARACTERS {
         string CharacterID PK
         string PlayerID FK
-        string GameMode "None|Incremental|MUD"
+        string GameMode
         string ActiveStoryID
         string ActiveSegmentID
         map Skills
@@ -415,7 +435,7 @@ erDiagram
     STORY {
         string StoryID PK
         string Title
-        string StoryType "one-time|daily|repeatable"
+        string StoryType
         string FirstSegmentID
         map Prerequisites
     }
@@ -423,7 +443,7 @@ erDiagram
     SEGMENTS {
         string StoryID PK
         string SegmentID SK
-        string SegmentType "mechanical|decision"
+        string SegmentType
         number SegmentDuration
         map Results
         list Challenges
@@ -433,7 +453,7 @@ erDiagram
     ACTIVE_SEGMENTS {
         string ActiveSegmentID PK
         string CharacterID GSI
-        string ProcessingStatus "pending|processing|processed"
+        string ProcessingStatus
         number StartTime
         number EndTime GSI
         list ClientEvents
@@ -464,6 +484,8 @@ erDiagram
 ```
 
 ### Event Flow Architecture
+
+The event-driven architecture uses EventBridge for time-based triggers and SQS queues for asynchronous processing of segments.
 
 ```mermaid
 graph LR
@@ -514,11 +536,13 @@ graph LR
 
 ### Weighted Branching Flow
 
+The weighted branching system filters branches by prerequisites, renormalizes weights, and uses cryptographic randomness for selection.
+
 ```mermaid
 flowchart TD
-    Start([Segment Complete]) --> GetOutcome[Get Outcome Result<br/>death/failure/minimal/normal/exceptional]
+    Start([Segment Complete]) --> GetOutcome[Get Outcome Result<br/>death, failure, minimal, normal, exceptional]
 
-    GetOutcome --> GetBranches[Load Results.Outcome.Branches]
+    GetOutcome --> GetBranches[Load Results Outcome Branches]
 
     GetBranches --> HasBranches{Branches<br/>Defined?}
 
@@ -532,7 +556,7 @@ flowchart TD
 
     Renormalize --> RandomSelect[Cryptographic Random Selection<br/>secrets.randbelow]
 
-    RandomSelect --> RecordMeta[Record BranchMetadata<br/>SelectionMethod, BranchLabel, etc.]
+    RandomSelect --> RecordMeta[Record BranchMetadata<br/>SelectionMethod, BranchLabel]
 
     RecordMeta --> CreateNext[Create Next ActiveSegment]
 
@@ -549,6 +573,8 @@ flowchart TD
 ---
 
 ## Deployment Architecture
+
+The deployment architecture shows the complete AWS infrastructure created by CDK and the CI/CD pipeline for story validation.
 
 ```mermaid
 graph TB
@@ -617,6 +643,8 @@ graph TB
 ---
 
 ## Failure Recovery Patterns
+
+The failure recovery pattern uses atomic claims, idempotent processing, and exponential backoff to handle errors gracefully.
 
 ```mermaid
 flowchart TD
