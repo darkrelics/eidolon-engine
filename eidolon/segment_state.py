@@ -211,7 +211,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         raise RuntimeError(f"Failed to create active segment: {err}") from err
 
 
-def update_segment_processing_status(active_segment_id: str, outcome: str, character_updates: dict, client_events: list = None) -> None:
+def update_segment_processing_status(active_segment_id: str, outcome: str, character_updates: dict, client_events = None) -> None:
     """
     Update active segment with processing results.
 
