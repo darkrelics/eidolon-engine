@@ -19,7 +19,6 @@ class DecisionWidget extends StatefulWidget {
   final String? title;
   final String? description;
   final VoidCallback? onCancel;
-  final bool showDifficulty;
 
   const DecisionWidget({
     super.key,
@@ -32,7 +31,6 @@ class DecisionWidget extends StatefulWidget {
     this.title,
     this.description,
     this.onCancel,
-    this.showDifficulty = false,
   });
 
   @override
@@ -44,7 +42,6 @@ class DecisionWidget extends StatefulWidget {
     required Map<String, dynamic> choices,
     String? title,
     String? description,
-    bool showDifficulty = false,
   }) async {
     return await showGeneralDialog<String>(
       context: context,
@@ -60,7 +57,6 @@ class DecisionWidget extends StatefulWidget {
               displayMode: DecisionDisplayMode.dialog,
               title: title,
               description: description,
-              showDifficulty: showDifficulty,
               onDecisionSelected: (choice) {
                 Navigator.of(context).pop(choice);
               },
@@ -281,8 +277,6 @@ class _DecisionWidgetState extends State<DecisionWidget>
         final choiceData = entry.value as Map<String, dynamic>?;
         final choiceText =
             choiceData?['Text'] ?? choiceData?['text'] ?? choiceId;
-        final difficulty =
-            choiceData?['Difficulty'] ?? choiceData?['difficulty'];
         final description =
             choiceData?['Description'] ?? choiceData?['description'];
         final isSelected = widget.selectedChoice == choiceId;
@@ -359,8 +353,6 @@ class _DecisionWidgetState extends State<DecisionWidget>
                             ],
                           ),
                         ),
-                        if (widget.showDifficulty && difficulty != null)
-                          _buildDifficultyChip(context, difficulty),
                       ],
                     ),
                   ),
@@ -370,34 +362,6 @@ class _DecisionWidgetState extends State<DecisionWidget>
           ),
         );
       }).toList(),
-    );
-  }
-
-  Widget _buildDifficultyChip(BuildContext context, dynamic difficulty) {
-    final theme = Theme.of(context);
-    final difficultyValue = difficulty is int ? difficulty : 0;
-
-    final (color, label) = switch (difficultyValue) {
-      <= 5 => (Colors.green, 'Easy'),
-      <= 10 => (Colors.orange, 'Medium'),
-      <= 15 => (Colors.red, 'Hard'),
-      _ => (Colors.purple, 'Extreme'),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.5)),
-      ),
-      child: Text(
-        label,
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: color,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
     );
   }
 

@@ -120,13 +120,13 @@
             "Left": {
               "Text": "Follow the sound of water",
               "Description": "Head toward the babbling brook through the underbrush",
-              "Difficulty": 8,
+              "Narrative": "You decide to follow the sound of running water, carefully making your way through the underbrush toward the babbling brook. The path is narrow and overgrown, but the gentle burbling grows louder as you approach.",
               "NextSegmentID": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f"
             },
             "Right": {
               "Text": "Push through the thicket",
               "Description": "Take the path toward the dense vegetation",
-              "Difficulty": 6,
+              "Narrative": "You choose the path through the dense thicket, pushing forward through the tangled vegetation. Thorns catch at your clothing as you forge ahead into the shadows.",
               "NextSegmentID": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a"
             }
           },
@@ -399,13 +399,13 @@
             "Follow": {
               "Text": "Follow the tracks deeper into the forest",
               "Description": "A direct but dangerous approach to find the goblin camp",
-              "Difficulty": 10,
+              "Narrative": "You steel your nerves and follow the goblin tracks deeper into the forest. The trail is clear but ominous, leading you into increasingly shadowed territory where danger surely lurks.",
               "NextSegmentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d"
             },
             "Around": {
               "Text": "Take the safer path through the fern gully",
               "Description": "A longer route that avoids the goblin patrols",
-              "Difficulty": 7,
+              "Narrative": "Caution prevails. You decide to take the longer route through the fern gully, avoiding the obvious goblin trails. The journey will take more time, but discretion seems the wiser choice here.",
               "NextSegmentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e"
             }
           },

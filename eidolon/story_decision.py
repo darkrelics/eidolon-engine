@@ -210,8 +210,6 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     active_segment["Decision"] = decision_id
     active_segment["DecisionMadeAt"] = now_iso()
 
-    record_segment_history(character_id, story_id, active_segment_id, active_segment)
-
     story_instance_id = active_segment.get("StoryInstanceID")
     segment_id = active_segment.get("SegmentID")
     if not segment_id:
@@ -219,12 +217,32 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
 
     segment_def = get_segment_definition(str(story_id), str(segment_id))
 
+    # Generate ClientEvents for the decision to enrich history
+    from eidolon.segment_processing import process_decision_segment
+    process_decision_segment(active_segment, segment_def)
+
+    record_segment_history(character_id, story_id, active_segment_id, active_segment)
+
     # Get next segment ID from the decision options (supports both legacy and rich formats)
     decision_options = segment_def.get("DecisionOptions", {})
     next_segment_id = get_next_segment_id_from_decision(decision_options, decision_id)
 
     response_data: dict = {
         "Accepted": True,
+        # Include the completed decision segment so frontend can display narrative immediately
+        "CompletedSegment": {
+            "ActiveSegmentID": active_segment_id,
+            "SegmentID": segment_id,
+            "SegmentType": "decision",
+            "Status": "completed",
+            "Decision": decision_id,
+            "Outcome": "normal",
+            "ProcessingStatus": "processed",
+            "ClientEvents": active_segment.get("ClientEvents", []),
+            "DecisionOptions": segment_def.get("DecisionOptions", {}),
+            "SegmentTitle": active_segment.get("SegmentTitle"),
+            "SegmentActivity": active_segment.get("SegmentActivity"),
+        },
     }
 
     if next_segment_id:

@@ -45,20 +45,22 @@ def route_segment_processing(segment_def: dict, character: dict, active_segment:
 
 def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
     """
-    Process a decision segment by checking if decision was made.
+    Process a decision segment and generate narrative events.
+
+    Decision segments are purely narrative - no mechanics, no difficulty checks.
+    This function generates ClientEvents to enrich the story history.
 
     Args:
-        active_segment: Active segment data
-        segment_def: Segment definition from Segments table
+        active_segment: Active segment data with Decision field
+        segment_def: Segment definition with DecisionOptions
 
     Returns:
         Outcome (always "normal" for decisions or "failure" if no decision)
     """
     decision = active_segment.get("Decision")
+    decision_options = segment_def.get("DecisionOptions", {})
 
-    if decision:
-        return "normal"
-    else:
+    if not decision:
         # No decision made before timeout - use default if available
         default_decision = segment_def.get("DefaultDecision")
         if default_decision:
@@ -71,12 +73,40 @@ def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
                     ExpressionAttributeNames={"#decision": "Decision"},
                     ExpressionAttributeValues={":decision": default_decision},
                 )
-                return "normal"
+                decision = default_decision
+                active_segment["Decision"] = decision
             except ClientError as err:
                 logger.error(f"Failed to update decision for {active_segment.get('ActiveSegmentID')} Error: {err}", exc_info=True)
                 raise RuntimeError(f"Failed to update decision: {err}") from err
         else:
             return "failure"
+
+    # Generate narrative ClientEvents for the chosen decision
+    client_events = []
+
+    if decision and decision in decision_options:
+        option = decision_options[decision]
+        narrative = option.get("Narrative")
+
+        if narrative:
+            # Primary narrative event showing what the character did
+            client_events.append({
+                "EventType": "narrative",
+                "Title": "Your Choice",
+                "Description": narrative
+            })
+
+        # Simple decision record (no mechanics data)
+        client_events.append({
+            "EventType": "decision",
+            "Title": option.get("Text", decision),
+            "Description": option.get("Description", "")
+        })
+
+    # Store events in active segment for history
+    active_segment["ClientEvents"] = client_events
+
+    return "normal"
 
 
 def process_mechanical_segment(segment_def: dict, character: dict, active_segment: dict) -> tuple:

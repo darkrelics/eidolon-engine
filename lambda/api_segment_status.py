@@ -217,7 +217,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     # Include decision-specific data
     if segment_type == "decision":
         response["Decision"] = active_segment.get("Decision")
-        response["DecisionOptions"] = active_segment.get("DecisionOptions")
 
         # Enrich with DecisionText from segment definition if available
         if story_id and segment_id and segment_def is None:
@@ -228,9 +227,27 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
         if segment_def:
             response["DecisionText"] = segment_def.get("DecisionText")
-            # If DecisionOptions not in active segment, get from definition
-            if not response.get("DecisionOptions"):
-                response["DecisionOptions"] = segment_def.get("DecisionOptions", {})
+            # Build DecisionOptions without exposing Difficulty or Narrative
+            raw_options = segment_def.get("DecisionOptions", {})
+            response["DecisionOptions"] = {
+                key: {
+                    "Text": option.get("Text"),
+                    "Description": option.get("Description"),
+                    "NextSegmentID": option.get("NextSegmentID")
+                }
+                for key, option in raw_options.items()
+            }
+        elif active_segment.get("DecisionOptions"):
+            # Fallback to active segment data (filter same fields)
+            raw_options = active_segment.get("DecisionOptions", {})
+            response["DecisionOptions"] = {
+                key: {
+                    "Text": option.get("Text"),
+                    "Description": option.get("Description"),
+                    "NextSegmentID": option.get("NextSegmentID")
+                }
+                for key, option in raw_options.items()
+            }
 
     # Include story information for consistent display
     if story_id:

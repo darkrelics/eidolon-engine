@@ -538,17 +538,19 @@ class _GameScreenState extends State<GameScreen> {
         throwOnRateLimit: true,
       );
 
-      final previousSegment = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+      // Use the completed segment from response (includes narrative ClientEvents)
+      final completedSegment = response['CompletedSegment'] as Map<String, dynamic>?;
 
       // Use the next segment from response instead of reloading
       if (response['NextSegment'] != null) {
         final nextSegment = response['NextSegment'] as Map<String, dynamic>;
 
-        // Capture the completed segment before transitioning
-        if (previousSegment != null && _isSegmentComplete(previousSegment)) {
-          final oldSegmentId = previousSegment['ActiveSegmentID']?.toString() ?? previousSegment['SegmentID']?.toString();
-          if (oldSegmentId != null) {
-            final segmentCopy = Map<String, dynamic>.from(previousSegment);
+        // Add the completed decision segment to history with its narrative
+        // Backend provides this with ClientEvents already generated
+        if (completedSegment != null) {
+          final segmentId = completedSegment['ActiveSegmentID']?.toString() ?? completedSegment['SegmentID']?.toString();
+          if (segmentId != null) {
+            final segmentCopy = Map<String, dynamic>.from(completedSegment);
 
             // Add story title for display
             if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
@@ -558,12 +560,12 @@ class _GameScreenState extends State<GameScreen> {
             // Add to history if not already present
             final exists = _segmentHistory.any((s) {
               final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
-              return id == oldSegmentId;
+              return id == segmentId;
             });
 
             if (!exists) {
               _segmentHistory = [..._segmentHistory, segmentCopy];
-              debugPrint('GameScreen: Added completed segment to history (decision): $oldSegmentId');
+              debugPrint('GameScreen: Added completed decision segment to history with narrative: $segmentId');
             }
           }
         }
@@ -594,9 +596,9 @@ class _GameScreenState extends State<GameScreen> {
         await _handleStoryCompletion(refreshCharacter: true);
       }
 
-      if (mounted && previousSegment != null) {
+      if (mounted && completedSegment != null) {
         // Show notification for decision outcome
-        final outcome = previousSegment['Outcome'];
+        final outcome = completedSegment['Outcome'];
         String? outcomeType;
         Map<String, dynamic>? rewards;
 
