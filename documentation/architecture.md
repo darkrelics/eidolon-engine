@@ -83,14 +83,14 @@ stateDiagram-v2
     Abandoned --> [*]
 
     note right of Available
-        Story listed in character's
+        Story listed in character
         AvailableStories array
     end note
 
     note right of Active
         Actions on activation:
         - Create ActiveSegment for first segment
-        - Set GameMode = "Incremental"
+        - Set GameMode = Incremental
         - Set ActiveStoryID and ActiveSegmentID
         - Queue mechanical segments
         - Enable polling infrastructure
@@ -101,8 +101,8 @@ stateDiagram-v2
         Actions on completion:
         - Apply final updates and rewards
         - Move to CompletedStories
-        - Clear ActiveStoryID/ActiveSegmentID
-        - Set GameMode = "None"
+        - Clear ActiveStoryID and ActiveSegmentID
+        - Set GameMode = None
         - Update StoryHistory with FinalOutcome
         - Delete ActiveSegment record
     end note
@@ -181,14 +181,16 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 
 ### 4. Queue Architecture
 
-**eidolon-processing-queue (SQS Standard Queue):**
+The dual-queue design separates immediate mechanical processing from timed segment advancement, enabling parallel processing while maintaining strict ordering guarantees.
+
+**processing-queue (SQS Standard Queue):**
 - Feeds `ops-segment-process` Lambda
 - Handles mechanical segments only
 - Message retention: 4 days
 - Visibility timeout: 30 seconds
 - Dead-letter queue after 3 retries
 
-**eidolon-advancement-queue (SQS Standard Queue):**
+**advancement-queue (SQS Standard Queue):**
 - Feeds `ops-story-advance` Lambda
 - Handles all segment types for completion
 - Message retention: 4 days
@@ -215,33 +217,35 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 
 **Polling State Machine:**
 
+The polling system automatically enables when stories start and disables when no active segments remain, optimizing costs while ensuring timely segment processing.
+
 ```mermaid
 stateDiagram-v2
     [*] --> Initial: System startup
     Initial --> PollingActive: Player starts story
-    PollingActive --> PollingStopped: No segments found / Story completes
+    PollingActive --> PollingStopped: No segments found
     PollingStopped --> PollingActive: Active segments found
     PollingStopped --> Initial: No active segments
 
     note right of Initial
-        State: Parameter="stop", Rule=DISABLED
+        State: Parameter=stop, Rule=DISABLED
     end note
 
     note right of PollingActive
-        State: Parameter="run", Rule=ENABLED
+        State: Parameter=run, Rule=ENABLED
         Trigger: api-story-start
         Actions:
-        - Sets SSM parameter to "run"
+        - Sets SSM parameter to run
         - Enables EventBridge rule
     end note
 
     note left of PollingStopped
-        State: Parameter="stop", Rule=ENABLED
+        State: Parameter=stop, Rule=ENABLED
         Triggers:
         - ops-segment-poller finds no segments
         - ops-story-advance completes last story
         Actions:
-        - Sets SSM parameter to "stop"
+        - Sets SSM parameter to stop
     end note
 
     note left of Initial
@@ -285,8 +289,8 @@ stateDiagram-v2
 
     note right of None
         Allowed transitions:
-        - None → Incremental (story start)
-        - None → MUD (enter MUD)
+        - None to Incremental story start
+        - None to MUD enter MUD
 
         No direct transitions between
         Incremental and MUD allowed.
@@ -295,19 +299,19 @@ stateDiagram-v2
 
     note right of Incremental
         Character state when in Incremental:
-        - GameMode = "Incremental"
-        - ActiveStoryID set (UUID)
-        - ActiveSegmentID set (UUID)
+        - GameMode = Incremental
+        - ActiveStoryID set UUID
+        - ActiveSegmentID set UUID
 
         Validation on story start:
-        - GameMode MUST be "None"
+        - GameMode MUST be None
         - ActiveStoryID MUST be null
         - ActiveSegmentID MUST be null
     end note
 
     note left of MUD
         Character state when in MUD:
-        - GameMode = "MUD"
+        - GameMode = MUD
         - MUD-specific fields active
 
         Future implementation will
@@ -317,6 +321,8 @@ stateDiagram-v2
 ```
 
 **Segment ProcessingStatus State Machine:**
+
+DynamoDB conditional writes ensure atomic state transitions, preventing duplicate processing even under high concurrency.
 
 ```mermaid
 stateDiagram-v2
@@ -329,8 +335,8 @@ stateDiagram-v2
         Initial state when ActiveSegment created.
 
         Segment awaits processing by:
-        - ops-segment-process (mechanical)
-        - ops-story-advance (decision/all)
+        - ops-segment-process mechanical
+        - ops-story-advance decision or all
     end note
 
     note right of processing
@@ -338,7 +344,7 @@ stateDiagram-v2
         conditional write:
 
         ConditionExpression:
-        "ProcessingStatus = :pending"
+        ProcessingStatus = :pending
 
         Only ONE Lambda can claim
         the segment for processing.
@@ -376,7 +382,7 @@ stateDiagram-v2
         Prerequisites checked:
         - Skill requirements met
         - Required items present
-        - Cooldown expired (if any)
+        - Cooldown expired if any
 
         Cooldown types:
         - one-time: Permanent after completion
@@ -388,10 +394,10 @@ stateDiagram-v2
         Character fields during Active:
         - ActiveStoryID = story UUID
         - ActiveSegmentID = current segment
-        - GameMode = "Incremental"
+        - GameMode = Incremental
 
         StoryHistory entry created with:
-        - StoryInstanceID (UUIDv7)
+        - StoryInstanceID UUIDv7
         - StartedAt timestamp
         - SegmentHistory array
     end note
@@ -401,7 +407,7 @@ stateDiagram-v2
         - Add to CompletedStories set
         - Clear ActiveStoryID
         - Clear ActiveSegmentID
-        - Set GameMode = "None"
+        - Set GameMode = None
         - Update StoryHistory:
           * FinishedAt timestamp
           * FinalOutcome
@@ -413,7 +419,7 @@ stateDiagram-v2
         - Add to AbandonedStories set
         - Clear ActiveStoryID
         - Clear ActiveSegmentID
-        - Set GameMode = "None"
+        - Set GameMode = None
         - Update StoryHistory:
           * AbandonedAt timestamp
           * No FinalOutcome
@@ -425,21 +431,36 @@ stateDiagram-v2
 
 **Automatic Recovery Paths:**
 
-1. **Character Retrieval Cleanup**: `api-character-get` resets GameMode to "None" if no valid ActiveStoryID/ActiveSegmentID exists
+1. **Character Retrieval Cleanup**: `api-character-get` resets GameMode to None if no valid ActiveStoryID or ActiveSegmentID exists
 2. **Polling System Recovery**: EventBridge triggers `ops-segment-poller` every minute to process expired segments and clean orphaned states
 3. **Segment Processing Guarantee**: `ops-story-advance` ensures eventual processing of all segments
 
 **Failure Recovery Scenarios:**
-- **Client crash/network loss**: Next API call triggers automatic GameMode cleanup
+- **Client crash or network loss**: Next API call triggers automatic GameMode cleanup
 - **Lambda timeout**: EventBridge ensures retry within 1 minute maximum
-- **Orphaned segments**: Automatic timeout to "exceptional" outcome protects players
-- **Maximum stuck time**: 2 minutes (1 EventBridge cycle + processing time)
+- **Orphaned segments**: Automatic timeout to exceptional outcome protects players
+- **Maximum stuck time**: 2 minutes (1 EventBridge cycle plus processing time)
 
 ### Health and Wounds System
 
+The wound tracking system models individual injuries that heal over time, creating realistic consequences and strategic healing mechanics.
+
 **Health Calculation:**
-- Health = MaxHealth - len(wounds)
-- Each wound is a map: `{DamageType: str, HealAt: ISO8601}`
+
+Current health is calculated dynamically based on wound count.
+
+```
+Health = MaxHealth - len(Wounds)
+```
+
+Each wound is a map structure:
+
+```json
+{
+  "DamageType": "lethal",
+  "HealAt": "2025-01-15T20:00:00Z"
+}
+```
 
 **Wound Types:**
 - **Bashing**: Heal in 15 minutes (bruises, stunning)
@@ -582,6 +603,8 @@ graph LR
 
 ### Concurrency Control
 
+The ProcessingStatus state machine ensures atomic segment processing using DynamoDB conditional writes.
+
 **ProcessingStatus State Machine:**
 - **pending**: Mechanical segment awaiting processing
 - **processing**: Segment claimed by Lambda for exclusive processing
@@ -594,14 +617,16 @@ graph LR
 
 ### Timeout Recovery
 
+System failures are handled gracefully with player-favorable defaults to prevent indefinite waiting.
+
 **Segment Timeout Protection:**
-- Segments past EndTime marked "exceptional" (best outcome)
+- Segments past EndTime marked exceptional (best outcome)
 - Prevents indefinite waiting from system failures
 - Player-favorable defaults protect user experience
 
 **Stuck Segment Recovery:**
-- Mechanical segments stuck >5 minutes get retried
-- ProcessingStatus reset to "pending" for reprocessing
+- Mechanical segments stuck over 5 minutes get retried
+- ProcessingStatus reset to pending for reprocessing
 - Maximum 3 retry attempts before DLQ
 
 ### Failure Modes
