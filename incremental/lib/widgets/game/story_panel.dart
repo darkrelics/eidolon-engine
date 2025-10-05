@@ -7,6 +7,7 @@ import 'package:eidolon_incremental/utils/outcome_colors.dart';
 import 'package:eidolon_incremental/widgets/story/active_story_widget.dart';
 import 'package:eidolon_incremental/widgets/story/available_stories_widget.dart';
 import 'package:eidolon_incremental/widgets/story/story_history_widget.dart';
+import 'package:fluttericon/rpg_awesome_icons.dart';
 
 /// Center panel that displays story content dynamically
 class StoryPanel extends StatefulWidget {
@@ -88,7 +89,7 @@ class _StoryPanelState extends State<StoryPanel> {
             ),
             child: Row(
               children: [
-                Icon(Icons.auto_stories, color: colorScheme.onPrimaryContainer),
+                Icon(RpgAwesome.scroll_unfurled, color: colorScheme.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Text(
                   _getHeaderTitle(),
@@ -98,7 +99,7 @@ class _StoryPanelState extends State<StoryPanel> {
                 // History toggle button
                 if (!_hasActiveStory() && (widget.character.completedStories.isNotEmpty || widget.storyHistoryArchive.isNotEmpty))
                   IconButton(
-                    icon: Icon(_showHistory ? Icons.library_books : Icons.history, color: colorScheme.onPrimaryContainer),
+                    icon: Icon(_showHistory ? RpgAwesome.book : RpgAwesome.cycle, color: colorScheme.onPrimaryContainer),
                     onPressed: () {
                       setState(() {
                         _showHistory = !_showHistory;
@@ -250,7 +251,7 @@ class _StoryPanelState extends State<StoryPanel> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.check_circle, size: 80, color: colorScheme.primary),
+            Icon(RpgAwesome.trophy, size: 80, color: colorScheme.primary),
             const SizedBox(height: 16),
             Text('Story Complete', style: theme.textTheme.headlineMedium),
             if (storyTitle != null) ...[
@@ -299,7 +300,7 @@ class _StoryPanelState extends State<StoryPanel> {
                 child: Column(
                   children: [
                     Icon(
-                      storyFailed ? Icons.dangerous : Icons.check_circle,
+                      storyFailed ? RpgAwesome.skull : RpgAwesome.trophy,
                       size: 64,
                       color: storyFailed ? Colors.red : Colors.green,
                     ),
@@ -407,7 +408,7 @@ class _StoryPanelState extends State<StoryPanel> {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(Icons.workspace_premium, size: 16, color: cardColor),
+                  Icon(RpgAwesome.gem_pendant, size: 16, color: cardColor),
                   const SizedBox(width: 4),
                   Text(
                     'Outcome: ${_formatOutcome(outcome)}',
@@ -586,12 +587,12 @@ class _StoryPanelState extends State<StoryPanel> {
   IconData _resolveOutcomeIcon(dynamic outcome) {
     switch (normalizedOutcomeType(outcome)) {
       case 'death':
-        return Icons.dangerous;
+        return RpgAwesome.skull;
       case 'failure':
       case 'failed':
-        return Icons.cancel;
+        return RpgAwesome.broken_heart;
       default:
-        return Icons.check_circle;
+        return RpgAwesome.trophy;
     }
   }
 }

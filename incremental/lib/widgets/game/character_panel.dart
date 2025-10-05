@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/utils/rpg_icons.dart';
+import 'package:fluttericon/rpg_awesome_icons.dart';
 
 /// Left panel displaying character stats and information
 class CharacterPanel extends StatelessWidget {
@@ -33,7 +35,7 @@ class CharacterPanel extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.person, color: colorScheme.onPrimaryContainer),
+                    Icon(RpgAwesome.player, color: colorScheme.onPrimaryContainer),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -72,7 +74,7 @@ class CharacterPanel extends StatelessWidget {
                   _InfoRow(
                     label: 'Archetype',
                     value: character.archetypeName,
-                    icon: Icons.category,
+                    icon: RpgAwesome.crown,
                   ),
                   const SizedBox(height: 16),
 
@@ -82,7 +84,7 @@ class CharacterPanel extends StatelessWidget {
                     current: character.health,
                     max: character.maxHealth,
                     color: Colors.red,
-                    icon: Icons.favorite,
+                    icon: RpgAwesome.health,
                   ),
                   const SizedBox(height: 12),
 
@@ -92,7 +94,7 @@ class CharacterPanel extends StatelessWidget {
                     current: character.essence,
                     max: character.maxEssence,
                     color: Colors.blue,
-                    icon: Icons.water_drop,
+                    icon: RpgAwesome.droplet,
                   ),
 
                   // Wounds Indicator
@@ -192,56 +194,15 @@ class CharacterPanel extends StatelessWidget {
   }
 
   IconData _getAttributeIcon(String attribute) {
-    switch (attribute.toLowerCase()) {
-      case 'strength':
-        return Icons.fitness_center;
-      case 'agility':
-        return Icons.speed;
-      case 'intelligence':
-        return Icons.psychology;
-      case 'wisdom':
-        return Icons.auto_awesome;
-      case 'charisma':
-        return Icons.star;
-      case 'constitution':
-        return Icons.shield;
-      default:
-        return Icons.bar_chart;
-    }
+    return RpgIcons.getAttributeIcon(attribute);
   }
 
   IconData _getSkillIcon(String skill) {
-    switch (skill.toLowerCase()) {
-      case 'melee':
-        return Icons.sports_martial_arts;
-      case 'ranged':
-        return Icons.gps_fixed;
-      case 'magic':
-        return Icons.auto_fix_high;
-      case 'stealth':
-        return Icons.visibility_off;
-      case 'perception':
-        return Icons.visibility;
-      case 'crafting':
-        return Icons.build;
-      default:
-        return Icons.school;
-    }
+    return RpgIcons.getSkillIcon(skill);
   }
 
   IconData _getResourceIcon(String resource) {
-    switch (resource.toLowerCase()) {
-      case 'gold':
-      case 'coins':
-        return Icons.monetization_on;
-      case 'experience':
-      case 'xp':
-        return Icons.trending_up;
-      case 'reputation':
-        return Icons.military_tech;
-      default:
-        return Icons.inventory_2;
-    }
+    return RpgIcons.getResourceIcon(resource);
   }
 }
 
