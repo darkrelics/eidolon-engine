@@ -166,7 +166,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
         # STEP 1: Character attacks opponent (character offensive vs opponent defensive)
         char_off_result = resolve_opposed_check_with_xp(
-            character_id, # type: ignore
+            character_id,  # type: ignore
             char_off_rating,
             opp_def_rating,
             char_off_skill,
@@ -193,7 +193,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         # STEP 2: Opponent attacks character (opponent offensive vs character defensive)
         # Swap aggressor/defender for XP calculation so character's defense is the "effective score"
         opp_off_result = resolve_opposed_check_with_xp(
-            character_id, # type: ignore
+            character_id,  # type: ignore
             char_def_rating,
             opp_off_rating,
             char_def_skill,

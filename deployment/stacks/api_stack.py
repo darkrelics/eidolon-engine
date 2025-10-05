@@ -93,12 +93,7 @@ class ApiStack(Stack):
         config = waf_config.load_waf_config("waf/api-gateway.yml")
 
         # Create Web ACL (API Gateway requires REGIONAL scope)
-        web_acl = waf_config.create_web_acl(
-            scope="REGIONAL",
-            stack=self,
-            config=config,
-            construct_id="ApiGatewayWebACL"
-        )
+        web_acl = waf_config.create_web_acl(scope="REGIONAL", stack=self, config=config, construct_id="ApiGatewayWebACL")
 
         return web_acl
 
@@ -110,12 +105,7 @@ class ApiStack(Stack):
         config = waf_config.load_waf_config("waf/cognito.yml")
 
         # Create Web ACL (Cognito requires REGIONAL scope)
-        web_acl = waf_config.create_web_acl(
-            scope="REGIONAL",
-            stack=self,
-            config=config,
-            construct_id="CognitoWebACL"
-        )
+        web_acl = waf_config.create_web_acl(scope="REGIONAL", stack=self, config=config, construct_id="CognitoWebACL")
 
         return web_acl
 
@@ -125,15 +115,12 @@ class ApiStack(Stack):
 
         # Get the stage ARN
         # API Gateway stage ARN format: arn:aws:apigateway:region::/restapis/api-id/stages/stage-name
-        stage_arn = f"arn:aws:apigateway:{self.region}::/restapis/{self.api.rest_api_id}/stages/{self.api.deployment_stage.stage_name}"
+        stage_arn = (
+            f"arn:aws:apigateway:{self.region}::/restapis/{self.api.rest_api_id}/stages/{self.api.deployment_stage.stage_name}"
+        )
 
         # Associate WAF with API Gateway stage
-        wafv2.CfnWebACLAssociation(
-            self,
-            "ApiWafAssociation",
-            resource_arn=stage_arn,
-            web_acl_arn=self.api_web_acl.attr_arn
-        )
+        wafv2.CfnWebACLAssociation(self, "ApiWafAssociation", resource_arn=stage_arn, web_acl_arn=self.api_web_acl.attr_arn)
 
     def _associate_cognito_waf(self) -> None:
         """Associate WAF Web ACL with Cognito User Pool."""
@@ -145,10 +132,7 @@ class ApiStack(Stack):
 
         # Associate WAF with Cognito User Pool
         wafv2.CfnWebACLAssociation(
-            self,
-            "CognitoWafAssociation",
-            resource_arn=self.cognito_user_pool_arn,
-            web_acl_arn=self.cognito_web_acl.attr_arn
+            self, "CognitoWafAssociation", resource_arn=self.cognito_user_pool_arn, web_acl_arn=self.cognito_web_acl.attr_arn
         )
 
     def _create_api_gateway(self) -> apigateway.RestApi:

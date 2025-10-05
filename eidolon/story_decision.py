@@ -219,6 +219,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
 
     # Generate ClientEvents for the decision to enrich history
     from eidolon.segment_processing import process_decision_segment
+
     process_decision_segment(active_segment, segment_def)
 
     record_segment_history(character_id, story_id, active_segment_id, active_segment)

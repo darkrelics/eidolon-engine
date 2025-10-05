@@ -211,7 +211,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         raise RuntimeError(f"Failed to create active segment: {err}") from err
 
 
-def update_segment_processing_status(active_segment_id: str, outcome: str, character_updates: dict, client_events = None) -> None:
+def update_segment_processing_status(active_segment_id: str, outcome: str, character_updates: dict, client_events=None) -> None:
     """
     Update active segment with processing results.
 
@@ -229,7 +229,9 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
         outcome = "normal"
 
     try:
-        update_expr = "SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, ProcessedAt = :processed_at"
+        update_expr = (
+            "SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, ProcessedAt = :processed_at"
+        )
         expr_values = {
             ":status": "processed",
             ":outcome": outcome,

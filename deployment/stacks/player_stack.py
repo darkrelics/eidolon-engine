@@ -29,7 +29,7 @@ def load_email_template(template_name: str) -> str:
         return ""
 
     try:
-        with open(template_path, 'r', encoding='utf-8') as f:
+        with open(template_path, "r", encoding="utf-8") as f:
             content = f.read()
         print(f"  Loaded email template: {template_name} ({len(content)} bytes)")
         return content

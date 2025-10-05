@@ -36,11 +36,7 @@ def filter_decision_options(raw_options: dict) -> dict:
         Filtered dict with only Text, Description, and NextSegmentID
     """
     return {
-        key: {
-            "Text": option.get("Text"),
-            "Description": option.get("Description"),
-            "NextSegmentID": option.get("NextSegmentID")
-        }
+        key: {"Text": option.get("Text"), "Description": option.get("Description"), "NextSegmentID": option.get("NextSegmentID")}
         for key, option in raw_options.items()
     }
 
@@ -75,7 +71,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             raise ValueError("No active story. Please select a story to begin your adventure.") from err
         raise
 
-    def _coerce_unix(timestamp_value: object, default = None):
+    def _coerce_unix(timestamp_value: object, default=None):
         if timestamp_value in (None, "", 0, "0"):
             return default
         if isinstance(timestamp_value, (int, float)):

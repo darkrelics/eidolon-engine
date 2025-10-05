@@ -90,18 +90,12 @@ def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
 
         if narrative:
             # Primary narrative event showing what the character did
-            client_events.append({
-                "EventType": "narrative",
-                "Title": "Your Choice",
-                "Description": narrative
-            })
+            client_events.append({"EventType": "narrative", "Title": "Your Choice", "Description": narrative})
 
         # Simple decision record (no mechanics data)
-        client_events.append({
-            "EventType": "decision",
-            "Title": option.get("Text", decision),
-            "Description": option.get("Description", "")
-        })
+        client_events.append(
+            {"EventType": "decision", "Title": option.get("Text", decision), "Description": option.get("Description", "")}
+        )
 
     # Store events in active segment for history
     active_segment["ClientEvents"] = client_events
@@ -165,8 +159,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 # Calculate attribute increase (uses attribute score for increment)
                 if attribute:
                     attr_increase = (
-                        calculate_skill_increase(effective_score, difficulty, current_attribute, passed)
-                        * ATTRIBUTE_XP_RATIO
+                        calculate_skill_increase(effective_score, difficulty, current_attribute, passed) * ATTRIBUTE_XP_RATIO
                     )
                     if attr_increase > 0:
                         attribute_xp[attribute] = attribute_xp.get(attribute, 0) + attr_increase

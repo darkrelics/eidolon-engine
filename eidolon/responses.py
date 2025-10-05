@@ -22,8 +22,6 @@ def decimal_to_json_serializable(obj):
     return obj
 
 
-
-
 def success_response(data=None, status_code: int = 200, headers=None) -> dict:
     """
     Create standardized success response for API Gateway.

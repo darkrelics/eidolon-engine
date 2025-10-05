@@ -78,10 +78,10 @@ def validate_gamemode_transition(current_mode: str, new_mode: str) -> bool:
 def set_character_game_mode(
     character_id: str,
     new_mode: str,
-    expected_current = None,
-    active_story_id = None,
-    active_segment_id = None,
-    story_instance_id = None,
+    expected_current=None,
+    active_story_id=None,
+    active_segment_id=None,
+    story_instance_id=None,
 ) -> bool:
     """
     Atomically set character GameMode with validation.
