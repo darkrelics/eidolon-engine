@@ -120,9 +120,15 @@ def create_rate_based_rule(rule_config: dict) -> dict:
         rate_statement["customKeys"] = []
         for key in custom_keys:
             if "header" in key:
-                rate_statement["customKeys"].append(
-                    {"header": {"name": key["header"]["name"]}}
-                )
+                # AWS WAF requires textTransformations for header custom keys
+                rate_statement["customKeys"].append({
+                    "header": {
+                        "name": key["header"]["name"],
+                        "textTransformations": [
+                            {"priority": 0, "type": "NONE"}
+                        ]
+                    }
+                })
 
     # Add scope down statement if present
     scope_down = statement.get("scope_down_statement")
