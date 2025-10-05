@@ -152,7 +152,7 @@ class _GameScreenState extends State<GameScreen> {
           _loadCharacterData(
             strategy: CharacterLoadRateLimitStrategy.immediate,
             showLoadingIndicator: false,
-          ).then((_) => _loadSegmentHistory());
+          );
         } else {
           // No saved character, redirect to selection
           debugPrint('GameScreen: No saved character, redirecting to character selection');
