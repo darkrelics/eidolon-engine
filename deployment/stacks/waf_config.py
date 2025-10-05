@@ -41,7 +41,7 @@ def load_waf_config(yaml_path: str) -> dict:
                 f"Please ensure WAF configuration files exist in the waf/ directory."
             )
 
-        with open(config_file, encoding='utf-8') as f:
+        with open(config_file, encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         # Validate config structure
@@ -121,14 +121,9 @@ def create_rate_based_rule(rule_config: dict) -> dict:
         for key in custom_keys:
             if "header" in key:
                 # AWS WAF requires textTransformations for header custom keys
-                rate_statement["customKeys"].append({
-                    "header": {
-                        "name": key["header"]["name"],
-                        "textTransformations": [
-                            {"priority": 0, "type": "NONE"}
-                        ]
-                    }
-                })
+                rate_statement["customKeys"].append(
+                    {"header": {"name": key["header"]["name"], "textTransformations": [{"priority": 0, "type": "NONE"}]}}
+                )
 
     # Add scope down statement if present
     scope_down = statement.get("scope_down_statement")
@@ -154,9 +149,7 @@ def create_managed_rule_group_statement(rule_config: dict) -> dict:
         "managedRuleGroupStatement": {
             "vendorName": statement.get("vendor_name"),
             "name": statement.get("name"),
-            "excludedRules": [
-                {"name": rule} for rule in statement.get("excluded_rules", [])
-            ],
+            "excludedRules": [{"name": rule} for rule in statement.get("excluded_rules", [])],
         }
     }
 
@@ -185,9 +178,7 @@ def create_size_constraint_statement(rule_config: dict) -> dict:
             "fieldToMatch": field_to_match,
             "comparisonOperator": statement.get("comparison_operator"),
             "size": statement.get("size"),
-            "textTransformations": [
-                {"priority": 0, "type": statement.get("text_transformation", "NONE")}
-            ],
+            "textTransformations": [{"priority": 0, "type": statement.get("text_transformation", "NONE")}],
         }
     }
 
@@ -271,11 +262,7 @@ def create_statement(statement_config: dict) -> dict:
 
     if "not_statement" in statement_config:
         not_stmt = statement_config["not_statement"]
-        return {
-            "notStatement": {
-                "statement": create_statement(not_stmt)
-            }
-        }
+        return {"notStatement": {"statement": create_statement(not_stmt)}}
 
     if "byte_match" in statement_config:
         return create_byte_match_statement({"statement": statement_config})
@@ -286,7 +273,7 @@ def create_statement(statement_config: dict) -> dict:
     return {}
 
 
-def create_web_acl(scope: str, stack, config: dict, construct_id = None) -> wafv2.CfnWebACL:
+def create_web_acl(scope: str, stack, config: dict, construct_id=None) -> wafv2.CfnWebACL:
     """
     Create WAF Web ACL from configuration.
 
@@ -308,12 +295,7 @@ def create_web_acl(scope: str, stack, config: dict, construct_id = None) -> wafv
 
         # Validate scope
         if scope not in ["CLOUDFRONT", "REGIONAL"]:
-            raise ValueError(
-                f"\n"
-                f"WAF Web ACL Error:\n"
-                f"  Invalid scope: {scope}\n"
-                f"  Must be 'CLOUDFRONT' or 'REGIONAL'"
-            )
+            raise ValueError(f"\n" f"WAF Web ACL Error:\n" f"  Invalid scope: {scope}\n" f"  Must be 'CLOUDFRONT' or 'REGIONAL'")
 
         rules = []
         rule_count = 0
@@ -389,7 +371,7 @@ def create_web_acl(scope: str, stack, config: dict, construct_id = None) -> wafv
                 # Add action or override action
                 if action:
                     rule["action"] = action
-                elif override_action: # type: ignore
+                elif override_action:  # type: ignore
                     rule["overrideAction"] = override_action
 
                 rules.append(rule)
@@ -415,7 +397,7 @@ def create_web_acl(scope: str, stack, config: dict, construct_id = None) -> wafv
             visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
                 sampled_requests_enabled=True,
                 cloud_watch_metrics_enabled=True,
-                metric_name=config.get("name", "WebACL"), # type: ignore
+                metric_name=config.get("name", "WebACL"),  # type: ignore
             ),
             name=config.get("name"),
             description=config.get("description", ""),

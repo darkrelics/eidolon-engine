@@ -56,11 +56,7 @@ def get_deployed_web_acl(web_acl_name: str, scope: str) -> dict:
             if acl.get("Name") == web_acl_name:
                 # Get full details
                 acl_id = acl.get("Id")
-                detail_response = client.get_web_acl(
-                    Scope=scope_str,
-                    Id=acl_id,
-                    Name=web_acl_name
-                )
+                detail_response = client.get_web_acl(Scope=scope_str, Id=acl_id, Name=web_acl_name)
                 return detail_response.get("WebACL", {})
 
         return {}
@@ -103,10 +99,7 @@ def compare_rules(deployed_rules: list, config_rules: list) -> list:
             config_priority = config_map[rule_name].get("priority")
             deployed_priority = deployed_map[rule_name].get("Priority")
             if config_priority != deployed_priority:
-                differences.append(
-                    f"Priority mismatch for {rule_name}: "
-                    f"config={config_priority}, deployed={deployed_priority}"
-                )
+                differences.append(f"Priority mismatch for {rule_name}: " f"config={config_priority}, deployed={deployed_priority}")
 
     return differences
 
@@ -203,24 +196,10 @@ def check_all_wafs() -> dict:
 def main():
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="Check WAF compliance")
-    parser.add_argument(
-        "--check-all",
-        action="store_true",
-        help="Check all WAF configurations"
-    )
-    parser.add_argument(
-        "--name",
-        help="Web ACL name to check"
-    )
-    parser.add_argument(
-        "--config",
-        help="Path to YAML config file"
-    )
-    parser.add_argument(
-        "--scope",
-        choices=["CLOUDFRONT", "REGIONAL"],
-        help="WAF scope"
-    )
+    parser.add_argument("--check-all", action="store_true", help="Check all WAF configurations")
+    parser.add_argument("--name", help="Web ACL name to check")
+    parser.add_argument("--config", help="Path to YAML config file")
+    parser.add_argument("--scope", choices=["CLOUDFRONT", "REGIONAL"], help="WAF scope")
 
     args = parser.parse_args()
 

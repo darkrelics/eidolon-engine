@@ -102,12 +102,7 @@ class ClientStack(Stack):
         config = waf_config.load_waf_config("waf/cloudfront-cdn.yml")
 
         # Create Web ACL (CloudFront requires CLOUDFRONT scope in us-east-1)
-        web_acl = waf_config.create_web_acl(
-            scope="CLOUDFRONT",
-            stack=self,
-            config=config,
-            construct_id="CloudFrontWebACL"
-        )
+        web_acl = waf_config.create_web_acl(scope="CLOUDFRONT", stack=self, config=config, construct_id="CloudFrontWebACL")
 
         return web_acl
 

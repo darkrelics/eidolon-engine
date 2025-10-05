@@ -29,7 +29,7 @@ def load_email_template(template_name: str) -> str:
         return ""
 
     try:
-        with open(template_path, 'r', encoding='utf-8') as f:
+        with open(template_path, "r", encoding="utf-8") as f:
             content = f.read()
         print(f"  Loaded email template: {template_name} ({len(content)} bytes)")
         return content
@@ -80,10 +80,10 @@ def configure_user_pool_email_template(user_pool_id: str, region: str) -> bool:
         cognito.update_user_pool(
             UserPoolId=user_pool_id,
             VerificationMessageTemplate={
-                'DefaultEmailOption': 'CONFIRM_WITH_CODE',
-                'EmailMessage': html_template,
-                'EmailSubject': 'Verify your Eidolon Engine account',
-            }
+                "DefaultEmailOption": "CONFIRM_WITH_CODE",
+                "EmailMessage": html_template,
+                "EmailSubject": "Verify your Eidolon Engine account",
+            },
         )
 
         print("  [OK] Email verification template updated successfully")

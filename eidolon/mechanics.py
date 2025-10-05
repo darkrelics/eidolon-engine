@@ -175,9 +175,7 @@ def resolve_opposed_check(aggressor: float, defender: float) -> dict:
     return {"Success": success, "Sigma": sigma}
 
 
-def calculate_skill_increase(
-    effective_score: float, difficulty: float, current_skill: float, success: bool
-) -> float:
+def calculate_skill_increase(effective_score: float, difficulty: float, current_skill: float, success: bool) -> float:
     """
     Calculate skill increase from a single action using exponential XP requirements.
 
@@ -274,14 +272,11 @@ def resolve_opposed_check_with_xp(
     current_attribute = float(character_attributes.get(attribute_name, 0))
 
     # Calculate skill increase
-    skill_increase = calculate_skill_increase(
-        aggressor_effective, defender_effective, current_skill, result["Success"]
-    )
+    skill_increase = calculate_skill_increase(aggressor_effective, defender_effective, current_skill, result["Success"])
 
     # Calculate attribute increase (uses attribute score for increment calculation)
     attr_increase = (
-        calculate_skill_increase(aggressor_effective, defender_effective, current_attribute, result["Success"])
-        * ATTRIBUTE_XP_RATIO
+        calculate_skill_increase(aggressor_effective, defender_effective, current_attribute, result["Success"]) * ATTRIBUTE_XP_RATIO
     )
 
     # Accumulate skill increase
