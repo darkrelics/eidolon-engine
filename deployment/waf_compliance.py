@@ -6,7 +6,6 @@ Validates deployed WAF configurations match YAML definitions.
 
 import argparse
 import sys
-from pathlib import Path
 
 import boto3
 from botocore.exceptions import ClientError
@@ -192,9 +191,9 @@ def check_all_wafs() -> dict:
         results[name] = result
 
         if result["compliant"]:
-            print(f"[OK] Compliant")
+            print("[OK] Compliant")
         else:
-            print(f"[WARNING] Not compliant:")
+            print("[WARNING] Not compliant:")
             for diff in result["differences"]:
                 print(f"  - {diff}")
 

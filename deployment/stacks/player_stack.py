@@ -1,7 +1,8 @@
 """Player stack for Cognito User Pool and Lambda function."""
 
-import aws_cdk as cdk
 from pathlib import Path
+
+import aws_cdk as cdk
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_iam as iam
