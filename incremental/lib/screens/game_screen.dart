@@ -105,6 +105,7 @@ class _GameScreenState extends State<GameScreen> {
         });
 
         _startOrchestrationIfNeeded();
+        _manageCharacterUpdateTimer();
       }
     } else if (args is CharacterInfo) {
       // Only update if it's a different character or first load
@@ -147,6 +148,8 @@ class _GameScreenState extends State<GameScreen> {
   void _manageCharacterUpdateTimer() {
     final hasActiveStory = _character?.activeSegmentID != null;
 
+    debugPrint('GameScreen: _manageCharacterUpdateTimer called - hasActiveStory=$hasActiveStory, timerExists=${_characterUpdateTimer != null}, characterId=${_character?.id}');
+
     if (hasActiveStory) {
       // Stop timer if in active story
       if (_characterUpdateTimer != null) {
@@ -157,14 +160,20 @@ class _GameScreenState extends State<GameScreen> {
     } else {
       // Start timer if not in active story and timer not already running
       if (_characterUpdateTimer == null && _character != null) {
-        debugPrint('GameScreen: Starting character update timer (no active story)');
+        debugPrint('GameScreen: Starting character update timer (no active story) - first update in 2 minutes');
+
+        // Start periodic timer - fires every 2 minutes
         _characterUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
-          debugPrint('GameScreen: Auto-refreshing character (2-minute timer)');
+          debugPrint('GameScreen: Auto-refreshing character (2-minute timer tick)');
           _loadCharacterData(
             strategy: CharacterLoadRateLimitStrategy.automated,
             showLoadingIndicator: false,
           );
         });
+      } else if (_characterUpdateTimer != null) {
+        debugPrint('GameScreen: Timer already running, not starting new one');
+      } else if (_character == null) {
+        debugPrint('GameScreen: Cannot start timer - no character loaded');
       }
     }
   }
