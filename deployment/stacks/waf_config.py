@@ -22,16 +22,79 @@ def load_waf_config(yaml_path: str) -> dict:
 
     Raises:
         FileNotFoundError: If YAML file doesn't exist
-        yaml.YAMLError: If YAML is malformed
+        ValueError: If YAML is malformed or invalid
+        RuntimeError: If file read fails
     """
-    config_file = Path(yaml_path)
-    if not config_file.exists():
-        raise FileNotFoundError(f"WAF config not found: {yaml_path}")
+    try:
+        # Resolve path relative to project root (parent of deployment/)
+        project_root = Path(__file__).parent.parent.parent
+        config_file = project_root / yaml_path
 
-    with open(config_file) as f:
-        config = yaml.safe_load(f)
+        if not config_file.exists():
+            raise FileNotFoundError(
+                f"\n"
+                f"WAF Configuration Error:\n"
+                f"  File not found: {yaml_path}\n"
+                f"  Resolved path: {config_file}\n"
+                f"  Expected location: {project_root}/waf/\n"
+                f"\n"
+                f"Please ensure WAF configuration files exist in the waf/ directory."
+            )
 
-    return config
+        with open(config_file, encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        # Validate config structure
+        if not isinstance(config, dict):
+            raise ValueError(
+                f"\n"
+                f"WAF Configuration Error:\n"
+                f"  File: {yaml_path}\n"
+                f"  Issue: Configuration must be a YAML dictionary\n"
+                f"  Got: {type(config).__name__}"
+            )
+
+        if "name" not in config:
+            raise ValueError(
+                f"\n"
+                f"WAF Configuration Error:\n"
+                f"  File: {yaml_path}\n"
+                f"  Issue: Missing required 'name' field\n"
+                f"  Please add a 'name' field to the WAF configuration."
+            )
+
+        return config
+
+    except FileNotFoundError:
+        raise  # Re-raise with our custom message
+    except yaml.YAMLError as e:
+        raise ValueError(
+            f"\n"
+            f"WAF Configuration Error:\n"
+            f"  File: {yaml_path}\n"
+            f"  Issue: Invalid YAML syntax\n"
+            f"  Details: {str(e)}\n"
+            f"\n"
+            f"Please check the YAML syntax in the configuration file."
+        ) from e
+    except PermissionError as e:
+        raise RuntimeError(
+            f"\n"
+            f"WAF Configuration Error:\n"
+            f"  File: {yaml_path}\n"
+            f"  Issue: Permission denied\n"
+            f"  Details: {str(e)}\n"
+            f"\n"
+            f"Please check file permissions."
+        ) from e
+    except Exception as e:
+        raise RuntimeError(
+            f"\n"
+            f"WAF Configuration Error:\n"
+            f"  File: {yaml_path}\n"
+            f"  Issue: Unexpected error reading configuration\n"
+            f"  Details: {str(e)}\n"
+        ) from e
 
 
 def create_rate_based_rule(rule_config: dict) -> dict:
@@ -229,89 +292,138 @@ def create_web_acl(scope: str, stack, config: dict, construct_id = None) -> wafv
 
     Returns:
         CDK Web ACL construct
+
+    Raises:
+        ValueError: If configuration is invalid
     """
-    if construct_id is None:
-        construct_id = config.get("name", "WebACL")
+    try:
+        if construct_id is None:
+            construct_id = config.get("name", "WebACL")
 
-    rules = []
-    for rule_config in config.get("rules", []):
-        # Skip disabled rules
-        if not rule_config.get("enabled", True):
-            continue
+        # Validate scope
+        if scope not in ["CLOUDFRONT", "REGIONAL"]:
+            raise ValueError(
+                f"\n"
+                f"WAF Web ACL Error:\n"
+                f"  Invalid scope: {scope}\n"
+                f"  Must be 'CLOUDFRONT' or 'REGIONAL'"
+            )
 
-        # Determine statement type
-        statement_type = rule_config.get("statement", {})
-        if "rate_based" in statement_type:
-            statement = create_rate_based_rule(rule_config)
-        elif "managed_rule_group" in statement_type:
-            statement = create_managed_rule_group_statement(rule_config)
-        elif "size_constraint" in statement_type:
-            statement = create_size_constraint_statement(rule_config)
-        elif "byte_match" in statement_type:
-            statement = create_byte_match_statement(rule_config)
-        elif "geo_match" in statement_type:
-            statement = create_geo_match_statement(rule_config)
-        else:
-            continue
+        rules = []
+        rule_count = 0
 
-        # Determine action
-        action_type = rule_config.get("action")
-        if action_type == "block":
-            action = {"block": {}}
-        elif action_type == "allow":
-            action = {"allow": {}}
-        elif action_type == "count":
-            action = {"count": {}}
-        elif action_type == "captcha":
-            action = {"captcha": {}}
-        elif action_type == "override_to_count":
-            # For managed rule groups
-            override_action = {"count": {}}
-            action = None
-        else:
-            action = {"allow": {}}
+        for rule_config in config.get("rules", []):
+            rule_count += 1
+            rule_name = rule_config.get("name", f"Rule-{rule_count}")
 
-        # Build visibility config
-        visibility = rule_config.get("visibility", {})
-        visibility_config = {
-            "sampledRequestsEnabled": visibility.get("sampled_requests", True),
-            "cloudWatchMetricsEnabled": visibility.get("cloudwatch_metrics", True),
-            "metricName": visibility.get("metric_name", rule_config.get("name")),
-        }
+            try:
+                # Skip disabled rules
+                if not rule_config.get("enabled", True):
+                    print(f"  Skipping disabled rule: {rule_name}")
+                    continue
 
-        # Build rule
-        rule = {
-            "name": rule_config.get("name"),
-            "priority": rule_config.get("priority"),
-            "statement": statement,
-            "visibilityConfig": visibility_config,
-        }
+                # Validate required fields
+                if "statement" not in rule_config:
+                    print(f"  Warning: Rule '{rule_name}' missing statement, skipping")
+                    continue
 
-        # Add action or override action
-        if action:
-            rule["action"] = action
-        elif override_action: # type: ignore
-            rule["overrideAction"] = override_action
+                if "priority" not in rule_config:
+                    print(f"  Warning: Rule '{rule_name}' missing priority, skipping")
+                    continue
 
-        rules.append(rule)
+                # Determine statement type
+                statement_type = rule_config.get("statement", {})
+                if "rate_based" in statement_type:
+                    statement = create_rate_based_rule(rule_config)
+                elif "managed_rule_group" in statement_type:
+                    statement = create_managed_rule_group_statement(rule_config)
+                elif "size_constraint" in statement_type:
+                    statement = create_size_constraint_statement(rule_config)
+                elif "byte_match" in statement_type:
+                    statement = create_byte_match_statement(rule_config)
+                elif "geo_match" in statement_type:
+                    statement = create_geo_match_statement(rule_config)
+                else:
+                    print(f"  Warning: Rule '{rule_name}' has unknown statement type, skipping")
+                    continue
 
-    # Create Web ACL
-    default_action_type = config.get("default_action", "allow")
-    default_action = {"allow": {}} if default_action_type == "allow" else {"block": {}}
+                # Determine action
+                action_type = rule_config.get("action")
+                if action_type == "block":
+                    action = {"block": {}}
+                elif action_type == "allow":
+                    action = {"allow": {}}
+                elif action_type == "count":
+                    action = {"count": {}}
+                elif action_type == "captcha":
+                    action = {"captcha": {}}
+                elif action_type == "override_to_count":
+                    # For managed rule groups
+                    override_action = {"count": {}}
+                    action = None
+                else:
+                    action = {"allow": {}}
 
-    web_acl = wafv2.CfnWebACL(
-        stack,
-        construct_id,
-        scope=scope,
-        default_action=default_action,
-        visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
-            sampled_requests_enabled=True,
-            cloud_watch_metrics_enabled=True,
-            metric_name=config.get("name"), # type: ignore
-        ),
-        name=config.get("name"),
-        description=config.get("description", ""),
-        rules=rules,
-    )
+                # Build visibility config
+                visibility = rule_config.get("visibility", {})
+                visibility_config = {
+                    "sampledRequestsEnabled": visibility.get("sampled_requests", True),
+                    "cloudWatchMetricsEnabled": visibility.get("cloudwatch_metrics", True),
+                    "metricName": visibility.get("metric_name", rule_name),
+                }
 
-    return web_acl
+                # Build rule
+                rule = {
+                    "name": rule_name,
+                    "priority": rule_config.get("priority"),
+                    "statement": statement,
+                    "visibilityConfig": visibility_config,
+                }
+
+                # Add action or override action
+                if action:
+                    rule["action"] = action
+                elif override_action: # type: ignore
+                    rule["overrideAction"] = override_action
+
+                rules.append(rule)
+
+            except Exception as e:
+                print(
+                    f"\n"
+                    f"Warning: Failed to process WAF rule '{rule_name}':\n"
+                    f"  {str(e)}\n"
+                    f"  Skipping this rule and continuing..."
+                )
+                continue
+
+        # Create Web ACL
+        default_action_type = config.get("default_action", "allow")
+        default_action = {"allow": {}} if default_action_type == "allow" else {"block": {}}
+
+        web_acl = wafv2.CfnWebACL(
+            stack,
+            construct_id,
+            scope=scope,
+            default_action=default_action,
+            visibility_config=wafv2.CfnWebACL.VisibilityConfigProperty(
+                sampled_requests_enabled=True,
+                cloud_watch_metrics_enabled=True,
+                metric_name=config.get("name", "WebACL"), # type: ignore
+            ),
+            name=config.get("name"),
+            description=config.get("description", ""),
+            rules=rules,
+        )
+
+        print(f"  Created WAF Web ACL '{config.get('name')}' with {len(rules)} rules")
+        return web_acl
+
+    except Exception as e:
+        raise ValueError(
+            f"\n"
+            f"WAF Web ACL Creation Error:\n"
+            f"  Name: {config.get('name', 'Unknown')}\n"
+            f"  Scope: {scope}\n"
+            f"  Details: {str(e)}\n"
+        ) from e
