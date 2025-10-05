@@ -24,9 +24,6 @@ import (
 	cwlogtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 )
 
-// TODO: split out the logging between the Console and Cloudwatch to allow different format and
-// levels for each.
-
 const maxRetries = 3
 
 var Logger *slog.Logger
