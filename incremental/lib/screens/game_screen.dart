@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/models/story.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/providers/character_provider.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:eidolon_incremental/services/notification_service.dart';
@@ -120,8 +121,48 @@ class _GameScreenState extends State<GameScreen> {
         _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate)
             .then((_) => _loadSegmentHistory());
       }
-    } else if (args != null) {
-      // Unexpected argument type provided via navigation; ignoring.
+    } else {
+      // No route arguments (page reload or direct URL navigation)
+      // Try to load from CharacterProvider (local storage)
+      if (_characterInfo == null && _character == null) {
+        debugPrint('GameScreen: No route arguments, checking CharacterProvider');
+
+        // Try to get character from provider
+        final characterProvider = context.read<CharacterProvider>();
+        final savedCharacter = characterProvider.character;
+
+        if (savedCharacter != null) {
+          debugPrint('GameScreen: Found saved character: ${savedCharacter.name}');
+          setState(() {
+            _resetForNewCharacter();
+            _character = savedCharacter;
+            _characterInfo = CharacterInfo(
+              name: savedCharacter.name,
+              id: savedCharacter.id,
+              dead: savedCharacter.health <= 0,
+            );
+            _isLoading = false;
+            _error = null;
+          });
+
+          _startOrchestrationIfNeeded();
+          _manageCharacterUpdateTimer();
+
+          // Refresh character data from server in background
+          _loadCharacterData(
+            strategy: CharacterLoadRateLimitStrategy.immediate,
+            showLoadingIndicator: false,
+          ).then((_) => _loadSegmentHistory());
+        } else {
+          // No saved character, redirect to selection
+          debugPrint('GameScreen: No saved character, redirecting to character selection');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, '/character-selection');
+            }
+          });
+        }
+      }
     }
   }
 

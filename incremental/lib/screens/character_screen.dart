@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/providers/character_provider.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:eidolon_incremental/utils/error_handler.dart';
@@ -391,17 +392,25 @@ class _CharacterScreenState extends State<CharacterScreen> {
     );
 
     try {
+      // Capture navigator and provider before async operations
+      final navigator = Navigator.of(context);
+      final characterProvider = context.read<CharacterProvider>();
+
       // Pre-load character data
       final fullCharacter = await _apiService.getCharacterById(character.id);
 
       if (!mounted) return;
 
-      // Close the loading dialog
-      LoadingDialog.hide(context);
+      // Save character to provider for reload persistence
+      if (fullCharacter != null) {
+        await characterProvider.updateCharacter(fullCharacter);
+      }
+
+      // Close the loading dialog (pop the dialog route)
+      navigator.pop();
 
       // Navigate to game screen with pre-loaded character data
-      Navigator.pushReplacementNamed(
-        context,
+      navigator.pushReplacementNamed(
         '/game',
         arguments: fullCharacter ?? character,
       );

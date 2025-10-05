@@ -24,18 +24,13 @@ phases:
 
   post_build:
     commands:
-      # Sync hashed assets with long-term caching
-      - aws s3 sync build/web s3://$S3_BUCKET/ --exclude "index.html" --exclude "flutter_bootstrap.js" --exclude "manifest.json" --delete --cache-control "public, max-age=31536000, immutable"
+      # Remove empty service worker file (not needed with --pwa-strategy=none)
+      - rm -f build/web/flutter_service_worker.js
 
-      # Upload entry points with no-cache headers
-      - |
-        for file in index.html flutter_bootstrap.js manifest.json; do
-          if [ -f "build/web/$file" ]; then
-            aws s3 cp "build/web/$file" "s3://$S3_BUCKET/$file" --cache-control "public, max-age=0, no-cache, must-revalidate"
-          fi
-        done
+      # Upload all files with 24-hour cache
+      - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "public, max-age=86400"
 
-      # Invalidate CloudFront cache
+      # Invalidate CloudFront cache (all paths)
       - |
         if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
           aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"

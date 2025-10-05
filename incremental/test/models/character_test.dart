@@ -177,6 +177,15 @@ void main() {
       final character3 = Character.fromJson(validJson);
       expect(character3.gameMode, equals('None'));
     });
+
+    test('copyWith updates gameMode', () {
+      final character = Character.fromJson(validJson);
+      expect(character.gameMode, equals('None'));
+
+      final updated = character.copyWith(gameMode: 'Incremental');
+      expect(updated.gameMode, equals('Incremental'));
+      expect(character.gameMode, equals('None')); // Original unchanged
+    });
   });
 
   group('Attributes', () {
