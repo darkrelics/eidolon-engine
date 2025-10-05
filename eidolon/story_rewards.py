@@ -63,7 +63,6 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
         # Story rewards currently only handle items and currency
         # XP is awarded through segment processing for specific skills
 
-
         logger.info(f"Applied story rewards for {character_id}")
     except ClientError as err:
         logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
