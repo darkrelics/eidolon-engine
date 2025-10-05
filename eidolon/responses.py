@@ -62,7 +62,7 @@ def not_found_response(resource=None) -> dict:
     Create standardized 404 Not Found response.
 
     Args:
-        resource: Optional resource description
+        resource: resource description
 
     Returns:
         API Gateway response dict

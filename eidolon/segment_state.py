@@ -21,7 +21,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         active_segment_id: Active segment UUID
         outcome: Outcome type
         results: Challenge or combat results
-        segment_def: Optional segment definition containing Results narratives
+        segment_def: segment definition containing Results narratives
     """
     if not outcome:
         logger.warning(f"No outcome computed for {active_segment_id}; defaulting to 'normal'")
@@ -219,7 +219,7 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
         active_segment_id: Active segment UUID
         outcome: Processing outcome
         character_updates: Character updates to apply
-        client_events: Optional list of client events (for decision segments)
+        client_events: list of client events (for decision segments)
 
     Raises:
         RuntimeError: If database operation fails

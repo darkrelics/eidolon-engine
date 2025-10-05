@@ -294,7 +294,7 @@ def create_web_acl(scope: str, stack, config: dict, construct_id = None) -> wafv
         scope: WAF scope ("CLOUDFRONT" or "REGIONAL")
         stack: CDK stack to create resources in
         config: WAF configuration dict from YAML
-        construct_id: Optional construct ID (defaults to config name)
+        construct_id: construct ID (defaults to config name)
 
     Returns:
         CDK Web ACL construct

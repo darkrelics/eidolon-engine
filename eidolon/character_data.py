@@ -334,7 +334,7 @@ def apply_character_updates(character_id: str, updates: dict, current_character:
     Args:
         character_id: Character UUID
         updates: Dict containing CharacterUpdates from segment processing
-        current_character: Optional character dict to avoid extra DynamoDB read.
+        current_character: character dict to avoid extra DynamoDB read.
                           If not provided, will use DynamoDB ADD operation for atomic updates.
 
     Raises:

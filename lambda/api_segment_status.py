@@ -75,7 +75,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             raise ValueError("No active story. Please select a story to begin your adventure.") from err
         raise
 
-    def _coerce_unix(timestamp_value: object, default: Optional[int] = None) -> Optional[int]:
+    def _coerce_unix(timestamp_value: object, default = None):
         if timestamp_value in (None, "", 0, "0"):
             return default
         if isinstance(timestamp_value, (int, float)):
@@ -115,7 +115,6 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         duration = max(60, end_time_unix - start_time_unix)
 
     # Calculate timer status
-    timer_expired = end_time_unix <= now
     time_remaining = max(0, int(end_time_unix - now))
 
     processing_status = active_segment.get("ProcessingStatus", "")
