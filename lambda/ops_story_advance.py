@@ -29,6 +29,9 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     """
     Business logic for advancing a story after segment completion.
 
+    IDEMPOTENT: Safe to call multiple times with the same segment ID.
+    Returns success if segment already advanced or doesn't exist.
+
     Args:
         active_segment_id: Active segment UUID
 
@@ -36,18 +39,38 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
         Dict with processing results
 
     Raises:
-        ValueError: If segment not found or invalid state
         RuntimeError: If processing fails
     """
-    # Get active segment first to check its status
-    active_segment = get_active_segment(active_segment_id)
+    # IDEMPOTENCY CHECK 1: Segment might already be deleted (already advanced)
+    try:
+        active_segment = get_active_segment(active_segment_id)
+    except ValueError:
+        # Segment doesn't exist - already advanced and deleted
+        logger.info(f"Segment {active_segment_id} not found (already advanced and deleted)")
+        return {"success": True, "skipped": True, "reason": "Already advanced"}
 
-    # Segments marked as completed still need to be advanced to create the next segment
-    # Only skip if the segment is abandoned or missing critical data
+    # IDEMPOTENCY CHECK 2: Check segment status
     status = active_segment.get("Status")
+
+    if status == "completed":
+        # Segment already marked completed - might be mid-advancement or already done
+        logger.info(f"Segment {active_segment_id} already marked as completed, skipping")
+        return {"success": True, "skipped": True, "reason": "Already marked completed"}
+
     if status == "abandoned":
         logger.info(f"Segment abandoned, skipping advancement for {active_segment_id}")
         return {"success": True, "skipped": True, "reason": "Segment abandoned"}
+
+    # ATOMIC CLAIM: Mark segment as completed FIRST (before doing any work)
+    # This prevents race conditions where two workers process the same segment
+    try:
+        mark_segment_as_completed(active_segment_id)
+        active_segment["Status"] = "completed"
+        logger.info(f"Claimed segment {active_segment_id} for advancement")
+    except Exception as err:
+        # Failed to claim - another worker already claimed it, or segment in invalid state
+        logger.warning(f"Failed to claim segment {active_segment_id} for advancement: {err}")
+        return {"success": True, "skipped": True, "reason": "Failed to claim (already claimed by another worker)"}
 
     # Extract key data
     character_id = active_segment.get("CharacterID")
@@ -118,12 +141,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
             logger.info("Found legacy StoryEffects in CharacterUpdates (already applied by processor)")
             # Effects should have already been applied by ops_segment_process
 
-    # Mark segment as completed in DynamoDB before recording history
-    try:
-        mark_segment_as_completed(active_segment_id)
-        active_segment["Status"] = "completed"
-    except Exception as err:
-        logger.error(f"Failed to mark segment as completed for {active_segment_id} Error: {err}", exc_info=True)
+    # NOTE: Segment was already marked as completed at the start of this function (atomic claim)
+    # This ensures idempotency - if we get here, we already own this segment
 
     # Record segment history
     record_segment_history(character_id, story_id, active_segment_id, active_segment)  # type: ignore
