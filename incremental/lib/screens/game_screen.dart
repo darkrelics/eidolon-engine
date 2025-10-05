@@ -43,6 +43,9 @@ class _GameScreenState extends State<GameScreen> {
   bool _storyCompletionNotified = false;
   Future<void>? _activeCharacterLoad;
 
+  // Character update timer (when not in active story)
+  Timer? _characterUpdateTimer;
+
   // Segment history (completion view only)
   List<Map<String, dynamic>> _segmentHistory = const [];
   Map<String, dynamic>? _lastStoryDetails;
@@ -126,15 +129,44 @@ class _GameScreenState extends State<GameScreen> {
     _runtime.dispose();
     _decisionDebouncer.dispose();
     _refreshDebouncer.dispose();
+    _characterUpdateTimer?.cancel();
     super.dispose();
   }
 
   void _resetForNewCharacter() {
     _runtime.cancel();
+    _characterUpdateTimer?.cancel();
     _orchestratedSegmentId = null;
     _segmentHistory = <Map<String, dynamic>>[];
     _lastStoryDetails = null;
     _storyCompletionNotified = false;
+  }
+
+  /// Manage character update timer based on story state.
+  /// Timer runs every 2 minutes when NOT in an active story.
+  void _manageCharacterUpdateTimer() {
+    final hasActiveStory = _character?.activeSegmentID != null;
+
+    if (hasActiveStory) {
+      // Stop timer if in active story
+      if (_characterUpdateTimer != null) {
+        debugPrint('GameScreen: Stopping character update timer (in active story)');
+        _characterUpdateTimer?.cancel();
+        _characterUpdateTimer = null;
+      }
+    } else {
+      // Start timer if not in active story and timer not already running
+      if (_characterUpdateTimer == null && _character != null) {
+        debugPrint('GameScreen: Starting character update timer (no active story)');
+        _characterUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
+          debugPrint('GameScreen: Auto-refreshing character (2-minute timer)');
+          _loadCharacterData(
+            strategy: CharacterLoadRateLimitStrategy.automated,
+            showLoadingIndicator: false,
+          );
+        });
+      }
+    }
   }
 
   Future<void> _loadCharacterData({
@@ -204,6 +236,7 @@ class _GameScreenState extends State<GameScreen> {
         });
 
         _startOrchestrationIfNeeded();
+        _manageCharacterUpdateTimer();
       }
     } catch (e) {
       debugPrint('GameScreen: ERROR loading character: $e');
@@ -303,6 +336,7 @@ class _GameScreenState extends State<GameScreen> {
       });
 
       _startOrchestrationIfNeeded(force: true);
+      _manageCharacterUpdateTimer();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -376,6 +410,7 @@ class _GameScreenState extends State<GameScreen> {
 
         // New segment or completed
         _startOrchestrationIfNeeded(force: true);
+        _manageCharacterUpdateTimer();
       },
       onStatusUpdated: (status) {
         if (!mounted || _character == null) return;
@@ -590,6 +625,7 @@ class _GameScreenState extends State<GameScreen> {
 
         // Start orchestration for the new segment
         _startOrchestrationIfNeeded(force: true);
+        _manageCharacterUpdateTimer();
       } else {
         // No next segment means the story has finished
         _runtime.cancel();
@@ -713,6 +749,8 @@ class _GameScreenState extends State<GameScreen> {
       _isLoading = false;
     });
 
+    _manageCharacterUpdateTimer();
+
     if (showMessage && !_storyCompletionNotified) {
       final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
       final fallbackStoryTitle = _segmentHistory.isNotEmpty ? _segmentHistory.last['StoryTitle'] as String? : null;
@@ -760,6 +798,8 @@ class _GameScreenState extends State<GameScreen> {
       _isLoading = false;
     });
 
+    _manageCharacterUpdateTimer();
+
     if (!_storyCompletionNotified) {
       final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
       final fallbackStoryTitle = _segmentHistory.isNotEmpty ? _segmentHistory.last['StoryTitle'] as String? : null;
@@ -798,6 +838,7 @@ class _GameScreenState extends State<GameScreen> {
         _lastStoryDetails = null;
       });
     }
+    _manageCharacterUpdateTimer();
   }
 
   Future<void> _handleAbandonStory() async {
