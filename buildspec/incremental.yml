@@ -20,14 +20,25 @@ phases:
 
   build:
     commands:
-      - flutter build web --release --no-wasm-dry-run --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
+      - flutter build web --release --pwa-strategy=none --no-wasm-dry-run --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
 
   post_build:
     commands:
-      - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "max-age=86400"
+      # Sync hashed assets with long-term caching
+      - aws s3 sync build/web s3://$S3_BUCKET/ --exclude "index.html" --exclude "flutter_bootstrap.js" --exclude "manifest.json" --delete --cache-control "public, max-age=31536000, immutable"
+
+      # Upload entry points with no-cache headers
+      - |
+        for file in index.html flutter_bootstrap.js manifest.json; do
+          if [ -f "build/web/$file" ]; then
+            aws s3 cp "build/web/$file" "s3://$S3_BUCKET/$file" --cache-control "public, max-age=0, no-cache, must-revalidate"
+          fi
+        done
+
+      # Invalidate only entry points
       - |
         if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
-          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/index.html" "/flutter_bootstrap.js" "/manifest.json"
         else
           echo "No CloudFront distribution ID provided, skipping cache invalidation"
         fi
