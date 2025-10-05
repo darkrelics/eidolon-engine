@@ -33,7 +33,7 @@ def get_waf_client(scope: str) -> tuple:
     return client, scope
 
 
-def get_deployed_web_acl(web_acl_name: str, scope: str) -> dict | None:
+def get_deployed_web_acl(web_acl_name: str, scope: str) -> dict:
     """
     Get deployed Web ACL configuration from AWS.
 
@@ -42,7 +42,7 @@ def get_deployed_web_acl(web_acl_name: str, scope: str) -> dict | None:
         scope: "CLOUDFRONT" or "REGIONAL"
 
     Returns:
-        Web ACL configuration dict or None if not found
+        Web ACL configuration dict. Empty dict if not found.
     """
     client, scope_str = get_waf_client(scope)
 
@@ -61,13 +61,13 @@ def get_deployed_web_acl(web_acl_name: str, scope: str) -> dict | None:
                     Id=acl_id,
                     Name=web_acl_name
                 )
-                return detail_response.get("WebACL")
+                return detail_response.get("WebACL", {})
 
-        return None
+        return {}
 
     except ClientError as err:
         print(f"[ERROR] Failed to get Web ACL {web_acl_name}: {err}")
-        return None
+        return {}
 
 
 def compare_rules(deployed_rules: list, config_rules: list) -> list:

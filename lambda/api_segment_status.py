@@ -8,7 +8,6 @@ Returns segment completion status and any available results.
 """
 
 import time
-from typing import Optional
 
 from eidolon.cognito import extract_player_id
 from eidolon.constants import RETRY_POLL_DELAY
@@ -21,6 +20,29 @@ from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_re
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
 from eidolon.time_utils import from_unix
+
+
+def filter_decision_options(raw_options: dict) -> dict:
+    """
+    Filter decision options to include only safe client-facing fields.
+
+    Removes internal fields like Difficulty and Narrative that should
+    not be exposed to the client.
+
+    Args:
+        raw_options: Raw decision options dict from segment definition
+
+    Returns:
+        Filtered dict with only Text, Description, and NextSegmentID
+    """
+    return {
+        key: {
+            "Text": option.get("Text"),
+            "Description": option.get("Description"),
+            "NextSegmentID": option.get("NextSegmentID")
+        }
+        for key, option in raw_options.items()
+    }
 
 
 def get_segment_status_business_logic(character_id: str, player_id: str) -> dict:
@@ -229,25 +251,11 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             response["DecisionText"] = segment_def.get("DecisionText")
             # Build DecisionOptions without exposing Difficulty or Narrative
             raw_options = segment_def.get("DecisionOptions", {})
-            response["DecisionOptions"] = {
-                key: {
-                    "Text": option.get("Text"),
-                    "Description": option.get("Description"),
-                    "NextSegmentID": option.get("NextSegmentID")
-                }
-                for key, option in raw_options.items()
-            }
+            response["DecisionOptions"] = filter_decision_options(raw_options)
         elif active_segment.get("DecisionOptions"):
             # Fallback to active segment data (filter same fields)
             raw_options = active_segment.get("DecisionOptions", {})
-            response["DecisionOptions"] = {
-                key: {
-                    "Text": option.get("Text"),
-                    "Description": option.get("Description"),
-                    "NextSegmentID": option.get("NextSegmentID")
-                }
-                for key, option in raw_options.items()
-            }
+            response["DecisionOptions"] = filter_decision_options(raw_options)
 
     # Include story information for consistent display
     if story_id:

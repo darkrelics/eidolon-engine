@@ -45,9 +45,9 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     try:
         active_segment = get_active_segment(active_segment_id)
     except ValueError:
-        # Segment doesn't exist - already advanced and deleted
-        logger.info(f"Segment {active_segment_id} not found (already advanced and deleted)")
-        return {"success": True, "skipped": True, "reason": "Already advanced"}
+        # Segment doesn't exist - may be already processed, invalid, or corrupted
+        logger.info(f"Segment {active_segment_id} not found (may be already processed or invalid)")
+        return {"success": True, "skipped": True, "reason": "Segment not found (may be already processed or invalid)"}
 
     # IDEMPOTENCY CHECK 2: Check segment status
     status = active_segment.get("Status")
