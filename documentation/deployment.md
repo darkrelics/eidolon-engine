@@ -1,127 +1,214 @@
-# Deployment Guide for Eidolon Engine
+# Eidolon Engine Deployment Guide
 
-This guide explains how to deploy and manage Eidolon Engine infrastructure using the CDK-based incremental deployment system.
+This guide explains how to deploy the Eidolon Engine infrastructure using the modular CDK-based deployment system that replaced the monolithic 1800+ line deployment class.
 
 ## Prerequisites
 
-- Python 3.11 or later (use `python3` command)
+- Python 3.12 or later (always use `python3` command)
 - AWS CLI configured with appropriate credentials
 - AWS CDK CLI installed: `npm install -g aws-cdk`
 - Required Python packages: `pip3 install -r requirements/scripts-requirements.txt`
-- AWS CDK Bootstrap: The target AWS account must be bootstrapped for CDK. Run `cdk bootstrap aws://ACCOUNT-ID/REGION` if not already done
+- AWS CDK Bootstrap: Run `cdk bootstrap aws://ACCOUNT-ID/REGION` if not already done
+- Supported regions: us-east-1, us-east-2, us-west-2
 
-## Overview
-
-The deployment system provides:
-
-- **Incremental deployments** - Deploy or update only what's needed
-- **Automatic resource detection** - Discovers and uses existing AWS resources
-- **Zero-downtime updates** - Works with existing infrastructure
-- **Infrastructure as Code** - All resources defined in CDK (Python)
-- **Drift detection** - Validates existing resources against expected state
-- **Multiple deployment modes** - Support for MUD, Incremental, and Hybrid game modes
-
-### Deployment Modes
-
-The Eidolon Engine supports three deployment modes, all sharing the same backend infrastructure but using different frontend applications:
-
-- **MUD Mode**: Traditional Multi-User Dungeon with Portal frontend
-- **Incremental Mode**: Idle/incremental game with Incremental frontend
-- **Hybrid Mode** (default): Supports both game types with Incremental frontend
-
-All modes share:
-
-- Same DynamoDB tables (Players, Characters, Archetypes, Items, Story)
-- Same Lambda functions and API Gateway
-- Same Cognito user pool for authentication
-- Unified backend infrastructure
-
-## Deployment Scenarios
-
-### 1. Greenfield Deployment (New Environment)
-
-For deploying to a fresh AWS account with no existing infrastructure:
+## Quick Start
 
 ```bash
 cd deployment
-python3 deploy.py --region us-east-1
+python3 deploy.py
 ```
 
-The system will:
+The deployment will:
 
-1. Initialize configuration from `config.template.yml` if no config exists
-2. Prompt for required parameters (game name, email, GitHub details)
-3. Create all necessary AWS resources
-4. Save configuration to `config.yml`
-5. Deploy Lua scripts to S3
+1. Check CDK bootstrap status
+2. Collect deployment parameters (mode, domain, etc.)
+3. Deploy 8–10 CDK stacks in sequence based on selected mode
+4. Execute Lambda builds automatically
+5. Update Lambda functions from S3 artifacts
+6. Execute portal build via CodeBuild
+7. Update config.yml with all resource identifiers
 
-### 2. Existing Infrastructure Deployment
+## System Architecture
 
-For environments with existing resources (S3 buckets, DynamoDB tables, etc.):
+This section is the canonical infrastructure overview referenced by other documentation.
 
-```bash
-# First, analyze what exists
-python3 deploy.py --region us-east-1 --analyze-only
+- **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
+- **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
+- **15 Lambda Functions**: API handlers and operational functions
+- **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
+- **Fixed Logical IDs**: Preventing resource recreation on updates
+- **Post-Deploy Updates**: Lambda functions automatically updated from S3
 
-# Then deploy, adopting existing resources
-python3 deploy.py --region us-east-1
+## Key Features
+
+The deployment system provides:
+
+- **Fixed Logical IDs**: Preventing resource recreation on stack updates
+- **CDK Context Pattern**: All stacks use `-c` flags for parameters (no argparse)
+- **AWS Access Isolation**: No AWS API calls during CDK synthesis
+- **Automated End-to-End**: From infrastructure to portal deployment
+- **Post-Deployment Operations**: Lambda updates, layer cleanup, trigger configuration
+- **Production Tested**: All phases deployed and operational
+
+## Deployment Modes
+
+### MUD Mode (9 Stacks)
+
+- **Frontend**: Portal app via `buildspec/portal.yml`
+- **Excludes**: Story Stack (no SQS/EventBridge)
+- **Includes**: S3 Scripts, CloudWatch logging
+- **Use Case**: Traditional MUD experience only
+
+### Incremental Mode (8 Stacks)
+
+- **Frontend**: Incremental app via `buildspec/incremental.yml`
+- **Excludes**: S3 Scripts, CloudWatch Stack
+- **Includes**: Story Stack (SQS/EventBridge)
+- **Use Case**: Story-driven incremental gameplay
+
+### Hybrid Mode - Default (10 Stacks)
+
+- **Frontend**: Incremental app via `buildspec/incremental.yml`
+- **Includes**: All stacks for complete functionality
+- **Use Case**: Full feature set with both game modes
+
+## Stack Deployment Order
+
+Refer other documents here rather than duplicating the sequence.
+
+### Phase-Based Deployment
+
+Stacks deploy in a specific order based on dependencies:
+
+1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
+2. **DynamoDB Stack**: 14 tables with managed IAM policy
+3. **Lambda Stack**: Layer, 15 functions, shared execution role
+4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
+5. **Character Stack**: Character-related Lambda resources
+6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
+7. **S3 Stack** (MUD/Hybrid only): Scripts bucket with Lua upload
+8. **CloudWatch Stack** (MUD/Hybrid only): Logging infrastructure
+9. **API Stack**: API Gateway with Lambda integrations
+10. **Client Stack**: CloudFront, S3, automated portal build
+
+Then (all modes): 11. **Lambda Function Updates**: Update function code from S3 artifacts
+
+## Deployment Process
+
+### Initial Setup
+
+Follow the command sequence in [Quick Start](#quick-start); the CLI then prompts for:
+
+1. **Deployment Mode**: MUD, Incremental, or Hybrid (default)
+2. **Domain Configuration**: Domain name and Route53 Hosted Zone ID
+3. **GitHub Settings**: Owner, repository, branch (for CodeBuild)
+4. **S3 Buckets**: Artifacts and scripts bucket names
+5. **Reply Email**: For Cognito notifications
+
+### Parameter Priority
+
+The system loads parameters in this order:
+
+1. Hardcoded defaults in code
+2. Saved values from `cdk.json`
+3. Existing `config.yml` values
+4. User prompts (override all)
+
+### CDK Context Configuration
+
+All parameters are passed via CDK context:
+
+```python
+# Example from deployment modules
+context_args = [
+    "-c", f"region={params.region}",
+    "-c", f"deployment_mode={params.deployment_mode}",
+    "-c", f"domain={params.domain}",
+    "-c", f"api_host={params.api_host}",
+    "-c", f"client_host={params.client_host}"
+]
 ```
 
-The system will:
+Each stack has its own app file (`app_*.py`) to prevent output contamination.
 
-1. Detect existing CloudFormation stacks
-2. Find existing S3 buckets, DynamoDB tables, and other resources
-3. Validate existing resources
-4. Create new resources only where needed
-5. Update configuration with all resource identifiers
+## Post-Deployment Operations
 
-### 3. Update Existing Deployment
+### Automatic Lambda Updates
 
-To update an existing CDK deployment:
+After CDK deployment, the system:
 
-```bash
-python3 deploy.py --region us-east-1
+1. **Updates Lambda function code** from the latest S3 artifacts
+2. **Re-associates each function** with the most recent published layer when needed
+3. **Skips not-yet-deployed functions safely**, logging a warning instead of failing the deployment
+4. **Configures Cognito triggers** for imported User Pools
+
+### Portal Build Automation
+
+The Client Stack automatically:
+
+1. **Starts CodeBuild project** after infrastructure
+2. **Monitors build progress** with phase updates
+3. **Syncs to S3** and invalidates CloudFront
+4. **Displays portal URL** on completion
+
+## Database Utilities
+
+The repository includes lightweight scripts for seeding and inspecting DynamoDB tables during development. Run them from the repo root; use `--region` to target a specific AWS account when needed.
+
+- `database/data_loader.py` — Loads the JSON fixtures in `data/` (rooms, exits, archetypes, prototypes, opponents, stories) into DynamoDB. Defaults to `us-east-1`:
+  ```bash
+  python database/data_loader.py --region us-west-2
+  ```
+- `database/viewer.py` — Dumps table contents (default region `us-east-1`). Pass logical table names (e.g., `characters`, `story_history`) to limit the output:
+  ```bash
+  python database/viewer.py --region us-west-2 characters archetypes
+  ```
+- `database/motd.py` — Adds a Message of the Day entry (region default `us-east-1`):
+  ```bash
+  python database/motd.py "Welcome to Eidolon" --region us-west-2
+  ```
+- `database/create_item.py` — Interactive helper that clones an item prototype into the `items` table (region default `us-east-1`):
+  ```bash
+  python database/create_item.py --region us-west-2
+  ```
+
+Sample fixtures live under `data/` (`test_rooms.json`, `test_story.json`, etc.) and match the schemas described in `schema.md`.
+
+## Critical Implementation Details
+
+### Fixed Logical IDs
+
+All resources use fixed logical IDs to prevent recreation:
+
+```python
+# Example from Lambda Stack
+def _get_function_logical_id(self, function_name: str) -> str:
+    logical_id_map = {
+        "api-character-list": "ApiCharacterListFunction",
+        "cognito-player-new": "CognitoPlayerNewFunction",
+        # ... etc
+    }
+    return logical_id_map.get(function_name, ...)
 ```
 
-The system will:
+### No AWS Access During Synthesis
 
-1. Compare current state with desired state
-2. Apply only necessary changes
-3. Show drift report if manual changes were made
+Resource checks happen in deployment layer, not CDK:
 
-## Command Line Options
+```python
+# WRONG - Fails during synthesis
+if check_s3_bucket_exists(bucket_name):
+    s3.Bucket.from_bucket_name(...)
 
-```bash
-python3 deploy.py [OPTIONS]
-
-Options:
-  --region REGION        AWS region (default: us-east-1)
-  --profile PROFILE      AWS profile to use
-  --auto-approve         Skip confirmation prompts
-  --skip-scripts         Skip Lua script deployment
-  --analyze-only         Only analyze infrastructure, don't deploy
-  --deploy-mud           Deploy in MUD mode (Portal frontend)
-  --deploy-incremental   Deploy in Incremental mode
-  --deploy-both          Deploy in Hybrid mode (default)
-  --non-interactive      Run without interactive prompts
-  --branch               Select specific GitHub branch
+# RIGHT - Use fixed IDs, let CDK handle
+s3.Bucket(self, "FixedLogicalId", bucket_name=...)
 ```
 
-## Configuration
+### Configuration Files
 
-### Initial Parameters
+#### config.yml (Operational Data)
 
-During first deployment, you'll be prompted for:
-
-- **Game Name**: Unique identifier for your game (default: `eidolon-engine`)
-- **Contact Email**: Administrator email for notifications
-- **GitHub Owner**: GitHub username or organization
-- **GitHub Repository**: Repository name containing the code
-- **GitHub Branch**: Branch to deploy from (default: `develop`)
-
-### Configuration File
-
-The system creates and maintains `config.yml`. If no configuration exists, it initializes from `config.template.yml`:
+Contains runtime configuration:
 
 ```yaml
 Game:
@@ -146,11 +233,10 @@ API:
   Subdomain: api # api.darkrelics.net
 
 # CORS configuration for API Gateway
-CORS:
-  AllowedOrigins: [] # Populated automatically based on deployment mode
-  # For MUD mode: adds portal domain
-  # For Incremental/Hybrid: adds incremental domain
-  # Custom domains can be added manually after deployment
+allowed_cors_origins:
+  [] # Optional list; when empty, API preflight defaults to "*" without credentials
+  # When set, API Gateway preflight uses this explicit list and allows credentials
+  # ALLOWED_ORIGINS env var is passed to Lambdas as a comma-separated string
 
 CloudFront:
   distribution_id: E1234567890ABC
@@ -180,431 +266,426 @@ Logging:
     metrics_namespace: eidolon/metrics
 ```
 
-## Resource Naming Convention
+#### cdk.json (CDK Context)
 
-All AWS resources use simple, unprefixed names for clarity:
+Stores deployment parameters:
 
-| Resource Type           | Naming Pattern                    | Example                                                                                              |
-| ----------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| DynamoDB Tables         | `{table_type}`                    | `players`, `characters`, `rooms`                                                                     |
-| S3 Buckets              | Various patterns                  | `eidolon-portal`, `{game}-lambda-{account}`                                                          |
-| CloudWatch Log Group    | `/aws/eidolon/server`             | `/aws/eidolon/server`                                                                                |
-| Cognito User Pool       | `eidolon-users`                   | `eidolon-users`                                                                                      |
-| CodeBuild Project       | `eidolon-codebuild`               | `eidolon-codebuild`                                                                                  |
-| CloudFront Distribution | `eidolon-distribution`            | `eidolon-distribution`                                                                               |
-| IAM Role                | `{game}-server-execution-role`    | `eidolon-engine-server-execution-role`                                                               |
-| IAM Policies            | `eidolon-{game}-{service}-access` | `eidolon-eidolon-engine-dynamodb-access`                                                             |
-| CDK Stack Names         | `{service}`                       | `iam`, `s3`, `dynamodb`, `cognito`, `cloudwatch`, `codebuild`, `base-lambda`, `lambda`, `cloudfront` |
-| API Gateway             | Single unified API                | `api.{domain}`                                                                                       |
+```json
+{
+  "context": {
+    "region": "us-east-1",
+    "deployment_mode": "hybrid",
+    "domain": "darkrelics.net",
+    "hosted_zone_id": "Z1234567890ABC",
+    "github_owner": "robinje",
+    "github_repo": "eidolon-engine",
+    "github_branch": "develop",
+    "s3_bucket": "eidolon-engine-lambda-542230992937"
+  }
+}
+```
 
-## Resource Management
+#### .cdk-state.json (Infrastructure State)
 
-### S3 Buckets
+Tracks deployed resources and outputs (gitignored).
 
-The system handles S3 buckets intelligently:
+## Resource Naming
 
-- **Existing buckets**: Automatically detected and used
-- **New buckets**: Created only if they don't exist
-- **Naming**: `eidolon-portal` and `eidolon-scripts`
+- **DynamoDB Tables** (14): `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`, `story`, `segments`, `active_segments`, `story_history`, `segment_history`, `opponents`
+- **Lambda Functions** (15): `api-*` and `ops-*` prefixed names
+- **S3 Buckets**: `eidolon-engine-lambda-{account}`, `eidolon-scripts-{account}`, portal bucket
+- **Cognito Pool**: `eidolon-users`
+- **CloudWatch**: `/eidolon/server` log group
+- **CDK Stack IDs**: Simple lowercase (`dynamodb`, `lambda`, `player`, etc.)
+- **IAM**: Shared `eidolon-lambda-execution-role` with managed policies
 
-To use specific existing buckets, add to `config.yml` before deployment:
+## Lambda Infrastructure
+
+### Shared Execution Role
+
+All Lambda functions use a single execution role with:
+
+- DynamoDB access via managed policy
+- CloudWatch Logs permissions
+- Additional policies attached by dependent stacks
+
+### Environment Variables
+
+```python
+# Set in lambda_stack.py
+"LOG_LEVEL": "INFO",  # Validated in eidolon/environment.py
+"ALLOWED_ORIGINS": f"https://{client_host}.{domain}",
+"CORS_ALLOW_CREDENTIALS": "true",
+# DynamoDB table names from stack outputs
+# Function-specific configs (SEGMENT_BATCH_SIZE, etc.)
+```
+
+### Post-Deployment Updates
+
+Lambda functions are updated from S3 after CDK deployment:
+
+```python
+# Automatic update ensures latest code
+lambda_client.update_function_code(
+    FunctionName=function_name,
+    S3Bucket=bucket_name,
+    S3Key=f"{function_name}.zip"
+)
+```
+
+## Known Issues and Solutions
+
+### API Domain Configuration
+
+The Flutter app expects domain without protocol:
+
+```python
+# Fixed in client_stack.py
+"API_DOMAIN": codebuild.BuildEnvironmentVariable(
+    value=f"{self.api_host}.{self.domain}"  # Not self.api_url
+)
+```
+
+### DynamoDB Permissions
+
+Must include `DescribeTable` action:
+
+```python
+# Fixed in dynamodb_stack.py
+actions=[
+    "dynamodb:DescribeTable",  # Required for table access
+    "dynamodb:GetItem",
+    "dynamodb:PutItem",
+    # ... other actions
+]
+```
+
+### Cognito Trigger Permissions
+
+For imported User Pools, permissions set post-deployment:
+
+```python
+# In player.py - always check and add permissions
+if current_trigger == lambda_arn:
+    # Still need to check Lambda permissions
+    # Don't return early
+```
+
+## Production Metrics
+
+### Deployment Statistics
+
+- **Total Stacks**: 10 independent CDK stacks
+- **Lambda Functions**: 15 with shared execution role
+- **DynamoDB Tables**: 14 with RemovalPolicy.RETAIN
+- **Module Size**: 94% under 300 lines, 100% under 1000 lines
+- **Deployment Time**: Full deployment in under 15 minutes
+- **Lessons Learned**: 140 documented and applied
+
+## Buildspec Selection by Mode
+
+### Portal Build (MUD Mode)
+
+Using `buildspec/portal.yml`:
 
 ```yaml
-Game:
-  PortalS3Bucket: eidolon-portal
-  ScriptsS3Bucket: eidolon-scripts
+# Builds from portal/ directory
+# Deploys traditional MUD interface
+# No story/incremental features
 ```
 
-### DynamoDB Tables
+### Incremental Build (Incremental/Hybrid)
 
-Tables are created with:
+Using `buildspec/incremental.yml`:
 
-- **Billing**: Pay-per-request (on-demand)
-- **Backup**: Point-in-time recovery enabled
-- **Retention**: Tables retained on stack deletion
-
-### CloudWatch Logs
-
-Log groups are created with configurable retention (default: 365 days).
-
-### CloudFront Distribution
-
-The system manages CloudFront for portal distribution:
-
-- **New distributions**: Created with optimized caching
-- **Security**: Uses Origin Access Identity for S3 access
-- **HTTPS**: Enforces secure connections
-
-## Deployment Workflow
-
-The deployment process follows a specific order of operations to ensure infrastructure is created correctly:
-
-### Prerequisites Check
-
-Before running the deployment, ensure:
-
-- AWS CDK is bootstrapped: `cdk bootstrap aws://ACCOUNT-ID/REGION`
-- Required permissions are in place
-- Dependencies are installed
-
-### Order of Operations
-
-1. **Check AWS Account Access** - Verify credentials and permissions
-2. **Check for config.yml** - Look for existing configuration
-3. **Validate Resources** - If config exists, validate all resources and update config with current state
-4. **Deploy Infrastructure** - Create/update AWS resources in phases (requires CDK bootstrap)
-5. **Build Artifacts** - Execute CodeBuild to create Lambda packages and frontend
-6. **Update Functions** - Deploy Lambda functions with new code
-7. **Finalize Configuration** - Write final config.yml with all resource IDs
-
-### 1. Standard Deployment
-
-Run the deployment wizard:
-
-```bash
-python3 deployment/deploy.py
+```yaml
+# Builds from incremental/ directory
+# Includes story progression features
+# Timer-based gameplay interface
 ```
 
-This will:
+### Automatic Execution
 
-- Check AWS access and display account information
-- Synchronize AWS state before deployment
-- Validate existing resources if config.yml exists
-- Deploy infrastructure in the correct order
-- Execute builds automatically with Lambda artifact validation
-- Update config.yml throughout the process
-- Track deployment events in state manager
+CodeBuild runs automatically after Client Stack:
 
-### 2. Validate Existing Infrastructure
+1. **Build starts** immediately after infrastructure
+2. **Real-time monitoring** with phase updates
+3. **S3 sync** to portal bucket
+4. **CloudFront invalidation** clears cache
+5. **Portal URL** displayed on completion
 
-To check if configured resources exist:
+## Module Organization
 
-```bash
-python3 deployment/deploy.py --validate
+### Deployment Modules (`deployment/`)
+
+- **deploy.py**: Main orchestrator (parameter collection, stack ordering)
+- **utilities.py**: CDK deployment wrapper, validation helpers
+- **dynamodb.py**: DynamoDB stack deployment and validation
+- **codebuild.py**: Build infrastructure with automatic execution
+- **lambda_functions.py**: Lambda deployment with S3 updates
+- **character.py**: Character stack deployment and validation
+- **player.py**: Cognito deployment with trigger configuration
+- **story.py**: SQS/EventBridge deployment (mode-aware)
+- **api.py**: API Gateway deployment
+- **client.py**: CloudFront and portal build automation
+
+### CDK App Files (`deployment/app_*.py`)
+
+Each stack has its own app file:
+
+- Prevents output contamination
+- Uses CDK context for parameters
+- No argparse, uses `try_get_context()`
+
+## Stack Dependencies
+
+### Direct Dependencies
+
+```mermaid
+graph LR
+    CodeBuild -->|provides artifacts for| Lambda
+    DynamoDB -->|policy attached to| Lambda
+    Lambda -->|functions used by| Player
+    Lambda -->|functions used by| Story
+    Lambda -->|functions used by| API
+    Player -->|authorizer for| API
+    API -->|URL passed to| Client
+
+    style CodeBuild fill:#e1f5ff
+    style DynamoDB fill:#fff3cd
+    style Lambda fill:#d4edda
+    style Player fill:#f8d7da
+    style Story fill:#f8d7da
+    style API fill:#d1ecf1
+    style Client fill:#e2e3e5
 ```
 
-This validates all resources in config.yml against AWS and reports:
+### Mode-Specific Dependencies
 
-- Missing resources
-- Configuration drift (with detailed drift detection and reporting)
-- Access issues
+**MUD Mode**:
 
-### 3. Analyze Without Deploying
+- S3 Scripts → Server can read Lua scripts
+- CloudWatch → Server writes logs
 
-To see what would be deployed:
+**Incremental/Hybrid**:
 
-```bash
-python3 deployment/deploy.py --analyze-only
-```
+- Story → SQS triggers Lambda functions
+- Story → EventBridge invokes poller
 
-### 4. Non-Interactive Deployment
+### Post-Deployment Operations
 
-For CI/CD pipelines:
-
-```bash
-python3 deployment/deploy.py --non-interactive --auto-approve
-```
-
-### 5. Update Scripts Only
-
-To deploy only Lua scripts:
-
-```bash
-python3 deployment/deploy_scripts.py
-```
-
-## CI/CD Pipeline
-
-### Frontend Deployment
-
-The CodeBuild project automatically builds and deploys the appropriate Flutter web application based on the deployment mode:
-
-#### MUD Mode
-
-- Builds from `portal/` directory
-- Uses `buildspec/portal.yml`
-- Deploys Portal Flutter application
-
-#### Incremental/Hybrid Modes
-
-- Builds from `incremental/` directory
-- Uses `buildspec/incremental.yml`
-- Deploys Incremental Flutter application
-
-The build process:
-
-1. **Builds the Flutter web application**
-2. **Syncs files to the S3 portal bucket**
-3. **Invalidates CloudFront cache** (if configured)
-
-### CloudFront Cache Invalidation
-
-When CloudFront is configured, the build process automatically:
-
-- Creates an invalidation for all paths (`/*`)
-- Ensures users immediately see updated content
-- No manual cache clearing required
-
-The invalidation only runs if a CloudFront distribution ID is available.
-
-### Manual Portal Deployment
-
-If you need to trigger a portal build manually:
-
-```bash
-# Using AWS CLI
-aws codebuild start-build --project-name eidolon-portal-build
-
-# Or through AWS Console
-# Navigate to CodeBuild → eidolon-portal-build → Start build
-```
-
-## Phased Deployment Details
-
-The deployment process is divided into six phases to ensure proper dependency resolution:
-
-### Phase 1: Foundation
-
-- **IAM roles and policies** - Created first with no dependencies
-- **S3 buckets** - Portal, scripts, and Lambda deployment buckets
-- **DynamoDB tables** - All game data tables
-
-### Phase 2: Authentication & Monitoring
-
-- **Cognito User Pool** - User authentication
-- **CloudWatch Log Groups** - Application logging
-
-### Phase 3: Build Infrastructure
-
-- **CodeBuild Projects** - For Lambda and frontend builds
-- Projects are configured without GitHub webhooks
-- Manual or deployment-triggered builds only
-
-### Phase 4: Build Execution
-
-- **Lambda Layer Build** - Dependencies package
-- **Lambda Functions Build** - Individual function packages
-- **Frontend Build** - Portal or Incremental application
-- Builds run sequentially for Lambda, parallel for frontend
-- CloudFront invalidation happens automatically if distribution exists
-
-### Phase 5: Application Layer
-
-- **Base Lambda Layer** - Shared dependencies
-- **Lambda Functions** - API handlers (with automatic updates from S3 when no CDK changes detected)
-- **API Gateway** - RESTful API with custom domain
-- **Cognito Triggers** - Post-confirmation Lambda (configured via boto3 post-deployment to avoid circular dependencies)
-
-### Phase 6: Distribution
-
-- **CloudFront** - CDN for frontend application
-- **S3 Bucket Policy Updates** - Automatic CloudFront OAI configuration after distribution deployment
-
-Each phase only proceeds if the previous phase succeeded. Failed deployments can be resumed from where they left off. Progress is reported in detail via the CDKProgressReporter.
-
-## Deployment Recovery (Fail-Forward Approach)
-
-The deployment system uses a fail-forward strategy. When a deployment fails:
-
-### Understanding Deployment Failures
-
-1. **Partial Success**: Some stacks may have deployed successfully before the failure
-2. **CDK Behavior**: Failed stacks are automatically rolled back by CDK
-3. **State Preservation**: Successfully deployed stacks remain active
-
-### Recovery Steps
-
-#### 1. Assess the Failure
-
-```bash
-# Check which stacks were deployed
-aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE
-
-# Review the failure details
-cdk list
-```
-
-#### 2. Fix the Issue
-
-Common fixes:
-
-- **Permission errors**: Update IAM policies
-- **Resource conflicts**: Rename resources to avoid conflicts
-- **Limit exceeded**: Request AWS quota increases
-- **Invalid parameters**: Correct configuration values
-
-#### 3. Resume Deployment
-
-```bash
-# Re-run deployment (only failed stacks will be attempted)
-python3 deploy.py --region us-east-1
-
-# The system will:
-# - Skip already deployed stacks
-# - Attempt only the failed stacks
-# - Update configuration with new outputs
-```
-
-#### 4. Alternative: Clean Slate
-
-If you prefer to start over:
-
-```bash
-# List all stacks
-cdk list
-
-# Destroy specific stacks
-cdk destroy <stack-name>
-
-# Or destroy all stacks (careful!)
-cdk destroy --all
-```
-
-### Fail-Forward Benefits
-
-- **No data loss**: Successful deployments are preserved
-- **Faster recovery**: Fix only what's broken
-- **Learning opportunity**: Investigate failures in place
-- **Incremental progress**: Build infrastructure step by step
+1. **Lambda Updates**: Force update from S3 artifacts
+2. **Layer Cleanup**: Delete old versions
+3. **Cognito Triggers**: Configure for imported pools
+4. **S3 Policies**: Update for CloudFront access
+5. **Portal Build**: Execute CodeBuild project
 
 ## Troubleshooting
 
-### CDK Bootstrap Issues
-
-If you encounter errors like "SSM parameter /cdk-bootstrap/hnb659fds/version not found" or "Role arn:aws:iam::ACCOUNT:role/cdk-hnb659fds-deploy-role-ACCOUNT-REGION is invalid":
-
-1. **Bootstrap the CDK environment**:
-
-   ```bash
-   cdk bootstrap aws://ACCOUNT-ID/REGION
-   # Example: cdk bootstrap aws://542230992937/us-east-1
-   ```
-
-2. **If bootstrap fails due to existing resources**:
-   - Check for existing CDK resources: `aws s3 ls | grep cdk-hnb659fds`
-   - Delete failed bootstrap stack: `aws cloudformation delete-stack --stack-name CDKToolkit`
-   - Wait for deletion: `aws cloudformation wait stack-delete-complete --stack-name CDKToolkit`
-   - Retry bootstrap
-
-3. **Common bootstrap errors**:
-   - "Policy already exists": Delete conflicting IAM policies first
-   - "Bucket already exists": The CDK assets bucket exists from a previous bootstrap
-   - "SSM parameter already exists": Delete the parameter with `aws ssm delete-parameter --name /cdk-bootstrap/hnb659fds/version`
-
-   The deployment system includes specific CDK bootstrap error detection and provides helpful error messages when bootstrap is required.
-
-### Configuration File Path
-
-The deployment system expects `config.yml` to be in the project root directory (one level up from the `deployment/` directory). If you see "No configuration found" errors:
-
-1. Ensure `config.yml` exists in the project root: `/path/to/eidolon-engine/config.yml`
-2. Run deployment commands from the `deployment/` directory
-3. The system will automatically look for `../config.yml`
-
-### "Stack already exists"
-
-If you see CDK stack conflicts:
+### CDK Bootstrap Required
 
 ```bash
-# List existing stacks
-aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE
-
-# If needed, delete conflicting CDK stack
-cdk destroy STACK_NAME
+cdk bootstrap aws://ACCOUNT-ID/REGION
 ```
 
-### "Bucket already exists"
+If you see "SSM parameter /cdk-bootstrap/hnb659fds/version not found":
 
-Add the bucket name to `config.yml` before deployment:
+- The account needs CDK bootstrap
+- Bootstrap creates required roles and buckets
+- Only needed once per account/region
 
-```yaml
-Game:
-  PortalS3Bucket: existing-bucket-name
+### Resource Already Exists
+
+With fixed logical IDs, CDK handles existing resources:
+
+- Resources are updated, not recreated
+- Data is preserved across deployments
+- Use RemovalPolicy.RETAIN for safety
+
+### Lambda Permission Issues
+
+For Cognito triggers on imported pools:
+
+```bash
+# Manually add if needed
+aws lambda add-permission \
+  --function-name cognito-player-new \
+  --statement-id CognitoInvokePermission \
+  --action lambda:InvokeFunction \
+  --principal cognito-idp.amazonaws.com \
+  --source-arn arn:aws:cognito-idp:REGION:ACCOUNT:userpool/POOL_ID
 ```
 
-### "Table already exists"
+### API URL Double HTTPS Issue
 
-If tables already exist with the expected names:
+If you see `https://https://api.domain.com`:
 
-1. Ensure table follows naming convention: `{table-type}` (e.g., `players`, `characters`)
-2. Check table is in the same region
-3. Verify AWS credentials have access
+```python
+# Problem: API_DOMAIN set to full URL
+# Solution: Pass domain only
+"API_DOMAIN": f"{api_host}.{domain}"  # Not api_url
+```
 
-### Resource Drift
+### LOG_LEVEL Validation
 
-If drift is detected:
+The system now validates LOG_LEVEL:
 
-1. Review the drift report
-2. Decide whether to:
-   - Accept drift (update CDK to match reality)
-   - Fix drift (revert manual changes)
-   - Ignore drift (if non-critical)
+```python
+# Accepts: "20", "INFO", "DEBUG", etc.
+# Returns: Always a string name for logging module
+LOG_LEVEL = _validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
+```
+
+### Layer Version Management
+
+Phase 11 reuses the most recent published `eidolon-dependencies` layer. It does **not** publish new versions or prune historical ones; remove stale layer versions manually through the AWS console or CLI if needed.
+
+## Environment Strategy
+
+### Multi-Account Deployment Architecture
+
+**Each deployment environment uses its own AWS account:**
+
+- **Development**: Separate AWS account for individual developer testing
+- **Staging**: Dedicated AWS account for integration testing
+- **Production**: Isolated AWS account for live system
+
+**Benefits:**
+
+- **Complete Isolation**: No resource name conflicts between environments
+- **Security**: Full account-level separation prevents cross-environment access
+- **Cost Tracking**: Clear cost attribution per environment
+- **IAM Simplicity**: No complex environment-based permissions needed
+
+**Resource Naming:**
+
+- **Same names across accounts**: All environments use identical resource names (`eidolon-api`, `characters`, etc.)
+- **No prefixes needed**: Account isolation eliminates naming conflicts
+- **Consistent configuration**: Same `config.yml` structure across environments
+
+**Flutter Configuration Management:**
+
+```dart
+// Build-time environment configuration
+const String apiDomain = String.fromEnvironment(
+  'API_DOMAIN',
+  defaultValue: 'api.darkrelics.net',  // Production default
+);
+
+// Environment-specific builds:
+// Dev: flutter build web --dart-define=API_DOMAIN=api-dev.darkrelics.net
+// Staging: flutter build web --dart-define=API_DOMAIN=api-staging.darkrelics.net
+// Prod: flutter build web --dart-define=API_DOMAIN=api.darkrelics.net
+```
+
+**Deployment Process Per Account:**
+
+1. **Bootstrap each account**: `cdk bootstrap aws://ACCOUNT-ID/REGION`
+2. **Deploy with same parameters**: Same domain names, resource names, configuration
+3. **Account-specific domains**: Use subdomain routing (api-dev.domain.com vs api.domain.com)
+4. **Consistent resource names**: No prefixes needed due to account isolation
 
 ## Best Practices
 
-1. **Always analyze first**: Use `--analyze-only` before deploying
-2. **Keep config.yml in version control**: Track infrastructure changes
-3. **Use consistent naming**: Resources use simple, unprefixed names
-4. **Regular drift checks**: Run analysis periodically
-5. **Backup before major changes**: Export critical data
+### Architecture Guidelines
 
-### Fail-Forward Best Practices
+1. **Module Size**: Keep modules under 300 lines (1000 max)
+2. **Fixed Logical IDs**: Prevent resource recreation
+3. **CDK Context**: Use for all parameter passing
+4. **Stack Isolation**: Separate app file per stack
+5. **Post-Deploy Updates**: Always update Lambdas from S3
+6. **Account Isolation**: Use separate AWS accounts for each environment
 
-1. **Small incremental changes**: Deploy one feature at a time
-2. **Test in development first**: Use separate environments
-3. **Document dependencies**: Know which stacks depend on others
-4. **Monitor partial deployments**: Check health of deployed stacks
-5. **Plan recovery strategy**: Know how to fix common failures before they happen
+### Deployment Guidelines
 
-## Advanced Usage
+1. **CDK Bootstrap First**: Required for each account/region
+2. **Collect Input Upfront**: All prompts before execution
+3. **Single Confirmation**: One approval for entire deployment
+4. **Mode Selection**: Choose appropriate deployment mode
+5. **Validate After Deploy**: Check resources with boto3
 
-### Deployment Mode Selection
+### Operational Guidelines
 
-```bash
-# Deploy in MUD mode (Portal frontend)
-python3 deployment/deploy.py --deploy-mud
+1. **Region Validation**: Only us-east-1, us-east-2, us-west-2
+2. **RemovalPolicy.RETAIN**: For all stateful resources
+3. **Managed Policies**: No inline policies
+4. **Pattern Consistency**: Same patterns across all stacks
 
-# Deploy in Incremental mode
-python3 deployment/deploy.py --deploy-incremental
+## Summary
 
-# Deploy in Hybrid mode (supports both game types)
-python3 deployment/deploy.py --deploy-both
+The Eidolon Engine deployment system represents a complete transformation from a monolithic 1800+ line class to a clean, modular architecture with:
 
-# Or set in config.yml
-Deployment:
-  Mode: hybrid  # Options: 'mud', 'incremental', or 'hybrid'
+- **9 Independent CDK Stacks**: Each with focused responsibility
+- **3 Deployment Modes**: MUD, Incremental, and Hybrid
+- **Automated End-to-End**: Infrastructure to portal deployment
+- **Production Tested**: All components operational
+- **140 Lessons Applied**: Best practices throughout
+
+The system demonstrates that complex infrastructure can be managed effectively with proper modularization, fixed logical IDs, and clear separation between CDK synthesis and AWS operations.
+
+## CDK Development Notes
+
+### Critical CDK Synthesis Limitations
+
+Based on extensive production deployment experience, these patterns must be followed:
+
+#### CDK Synthesis Constraints
+
+- **No AWS Access During Synthesis**: CDK synthesis happens without AWS credentials. Any boto3 calls in CDK stack classes will fail. The deployment system uses boto3 in top-level deployment scripts for resource verification before CDK synthesis
+- **Fixed Logical IDs Required**: Use fixed IDs like `"PortalBucket"` not dynamic ones to prevent resource recreation
+- **CDK Tokens vs Strings**: `self.region` returns a token, not a string. Pass actual region values as parameters
+- **No Runtime Imports**: All imports must be at module level. No dynamic imports or module injection
+
+#### Resource Management Patterns
+
+```python
+# CORRECT: Fixed logical ID with RETAIN policy
+bucket = s3.Bucket(
+    self,
+    "ArtifactsBucket",  # Fixed ID - won't change between deployments
+    bucket_name=bucket_name,
+    removal_policy=RemovalPolicy.RETAIN,
+    auto_delete_objects=False,
+)
+
+# WRONG: Dynamic ID causes recreation
+bucket = s3.Bucket(
+    self,
+    f"Bucket-{timestamp}",  # Changes every deployment!
+    bucket_name=bucket_name,
+)
 ```
 
-### Custom Parameters
+#### Import Pattern for Existing Resources
 
-Override defaults via environment or config:
+```python
+# In deployment module (has AWS access)
+def deploy_stack(params):
+    from stacks.stack_utilities import check_s3_bucket_exists
+    bucket_exists = check_s3_bucket_exists(params.bucket, params.region)
 
-```bash
-# Via environment
-export CDK_DEFAULT_ACCOUNT=123456789012
-export CDK_DEFAULT_REGION=eu-west-1
-export DEPLOYMENT_MODE=hybrid
+    context_args = [
+        "-c", f"bucket_exists={'true' if bucket_exists else 'false'}",
+    ]
+    return run_cdk_deploy("stack", params.region, app_command, context_args)
 
-# Via context
-cdk deploy -c deployment_mode=hybrid -c game_name=eidolon-engine
+# In CDK stack
+def __init__(self, scope, id, bucket_exists: bool = False, **kwargs):
+    if bucket_exists:
+        bucket = s3.Bucket.from_bucket_name(self, "Bucket", bucket_name)
+    else:
+        bucket = s3.Bucket(self, "Bucket", bucket_name=bucket_name,
+                          removal_policy=RemovalPolicy.RETAIN)
 ```
 
-### Multi-Environment
+#### Lambda Layer Version Management
 
-Deploy multiple environments:
+Automated deployments reuse the latest published `eidolon-dependencies` layer but do not publish new versions or prune historical ones. When you intentionally roll a new layer, publish it manually (e.g. via the `lambda-layer` CodeBuild project) and delete obsolete versions through the console/CLI to stay within the 75-version limit.
 
-```bash
-# Development
-python3 deploy.py --region us-east-1
+#### Common Pitfalls to Avoid
 
-# Production (different region/account)
-AWS_PROFILE=prod python3 deploy.py --region eu-west-1
-```
-
-### State Management
-
-Deployment state is tracked in:
-
-- `.deployment_state.json` - Local state file
-- CloudFormation stack outputs - Resource identifiers
-- `config.yml` - Runtime configuration
+1. **Square Bracket Dictionary Access**: Use `.get()` method for safe access
+2. **Environment Variable Manipulation**: Pass region explicitly, don't rely on CDK environment
+3. **Inline IAM Policies**: Always use managed policies
+4. **Dynamic Resource Naming**: Causes resource recreation on every deployment
+5. **Resource Checks in CDK**: Will always fail during synthesis

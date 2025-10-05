@@ -1,21 +1,10 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../utils/auth_state.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -80,12 +69,24 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
             backgroundColor: Colors.green,
           ),
         );
+      } else if (mounted && authState.message.isNotEmpty) {
+        // Show the specific message from AuthState
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authState.message),
+            backgroundColor:
+                authState.isSignUpMode
+                    ? Colors.green
+                    : Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } catch (e) {
+      debugPrint('Registration error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: const Text('Failed to create account. Please try again.'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -113,20 +114,28 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       await authState.confirmRegistration();
 
-      if (mounted) {
+      if (mounted && authState.isAuthenticated) {
+        // User was automatically signed in after verification
+        Navigator.pushReplacementNamed(context, '/character-management');
+      } else if (mounted && authState.message.isNotEmpty) {
+        // Show the specific message from AuthState
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Account verified successfully! Please sign in.'),
+          SnackBar(
+            content: Text(authState.message),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pushReplacementNamed(context, '/login');
+        if (!authState.isVerificationMode) {
+          // Verification succeeded but auto-login failed, go to login screen
+          Navigator.pushReplacementNamed(context, '/login');
+        }
       }
     } catch (e) {
+      debugPrint('Verification error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: const Text('Failed to verify account. Please try again.'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -149,19 +158,21 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final authState = context.read<AuthState>();
       await authState.resendVerificationCode();
 
-      if (mounted) {
+      if (mounted && authState.message.isNotEmpty) {
+        // Show the specific message from AuthState
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('New verification code sent'),
+          SnackBar(
+            content: Text(authState.message),
             backgroundColor: Colors.green,
           ),
         );
       }
     } catch (e) {
+      debugPrint('Resend code error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: const Text('Failed to resend code. Please try again.'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

@@ -3,30 +3,35 @@ name: Python Autoformatting
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "requirements/*-requirements.txt"
+      - "**/*.py"
   pull_request:
-    branches: "**"
+    paths:
+      - "requirements/*-requirements.txt"
+      - "**/*.py"
 
 permissions:
   pull-requests: write
   contents: write
 
 jobs:
-  auto-format-python:
+  format-python:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - name: Install Python Autoformatting Tools
+      - name: Install Autoformatting Tools
         run: |
           python -m pip install --upgrade pip
           pip install --upgrade wheel
-          pip install --upgrade isort black ruff
+          pip install -r requirements/format-requirements.txt
 
       - name: Configure Git
         run: |
@@ -36,24 +41,33 @@ jobs:
           git config --global user.email "contact@darkrelics.net"
           git pull
 
-      - name: Autoformat Python Files
+      - name: Run pip-audit fixes
+        continue-on-error: true
         run: |
-          isort --atomic --py 312 .
+          for req_file in $(git ls-files './requirements/*-requirements.txt'); do
+            echo "Processing $req_file"
+            pip-audit --fix -r "$req_file"
+          done
+
+      - name: Run code formatters
+        continue-on-error: true
+        run: |
+          isort -l 132 --up --tc -m 3 --atomic --py 312 --float-to-top .
           ruff check . --ignore E501 --fix
-          black . -l 132 -t py312
+          black . -l 132 -t py311
 
       - name: Check for changes
         id: git-check
         run: |
           git add . -vv
           if git diff-index --quiet HEAD; then
-              echo "changes=false" >> $GITHUB_OUTPUT
+            echo "changes=false" >> $GITHUB_OUTPUT
           else
-              echo "changes=true" >> $GITHUB_OUTPUT
+            echo "changes=true" >> $GITHUB_OUTPUT
           fi
 
       - name: Commit and push changes
         if: steps.git-check.outputs.changes == 'true'
         run: |
-          git commit -m "Apply Python Autoformatting" -vv
+          git commit -m "Apply Python Autoformatting"
           git push -vv

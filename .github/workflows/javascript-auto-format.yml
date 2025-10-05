@@ -3,8 +3,9 @@ name: JavaScript Auto Format
 on:
   push:
     branches: [develop, qa, prod]
+    paths: ["**/*.{js,jsx,ts,tsx,json,md,yml,yaml}"]
   pull_request:
-    branches: "**"
+    paths: ["**/*.{js,jsx,ts,tsx,json,md,yml,yaml}"]
 
 permissions:
   pull-requests: write
@@ -14,9 +15,9 @@ jobs:
   auto-format-javascript:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Node 22
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
       - name: Install JavaScript Autoformatting Tools

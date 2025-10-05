@@ -1,7 +1,12 @@
 .
 │   .gitignore
+│   .prettierignore
+│   cdk.context.json
 │   config.template.yml
+│   config.yml
+│   CONTRIBUTING.md
 │   LICENSE
+│   Project Map.txt
 │   README.md
 │   setup.py
 │
@@ -28,11 +33,15 @@
 │       portal.yml
 │
 ├───cloudformation
+│       cloudfront.yml
 │       cloudwatch.yml
 │       codebuild.yml
 │       cognito.yml
 │       dynamo.yml
-│       lambda_archetypes.yml
+│       iam.yml
+│       lambda.yml
+│       master.yml
+│       s3.yml
 │
 ├───data
 │       names.txt
@@ -40,9 +49,11 @@
 │       test_archetypes.json
 │       test_exits.json
 │       test_exits_update.json
+│       test_opponents.json
 │       test_prototypes.json
 │       test_rooms.json
 │       test_rooms_update.json
+│       test_story.json
 │
 ├───database
 │       create_item.py
@@ -51,66 +62,83 @@
 │       viewer.py
 │
 ├───deployment
+│   │   aws_client_factory.py
+│   │   build_executor.py
 │   │   cdk_api_integration.py
-│   │   CDK_API_MIGRATION.md
-│   │   config.yml.template
 │   │   configure_cors.py
-│   │   CORS_CONFIGURATION.md
+│   │   config_updater.py
+│   │   config_validator.py
 │   │   deploy.py
 │   │   deployment_logic.py
 │   │   deploy_old.py
 │   │   deploy_scripts.py
+│   │   error_handlers.py
+│   │   health_checks.py
 │   │   resource_validator.py
+│   │   stack_utils.py
 │   │   state_manager.py
-│   │   test_cdk_api.py
 │   │
-│   └───cdk
-│       │   app.py
-│       │   cdk.json
-│       │
-│       └───stacks
-│               base_lambda_stack.py
-│               cloudfront_stack.py
-│               cloudwatch_stack.py
-│               codebuild_stack.py
-│               cognito_stack.py
-│               dynamodb_stack.py
-│               iam_stack.py
-│               lambda_stack.py
-│               s3_stack.py
-│               __init__.py
+│   ├───cdk
+│   │   │   app.py
+│   │   │   cdk.json
+│   │   │
+│   │   ├───scripts
+│   │   │       fix_cognito_triggers.py
+│   │   │
+│   │   └───stacks
+│   │           base_lambda_stack.py
+│   │           cloudfront_stack.py
+│   │           cloudwatch_stack.py
+│   │           codebuild_stack.py
+│   │           cognito_stack.py
+│   │           cognito_trigger_stack.py
+│   │           dynamodb_stack.py
+│   │           iam_stack.py
+│   │           lambda_stack.py
+│   │           s3_stack.py
+│   └───────────__init__.py
 │
 ├───documentation
-│       concurrency.md
-│       deployment-design.md
-│       deployment.md
-│       experience.md
-│       incremental-to-mud-workflow.md
-│       mechanics.md
-│       ordinal.md
-│       schema.md
-│       scripting.md
-│       stealth-system.md
+│   │   cloudformation.md
+│   │   concurrency.md
+│   │   cors-configuration.md
+│   │   deployment-design.md
+│   │   deployment-modes.md
+│   │   deployment.md
+│   │   experience.md
+│   │   incremental-design.md
+│   │   incremental-mud-workflow.md
+│   │   incremental-requirements.md
+│   │   incremental.md
+│   │   lambda-functions.md
+│   │   mechanics.md
+│   │   ordinal.md
+│   │   schema.md
+│   │   scripting.md
+│   │   stealth.md
+│   │
+│   └───archive
+│           README.md
 │
 ├───editor
 │   │   analyze_rooms.py
 │   │   analyze_rooms_exits.py
-│   │   RoomEditor.ipynb
-│   │
-│   └───.ipynb_checkpoints
-│           RoomEditor-checkpoint.ipynb
+│   └───RoomEditor.ipynb
 │
 ├───eidolon
+│       character.py
 │       cognito.py
 │       cors.py
 │       dynamo.py
 │       logger.py
+│       queries.py
 │       README.md
-│       request_utils.py
-│       response_utils.py
+│       requests.py
+│       responses.py
 │       s3.py
-│       state_manager.py
-│       validation_utils.py
+│       state.py
+│       utilities.py
+│       validation.py
 │       __init__.py
 │
 ├───eidolon_common.egg-info
@@ -118,17 +146,13 @@
 │       PKG-INFO
 │       requires.txt
 │       SOURCES.txt
-│       top_level.txt
 │
 ├───incremental
 │   │   .flutter-plugins-dependencies
 │   │   .gitignore
 │   │   analysis_options.yaml
-│   │   incremental-backlog-organization.md
 │   │   pubspec.lock
 │   │   pubspec.yaml
-│   │   README.md
-│   │   TODO.md
 │   │
 │   ├───.dart_tool
 │   │   │   package_config.json
@@ -210,8 +234,9 @@
 │   │   ├───config
 │   │   │       app_config.json
 │   │   │
-│   │   ├───data
 │   │   └───images
+│   │           background.jpg
+│   │
 │   ├───ios
 │   │   │   .gitignore
 │   │   │   Podfile
@@ -294,6 +319,9 @@
 │   │   ├───config
 │   │   │       app_config.dart
 │   │   │
+│   │   ├───constants
+│   │   │       navigation_constants.dart
+│   │   │
 │   │   ├───models
 │   │   │       archetype.dart
 │   │   │       character.dart
@@ -305,15 +333,20 @@
 │   │   │
 │   │   ├───screens
 │   │   │       account_settings_screen.dart
+│   │   │       character_selection_screen.dart
+│   │   │       game_screen.dart
 │   │   │       login_screen.dart
 │   │   │       password_reset_confirm_screen.dart
 │   │   │       password_reset_screen.dart
 │   │   │       registration_screen.dart
 │   │   │
-│   │   └───services
-│   │           api_service.dart
-│   │           archetype_service.dart
-│   │           auth_service.dart
+│   │   ├───services
+│   │   │       api_service.dart
+│   │   │       archetype_service.dart
+│   │   │       auth_service.dart
+│   │   │
+│   │   └───utils
+│   │           error_handler.dart
 │   │
 │   ├───schemas
 │   │       story.schema.json
@@ -335,18 +368,23 @@
 │       └───icons
 │               Icon-192.png
 │               Icon-512.png
-│               Icon-maskable-192.png
-│               Icon-maskable-512.png
 │
 ├───lambda
-│       api_add_character.py
-│       api_delete_character.py
-│       api_get_archetypes.py
-│       api_get_character.py
-│       api_list_characters.py
-│       cognito_delete_player.py
-│       cognito_new_player.py
-│       README.md
+│   │   api_abandon_story.py
+│   │   api_character_add.py
+│   │   api_character_delete.py
+│   │   api_archetypes_get.py
+│   │   api_get_character.py
+│   │   api_get_current_story.py
+│   │   api_get_segment_outcome.py
+│   │   api_get_stories.py
+│   │   api_character_list.py
+│   │   api_start_story.py
+│   │   api_submit_decision.py
+│   │   cognito_delete_player.py
+│   │   cognito_new_player.py
+│   │   ops_process_segment.py
+│   └───ops_segment_poller.py
 │
 ├───portal
 │   │   .flutter-plugins
@@ -389,6 +427,7 @@
 │   │   │       splash_screen.dart
 │   │   │
 │   │   ├───services
+│   │   │       api_service.dart
 │   │   │       auth_service.dart
 │   │   │
 │   │   ├───utils
@@ -442,6 +481,7 @@
 │       room_tavern.lua
 │
 ├───scripts_python
+│       generate_bloom_filter.py
 │       list_processor.py
 │
 └───server
@@ -464,7 +504,6 @@
         command-registry.go
         commands.go
         commands_test.go
-        config.yml
         configuration.go
         damage.go
         damage_test.go

@@ -1,19 +1,8 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 
 package main
@@ -117,22 +106,24 @@ func (c *Character) SaveWithContext(ctx context.Context) error {
 
 	// Character data structure matches DynamoDB schema
 	characterData := &CharacterData{
-		CharacterID:   c.id.String(),
-		PlayerID:      c.player.id.String(),
-		CharacterName: c.name,
-		Attributes:    c.attributes,
-		Skills:        c.skills,
-		Essence:       c.essence,
-		Health:        c.health,
-		MaxHealth:     c.maxHealth,
-		Wounds:        c.wounds,
-		RoomID:        c.room.roomID,
-		Inventory:     inventoryIDs,
-		LeftHandID:    leftHandID,
-		RightHandID:   rightHandID,
-		Hidden:        c.hidden,
-		CharState:     c.charState,
-		GameMode:      c.gameMode,
+		CharacterID:      c.id.String(),
+		PlayerID:         c.player.id.String(),
+		CharacterName:    c.name,
+		Attributes:       c.attributes,
+		Skills:           c.skills,
+		Essence:          c.essence,
+		MaxHealth:        c.maxHealth,
+		Wounds:           c.wounds,
+		RoomID:           c.room.roomID,
+		Inventory:        inventoryIDs,
+		LeftHandID:       leftHandID,
+		RightHandID:      rightHandID,
+		Hidden:           c.hidden,
+		CharState:        c.charState,
+		GameMode:         c.gameMode,
+		AvailableStories: c.availableStories,
+		AbandonedStories: c.abandonedStories,
+		CompletedStories: c.completedStories,
 	}
 
 	// Transactional save ensures data consistency
@@ -174,7 +165,6 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 		attributes:       make(map[string]float64),
 		skills:           make(map[string]float64),
 		essence:          float64(p.server.game.startingEssence), // Default from config
-		health:           int(p.server.game.startingHealth),      // Default from config
 		maxHealth:        int(p.server.game.startingHealth),      // Default from config
 		wounds:           []Wound{},                              // Start with no wounds
 		inventory:        make(map[string]*Item),
@@ -225,11 +215,16 @@ func (p *Player) CreateCharacter(name string, archetype string) (*Character, err
 
 			// Use archetype's Health and Essence if specified, otherwise keep defaults
 			if archetypeObj.Health > 0 {
-				character.health = int(archetypeObj.Health)
 				character.maxHealth = int(archetypeObj.Health)
 			}
 			if archetypeObj.Essence > 0 {
 				character.essence = float64(archetypeObj.Essence)
+			}
+
+			// Copy available stories from archetype
+			if len(archetypeObj.AvailableStories) > 0 {
+				character.availableStories = make([]string, len(archetypeObj.AvailableStories))
+				copy(character.availableStories, archetypeObj.AvailableStories)
 			}
 
 			if startRoom, ok := p.server.game.rooms[archetypeObj.StartRoom]; ok {
@@ -391,6 +386,11 @@ func (c *Character) Stop() {
 		c.room.mutex.Unlock()
 	}
 
+	// Clear GameMode when character logs out
+	c.mutex.Lock()
+	c.gameMode = "None"
+	c.mutex.Unlock()
+
 	// State persistence preserves player progress
 	// Use a fresh context for shutdown saves to ensure they complete
 	saveCtx := context.Background()
@@ -488,7 +488,7 @@ func FormatCharacterDescription(target *Character, viewer *Character) string {
 		desc.WriteString("unconscious ")
 	} else if target.charState == CharStateDead {
 		desc.WriteString("dead ")
-	} else if target.health < target.maxHealth/2 {
+	} else if target.GetHealth() < target.maxHealth/2 {
 		desc.WriteString("wounded ")
 	}
 

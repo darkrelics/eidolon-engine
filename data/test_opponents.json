@@ -1,0 +1,363 @@
+{
+  "Opponents": [
+    {
+      "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+      "Name": "Goblin Scout",
+      "Description": "A scrawny goblin armed with a rusty blade and wearing tattered leather",
+      "OffensiveAction": "Melee",
+      "OffensiveRating": 8,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 7,
+      "Health": 6,
+      "WeaponType": "lethal",
+      "WeaponDamage": 2,
+      "ArmorRating": 1,
+      "LootTable": [
+        {
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.5
+        },
+        {
+          "ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
+          "Chance": 0.3
+        }
+      ],
+      "Tags": ["goblinoid", "forest", "weak"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
+      "Name": "Goblin Warrior",
+      "Description": "A muscular goblin warrior with proper armor and a sharp sword",
+      "OffensiveAction": "Melee",
+      "OffensiveRating": 10,
+      "DefensiveAction": "Parry",
+      "DefensiveRating": 9,
+      "Health": 10,
+      "WeaponType": "lethal",
+      "WeaponDamage": 3,
+      "ArmorRating": 3,
+      "LootTable": [
+        {
+          "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Chance": 0.4
+        },
+        {
+          "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "Chance": 0.3
+        },
+        {
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.7
+        }
+      ],
+      "Tags": ["goblinoid", "forest", "medium"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "c9d0e1f2-3a4b-5c6d-7e8f-9a0b1c2d3e4f",
+      "Name": "Goblin Shaman",
+      "Description": "A wizened goblin shaman wielding dark magic and wearing bone charms",
+      "OffensiveAction": "Arcane",
+      "OffensiveRating": 7,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 8,
+      "Health": 5,
+      "WeaponType": "aggravated",
+      "WeaponDamage": 2,
+      "ArmorRating": 0,
+      "LootTable": [
+        {
+          "ItemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "Chance": 0.3
+        },
+        {
+          "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Chance": 0.2
+        },
+        {
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.8
+        }
+      ],
+      "Tags": ["goblinoid", "forest", "magic", "medium"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "d0e1f2a3-4b5c-6d7e-8f9a-0b1c2d3e4f50",
+      "Name": "Forest Bandit",
+      "Description": "A grizzled human bandit with a bow and leather armor",
+      "OffensiveAction": "Archery",
+      "OffensiveRating": 9,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 8,
+      "Health": 8,
+      "WeaponType": "lethal",
+      "WeaponDamage": 3,
+      "ArmorRating": 2,
+      "LootTable": [
+        {
+          "ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
+          "Chance": 0.5
+        },
+        {
+          "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Chance": 0.3
+        },
+        {
+          "ItemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
+          "Chance": 0.2
+        }
+      ],
+      "Tags": ["human", "forest", "ranged", "medium"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "e1f2a3b4-5c6d-7e8f-9a0b-1c2d3e4f5061",
+      "Name": "Wolf",
+      "Description": "A large grey wolf with sharp fangs and keen senses",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 8,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 9,
+      "Health": 7,
+      "WeaponType": "lethal",
+      "WeaponDamage": 2,
+      "ArmorRating": 0,
+      "LootTable": [],
+      "Tags": ["animal", "forest", "fast", "weak"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "f2a3b4c5-6d7e-8f9a-0b1c-2d3e4f506172",
+      "Name": "Dire Wolf",
+      "Description": "A massive black wolf with glowing red eyes and razor-sharp claws",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 11,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 10,
+      "Health": 12,
+      "WeaponType": "lethal",
+      "WeaponDamage": 4,
+      "ArmorRating": 1,
+      "LootTable": [],
+      "Tags": ["animal", "forest", "fast", "strong"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "a3b4c5d6-7e8f-9a0b-1c2d-3e4f50617283",
+      "Name": "Skeleton Warrior",
+      "Description": "An animated skeleton wielding a rusty sword and wearing ancient armor",
+      "OffensiveAction": "Melee",
+      "OffensiveRating": 7,
+      "DefensiveAction": "Parry",
+      "DefensiveRating": 6,
+      "Health": 6,
+      "WeaponType": "lethal",
+      "WeaponDamage": 2,
+      "ArmorRating": 2,
+      "LootTable": [
+        {
+          "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "Chance": 0.2
+        }
+      ],
+      "Tags": ["undead", "dungeon", "weak"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "b4c5d6e7-8f9a-0b1c-2d3e-4f5061728394",
+      "Name": "Zombie",
+      "Description": "A shambling corpse with rotting flesh and mindless hunger",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 5,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 4,
+      "Health": 10,
+      "WeaponType": "bashing",
+      "WeaponDamage": 2,
+      "ArmorRating": 0,
+      "LootTable": [],
+      "Tags": ["undead", "dungeon", "slow", "medium"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "c5d6e7f8-9a0b-1c2d-3e4f-506172839405",
+      "Name": "Vampire Spawn",
+      "Description": "A pale creature with fangs and unnatural strength",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 10,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 11,
+      "Health": 9,
+      "WeaponType": "aggravated",
+      "WeaponDamage": 3,
+      "ArmorRating": 1,
+      "LootTable": [
+        {
+          "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Chance": 0.3
+        },
+        {
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.6
+        }
+      ],
+      "Tags": ["undead", "dungeon", "vampire", "strong"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "d6e7f8a9-0b1c-2d3e-4f50-617283940516",
+      "Name": "Cave Troll",
+      "Description": "A massive, dim-witted troll with regenerative abilities",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 9,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 6,
+      "Health": 15,
+      "WeaponType": "bashing",
+      "WeaponDamage": 5,
+      "ArmorRating": 2,
+      "LootTable": [
+        {
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.8
+        },
+        {
+          "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Chance": 0.4
+        }
+      ],
+      "Tags": ["monster", "dungeon", "regenerating", "strong"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "e7f8a9b0-1c2d-3e4f-5061-728394051627",
+      "Name": "Giant Spider",
+      "Description": "A huge black spider with venomous fangs and sticky webs",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 9,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 10,
+      "Health": 8,
+      "WeaponType": "lethal",
+      "WeaponDamage": 3,
+      "ArmorRating": 1,
+      "LootTable": [],
+      "Tags": ["animal", "dungeon", "venomous", "medium"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "f8a9b0c1-2d3e-4f50-6172-839405162738",
+      "Name": "Orc Raider",
+      "Description": "A fierce orc warrior with a massive axe and crude armor",
+      "OffensiveAction": "Melee",
+      "OffensiveRating": 11,
+      "DefensiveAction": "Parry",
+      "DefensiveRating": 8,
+      "Health": 11,
+      "WeaponType": "lethal",
+      "WeaponDamage": 4,
+      "ArmorRating": 3,
+      "LootTable": [
+        {
+          "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+          "Chance": 0.4
+        },
+        {
+          "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
+          "Chance": 0.5
+        },
+        {
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.7
+        }
+      ],
+      "Tags": ["orc", "mountain", "strong"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "a9b0c1d2-3e4f-5061-7283-940516273849",
+      "Name": "Dark Cultist",
+      "Description": "A hooded figure wielding dark magic and forbidden knowledge",
+      "OffensiveAction": "Arcane",
+      "OffensiveRating": 8,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 7,
+      "Health": 7,
+      "WeaponType": "aggravated",
+      "WeaponDamage": 3,
+      "ArmorRating": 0,
+      "LootTable": [
+        {
+          "ItemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
+          "Chance": 0.5
+        },
+        {
+          "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Chance": 0.3
+        }
+      ],
+      "Tags": ["human", "magic", "cultist", "medium"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "b0c1d2e3-4f50-6172-8394-051627384950",
+      "Name": "Stone Golem",
+      "Description": "An animated construct of stone and magic, slow but incredibly tough",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 7,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 5,
+      "Health": 14,
+      "WeaponType": "bashing",
+      "WeaponDamage": 4,
+      "ArmorRating": 5,
+      "LootTable": [
+        {
+          "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
+          "Chance": 0.4
+        }
+      ],
+      "Tags": ["construct", "dungeon", "slow", "strong"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "c1d2e3f4-5061-7283-9405-162738495061",
+      "Name": "Imp",
+      "Description": "A tiny winged demon with a poisonous stinger",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 9,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 11,
+      "Health": 4,
+      "WeaponType": "lethal",
+      "WeaponDamage": 1,
+      "ArmorRating": 0,
+      "LootTable": [],
+      "Tags": ["demon", "dungeon", "flying", "weak"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    },
+    {
+      "OpponentID": "51eadb06-e05c-4515-84a7-1e415d6b88e1",
+      "Name": "Gremlin",
+      "Description": "A small, mischievous creature with sharp teeth and grubby claws",
+      "OffensiveAction": "Brawling",
+      "OffensiveRating": 4,
+      "DefensiveAction": "Dodge",
+      "DefensiveRating": 5,
+      "Health": 3,
+      "WeaponType": "bashing",
+      "WeaponDamage": 1,
+      "ArmorRating": 0,
+      "LootTable": [
+        {
+          "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Chance": 0.2
+        }
+      ],
+      "Tags": ["goblinoid", "dungeon", "weak", "pest"],
+      "CreatedAt": "2025-01-23T10:00:00Z"
+    }
+  ]
+}

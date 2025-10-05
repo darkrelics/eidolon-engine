@@ -1,21 +1,12 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
+import '../utils/json_utils.dart';
 import 'auth_service.dart';
 
 class Character {
@@ -39,17 +30,28 @@ class Character {
 
   factory Character.fromJson(Map<String, dynamic> json) {
     return Character(
-      id:
-          json['CharacterID'] as String? ??
-          json['id'] as String? ??
-          json['characterId'] as String? ??
-          '',
-      name: json['name'] as String,
-      dead: json['dead'] as bool? ?? false,
-      attributes: json['Attributes'] as Map<String, dynamic>?,
-      skills: json['Skills'] as Map<String, dynamic>?,
-      health: json['Health'] as int?,
-      maxHealth: json['MaxHealth'] as int?,
+      id: JsonUtils.getFlexibleRequired<String>(
+        json,
+        'CharacterID',
+        'characterId',
+        defaultValue: '',
+      ),
+      name: JsonUtils.getFlexibleRequired<String>(
+        json,
+        'CharacterName',
+        'characterName',
+        defaultValue: '',
+      ),
+      dead: JsonUtils.getFlexibleRequired<bool>(
+        json,
+        'Dead',
+        'dead',
+        defaultValue: false,
+      ),
+      attributes: JsonUtils.getFlexibleMap(json, 'Attributes', 'attributes'),
+      skills: JsonUtils.getFlexibleMap(json, 'Skills', 'skills'),
+      health: JsonUtils.getFlexible<int>(json, 'Health', 'health'),
+      maxHealth: JsonUtils.getFlexible<int>(json, 'MaxHealth', 'maxHealth'),
     );
   }
 }
@@ -77,7 +79,7 @@ class ApiService {
     }
 
     final response = await http.get(
-      Uri.parse('$_baseUrl/characters'),
+      Uri.parse('$_baseUrl/character/list'),
       headers: {
         'Authorization': 'Bearer $idToken',
         'Content-Type': 'application/json',
@@ -87,7 +89,7 @@ class ApiService {
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
       final characterList =
-          (data['characters'] as List)
+          JsonUtils.getFlexibleList<dynamic>(data, 'Characters', 'characters')
               .map((char) => Character.fromJson(char as Map<String, dynamic>))
               .toList();
       return characterList;
@@ -112,7 +114,7 @@ class ApiService {
     }
 
     final response = await http.get(
-      Uri.parse('$_baseUrl/character?characterId=$characterId'),
+      Uri.parse('$_baseUrl/character?CharacterID=$characterId'),
       headers: {
         'Authorization': 'Bearer $idToken',
         'Content-Type': 'application/json',
@@ -121,7 +123,11 @@ class ApiService {
 
     if (response.statusCode == 200) {
       final data = json.decode(response.body) as Map<String, dynamic>;
-      final characterData = data['character'] as Map<String, dynamic>;
+      final characterData = JsonUtils.getFlexibleMap(
+        data,
+        'Character',
+        'character',
+      );
       return Character.fromJson(characterData);
     } else if (response.statusCode == 401) {
       throw Exception('Unauthorized');
@@ -144,7 +150,7 @@ class ApiService {
     }
 
     final response = await http.delete(
-      Uri.parse('$_baseUrl/character?characterId=$characterId'),
+      Uri.parse('$_baseUrl/character?CharacterID=$characterId'),
       headers: {
         'Authorization': 'Bearer $idToken',
         'Content-Type': 'application/json',

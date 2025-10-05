@@ -1,26 +1,76 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/.github/workflows"
+    directory: "/"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      git-actions-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+        patterns: ["*"]
+      git-action-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "gomod"
     directory: "/server"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      go-package-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+        patterns: ["*"]
+      go-package-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "pip"
     directory: "/requirements"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      pip-package-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+        patterns: ["*"]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "pub"
     directory: "/portal"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      flutter-portal-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+        patterns: ["*"]
+      flutter-portal-security:
+        applies-to: security-updates
+        patterns: ["*"]
 
   - package-ecosystem: "pub"
     directory: "/incremental"
     schedule:
       interval: "weekly"
+    reviewers:
+      - "robinje"
+    groups:
+      flutter-incremental-updates:
+        applies-to: version-updates
+        update-types: ["major", "minor", "patch"]
+        patterns: ["*"]
+      flutter-incremental-security:
+        applies-to: security-updates
+        patterns: ["*"]

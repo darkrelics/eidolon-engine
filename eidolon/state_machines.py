@@ -1,0 +1,326 @@
+"""
+State machine definitions and transition validation.
+
+Provides enums and functions for enforcing valid state transitions across:
+- Character GameMode (None/Incremental/MUD)
+- Segment ProcessingStatus (pending/processing/processed)
+- Story Lifecycle (Available/Active/Completed/Abandoned)
+"""
+
+from datetime import datetime, timezone
+from enum import Enum
+
+from botocore.exceptions import ClientError
+
+from eidolon.dynamo import TableName, dynamo
+from eidolon.logger import logger
+
+
+class GameMode(str, Enum):
+    """Character GameMode states."""
+
+    NONE = "None"
+    INCREMENTAL = "Incremental"
+    MUD = "MUD"
+
+
+class ProcessingStatus(str, Enum):
+    """Segment processing states."""
+
+    PENDING = "pending"
+    PROCESSING = "processing"
+    PROCESSED = "processed"
+
+
+class StoryLifecycle(str, Enum):
+    """Story lifecycle states."""
+
+    AVAILABLE = "Available"
+    ACTIVE = "Active"
+    COMPLETED = "Completed"
+    ABANDONED = "Abandoned"
+
+
+# Valid GameMode transitions
+VALID_GAMEMODE_TRANSITIONS = {
+    GameMode.NONE: {GameMode.INCREMENTAL, GameMode.MUD},
+    GameMode.INCREMENTAL: {GameMode.NONE},
+    GameMode.MUD: {GameMode.NONE},
+}
+
+
+def validate_gamemode_transition(current_mode: str, new_mode: str) -> bool:
+    """
+    Check if a GameMode transition is valid.
+
+    Args:
+        current_mode: Current GameMode value
+        new_mode: Desired GameMode value
+
+    Returns:
+        True if transition is allowed, False otherwise
+    """
+    try:
+        current = GameMode(current_mode)
+        new = GameMode(new_mode)
+
+        if current == new:
+            return True
+
+        allowed = VALID_GAMEMODE_TRANSITIONS.get(current, set())
+        return new in allowed
+
+    except ValueError:
+        logger.error(f"Invalid GameMode value: current={current_mode}, new={new_mode}")
+        return False
+
+
+def set_character_game_mode(
+    character_id: str,
+    new_mode: str,
+    expected_current = None,
+    active_story_id = None,
+    active_segment_id = None,
+    story_instance_id = None,
+) -> bool:
+    """
+    Atomically set character GameMode with validation.
+
+    Uses DynamoDB conditional write to ensure state consistency.
+
+    Args:
+        character_id: Character UUID
+        new_mode: Desired GameMode (None/Incremental/MUD)
+        expected_current: Expected current GameMode (optional, for extra safety)
+        active_story_id: Story ID to set when entering Incremental mode
+        active_segment_id: Segment ID to set when entering Incremental mode
+        story_instance_id: Story instance ID to add to CompletedStories (optional)
+
+    Returns:
+        True if transition successful, False if condition failed
+
+    Raises:
+        ValueError: If transition is invalid or parameters incorrect
+        RuntimeError: If database error occurs
+    """
+    if not character_id:
+        raise ValueError("Character ID cannot be empty")
+
+    try:
+        new_game_mode = GameMode(new_mode)
+    except ValueError:
+        raise ValueError(f"Invalid GameMode: {new_mode}") from None
+
+    # Build update expression
+    update_expression = "SET GameMode = :new_mode, UpdatedAt = :timestamp"
+    expression_values = {
+        ":new_mode": new_game_mode.value,
+        ":timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    # Build condition expression
+    condition_parts = []
+
+    if expected_current:
+        try:
+            expected_mode = GameMode(expected_current)
+            condition_parts.append("GameMode = :expected_mode")
+            expression_values[":expected_mode"] = expected_mode.value
+        except ValueError:
+            raise ValueError(f"Invalid expected GameMode: {expected_current}") from None
+
+    # Special handling for Incremental mode
+    if new_game_mode == GameMode.INCREMENTAL:
+        if not active_story_id or not active_segment_id:
+            raise ValueError("Active story and segment IDs required when entering Incremental mode")
+
+        # Add story/segment to update
+        update_expression += ", ActiveStoryID = :story_id, ActiveSegmentID = :segment_id"
+        expression_values[":story_id"] = active_story_id
+        expression_values[":segment_id"] = active_segment_id
+
+        # Add to CompletedStories if story_instance_id provided
+        if story_instance_id:
+            update_expression += " ADD CompletedStories :story_instance"
+            expression_values[":story_instance"] = {story_instance_id}  # type: ignore
+
+        # Require that current mode allows transition to Incremental
+        if not expected_current:
+            # If no expected mode specified, require None or recovery from broken Incremental state
+            condition_parts.append(
+                "(GameMode = :none) OR "
+                "(GameMode = :incremental AND "
+                "(attribute_not_exists(ActiveStoryID) OR ActiveStoryID = :null_value) AND "
+                "(attribute_not_exists(ActiveSegmentID) OR ActiveSegmentID = :null_value))"
+            )
+            expression_values[":none"] = GameMode.NONE.value
+            expression_values[":incremental"] = GameMode.INCREMENTAL.value
+            expression_values[":null_value"] = None  # type: ignore
+
+    # Special handling for returning to None
+    elif new_game_mode == GameMode.NONE:
+        # Clear active story/segment fields when returning to None
+        update_expression += " REMOVE ActiveStoryID, ActiveSegmentID"
+
+    # Execute conditional update
+    try:
+        condition_expression = " AND ".join(condition_parts) if condition_parts else None
+
+        update_kwargs = {
+            "UpdateExpression": update_expression,
+            "ExpressionAttributeValues": expression_values,
+        }
+
+        if condition_expression:
+            update_kwargs["ConditionExpression"] = condition_expression
+
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            **update_kwargs,
+        )
+
+        logger.info(f"GameMode transition successful for {character_id}: → {new_mode}")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "Unknown")
+
+        if error_code == "ConditionalCheckFailedException":
+            logger.warning(f"GameMode transition failed for {character_id}: condition not met (race condition)")
+            return False
+
+        logger.error(f"Failed to update GameMode for {character_id}: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to update GameMode: {err}") from err
+
+
+def claim_segment_for_processing(active_segment_id: str) -> bool:
+    """
+    Atomically claim a segment for processing (pending → processing).
+
+    Uses DynamoDB conditional write to ensure only one Lambda claims the segment.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Returns:
+        True if claim successful, False if already claimed
+
+    Raises:
+        ValueError: If segment ID is empty
+        RuntimeError: If database error occurs
+    """
+    if not active_segment_id:
+        raise ValueError("Active segment ID cannot be empty")
+
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET ProcessingStatus = :processing, ProcessingStartedAt = :timestamp",
+            ConditionExpression="ProcessingStatus = :pending",
+            ExpressionAttributeValues={
+                ":processing": ProcessingStatus.PROCESSING.value,
+                ":pending": ProcessingStatus.PENDING.value,
+                ":timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+        logger.info(f"Claimed segment for processing: {active_segment_id}")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "Unknown")
+
+        if error_code == "ConditionalCheckFailedException":
+            logger.info(f"Segment already claimed for processing: {active_segment_id}")
+            return False
+
+        logger.error(f"Failed to claim segment for processing {active_segment_id}: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to claim segment: {err}") from err
+
+
+def mark_segment_processed(active_segment_id: str, outcome: str, character_updates: dict) -> bool:
+    """
+    Mark segment as processed (processing → processed).
+
+    Idempotent: safe to call multiple times.
+
+    Args:
+        active_segment_id: Active segment UUID
+        outcome: Segment outcome (normal/exceptional/minimal/failure/death)
+        character_updates: Dict of character updates to store
+
+    Returns:
+        True if update successful, False if already processed
+
+    Raises:
+        ValueError: If segment ID is empty
+        RuntimeError: If database error occurs
+    """
+    if not active_segment_id:
+        raise ValueError("Active segment ID cannot be empty")
+
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET ProcessingStatus = :processed, #outcome = :outcome_value, CharacterUpdates = :updates, ProcessedAt = :timestamp",
+            ConditionExpression="ProcessingStatus = :processing OR ProcessingStatus = :processed",
+            ExpressionAttributeNames={"#outcome": "Outcome"},
+            ExpressionAttributeValues={
+                ":processed": ProcessingStatus.PROCESSED.value,
+                ":processing": ProcessingStatus.PROCESSING.value,
+                ":outcome_value": outcome,
+                ":updates": character_updates,
+                ":timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+        )
+
+        logger.info(f"Marked segment as processed: {active_segment_id}, outcome={outcome}")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "Unknown")
+
+        if error_code == "ConditionalCheckFailedException":
+            logger.warning(f"Segment not in processing state: {active_segment_id}")
+            return False
+
+        logger.error(f"Failed to mark segment processed {active_segment_id}: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to mark segment processed: {err}") from err
+
+
+def reset_segment_to_pending(active_segment_id: str) -> bool:
+    """
+    Reset segment back to pending state for retry.
+
+    Used by segment recovery logic when processing gets stuck.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Returns:
+        True if reset successful
+
+    Raises:
+        ValueError: If segment ID is empty
+        RuntimeError: If database error occurs
+    """
+    if not active_segment_id:
+        raise ValueError("Active segment ID cannot be empty")
+
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET ProcessingStatus = :pending REMOVE ProcessingStartedAt, ProcessedAt",
+            ExpressionAttributeValues={":pending": ProcessingStatus.PENDING.value},
+        )
+
+        logger.info(f"Reset segment to pending for retry: {active_segment_id}")
+        return True
+
+    except ClientError as err:
+        logger.error(f"Failed to reset segment to pending {active_segment_id}: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to reset segment: {err}") from err

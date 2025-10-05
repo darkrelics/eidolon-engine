@@ -63,8 +63,13 @@ go.work
 
 **/.dart_tool/
 
+.dart_tool/**
+
 **/*.metadata
 
+incremental/ios
+incremental/android
+sectio
 # Claude Code specific files
 CLAUDE.md
 .claude/
@@ -81,7 +86,7 @@ CLAUDE.md
 **/*.pyo
 **/*.pyd
 **/*.pdb
-
+**/.pytest_cache
 
 # Apple Problems
 **/.DS_Store
@@ -89,4 +94,7 @@ CLAUDE.md
 **/.ruff_cache
 **/.ruff_cache/**
 
-**/.deployment_state.json
+**/cdk.json
+
+# CDK state file
+deployment/.cdk-state.json

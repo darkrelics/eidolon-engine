@@ -1,0 +1,1552 @@
+openapi: 3.1.0
+info:
+  title: Eidolon Engine Incremental Game API
+  description: RESTful API for the Eidolon Engine incremental game mode. All endpoints require authentication via AWS Cognito and return JSON responses.
+  version: 1.0.0
+  contact:
+    name: Jason E. Robinson
+    email: contact@darkrelics.net
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.darkrelics.net
+    description: Production server
+security:
+  - CognitoAuth: []
+
+tags:
+  - name: Archetypes
+    description: Character archetype operations
+  - name: Characters
+    description: Character management operations
+  - name: Stories
+    description: Story lifecycle operations
+  - name: Segments
+    description: Segment processing and polling operations
+
+paths:
+  /archetype:
+    get:
+      tags:
+        - Archetypes
+      summary: Get available archetypes
+      description: Retrieves all player-available archetypes for character creation. Results are cached at the Lambda level for performance.
+      operationId: getArchetypes
+      responses:
+        "200":
+          description: Successfully retrieved archetypes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchetypesResponse"
+              examples:
+                knightExample:
+                  summary: Example with Knight archetype
+                  value:
+                    Archetypes:
+                      - ArchetypeName: Knight
+                        Description: A stalwart defender skilled in combat and honor
+                        Attributes:
+                          Strength: 8
+                          Agility: 5
+                          Endurance: 7
+                          Charisma: 6
+                          Intrigue: 3
+                          Presence: 7
+                          Perception: 4
+                          Intelligence: 4
+                          Cunning: 3
+                        Skills:
+                          Melee: 10
+                          Parry: 8
+                          Dodge: 4
+                        Health: 12
+                        Essence: 3
+                        StartRoom: 100
+                        StartingItems:
+                          - PrototypeID: a47ac10b-58cc-4372-a567-0e02b2c3d484
+                            Slot: "back"
+                            IsWorn: true
+                            Container: true
+                          - PrototypeID: d47ac10b-58cc-4372-a567-0e02b2c3d481
+                            Slot: "weapon"
+                            IsWorn: true
+                            Container: false
+                        AvailableStories:
+                          - story_knight_honor
+                          - story_common_intro
+                    Count: 1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /character/list:
+    get:
+      tags:
+        - Characters
+      summary: List player characters
+      description: Retrieves a list of all characters belonging to the authenticated player. Returns minimal information suitable for character selection.
+      operationId: listCharacters
+      responses:
+        "200":
+          description: Successfully retrieved character list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CharacterListResponse"
+              examples:
+                multipleCharacters:
+                  summary: Player with multiple characters
+                  value:
+                    Characters:
+                      - CharacterName: Aragorn
+                        CharacterID: 550e8400-e29b-41d4-a716-446655440000
+                        Dead: false
+                      - CharacterName: Boromir
+                        CharacterID: 6ba7b810-9dad-11d1-80b4-00c04fd430c8
+                        Dead: true
+                emptyList:
+                  summary: New player with no characters
+                  value:
+                    Characters: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Player not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Player not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /character:
+    post:
+      tags:
+        - Characters
+      summary: Create new character
+      description: Creates a new character for the authenticated player. Character names must be unique across all players.
+      operationId: addCharacter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CharacterCreateRequest"
+            examples:
+              wizardCharacter:
+                summary: Create a wizard character
+                value:
+                  CharacterName: Gandalf
+                  ArchetypeName: Wizard
+              defaultArchetype:
+                summary: Create with default archetype
+                value:
+                  CharacterName: Frodo
+                  ArchetypeName: ""
+      responses:
+        "201":
+          description: Character created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CharacterCreateResponse"
+              example:
+                CharacterID: 7ba8c520-a5d2-4e8f-b3c1-9f2e3d4c5b6a
+                CharacterName: Gandalf
+                Archetype: Wizard
+                Message: Character created successfully
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingName:
+                  summary: Missing character name
+                  value:
+                    Error: "CharacterName is required"
+                invalidName:
+                  summary: Invalid character name format
+                  value:
+                    Error: "Character name must be 3-32 characters and contain only letters, spaces, and hyphens"
+                nameNotAvailable:
+                  summary: Name in restricted list
+                  value:
+                    Error: "Character name is not available"
+                limitReached:
+                  summary: Character limit reached
+                  value:
+                    Error: "Character limit reached (10)"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Name already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character name is already taken"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    get:
+      tags:
+        - Characters
+      summary: Get character details
+      description: Retrieves complete character data including active story and segment information. Validates character ownership.
+      operationId: getCharacter
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the character to retrieve
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Successfully retrieved character
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CharacterDetailResponse"
+              examples:
+                withActiveStory:
+                  summary: Character with active story
+                  value:
+                    Character:
+                      CharacterID: 550e8400-e29b-41d4-a716-446655440000
+                      PlayerID: 123e4567-e89b-12d3-a456-426614174000
+                      CharacterName: Aragorn
+                      GameMode: Incremental
+                      RoomID: 100
+                      Inventory:
+                        "0": abc123-item-uuid
+                        "1": def456-item-uuid
+                      InventoryDetails:
+                        "0":
+                          ItemID: abc123-item-uuid
+                          Name: Leather Backpack
+                          Description: A sturdy leather backpack
+                          Quantity: 1
+                          Stackable: false
+                          Equipped: true
+                          Mass: 2
+                          Value: 50
+                      Attributes:
+                        Strength: 8
+                        Agility: 5
+                        Endurance: 7
+                      Skills:
+                        Melee: 10
+                        Parry: 8
+                      MaxHealth: 12
+                      Wounds:
+                        - DamageType: bashing
+                          HealAt: "2025-01-15T14:30:00Z"
+                      ActiveStoryID: story_current_uuid
+                      ActiveSegmentID: segment_current_uuid
+                    ActiveStory:
+                      StoryID: story_current_uuid
+                      Title: The Dark Tower
+                      Description: Investigate the mysterious tower
+                      EstimatedDuration: 1800
+                    ActiveSegment:
+                      ActiveSegmentID: segment_current_uuid
+                      SegmentID: segment_def_uuid
+                      SegmentType: mechanical
+                      Status: active
+                      StartTime: 1704900000
+                      EndTime: 1704900300
+                withoutActiveStory:
+                  summary: Character without active story (shows available stories)
+                  value:
+                    Character:
+                      CharacterID: 550e8400-e29b-41d4-a716-446655440000
+                      PlayerID: 123e4567-e89b-12d3-a456-426614174000
+                      CharacterName: Aragorn
+                      GameMode: None
+                      RoomID: 100
+                      Inventory:
+                        "0": abc123-item-uuid
+                      Attributes:
+                        Strength: 8
+                        Agility: 5
+                        Endurance: 7
+                      Skills:
+                        Melee: 10
+                        Parry: 8
+                      MaxHealth: 12
+                      Wounds: []
+                      ActiveStoryID: null
+                      ActiveSegmentID: null
+                      AvailableStories: ["story_1", "story_2"]
+                    AvailableStories:
+                      - StoryID: story_1
+                        Title: "The Beginning"
+                        Description: "Start your journey"
+                        Type: once
+                        Available: true
+                        CooldownRemaining: 0
+                        EstimatedDuration: 600
+                        Prerequisites: {}
+                      - StoryID: story_2
+                        Title: "Daily Challenge"
+                        Description: "Test your skills"
+                        Type: daily
+                        Available: false
+                        CooldownRemaining: 3600
+                        EstimatedDuration: 1800
+                        Prerequisites:
+                          CompletedStories: ["story_1"]
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Missing CharacterID parameter"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Character not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+    delete:
+      tags:
+        - Characters
+      summary: Delete a character
+      description: Deletes a character owned by the authenticated player.
+      operationId: deleteCharacter
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the character to delete
+      responses:
+        "200":
+          description: Character deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CharacterDeleteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Character not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /story/start:
+    post:
+      tags:
+        - Stories
+      summary: Start a story
+      description: Starts a story for a character and returns the first segment info.
+      operationId: startStory
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [CharacterID, StoryID]
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                StoryID:
+                  type: string
+      responses:
+        "200":
+          description: Story started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartStoryResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Story not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: Character or story not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Character already in a game mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /story/abandon:
+    post:
+      tags:
+        - Stories
+      summary: Abandon active story
+      description: Abandons a character's current story and resets game mode.
+      operationId: abandonStory
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Story abandoned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AbandonResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/decision:
+    post:
+      tags:
+        - Segments
+      summary: Submit a decision
+      description: Submits a player's decision for a decision segment.
+      operationId: submitDecision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [CharacterID, Decision]
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                Decision:
+                  type: string
+      responses:
+        "200":
+          description: Decision accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DecisionResponse"
+              examples:
+                mechanicalAdvance:
+                  summary: Decision advances to a mechanical segment
+                  value:
+                    Accepted: true
+                    NextSegmentTime: "2025-01-15T14:30:00Z"
+                    NextSegment:
+                      ActiveSegmentID: "550e8400-e29b-41d4-a716-446655440001"
+                      StoryID: "story-uuid"
+                      SegmentID: "segment-next-uuid"
+                      SegmentType: "mechanical"
+                      Status: "active"
+                      StartTime: "2025-01-15T14:25:00Z"
+                      EndTime: "2025-01-15T14:30:00Z"
+                      ProcessingStatus: "pending"
+                      SegmentActivity: "Fighting the goblin"
+                      SegmentTitle: "Preparing for combat"
+                      Duration: 300
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Segment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Decision already submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/outcome:
+    get:
+      tags:
+        - Segments
+      summary: Get segment outcome
+      description: Retrieves outcome narrative and effects for a completed or processed segment.
+      operationId: getSegmentOutcome
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - in: query
+          name: SegmentID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Outcome data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentOutcomeResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Character or segment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: Segment not yet completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/status:
+    get:
+      tags:
+        - Segments
+      summary: Get active segment status
+      description: Returns status and timing for the character's current segment.
+      operationId: getSegmentStatus
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Status data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentStatusResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No active segment found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /segment/history:
+    get:
+      tags:
+        - Segments
+      summary: Get segment history
+      description: Retrieves completed segment history for the active story.
+      operationId: getSegmentHistory
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Segment history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SegmentHistoryResponse"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  securitySchemes:
+    CognitoAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: AWS Cognito JWT token
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - Error
+      properties:
+        Error:
+          type: string
+          description: Human-readable error message
+          example: "Failed to load archetypes"
+
+    ArchetypesResponse:
+      type: object
+      required:
+        - Archetypes
+        - Count
+      properties:
+        Archetypes:
+          type: array
+          description: List of available player archetypes
+          items:
+            $ref: "#/components/schemas/Archetype"
+        Count:
+          type: integer
+          description: Total number of archetypes returned
+          minimum: 0
+          example: 5
+
+    CharacterListResponse:
+      type: object
+      required:
+        - Characters
+      properties:
+        Characters:
+          type: array
+          description: List of characters owned by the player
+          items:
+            $ref: "#/components/schemas/CharacterInfo"
+
+    CharacterInfo:
+      type: object
+      required:
+        - CharacterName
+        - CharacterID
+        - Dead
+      properties:
+        CharacterName:
+          type: string
+          description: Display name of the character
+          example: Aragorn
+          minLength: 1
+          maxLength: 50
+        CharacterID:
+          type: string
+          description: Unique identifier (UUID) for the character
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        Dead:
+          type: boolean
+          description: Whether the character has died
+          example: false
+
+    Archetype:
+      type: object
+      required:
+        - ArchetypeName
+        - Description
+        - Attributes
+        - Skills
+        - Health
+        - Essence
+        - StartRoom
+        - StartingItems
+        - AvailableStories
+      properties:
+        ArchetypeName:
+          type: string
+          description: Unique identifier and display name for the archetype
+          example: Knight
+          minLength: 1
+          maxLength: 50
+        Description:
+          type: string
+          description: Flavor text describing the archetype
+          example: A stalwart defender skilled in combat and honor
+          maxLength: 500
+        Attributes:
+          $ref: "#/components/schemas/AttributeMap"
+        Skills:
+          $ref: "#/components/schemas/SkillMap"
+        Health:
+          type: integer
+          description: Starting maximum health points
+          minimum: 1
+          maximum: 100
+          example: 12
+        Essence:
+          type: integer
+          description: Starting maximum essence (mana) points
+          minimum: 0
+          maximum: 50
+          example: 3
+        StartRoom:
+          type: integer
+          description: Room ID where new characters of this archetype begin
+          minimum: 0
+          example: 100
+        StartingItems:
+          type: array
+          description: List of items the character starts with
+          items:
+            $ref: "#/components/schemas/StartingItem"
+        AvailableStories:
+          type: array
+          description: List of story IDs available to this archetype
+          items:
+            type: string
+            pattern: "^story_[a-z_]+$"
+            example: story_knight_honor
+
+    AttributeMap:
+      type: object
+      description: Map of attribute names to their starting values
+      properties:
+        Strength:
+          type: number
+          minimum: 0
+          maximum: 20
+        Agility:
+          type: number
+          minimum: 0
+          maximum: 20
+        Endurance:
+          type: number
+          minimum: 0
+          maximum: 20
+        Charisma:
+          type: number
+          minimum: 0
+          maximum: 20
+        Intrigue:
+          type: number
+          minimum: 0
+          maximum: 20
+        Presence:
+          type: number
+          minimum: 0
+          maximum: 20
+        Perception:
+          type: number
+          minimum: 0
+          maximum: 20
+        Intelligence:
+          type: number
+          minimum: 0
+          maximum: 20
+        Cunning:
+          type: number
+          minimum: 0
+          maximum: 20
+      additionalProperties: false
+      example:
+        Strength: 8
+        Agility: 5
+        Endurance: 7
+        Charisma: 6
+        Intrigue: 3
+        Presence: 7
+        Perception: 4
+        Intelligence: 4
+        Cunning: 3
+
+    SkillMap:
+      type: object
+      description: Map of skill names to their starting values
+      additionalProperties:
+        type: number
+        minimum: 0
+        maximum: 100
+      example:
+        Melee: 10
+        Parry: 8
+        Dodge: 4
+
+    StartingItem:
+      type: object
+      required:
+        - PrototypeID
+        - Slot
+        - IsWorn
+        - Container
+      properties:
+        PrototypeID:
+          type: string
+          description: UUID of the item prototype to create
+          format: uuid
+          example: a47ac10b-58cc-4372-a567-0e02b2c3d484
+        Slot:
+          type: string
+          description: Equipment slot name if worn (e.g., "back", "weapon", "armor"). Empty string if not worn.
+          example: "back"
+        IsWorn:
+          type: boolean
+          description: Whether the item starts equipped
+          example: true
+        Container:
+          type: boolean
+          description: Whether this item is a container (only first container is used)
+          example: true
+
+    CharacterCreateRequest:
+      type: object
+      required:
+        - CharacterName
+      properties:
+        CharacterName:
+          type: string
+          description: Desired name for the character
+          pattern: '^[a-zA-Z\s\-]{3,32}$'
+          minLength: 3
+          maxLength: 32
+          example: Gandalf
+        ArchetypeName:
+          type: string
+          description: Archetype to use (defaults to "default" if not specified or invalid)
+          example: Wizard
+          default: ""
+
+    CharacterCreateResponse:
+      type: object
+      required:
+        - CharacterID
+        - CharacterName
+        - Archetype
+        - Message
+      properties:
+        CharacterID:
+          type: string
+          description: Unique identifier (UUID) for the created character
+          format: uuid
+          example: 7ba8c520-a5d2-4e8f-b3c1-9f2e3d4c5b6a
+        CharacterName:
+          type: string
+          description: The character's name as stored
+          example: Gandalf
+        Archetype:
+          type: string
+          description: The archetype that was applied
+          example: Wizard
+        Message:
+          type: string
+          description: Success confirmation message
+          example: Character created successfully
+
+    CharacterDeleteResponse:
+      type: object
+      required:
+        - Message
+      properties:
+        Message:
+          type: string
+          description: Success confirmation message
+          example: Character deleted successfully
+
+    CharacterDetailResponse:
+      type: object
+      required:
+        - Character
+      properties:
+        Character:
+          $ref: "#/components/schemas/Character"
+        ActiveStory:
+          $ref: "#/components/schemas/ActiveStory"
+          description: Current story details (only present if character has active story)
+        ActiveSegment:
+          $ref: "#/components/schemas/ActiveSegment"
+          description: Current segment details (only present if character has active segment)
+        AvailableStories:
+          type: array
+          items:
+            $ref: "#/components/schemas/AvailableStory"
+          description: List of available stories (only present if no active story and stories are available)
+
+    Character:
+      type: object
+      required:
+        - CharacterID
+        - PlayerID
+        - CharacterName
+        - GameMode
+        - RoomID
+        - Inventory
+        - Attributes
+        - Skills
+        - MaxHealth
+        - Essence
+        - MaxEssence
+        - Wounds
+        - CharState
+        - AvailableStories
+        - AbandonedStories
+        - CompletedStories
+        - Archetype
+        - Resources
+        - Progress
+      properties:
+        CharacterID:
+          type: string
+          format: uuid
+          description: Unique identifier for the character
+        PlayerID:
+          type: string
+          format: uuid
+          description: UUID of the player who owns the character
+        CharacterName:
+          type: string
+          description: Display name of the character
+        GameMode:
+          type: string
+          enum: [MUD, Incremental, None]
+          description: Current game mode
+        RoomID:
+          type: integer
+          description: Current room location
+        Inventory:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map of inventory slots to item UUIDs
+        InventoryDetails:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/ItemDetail"
+          description: Enriched inventory with full item information
+        Attributes:
+          $ref: "#/components/schemas/AttributeMap"
+        Skills:
+          $ref: "#/components/schemas/SkillMap"
+        MaxHealth:
+          type: integer
+          minimum: 1
+          description: Maximum health points
+        Essence:
+          type: integer
+          minimum: 0
+          description: Current essence (mana) points
+        MaxEssence:
+          type: integer
+          minimum: 0
+          description: Maximum essence points
+        Wounds:
+          type: array
+          items:
+            $ref: "#/components/schemas/Wound"
+          description: List of current wounds
+        CharState:
+          type: string
+          description: Current character state
+          enum: [standing, unconscious, dead]
+        LeftHandID:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of item in left hand
+        RightHandID:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of item in right hand
+        AvailableStories:
+          type: array
+          items:
+            type: string
+          description: Story IDs available to this character
+        AbandonedStories:
+          type: array
+          items:
+            type: string
+          description: Story IDs the character has abandoned
+        CompletedStories:
+          type: array
+          items:
+            type: string
+          description: Story IDs the character has completed
+        ActiveStoryID:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of currently active story
+        ActiveSegmentID:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of currently active segment
+        Archetype:
+          type: string
+          description: Character's archetype name
+        Resources:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Resource quantities (e.g., gold, supplies)
+        Progress:
+          type: object
+          additionalProperties:
+            type: boolean
+          description: Progress flags and achievements
+
+    ItemDetail:
+      type: object
+      required:
+        - ItemID
+        - Name
+        - Description
+        - Quantity
+      properties:
+        ItemID:
+          type: string
+          format: uuid
+          description: UUID of the item
+        Name:
+          type: string
+          description: Display name of the item
+        Description:
+          type: string
+          description: Item description
+        Quantity:
+          type: integer
+          minimum: 1
+          description: Number of items in stack
+        Stackable:
+          type: boolean
+          description: Whether item can be stacked
+        Equipped:
+          type: boolean
+          description: Whether item is currently equipped
+        Mass:
+          type: number
+          description: Weight of the item
+        Value:
+          type: integer
+          description: Monetary value
+
+    Wound:
+      type: object
+      required:
+        - DamageType
+        - HealAt
+      properties:
+        DamageType:
+          type: string
+          enum: [bashing, lethal, aggravated]
+          description: Type of damage
+        HealAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp when wound will heal
+
+    ActiveStory:
+      type: object
+      required:
+        - StoryID
+        - Title
+      properties:
+        StoryID:
+          type: string
+          format: uuid
+          description: UUID of the story
+        Title:
+          type: string
+          description: Display title of the story
+        Description:
+          type: string
+          description: Brief description of the story
+        EstimatedDuration:
+          type: integer
+          description: Estimated completion time in seconds
+
+    ActiveSegment:
+      type: object
+      required:
+        - ActiveSegmentID
+        - SegmentID
+        - SegmentType
+        - Status
+        - StartTime
+        - EndTime
+      properties:
+        ActiveSegmentID:
+          type: string
+          format: uuid
+          description: UUID of the active segment instance
+        SegmentID:
+          type: string
+          format: uuid
+          description: UUID of the segment definition
+        SegmentType:
+          type: string
+          enum: [mechanical, decision]
+          description: Type of segment
+        Status:
+          type: string
+          enum: [active, completed, abandoned]
+          description: Current segment status
+        StartTime:
+          type: integer
+          description: Unix timestamp when segment started
+        EndTime:
+          type: integer
+          description: Unix timestamp when segment will end
+        Outcome:
+          type: string
+          enum: [death, failure, minimal, normal, exceptional]
+          nullable: true
+          description: Calculated outcome (if processed)
+        ClientEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientEvent"
+          description: Events to display to client.
+
+    AvailableStory:
+      type: object
+      required:
+        - StoryID
+        - Title
+        - Description
+        - Type
+        - Available
+        - CooldownRemaining
+        - EstimatedDuration
+        - Prerequisites
+      properties:
+        StoryID:
+          type: string
+          description: Unique identifier of the story
+          example: story_knight_honor
+        Title:
+          type: string
+          description: Display title of the story
+          example: "A Knight's Honor"
+        Description:
+          type: string
+          description: Brief description of the story
+          example: "Test your honor in a challenging quest"
+        Type:
+          type: string
+          enum: [repeatable, daily, once]
+          description: Story availability type
+          example: daily
+        Available:
+          type: boolean
+          description: Whether the story can be started now
+          example: true
+        CooldownRemaining:
+          type: integer
+          minimum: 0
+          description: Seconds until story becomes available (0 if available)
+          example: 0
+        EstimatedDuration:
+          type: integer
+          description: Estimated completion time in seconds
+          example: 1800
+        Prerequisites:
+          type: object
+          description: Prerequisites that must be met to access this story
+          properties:
+            CompletedStories:
+              type: array
+              items:
+                type: string
+              description: Story IDs that must be completed first
+            MinLevel:
+              type: integer
+              description: Minimum character level required
+            Resources:
+              type: object
+              additionalProperties:
+                type: integer
+              description: Required resources to start
+
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            Error: "Unauthorized"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            Error: "Failed to load archetypes"
+
+    # Additional schemas for deployed endpoints
+    ClientEvent:
+      type: object
+      properties:
+        EventType:
+          type: string
+        Title:
+          type: string
+        Description:
+          type: string
+        Data:
+          type: object
+      additionalProperties: false
+
+    ChallengeAttempt:
+      type: object
+      properties:
+        EffectiveScore:
+          type: number
+        Difficulty:
+          type: integer
+        Sigma:
+          type: number
+        Success:
+          type: boolean
+      required: [EffectiveScore, Difficulty, Sigma, Success]
+
+    ChallengeResult:
+      type: object
+      properties:
+        Attribute:
+          type: string
+          nullable: true
+        Skill:
+          type: string
+          nullable: true
+        Difficulty:
+          type: integer
+        Attempts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeAttempt"
+        BestSigma:
+          type: number
+        Passed:
+          type: boolean
+      required: [Difficulty, Attempts, BestSigma, Passed]
+
+    CombatAttack:
+      type: object
+      properties:
+        Hit:
+          type: boolean
+        Sigma:
+          type: number
+        Damage:
+          type: integer
+          nullable: true
+        DamageType:
+          type: string
+          nullable: true
+      required: [Hit, Sigma]
+
+    CombatRound:
+      type: object
+      properties:
+        Round:
+          type: integer
+        PlayerAttack:
+          $ref: "#/components/schemas/CombatAttack"
+        OpponentAttack:
+          $ref: "#/components/schemas/CombatAttack"
+
+    CombatState:
+      type: object
+      properties:
+        Round:
+          type: integer
+        PlayerWounds:
+          type: array
+          items:
+            type: object
+        OpponentWounds:
+          type: array
+          items:
+            type: object
+        OpponentHealth:
+          type: integer
+          nullable: true
+        OpponentID:
+          type: string
+          nullable: true
+        CombatLog:
+          type: array
+          items:
+            $ref: "#/components/schemas/CombatRound"
+        Victor:
+          type: string
+          nullable: true
+        OpponentDefeated:
+          type: boolean
+          nullable: true
+
+    StartStoryResponse:
+      type: object
+      properties:
+        Success:
+          type: boolean
+        Segment:
+          type: object
+          properties:
+            ActiveSegmentID:
+              type: string
+            SegmentType:
+              type: string
+            StartTime:
+              type: string
+              format: date-time
+            EndTime:
+              type: string
+              format: date-time
+            SegmentActivity:
+              type: string
+            Duration:
+              type: integer
+      required: [Success, Segment]
+
+    DecisionResponse:
+      type: object
+      properties:
+        Accepted:
+          type: boolean
+        NextSegmentTime:
+          type: string
+          format: date-time
+          nullable: true
+        NextSegment:
+          type: object
+          nullable: true
+          properties:
+            ActiveSegmentID:
+              type: string
+            StoryID:
+              type: string
+            SegmentID:
+              type: string
+            SegmentType:
+              type: string
+            Status:
+              type: string
+            StartTime:
+              type: string
+              format: date-time
+            EndTime:
+              type: string
+              format: date-time
+            ProcessingStatus:
+              type: string
+            SegmentActivity:
+              type: string
+            SegmentTitle:
+              type: string
+            Duration:
+              type: integer
+            DecisionText:
+              type: string
+              nullable: true
+            DecisionOptions:
+              type: object
+              additionalProperties:
+                type: string
+            DefaultDecision:
+              type: string
+              nullable: true
+      required: [Accepted]
+
+    SegmentOutcomeResponse:
+      type: object
+      properties:
+        Outcome:
+          type: string
+        Narrative:
+          type: string
+        Effects:
+          type: object
+        NextSegmentID:
+          type: string
+          nullable: true
+        Decision:
+          type: string
+          nullable: true
+        ChallengeResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeResult"
+        CombatState:
+          $ref: "#/components/schemas/CombatState"
+      required: [Outcome, Narrative, Effects]
+
+    SegmentStatusResponse:
+      type: object
+      properties:
+        ActiveSegmentID:
+          type: string
+        StoryID:
+          type: string
+        SegmentID:
+          type: string
+        Status:
+          type: string
+        IsComplete:
+          type: boolean
+        TimeRemaining:
+          type: integer
+        StartTime:
+          type: string
+          format: date-time
+        EndTime:
+          type: string
+          format: date-time
+        Outcome:
+          type: string
+          nullable: true
+        Decision:
+          type: string
+          nullable: true
+        ChallengeResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeResult"
+        CombatState:
+          $ref: "#/components/schemas/CombatState"
+
+    SegmentHistoryItem:
+      type: object
+      properties:
+        ActiveSegmentID:
+          type: string
+        SegmentID:
+          type: string
+        SegmentType:
+          type: string
+        Status:
+          type: string
+        ProcessingStatus:
+          type: string
+        StartTime:
+          type: string
+          format: date-time
+          nullable: true
+        EndTime:
+          type: string
+          format: date-time
+          nullable: true
+        CompletedAt:
+          type: string
+          format: date-time
+          nullable: true
+        Outcome:
+          type: string
+        ClientEvents:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClientEvent"
+        CharacterUpdates:
+          type: object
+        Decision:
+          type: string
+        ChallengeResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChallengeResult"
+        SkillXPAwarded:
+          type: object
+        AttributeXPAwarded:
+          type: object
+        CombatState:
+          $ref: "#/components/schemas/CombatState"
+        NextSegmentID:
+          type: string
+
+    SegmentHistoryResponse:
+      type: object
+      properties:
+        CharacterID:
+          type: string
+        StoryID:
+          type: string
+          nullable: true
+        Segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/SegmentHistoryItem"
+      required: [CharacterID, Segments]
+
+    AbandonResponse:
+      type: object
+      properties:
+        CharacterID:
+          type: string
+        StoryID:
+          type: string
+        Abandoned:
+          type: boolean
+        Message:
+          type: string
+      required: [CharacterID, StoryID, Abandoned]

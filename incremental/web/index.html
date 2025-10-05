@@ -34,11 +34,18 @@
 
     <style>
       body {
-        background-color: #000000;
+        background-color: #1f2224;
         margin: 0;
         padding: 0;
       }
     </style>
+
+    <script>
+      // Configure Flutter web renderer to avoid WebGL deprecation warnings
+      // Options: "canvaskit", "html", or "auto"
+      // CanvasKit provides better performance and consistency across browsers
+      window.flutterWebRenderer = "canvaskit";
+    </script>
   </head>
   <body>
     <script src="flutter_bootstrap.js" async></script>

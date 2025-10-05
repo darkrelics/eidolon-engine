@@ -30,8 +30,8 @@ phases:
               cp -r eidolon "build_temp/$func_name/"
             fi
 
-            # Include bloom filter data for api_add_character
-            if [ "$func_name" = "api_add_character" ]; then
+            # Include bloom filter data for api_character_add
+            if [ "$func_name" = "api_character_add" ]; then
               cp lambda/character_name_filter.pkl "build_temp/$func_name/"
             fi
 
@@ -51,8 +51,3 @@ phases:
             aws s3 cp "$zip_file" "s3://$S3_BUCKET/$(basename $zip_file)"
           fi
         done
-
-artifacts:
-  files:
-    - lambda/*.zip
-  name: lambda-functions

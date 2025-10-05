@@ -1,23 +1,12 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
-import '../utils/error_handler.dart';
+
+import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
 
 class PasswordResetScreen extends StatefulWidget {
   const PasswordResetScreen({super.key});
@@ -40,6 +29,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   Future<void> _handlePasswordReset() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -66,7 +56,9 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

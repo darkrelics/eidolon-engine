@@ -10,6 +10,7 @@ Game:
   Balance: 0.25
   StartingHealth: 10
   StartingEssence: 3
+  MaxCharactersPerPlayer: 10
   NamesPath: ../data/names.txt
   ObscenityPath: ../data/obscenity.txt
   ScriptsS3Prefix: scripts
@@ -46,7 +47,19 @@ DynamoDB:
     Exits: exits
     Prototypes: prototypes
     Motd: motd
+    Segments: segments
+    ActiveSegments: active_segments
+    Opponents: opponents
+    CharacterHistory: character_history
+    StoryHistory: story_history
+    SegmentHistory: segment_history
   AccessPolicyArn: "" # deployment-generated
+
+# Story infrastructure (deployment-generated)
+Story:
+  ProcessingQueueUrl: ""
+  AdvancementQueueUrl: ""
+  SSMParameter: ""
 
 # API configuration (required)
 API:

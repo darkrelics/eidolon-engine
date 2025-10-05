@@ -1,19 +1,8 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 
 package main
@@ -63,13 +52,13 @@ type Room struct {
 
 // RoomData represents the structure for storing room data in DynamoDB
 type RoomData struct {
-	RoomID      int64    `json:"roomID" dynamodbav:"RoomID"`
-	Area        string   `json:"area" dynamodbav:"Area"`
-	Title       string   `json:"title" dynamodbav:"Title"`
-	Description string   `json:"description" dynamodbav:"Description"`
-	ExitIDs     []string `json:"exitID" dynamodbav:"ExitID"`
-	Persistent  bool     `json:"persistent" dynamodbav:"Persistent"`
-	ScriptID    string   `json:"scriptID" dynamodbav:"ScriptID"`
+	RoomID      int64    `json:"RoomID" dynamodbav:"RoomID"`
+	Area        string   `json:"Area" dynamodbav:"Area"`
+	Title       string   `json:"Title" dynamodbav:"Title"`
+	Description string   `json:"Description" dynamodbav:"Description"`
+	ExitIDs     []string `json:"ExitID" dynamodbav:"ExitID"`
+	Persistent  bool     `json:"Persistent" dynamodbav:"Persistent"`
+	ScriptID    string   `json:"ScriptID" dynamodbav:"ScriptID"`
 }
 
 func NewRoom(ctx context.Context, roomID int64, area, title, description string, persistent bool, scriptID string) *Room {

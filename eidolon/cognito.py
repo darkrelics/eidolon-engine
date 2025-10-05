@@ -5,10 +5,10 @@ Provides common authentication and authorization helpers for API Gateway
 Lambda functions using Cognito user pools.
 """
 
-import json
+from eidolon.logger import logger
 
 
-def extract_player_id(event: dict):
+def extract_player_id(event: dict) -> str:
     """
     Extract player ID from Cognito authorizer claims.
 
@@ -16,83 +16,16 @@ def extract_player_id(event: dict):
         event: API Gateway Lambda event
 
     Returns:
-        Player ID (Cognito sub) or None if not found
+        Player ID (Cognito sub)
+
+    Raises:
+        ValueError: If no player ID found in claims
     """
     claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    return claims.get("sub")
-
-
-def require_auth(event: dict) -> tuple:
-    """
-    Validate authentication and return player_id or error response.
-
-    Args:
-        event: API Gateway Lambda event
-
-    Returns:
-        Tuple of (player_id, error_response)
-        - If authenticated: (player_id, None)
-        - If not authenticated: (None, error_response_dict)
-    """
-    player_id = extract_player_id(event)
+    player_id = claims.get("sub")
 
     if not player_id:
-        error_response = {
-            "statusCode": 401,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Unauthorized"}),
-        }
-        return None, error_response
+        logger.warning("No player ID found in authorization claims")
+        raise ValueError("No player ID found in authorization claims")
 
-    return player_id, None
-
-
-def extract_user_email(event: dict):
-    """
-    Extract user email from Cognito authorizer claims.
-
-    Args:
-        event: API Gateway Lambda event
-
-    Returns:
-        User email or None if not found
-    """
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    return claims.get("email")
-
-
-def extract_username(event: dict):
-    """
-    Extract username from Cognito authorizer claims.
-
-    Args:
-        event: API Gateway Lambda event
-
-    Returns:
-        Username (cognito:username) or None if not found
-    """
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    return claims.get("cognito:username")
-
-
-def has_permission(event: dict, permission: str) -> bool:
-    """
-    Check if user has a specific permission.
-
-    This is a placeholder for future permission system implementation.
-    Currently returns True for all authenticated users.
-
-    Args:
-        event: API Gateway Lambda event
-        permission: Permission string to check
-
-    Returns:
-        True if user has permission, False otherwise
-    """
-    player_id = extract_player_id(event)
-    if not player_id:
-        return False
-
-    # TODO: Implement actual permission checking
-    # For now, all authenticated users have all permissions
-    return True
+    return player_id

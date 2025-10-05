@@ -1,23 +1,15 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
-import '../utils/error_handler.dart';
+
+import 'package:eidolon_incremental/constants/navigation_constants.dart';
+import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/providers/theme_provider.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
+import 'package:eidolon_incremental/widgets/shared/keyboard_shortcuts.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -30,6 +22,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   bool _isLoading = false;
 
   Future<void> _handleSignOut() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -45,7 +38,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signOut')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'signOut'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -66,6 +61,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final doubleConfirmed = await _showFinalDeleteConfirmationDialog();
     if (!doubleConfirmed || !mounted) return;
 
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
     });
@@ -75,19 +71,21 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       await authProvider.deleteAccount();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Your account has been deleted'),
-            backgroundColor: Colors.green,
-          ),
+        Navigator.pushReplacementNamed(
+          context,
+          '/login',
+          arguments: {
+            NavigationConstants.messageKey: 'Your account has been deleted',
+          },
         );
-        Navigator.pushReplacementNamed(context, '/login');
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'deleteAccount')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'deleteAccount'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -183,6 +181,47 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               child: Column(
                 children: [
                   ListTile(
+                    leading: const Icon(Icons.palette),
+                    title: const Text('Appearance'),
+                    subtitle: const Text('Customize the app appearance'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.brightness_6),
+                    title: const Text('Theme'),
+                    subtitle: const Text(
+                      'Choose between light, dark, or system theme',
+                    ),
+                    trailing: const ThemeModeSelector(),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.help),
+                    title: const Text('Help'),
+                    subtitle: const Text('Get help with the app'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.keyboard),
+                    title: const Text('Keyboard Shortcuts'),
+                    subtitle: const Text('View available keyboard shortcuts'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => KeyboardShortcutHelp.show(context),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
                     leading: const Icon(Icons.security),
                     title: const Text('Security'),
                     subtitle: const Text('Manage your account security'),
@@ -191,7 +230,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.lock_reset),
                     title: const Text('Change Password'),
-                    trailing: const Icon(Icons.arrow_forward_ios),
+                    trailing: const Icon(Icons.chevron_right),
                     onTap: _isLoading
                         ? null
                         : () {
@@ -228,7 +267,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     subtitle: const Text(
                       'Permanently delete your account and all data',
                     ),
-                    trailing: const Icon(Icons.arrow_forward_ios),
+                    trailing: const Icon(Icons.chevron_right),
                     onTap: _isLoading ? null : _handleDeleteAccount,
                   ),
                 ],

@@ -3,11 +3,10 @@ on:
   push:
     branches: [develop, qa, prod]
     paths:
-      - "scripts_lua/**/*.lua"
+      - "scripts_lua/*.lua"
   pull_request:
-    branches: "**"
     paths:
-      - "scripts_lua/**/*.lua"
+      - "scripts_lua/*.lua"
 
 jobs:
   validate-lua:
@@ -15,7 +14,7 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install Lua
         run: |

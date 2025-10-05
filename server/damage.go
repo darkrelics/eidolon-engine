@@ -1,19 +1,8 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 
 package main
@@ -44,8 +33,8 @@ const (
 
 // Wound represents a single point of damage with its heal time
 type Wound struct {
-	DamageType string    `json:"damage_type" dynamodbav:"damage_type"`
-	HealAt     time.Time `json:"heal_at" dynamodbav:"heal_at"`
+	DamageType string    `json:"DamageType" dynamodbav:"damage_type"`
+	HealAt     time.Time `json:"HealAt" dynamodbav:"heal_at"`
 }
 
 func GetHealingDuration(damageType string) time.Duration {
@@ -73,13 +62,13 @@ func (c *Character) TakeDamage(damageType string, amount int) {
 	}
 
 	c.addWounds(damageType, amount)
-	c.health = c.maxHealth - len(c.wounds)
+	currentHealth := c.maxHealth - len(c.wounds)
 
 	damageMsg := fmt.Sprintf("You take %d %s damage! Health: %d/%d\n\r",
-		originalAmount, damageType, c.health, c.maxHealth)
+		originalAmount, damageType, currentHealth, c.maxHealth)
 	c.playerCommandOut <- damageMsg
 
-	if c.health <= 0 {
+	if currentHealth <= 0 {
 		c.updateStateWhenHealthZero()
 	}
 }
@@ -173,6 +162,18 @@ func min(a, b int) int {
 	return b
 }
 
+// GetHealth returns the current health calculated as MaxHealth - number of wounds
+func (c *Character) GetHealth() int {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	if c.charState == CharStateDead {
+		return 0
+	}
+
+	return c.maxHealth - len(c.wounds)
+}
+
 func (c *Character) CalculateCurrentHealth() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -192,11 +193,11 @@ func (c *Character) CalculateCurrentHealth() {
 
 	if len(activeWounds) != len(c.wounds) {
 		healed := len(c.wounds) - len(activeWounds)
+		oldWoundsCount := len(c.wounds)
 		c.wounds = activeWounds
-		oldHealth := c.health
-		c.health = c.maxHealth - len(c.wounds)
+		currentHealth := c.maxHealth - len(c.wounds)
 
-		if oldHealth <= 0 && c.health > 0 && c.charState == CharStateUnconscious {
+		if oldWoundsCount >= c.maxHealth && currentHealth > 0 && c.charState == CharStateUnconscious {
 			c.charState = CharStateStanding
 			if c.player != nil {
 				c.playerCommandOut <- ApplyColor("green", "You regain consciousness!\n\r")
@@ -205,7 +206,7 @@ func (c *Character) CalculateCurrentHealth() {
 
 		if healed > 0 && c.player != nil {
 			c.playerCommandOut <- fmt.Sprintf("You heal %d wound%s. Health: %d/%d\n\r",
-				healed, pluralize(healed), c.health, c.maxHealth)
+				healed, pluralize(healed), currentHealth, c.maxHealth)
 		}
 	}
 }

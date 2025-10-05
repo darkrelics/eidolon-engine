@@ -1,0 +1,53 @@
+name: Story Validation
+
+on:
+  pull_request:
+    paths:
+      - "data/**/*.json"
+      - "incremental/schemas/**/*.json"
+      - "scripts_python/validate_*.py"
+  push:
+    branches: [develop, qa, prod]
+    paths:
+      - "data/**/*.json"
+
+permissions:
+  pull-requests: read
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  validate-stories:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install validation dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install jsonschema
+
+      - name: Validate story branching
+        id: validate_branching
+        run: |
+          python3 scripts_python/validate_branching.py data/test_story.json data/test_story_branching.json
+
+      - name: Validate story content
+        id: validate_content
+        run: |
+          python3 scripts_python/validate_story_content.py data/test_story.json data/test_story_branching.json
+
+      - name: Generate validation summary
+        if: always()
+        run: |
+          echo "## Story Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Branching validation: ${{ steps.validate_branching.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Content validation: ${{ steps.validate_content.outcome }}" >> $GITHUB_STEP_SUMMARY

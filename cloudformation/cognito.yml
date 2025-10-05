@@ -1,33 +1,84 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "Cognito User Pool, Client, and Identity Pool for Eidolon Engine with S3 story access"
+Description: "Cognito User Pool, Client, and Identity Pool for Eidolon Engine"
 
 Parameters:
-  UserPoolName:
+  GameName:
     Type: String
-    Description: Name of the user pool
-    Default: eidolon-user-pool
-
-  AppClientName:
-    Type: String
-    Description: Name of the app client
-    Default: eidolon-app-client
+    Default: "eidolon"
+    Description: "Name of the game"
 
   ReplyEmailAddress:
     Type: String
-    Description: Email address to send notifications from
-    Default: contact@darkrelics.net
+    Description: "Email address to send notifications from"
+    Default: "noreply@darkrelics.net"
 
-  StoryBucketName:
+  LambdaBucketName:
     Type: String
-    Description: Name of the S3 bucket containing story content
-    AllowedPattern: ^[a-z0-9][a-z0-9-]*[a-z0-9]$
-    ConstraintDescription: Must be a valid S3 bucket name
+    Description: "S3 bucket containing Lambda deployment packages"
+
+  LambdaZipKey:
+    Type: String
+    Default: "lambda.zip"
+    Description: "S3 key for Lambda deployment package"
 
 Resources:
+  # Lambda functions for Cognito triggers
+  CognitoNewPlayerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${GameName}-cognito-new-player"
+      Runtime: python3.12
+      Handler: cognito_new_player.lambda_handler
+      Code:
+        S3Bucket: !Ref LambdaBucketName
+        S3Key: !Ref LambdaZipKey
+      Environment:
+        Variables:
+          PLAYERS_TABLE: players
+      MemorySize: 128
+      Timeout: 30
+      Role: !ImportValue
+        Fn::Sub: "iam-${AWS::StackName}-LambdaExecutionRoleArn"
+
+  CognitoDeletePlayerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${GameName}-cognito-delete-player"
+      Runtime: python3.12
+      Handler: cognito_delete_player.lambda_handler
+      Code:
+        S3Bucket: !Ref LambdaBucketName
+        S3Key: !Ref LambdaZipKey
+      Environment:
+        Variables:
+          PLAYERS_TABLE: players
+          CHARACTERS_TABLE: characters
+      MemorySize: 128
+      Timeout: 30
+      Role: !ImportValue
+        Fn::Sub: "iam-${AWS::StackName}-LambdaExecutionRoleArn"
+
+  # Lambda permissions for Cognito triggers
+  CognitoNewPlayerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CognitoNewPlayerFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
+  CognitoDeletePlayerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CognitoDeletePlayerFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
-      UserPoolName: !Ref UserPoolName
+      UserPoolName: !Sub "${GameName}-user-pool"
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -51,11 +102,13 @@ Resources:
         RecoveryMechanisms:
           - Name: verified_email
             Priority: 1
+      LambdaConfig:
+        PostConfirmation: !GetAtt CognitoNewPlayerFunction.Arn
 
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
-      ClientName: !Ref AppClientName
+      ClientName: !Sub "${GameName}-web-client"
       UserPoolId: !Ref CognitoUserPool
       GenerateSecret: false
       ExplicitAuthFlows:
@@ -77,7 +130,7 @@ Resources:
   CognitoIdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
-      IdentityPoolName: !Sub "${UserPoolName}-identity-pool"
+      IdentityPoolName: !Sub "${GameName}-identity-pool"
       AllowUnauthenticatedIdentities: false
       CognitoIdentityProviders:
         - ClientId: !Ref CognitoUserPoolClient
@@ -93,7 +146,7 @@ Resources:
   CognitoAuthenticatedRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub "${UserPoolName}-authenticated-role"
+      RoleName: !Sub "${GameName}-authenticated-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -107,7 +160,7 @@ Resources:
               ForAnyValue:StringLike:
                 cognito-identity.amazonaws.com:amr: authenticated
       Policies:
-        - PolicyName: S3StoryReadAccess
+        - PolicyName: S3AccessPolicy
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -115,38 +168,36 @@ Resources:
                 Action:
                   - s3:GetObject
                 Resource:
-                  - !Sub "arn:aws:s3:::${StoryBucketName}/stories/*"
+                  - !Sub "arn:aws:s3:::${GameName}-scripts/stories/*"
+                  - !Sub "arn:aws:s3:::${GameName}-scripts/images/*"
               - Effect: Allow
                 Action:
                   - s3:ListBucket
                 Resource:
-                  - !Sub "arn:aws:s3:::${StoryBucketName}"
+                  - !Sub "arn:aws:s3:::${GameName}-scripts"
                 Condition:
                   StringLike:
                     s3:prefix:
                       - "stories/*"
+                      - "images/*"
 
 Outputs:
   UserPoolId:
-    Description: ID of the Cognito User Pool
+    Description: "ID of the Cognito User Pool"
     Value: !Ref CognitoUserPool
 
   UserPoolArn:
-    Description: ARN of the Cognito User Pool
+    Description: "ARN of the Cognito User Pool"
     Value: !GetAtt CognitoUserPool.Arn
 
   UserPoolClientId:
+    Description: "ID of the Cognito App Client"
     Value: !Ref CognitoUserPoolClient
-    Description: ID of the Cognito App Client
 
   IdentityPoolId:
-    Description: ID of the Cognito Identity Pool
+    Description: "ID of the Cognito Identity Pool"
     Value: !Ref CognitoIdentityPool
 
   AuthenticatedRoleArn:
-    Description: ARN of the authenticated IAM role
+    Description: "ARN of the authenticated IAM role"
     Value: !GetAtt CognitoAuthenticatedRole.Arn
-
-  StoryBucketName:
-    Description: Name of the S3 bucket for story content
-    Value: !Ref StoryBucketName

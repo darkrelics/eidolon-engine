@@ -1,6 +1,6 @@
 {
-  "archetypes": {
-    "wizard": {
+  "Archetypes": {
+    "Wizard": {
       "ArchetypeName": "Wizard",
       "Description": "A Wizard!",
       "Health": 8,
@@ -35,30 +35,35 @@
         "Appraise": 1.0
       },
       "StartRoom": 8,
+      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d", "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1"],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "Slot": "finger",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
-    "rogue": {
+    "Rogue": {
       "ArchetypeName": "Rogue",
       "Description": "A Rogue!",
       "Health": 10,
@@ -93,30 +98,35 @@
         "Appraise": 0.0
       },
       "StartRoom": 10,
+      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d", "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1"],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "Slot": "armor",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
-    "warrior": {
+    "Warrior": {
       "ArchetypeName": "Warrior",
       "Description": "A Warrior!",
       "Health": 12,
@@ -151,30 +161,35 @@
         "Appraise": 0.0
       },
       "StartRoom": 4,
+      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d", "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1"],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
           "Slot": "back",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": true
         },
         {
           "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "Slot": "armor",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Slot": "",
-          "IsWorn": false
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
-    "goblin": {
+    "Goblin": {
       "ArchetypeName": "Goblin",
       "Description": "A mischievous goblin creature",
       "Health": 6,
@@ -209,11 +224,13 @@
         "Appraise": 1.0
       },
       "StartRoom": 10,
+      "AvailableStories": [],
       "StartingItems": [
         {
           "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Slot": "weapon",
-          "IsWorn": true
+          "IsWorn": true,
+          "Container": false
         }
       ]
     }

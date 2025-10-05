@@ -3,19 +3,8 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 
 package main
@@ -110,13 +99,13 @@ func (h *CloudWatchHandler) Handle(ctx context.Context, record slog.Record) erro
 
 	// Marshal record to JSON for CloudWatch
 	type logEntry struct {
-		Time    string         `json:"time"`
-		Level   string         `json:"level"`
-		Message string         `json:"message"`
-		Attrs   map[string]any `json:"attrs,omitempty"`
-		File    string         `json:"file,omitempty"`
-		Line    int            `json:"line,omitempty"`
-		Func    string         `json:"function,omitempty"`
+		Time    string         `json:"Time"`
+		Level   string         `json:"Level"`
+		Message string         `json:"Message"`
+		Attrs   map[string]any `json:"Attrs,omitempty"`
+		File    string         `json:"File,omitempty"`
+		Line    int            `json:"Line,omitempty"`
+		Func    string         `json:"Function,omitempty"`
 	}
 
 	entry := logEntry{

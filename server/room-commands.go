@@ -1,19 +1,8 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 
 package main
@@ -471,7 +460,6 @@ func getRangeDescription(distance float64) string {
 }
 
 // initiateCombat sets up combat ranges between two characters at the specified distance
-// TODO: Currently unused - placeholder for future combat system features
 func (r *Room) initiateCombat(char1, char2 *Character, distance float64) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -487,8 +475,6 @@ func (r *Room) initiateCombat(char1, char2 *Character, distance float64) {
 	r.combatRanges[char2.id][char1.id] = distance
 }
 
-// removeCombatRange removes combat range between two specific characters
-// TODO: Currently unused - placeholder for future combat system features
 // removeCharacterFromCombat removes all combat ranges for a specific character
 func (r *Room) removeCharacterFromCombat(character *Character) {
 	r.mutex.Lock()
@@ -506,7 +492,6 @@ func (r *Room) removeCharacterFromCombat(character *Character) {
 }
 
 // getCombatRange returns the combat range between two characters, or -1 if not in combat
-// TODO: Currently unused - placeholder for future combat system features
 func (r *Room) getCombatRange(char1, char2 *Character) float64 {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()

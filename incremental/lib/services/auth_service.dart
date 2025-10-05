@@ -1,55 +1,88 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-/// Configuration class for storing Cognito settings
-class AppConfig {
+/// Configuration class for AWS Cognito authentication settings.
+///
+/// This class manages the Cognito User Pool and Client IDs needed for authentication.
+/// In production, these values MUST be provided via environment variables during build.
+/// In development mode (kDebugMode), placeholder values are used as fallbacks to simplify local testing.
+///
+/// The environment variables USER_POOL_ID and CLIENT_ID are injected at compile time
+/// using the --dart-define flags during the Flutter build process.
+class CognitoConfig {
   static const String userPoolId = String.fromEnvironment('USER_POOL_ID');
   static const String clientId = String.fromEnvironment('CLIENT_ID');
 
+  /// Development fallback values for local testing only.
+  /// These are placeholder values that allow the app to run in development mode
+  /// without requiring actual AWS Cognito configuration.
+  /// NEVER use these in production - they are intentionally invalid.
   static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
   static String get _devClientId =>
       kDebugMode ? '1example2client3id4567890abc' : '';
 
+  /// Returns the User Pool ID with fallback to development value in debug mode
   static String get userPoolIdWithFallback =>
       userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
 
+  /// Returns the Client ID with fallback to development value in debug mode
   static String get clientIdWithFallback =>
       clientId.isNotEmpty ? clientId : _devClientId;
 
+  /// Validates that the Cognito configuration is properly set.
+  /// In production (release mode), this ensures environment variables are provided.
+  /// In development (debug mode), this allows fallback values to be used.
+  ///
+  /// This should be called during app initialization to fail fast on configuration issues.
   static void validateConfiguration() {
     final effectiveUserPoolId = userPoolIdWithFallback;
     final effectiveClientId = clientIdWithFallback;
 
-    if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
-      throw ConfigurationException('Invalid identity provider configuration.');
-    }
-
-    if (effectiveClientId.isEmpty) {
-      throw ConfigurationException('Client configuration is incomplete.');
-    }
-
+    // In production, environment variables MUST be provided - no fallbacks allowed
     if (kReleaseMode && (userPoolId.isEmpty || clientId.isEmpty)) {
       throw ConfigurationException(
-        'Production build is missing required environment variables.',
+        'Production build is missing required environment variables. '
+        'Ensure USER_POOL_ID and CLIENT_ID are provided via --dart-define during build.',
       );
     }
+
+    // Basic validation - user pool ID must have the correct format
+    if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
+      throw ConfigurationException(
+        'Invalid User Pool ID format. Expected format: "region_poolId" (e.g., "us-east-1_abcd1234")',
+      );
+    }
+
+    // Client ID must be present and have reasonable length
+    if (effectiveClientId.isEmpty) {
+      throw ConfigurationException(
+        'Client ID is missing. Ensure CLIENT_ID environment variable is set.',
+      );
+    }
+
+    if (effectiveClientId.length < 10) {
+      throw ConfigurationException(
+        'Client ID appears invalid (too short). Expected a valid Cognito Client ID.',
+      );
+    }
+  }
+
+  /// Static validation that runs when the class is first accessed.
+  /// This ensures configuration issues are caught early in the app lifecycle.
+  // ignore: unused_field
+  static final bool _isValidated = _performEarlyValidation();
+
+  static bool _performEarlyValidation() {
+    // Only validate automatically in release mode to catch production issues early
+    if (kReleaseMode) {
+      validateConfiguration();
+    }
+    return true;
   }
 }
 
@@ -80,9 +113,11 @@ class AuthExceptionMapper {
       // Log the error code in debug mode to help diagnose issues
       if (kDebugMode) {
         debugPrint('AuthExceptionMapper: Cognito error code: ${error.code}');
-        debugPrint('AuthExceptionMapper: Cognito error message: ${error.message}');
+        debugPrint(
+          'AuthExceptionMapper: Cognito error message: ${error.message}',
+        );
       }
-      
+
       switch (error.code) {
         case 'UserNotFoundException':
         case 'NotAuthorizedException':
@@ -106,22 +141,25 @@ class AuthExceptionMapper {
           return 'Verification code has expired. Please request a new one';
         default:
           // Check if the error message contains username exists indication
-          if (error.message?.toLowerCase().contains('username exists') == true ||
-              error.message?.toLowerCase().contains('user already exists') == true ||
-              error.message?.toLowerCase().contains('already registered') == true) {
+          if (error.message?.toLowerCase().contains('username exists') ==
+                  true ||
+              error.message?.toLowerCase().contains('user already exists') ==
+                  true ||
+              error.message?.toLowerCase().contains('already registered') ==
+                  true) {
             return 'The Player Account already exists.';
           }
           return 'An error occurred. Please try again';
       }
     }
-    
+
     // Additional check for non-Cognito exceptions that might indicate duplicate account
     if (error.toString().toLowerCase().contains('username exists') ||
         error.toString().toLowerCase().contains('user already exists') ||
         error.toString().toLowerCase().contains('already registered')) {
       return 'The Player Account already exists.';
     }
-    
+
     return 'An unexpected error occurred. Please try again';
   }
 }
@@ -153,10 +191,10 @@ class AuthService {
     if (_isInitialized) return;
 
     try {
-      AppConfig.validateConfiguration();
+      CognitoConfig.validateConfiguration();
 
-      final userPoolId = AppConfig.userPoolIdWithFallback;
-      final clientId = AppConfig.clientIdWithFallback;
+      final userPoolId = CognitoConfig.userPoolIdWithFallback;
+      final clientId = CognitoConfig.clientIdWithFallback;
 
       userPool = CognitoUserPool(userPoolId, clientId);
       _isInitialized = true;
@@ -312,26 +350,22 @@ class AuthService {
     await _ensureInitialized();
 
     try {
-      debugPrint(
-        'AuthService: isAuthenticated check - _currentUser: ${_currentUser != null}, _session: ${_session != null}',
-      );
+      // debugPrint('AuthService: isAuthenticated check - _currentUser: ${_currentUser != null}, _session: ${_session != null}');
 
       if (_currentUser == null || _session == null) {
-        debugPrint(
-          'AuthService: No current session in memory, attempting restore...',
-        );
+        // debugPrint('AuthService: No current session in memory, attempting restore...');
         final restored = await _restoreSession();
-        debugPrint('AuthService: Restore session result: $restored');
+        // debugPrint('AuthService: Restore session result: $restored');
         if (!restored) return false;
       }
 
       if (_session == null) return false;
 
       final isValid = _session!.isValid();
-      debugPrint('AuthService: Session validity: $isValid');
+      // debugPrint('AuthService: Session validity: $isValid');
 
       if (!isValid) {
-        debugPrint('AuthService: Session invalid, attempting refresh...');
+        // debugPrint('AuthService: Session invalid, attempting refresh...');
         return await _refreshSession();
       }
 

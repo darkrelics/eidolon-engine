@@ -1,8 +1,0 @@
-{
-  "development": {
-    "testArchetypesPath": "packages/eidolon_engine/data/test_archetypes.json"
-  },
-  "production": {
-    "archetypeManifestUrl": null
-  }
-}

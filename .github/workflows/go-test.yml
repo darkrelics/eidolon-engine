@@ -3,8 +3,11 @@ name: Go Test
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "server/**"
   pull_request:
-    branches: "**"
+    paths:
+      - "server/**"
 
 jobs:
   test:
@@ -12,12 +15,12 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.24
+          go-version-file: server/go.mod
 
       - name: Run tests
         run: |

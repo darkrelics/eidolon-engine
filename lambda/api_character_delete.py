@@ -1,0 +1,127 @@
+"""
+Eidolon Engine
+
+Copyright 2024-2025 Jason E. Robinson
+
+Lambda function to delete a character for an authenticated player.
+Ensures the character belongs to the player before deletion.
+"""
+
+from eidolon.character_data import character_get
+from eidolon.cognito import extract_player_id
+from eidolon.cors import cors_handler
+from eidolon.logger import log_lambda_statistics, logger
+from eidolon.player_character import delete_character
+from eidolon.requests import get_query_parameter
+from eidolon.responses import lambda_error, lambda_response
+
+
+def character_deletion(player_id: str, character_id: str) -> dict:
+    """
+    Handle the business logic for character deletion.
+
+    This function orchestrates the character deletion process without
+    performing any AWS-specific operations.
+
+    Args:
+        player_id: Cognito user ID
+        character_id: Character UUID
+
+    Returns:
+        Dict containing:
+            - success: bool - Whether deletion was successful
+            - character_name: str - Name of deleted character
+            - deletion_result: dict - Detailed deletion results
+
+    Raises:
+        ValueError: If character not found, invalid ID, or not owned by player
+        RuntimeError: If database operations fail
+    """
+    # Verify ownership
+    character: dict = character_get(character_id, player_id)
+    character_name = character.get("CharacterName", "Unknown")
+
+    logger.info(f"Character ownership verified, proceeding with deletion for {character_id}")
+
+    # Delete the character
+    deletion_result: dict = delete_character(character_id, remove_from_player_list=True)
+
+    logger.info(f"Character deletion completed for {character_id}")
+
+    # Check if deletion was successful
+    if not deletion_result.get("CharacterDeleted", False):
+        error_msg = "Failed to delete character"
+        errors = deletion_result.get("Errors", [])
+        if errors:
+            error_msg = errors[0]
+        raise RuntimeError(error_msg)
+
+    return {"success": True, "character_name": character_name, "deletion_result": deletion_result}
+
+
+def lambda_handler(event: dict, context: object) -> dict:
+    """
+    Lambda handler for character deletion API.
+
+    Args:
+        event: API Gateway event with Cognito authorizer
+        context: Lambda context
+
+    Returns:
+        API Gateway response
+    """
+    # Log invocation
+    log_lambda_statistics(event, context)
+
+    # Handle preflight
+    preflight_response: dict = cors_handler.handle_preflight(event)
+    if preflight_response:
+        return preflight_response
+
+    # Extract player ID from JWT
+    try:
+        player_id: str = extract_player_id(event)
+    except ValueError as err:
+        logger.warning(f"Authentication failed: {err}", exc_info=False)
+        return lambda_response(401, {"Error": "Unauthorized"}, event)
+    except Exception as err:
+        return lambda_error(event, err)
+
+    # Get character ID from query parameters
+    character_id = get_query_parameter(event, "CharacterID")
+    if not character_id:
+        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+
+    # Call business logic
+    try:
+        result: dict = character_deletion(player_id, character_id)  # type: ignore
+        return lambda_response(
+            200,
+            {
+                "Message": "Character deleted successfully",
+                "CharacterID": character_id,
+                "CharacterName": result.get("character_name", "Unknown"),
+                "ItemsDeleted": result.get("deletion_result", {}).get("ItemsDeleted", 0),
+                "ActiveSegmentsDeleted": result.get("deletion_result", {}).get("ActiveSegmentsDeleted", 0),
+            },
+            event,
+        )
+    except ValueError as err:
+        # Character not found or not owned by player
+        logger.warning(f"Character deletion validation failed for {character_id} Error: {err}")
+        error_msg: str = str(err).lower()
+        if "not found" in error_msg:
+            return lambda_response(404, {"Error": "Character not found"}, event)
+        elif "not owned" in error_msg or "ownership" in error_msg:
+            return lambda_response(403, {"Error": "Access denied"}, event)
+        else:
+            return lambda_response(400, {"Error": "Unexpected Event"}, event)
+    except RuntimeError as err:
+        # Database or deletion failures
+        logger.error(
+            f"Character deletion system error for {character_id} Error: {err}",
+            exc_info=True,
+        )
+        return lambda_response(500, {"Error": "Internal server error"}, event)
+    except Exception as err:
+        return lambda_error(event, err)

@@ -11,22 +11,19 @@
 ![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
 ![Flutter](https://img.shields.io/badge/Flutter-%2302569B.svg?style=for-the-badge&logo=Flutter&logoColor=white)
 
-![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
-![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)
-
 # Eidolon Engine
 
-A multi-mode game engine supporting both incremental RPG and MUD (Multi-User Dungeon) gameplay through a unified AWS backend.
+A multi-mode game engine supporting both story-driven incremental RPG and traditional MUD (Multi-User Dungeon) gameplay through a unified AWS backend.
 
 ## Overview
 
-Eidolon Engine provides three deployment modes using shared backend infrastructure:
+Eidolon Engine provides three deployment modes with a fully automated infrastructure deployment system:
 
-- **Incremental Mode**: Timer-based story progression with automated gameplay
-- **MUD Mode**: Traditional text-based multiplayer game with SSH access
-- **Hybrid Mode**: Combined incremental and MUD server deployment
+- **MUD Mode**: Traditional Multi-User Dungeon without story features
+- **Incremental Mode**: Story-driven gameplay with narrative progression
+- **Hybrid Mode**: Full feature set combining MUD and story elements (default)
 
-The system uses AWS Lambda functions as the primary backend, with different frontend applications for each mode.
+The system features a complete end-to-end deployment pipeline that provisions all AWS infrastructure and automatically deploys the frontend application.
 
 ## Key Features
 
@@ -36,14 +33,16 @@ The system uses AWS Lambda functions as the primary backend, with different fron
 - Timer-based incremental gameplay mechanics
 - Real-time MUD interactions via SSH
 - Persistent game state across sessions
-- Lua scripting for game content
 
 ### Technical Features
 
-- AWS Lambda backend for all game logic
-- DynamoDB for data persistence
-- Infrastructure as Code using AWS CDK
-- Automated deployment pipelines
+- AWS Lambda backend for all game logic (16 functions)
+- DynamoDB for data persistence (14 tables)
+- Infrastructure as Code using AWS CDK (9 stacks)
+- Fully automated deployment with portal build
+- Three deployment modes with dynamic stack ordering
+- Fixed logical IDs preventing resource recreation
+- Post-deployment Lambda updates from S3 artifacts
 - Flutter web applications
 - Go-based SSH server for MUD mode
 - Lua scripting for game mechanics and content
@@ -53,11 +52,13 @@ The system uses AWS Lambda functions as the primary backend, with different fron
 The engine uses a modern cloud-native architecture with a unified backend serving multiple frontends:
 
 - **Frontend Applications**:
+
   - Flutter web app for incremental gameplay (`/incremental`)
   - Flutter portal for MUD web interface (`/portal`)
   - SSH server for traditional MUD access (`/server`)
 
 - **Unified Backend Services** (shared by all game modes):
+
   - AWS Lambda functions for all game logic (`/lambda`)
   - DynamoDB tables for persistent game state
   - Character GameMode field prevents concurrent MUD/Incremental access
@@ -73,7 +74,7 @@ The engine uses a modern cloud-native architecture with a unified backend servin
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.12
 - Go 1.24+ (for MUD server)
 - Flutter 3.32+ (for web interfaces)
 - AWS CLI configured with appropriate credentials
@@ -96,24 +97,36 @@ The engine uses a modern cloud-native architecture with a unified backend servin
    python deploy.py
    ```
 
-3. **Choose deployment mode**:
-   - **Incremental Only**: Deploys incremental game UI and Lambda backend
-   - **MUD Only**: Deploys portal UI, Lambda backend, and prepares for server
-   - **Hybrid**: Full deployment with all components
+3. **Deployment Process**:
 
-4. **Access your game**:
-   - Web interfaces available via CloudFront distribution
+   The deployment system will:
+
+   - Prompt for configuration (AWS region, domain, deployment mode)
+   - Deploy infrastructure in the correct order based on selected mode
+   - Build Lambda functions and layer automatically
+   - Execute portal build and deploy to CloudFront
+   - Display the portal URL upon completion
+
+4. **Deployment Modes**:
+
+   - **MUD Mode**: Traditional MUD without story features (uses portal.yml buildspec)
+   - **Incremental Mode**: Story-driven gameplay (uses incremental.yml buildspec)
+   - **Hybrid Mode**: Full feature set (default, uses incremental.yml buildspec)
+
+5. **Access your game**:
+   - Portal URL: `https://portal.yourdomain.com` (displayed after deployment)
+   - API endpoint: `https://api.yourdomain.com`
    - SSH server can be run locally or on EC2 (MUD mode)
 
 ## Documentation
 
 Comprehensive documentation is available in the `/documentation` directory:
 
-- [Architecture Overview](documentation/architecture/overview.md)
-- [Deployment Guide](documentation/deployment/deployment-guide.md)
-- [Game Design](documentation/game-design/)
-- [API Reference](documentation/api/lambda-functions.md)
-- [Development Setup](documentation/development/local-setup.md)
+- [Deployment Design](documentation/deployment-design.md) - Architecture and infrastructure design
+- [Deployment Guide](documentation/deployment.md) - Step-by-step deployment instructions
+- [Incremental Game Design](documentation/incremental-design.md) - Game system design
+- [Game Mechanics](documentation/mechanics.md) - Core gameplay mechanics
+- [API Reference](documentation/lambda-functions.md) - Lambda function specifications
 
 ## Project Structure
 
@@ -132,7 +145,12 @@ eidolon-engine/
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines and coding standards.
+### Style Guides
+
+- [Python Style Guide](documentation/python-style.md) - Python coding standards
+- [Flutter Style Guide](documentation/flutter-style.md) - Flutter/Dart conventions
+- [AWS Style Guide](documentation/aws-style.md) - Infrastructure patterns
+- [Documentation Style Guide](documentation/style-guide.md) - Writing standards
 
 ### Running Locally
 
@@ -154,22 +172,13 @@ python deploy.py --analyze-only
 
 ## Deployment Modes
 
-The engine supports three deployment configurations, all using the same unified backend:
+Choose the deployment mode based on your game focus:
 
-1. **Incremental Mode**: Deploys the incremental game UI with timer-based progression
-2. **MUD Mode**: Deploys the Portal web interface for MUD access (SSH server deployed separately)
-3. **Hybrid Mode**: Deploys the incremental UI while supporting both game types
+- **MUD Mode**: Excludes story features, uses traditional MUD interface (`portal.yml`)
+- **Incremental Mode**: Excludes S3/CloudWatch stacks, uses story interface (`incremental.yml`)
+- **Hybrid Mode** (Default): All features enabled, uses story interface (`incremental.yml`)
 
-All modes share the same Lambda functions and DynamoDB tables. The character GameMode field ensures a character can only be active in one mode at a time, preventing concurrent access issues.
-
-## Contributing
-
-Contributions are welcome. Please see [CONTRIBUTING.md](CONTRIBUTING.md) for:
-
-- Code style and standards
-- Testing requirements
-- Pull request process
-- Issue reporting
+The deployment automatically adjusts stack order and buildspec selection based on the chosen mode.
 
 ## License
 

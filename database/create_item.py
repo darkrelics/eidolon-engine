@@ -1,81 +1,26 @@
-"""
-Eidolon Engine
+"""Utility to create an item from a prototype in the Items table."""
 
-Copyright 2024-2025 Jason Robinson
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-This module adds an item based on a prototype to a room.
-"""
-
+import argparse
 import os
+import sys
 import uuid
 from decimal import Decimal
 
-from eidolon.dynamo import delete_item, get_item, get_table, put_item, update_item
+from eidolon.dynamo import TableName, dynamo
 
-
-def display_rooms() -> list:
-    """
-    Fetches and displays all rooms from the 'rooms' DynamoDB table.
-
-    Returns:
-        A list of room dictionaries.
-    """
-    try:
-        rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
-        response = rooms_table.scan()
-        rooms = response.get("Items", [])
-        if not rooms:
-            print("No rooms found.")
-            return []
-
-        print("Available Rooms:")
-        for room in rooms:
-            room_id = int(room["RoomID"])
-            title = room.get("Title", "No Title")
-            print(f"{room_id}: {title}")
-        return rooms
-    except Exception as err:
-        print(f"Error fetching rooms: {err}")
-        return []
-
-
-def prompt_for_room():
-    """
-    Prompts the user to enter a room ID.
-
-    Returns:
-        The room ID entered by the user, or None to quit.
-    """
-    while True:
-        room_input = input("Enter room ID (X to quit): ").strip().upper()
-        if room_input == "X":
-            return None
-        try:
-            return int(room_input)
-        except ValueError:
-            print("Please enter a valid number or 'X' to quit.")
+# Ensure repo root is on path before importing eidolon modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def display_prototypes() -> list:
     """
     Fetches and displays all item prototypes from the 'prototypes' DynamoDB table.
+
+    Returns:
+        A list of prototype dictionaries.
     """
     try:
-        prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
-        response = prototypes_table.scan()
-        prototypes = response.get("Items", [])
+        prototypes = dynamo.scan_all(TableName.PROTOTYPES)
         if not prototypes:
             print("No prototypes found.")
             return []
@@ -83,7 +28,7 @@ def display_prototypes() -> list:
         print("Available Prototypes:")
         for prototype in prototypes:
             prototype_id = prototype.get("PrototypeID", "No ID")
-            name = prototype.get("prototype_name", "No Name")
+            name = prototype.get("PrototypeName", "No Name")
             print(f"{prototype_id}: {name}")
         return prototypes
     except Exception as err:
@@ -111,10 +56,19 @@ def create_new_item_from_prototype(prototype: dict) -> dict:
     Returns:
         A new item dictionary with a unique ID and properties copied from the prototype.
     """
+    # Pick a single slot string for Items.WornOn per schema (string, not list)
+    worn_on_value = ""
+    prototype_worn_on = prototype.get("WornOn")
+    if isinstance(prototype_worn_on, list) and prototype_worn_on:
+        # Use the first declared slot as a default
+        worn_on_value = str(prototype_worn_on[0])
+    elif isinstance(prototype_worn_on, str):
+        worn_on_value = prototype_worn_on
+
     new_item: dict = {
         "ItemID": str(uuid.uuid4()),
         "PrototypeID": prototype.get("PrototypeID", "No ID"),
-        "item_name": prototype.get("prototype_name", "Unnamed Item"),
+        "Name": prototype.get("PrototypeName", "Unnamed Item"),
         "Description": prototype.get("Description", ""),
         "Mass": Decimal(str(prototype.get("Mass", 0))),
         "Value": Decimal(str(prototype.get("Value", 0))),
@@ -122,12 +76,12 @@ def create_new_item_from_prototype(prototype: dict) -> dict:
         "MaxStack": Decimal(str(prototype.get("MaxStack", 1))),
         "Quantity": Decimal("1"),
         "Wearable": prototype.get("Wearable", False),
-        "WornOn": prototype.get("WornOn", []),
+        "WornOn": worn_on_value,
         "Verbs": prototype.get("Verbs", {}),
         "Overrides": prototype.get("Overrides", {}),
         "TraitMods": {k: Decimal(str(v)) for k, v in prototype.get("TraitMods", {}).items()},
         "Container": prototype.get("Container", False),
-        "Contents": prototype.get("Contents", []),
+        "Contents": [],
         "IsWorn": False,
         "CanPickUp": prototype.get("CanPickUp", True),
         "Metadata": prototype.get("Metadata", {}),
@@ -145,115 +99,68 @@ def add_item_to_table(new_item: dict) -> bool:
     Returns:
         True if the item was successfully added to the table, False otherwise.
     """
-    items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
-    if put_item(items_table, new_item):
-        print(f"Successfully added item '{new_item['item_name']}' to items table.")
+    try:
+        dynamo.put_item(TableName.ITEMS, new_item)
+        print(f"Successfully added item '{new_item['Name']}' to Items table.")
         return True
-    else:
-        print("Error saving new item to items table.")
+    except Exception as err:
+        print(f"Error saving new item to Items table: {err}")
         return False
 
 
-def add_item_to_room(room: dict, new_item: dict) -> bool:
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Create an item from a prototype in DynamoDB.")
+    parser.add_argument(
+        "--region",
+        default="us-east-1",
+        help="AWS region for DynamoDB (default: us-east-1)",
+    )
+    return parser.parse_args()
+
+
+def main(args: argparse.Namespace) -> None:
     """
-    Adds the new item to the 'items' table and updates the room to include the item.
-
-    Args:
-        room: The room dictionary where the item will be added.
-        new_item: The item dictionary to add.
-
-    Returns:
-        True if the item was successfully added to the room, False otherwise.
+    Allows the user to select a prototype and then creates an item in the Items table.
+    Conforms to documentation/schema.md field names. Does not link items to rooms.
     """
-    room_id = int(room.get("RoomID", 0))
 
-    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
-    current_room = get_item(rooms_table, {"RoomID": room_id})
-
-    if not current_room:
-        print(f"Room {room_id} not found.")
-        return False
-
-    current_item_ids = current_room.get("ItemID", [])
-
-    # Ensure current_item_ids is a list
-    if not isinstance(current_item_ids, list):
-        current_item_ids = [current_item_ids] if current_item_ids else []
-
-    # Add the new item's ID to the room's ItemID list
-    item_id = new_item.get("ItemID")
-    if not item_id:
-        print("New item does not have an ID.")
-        return False
-
-    current_item_ids.append(item_id)
-
-    if update_item(rooms_table, {"RoomID": room_id}, "SET ItemID = :item_ids", {":item_ids": current_item_ids}):
-        print(f"Successfully added item '{new_item['item_name']}' (ItemID: {new_item['ItemID']}) to room {room_id}")
-        return True
-    else:
-        print("Error updating room.")
-        # Attempt to roll back by deleting the item we just added
-        items_table = get_table(os.environ.get("ITEMS_TABLE", "items"))
-        if delete_item(items_table, {"ItemID": new_item["ItemID"]}):
-            print(f"Rolled back: Deleted item '{new_item['item_name']}' from items table.")
-        else:
-            print("Error rolling back item addition.")
-        return False
-
-
-def main() -> None:
-    """
-    Allows the user to select a room and a prototype, and then adds an item to the room.
-    """
+    dynamo.set_region(args.region)
 
     while True:
-        rooms: list = display_rooms()
-        if not rooms:
-            print("No rooms available. Exiting.")
-            break
+        try:
+            prototypes: list = display_prototypes()
+            if not prototypes:
+                print("No item prototypes found. Please add some prototypes first.")
+                break
 
-        room_id = prompt_for_room()
-        if room_id is None:
-            print("Exiting.")
-            break
+            prototype_id: str = prompt_for_prototype()
+            if not prototype_id:
+                print("No prototype selected. Exiting.")
+                break
 
-        room = next((r for r in rooms if int(r["RoomID"]) == room_id), None)
-        if not room:
-            print("Room not found.")
+            selected_prototype = next((p for p in prototypes if p.get("PrototypeID") == prototype_id), None)
+            if not selected_prototype:
+                print("Prototype not found.")
+                continue
+
+            print(f"Selected prototype: {selected_prototype}")
+
+            new_item: dict = create_new_item_from_prototype(selected_prototype)
+            print(f"New item created: {new_item}")
+
+            try:
+                add_item_to_table(new_item)
+            except (ValueError, RuntimeError) as err:
+                print(f"Failed to add item to table: {err}")
+                continue
+
+        except RuntimeError as err:
+            print(f"Database error: {err}")
             continue
-
-        prototypes: list = display_prototypes()
-        if not prototypes:
-            print("No item prototypes found. Please add some prototypes first.")
+        except Exception as err:
+            print(f"Unexpected error: {err}")
             continue
-
-        prototype_id: str = prompt_for_prototype()
-        if not prototype_id:
-            print("No prototype selected. Returning to room selection.")
-            continue
-
-        selected_prototype = next((p for p in prototypes if p.get("PrototypeID") == prototype_id), None)
-        if not selected_prototype:
-            print("Prototype not found.")
-            continue
-
-        print(f"Selected prototype: {selected_prototype}")
-
-        new_item: dict = create_new_item_from_prototype(selected_prototype)
-        print(f"New item created: {new_item}")
-
-        if add_item_to_table(new_item):
-            print(f"Successfully added '{new_item['item_name']}' to items table.")
-        else:
-            print("Failed to add item to table.")
-            continue
-
-        if add_item_to_room(room, new_item):
-            print(f"Successfully added '{new_item['item_name']}' to room {room_id}.")
-        else:
-            print("Failed to add item to room.")
 
 
 if __name__ == "__main__":
-    main()
+    main(parse_args())

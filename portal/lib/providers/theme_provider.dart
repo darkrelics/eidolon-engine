@@ -95,118 +95,122 @@ class ThemeProvider extends ChangeNotifier {
 
   /// Creates the dark theme for the application
   static ThemeData _buildDarkTheme() {
+    const Color darkBackground = Color(0xFF1F2224);
+    const Color darkSurface = Color(0xFF2A2D31);
+    const Color accentPurple = Color(0xFF818CF8);
+    const Color darkTextPrimary = Color(0xFFE6E6E6);
+    const Color darkTextSecondary = Color(0xFFAEAEB2);
+    const Color darkDivider = Color(0xFF505050);
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.white,
+        seedColor: accentPurple,
         brightness: Brightness.dark,
-        primary: Colors.white,
-        onPrimary: Colors.black,
-        secondary: Colors.white70,
-        onSecondary: Colors.black,
-        surface: Colors.grey[900]!,
-        onSurface: Colors.white,
-        error: Colors.red.shade400,
-        onError: Colors.black,
-        outline: Colors.white.withValues(alpha: 0.2),
+        primary: accentPurple,
+        onPrimary: Colors.white,
+        secondary: accentPurple.withAlpha(230),
+        onSecondary: Colors.white,
+        surface: darkSurface,
+        onSurface: darkTextPrimary,
+        error: const Color(0xFFD32F2F),
+        onError: Colors.white,
+        outline: darkDivider,
       ),
-      scaffoldBackgroundColor: Colors.black,
+      scaffoldBackgroundColor: darkBackground,
       cardTheme: CardThemeData(
-        elevation: 0,
-        color: Colors.grey[850],
+        elevation: 2,
+        color: darkSurface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: darkDivider.withValues(alpha: 0.3)),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        labelStyle: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-        floatingLabelStyle: const TextStyle(color: Colors.white),
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.3)),
+        labelStyle: const TextStyle(color: darkTextSecondary),
+        floatingLabelStyle: const TextStyle(color: accentPurple),
+        hintStyle: TextStyle(color: darkTextSecondary.withValues(alpha: 0.7)),
+        enabledBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: darkDivider),
         ),
         focusedBorder: const UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.white),
+          borderSide: BorderSide(color: accentPurple),
         ),
-        errorBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.red.shade400),
+        errorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFD32F2F)),
         ),
-        focusedErrorBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.red.shade400),
+        focusedErrorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFD32F2F)),
         ),
         filled: true,
-        fillColor: Colors.black.withValues(alpha: 0.05),
+        fillColor: darkSurface.withValues(alpha: 0.5),
       ),
       textTheme: Typography.material2021().white.copyWith(
-        bodyLarge: const TextStyle(color: Colors.white),
-        bodyMedium: const TextStyle(color: Colors.white),
-        titleLarge: const TextStyle(color: Colors.white),
-        titleMedium: const TextStyle(color: Colors.white),
-        titleSmall: const TextStyle(color: Colors.white),
-        labelLarge: const TextStyle(color: Colors.white),
+        bodyLarge: const TextStyle(color: darkTextPrimary),
+        bodyMedium: const TextStyle(color: darkTextPrimary),
+        titleLarge: const TextStyle(color: darkTextPrimary),
+        titleMedium: const TextStyle(color: darkTextPrimary),
+        titleSmall: const TextStyle(color: darkTextPrimary),
+        labelLarge: const TextStyle(color: darkTextPrimary),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.black,
-          backgroundColor: Colors.white,
-          disabledForegroundColor: Colors.black54,
-          disabledBackgroundColor: Colors.white30,
+          foregroundColor: Colors.white,
+          backgroundColor: accentPurple,
+          disabledForegroundColor: Colors.white54,
+          disabledBackgroundColor: accentPurple.withValues(alpha: 0.3),
           minimumSize: const Size(88, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: Colors.white,
+          foregroundColor: accentPurple,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: const BorderSide(color: Colors.white),
+          foregroundColor: accentPurple,
+          side: const BorderSide(color: accentPurple),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: darkBackground,
+        foregroundColor: darkTextPrimary,
         elevation: 0,
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: Colors.white,
+        color: accentPurple,
       ),
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(foregroundColor: Colors.white),
+        style: IconButton.styleFrom(foregroundColor: darkTextPrimary),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: accentPurple,
+        foregroundColor: Colors.white,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: Colors.grey[850],
-        contentTextStyle: const TextStyle(color: Colors.white),
+        backgroundColor: darkSurface,
+        contentTextStyle: const TextStyle(color: darkTextPrimary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
       ),
-      dividerTheme: DividerThemeData(
-        color: Colors.white.withValues(alpha: 0.1),
-        thickness: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: darkDivider, thickness: 1),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.white.withValues(alpha: 0.5);
+            return accentPurple.withValues(alpha: 0.5);
           }
-          return Colors.white.withValues(alpha: 0.2);
+          return darkDivider;
         }),
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.white;
+            return accentPurple;
           }
-          return Colors.grey;
+          return darkTextSecondary;
         }),
       ),
     );
@@ -214,114 +218,121 @@ class ThemeProvider extends ChangeNotifier {
 
   /// Creates the light theme for the application
   static ThemeData _buildLightTheme() {
+    const Color primaryBlue = Color(0xFF2196F3);
+    const Color lightBackground = Colors.white;
+    const Color lightSurface = Colors.white;
+    const Color lightTextPrimary = Color(0xDE000000); // Black 87%
+    const Color lightTextSecondary = Color(0x8A000000); // Black 54%
+    const Color lightDivider = Color(0xFFE0E0E0);
+
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.black,
-        primary: Colors.black,
+        seedColor: primaryBlue,
+        primary: primaryBlue,
         onPrimary: Colors.white,
-        secondary: Colors.grey[800]!,
+        secondary: primaryBlue.withAlpha(230),
         onSecondary: Colors.white,
-        surface: Colors.white,
-        onSurface: Colors.black,
-        error: Colors.red.shade400,
+        surface: lightSurface,
+        onSurface: lightTextPrimary,
+        error: const Color(0xFFD32F2F),
         onError: Colors.white,
-        outline: Colors.black.withValues(alpha: 0.2),
+        outline: lightDivider,
       ),
-      scaffoldBackgroundColor: Colors.white,
+      scaffoldBackgroundColor: lightBackground,
       cardTheme: CardThemeData(
-        elevation: 0,
-        color: Colors.grey[100],
+        elevation: 2,
+        color: lightSurface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.black.withValues(alpha: 0.1)),
+          borderRadius: BorderRadius.circular(8),
+          side: const BorderSide(color: lightDivider),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        labelStyle: TextStyle(color: Colors.black.withValues(alpha: 0.7)),
-        floatingLabelStyle: const TextStyle(color: Colors.black),
-        hintStyle: TextStyle(color: Colors.black.withValues(alpha: 0.5)),
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.black.withValues(alpha: 0.3)),
+        labelStyle: const TextStyle(color: lightTextSecondary),
+        floatingLabelStyle: const TextStyle(color: primaryBlue),
+        hintStyle: TextStyle(color: lightTextSecondary.withValues(alpha: 0.7)),
+        enabledBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: lightDivider),
         ),
-        focusedBorder: const UnderlineInputBorder(),
-        errorBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.red.shade400),
+        focusedBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: primaryBlue),
         ),
-        focusedErrorBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: Colors.red.shade400),
+        errorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFD32F2F)),
+        ),
+        focusedErrorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: Color(0xFFD32F2F)),
         ),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.05),
+        fillColor: lightSurface.withValues(alpha: 0.05),
       ),
       textTheme: Typography.material2021().black.copyWith(
-        bodyLarge: const TextStyle(color: Colors.black),
-        bodyMedium: const TextStyle(color: Colors.black),
-        titleLarge: const TextStyle(color: Colors.black),
-        titleMedium: const TextStyle(color: Colors.black),
-        titleSmall: const TextStyle(color: Colors.black),
-        labelLarge: const TextStyle(color: Colors.black),
+        bodyLarge: const TextStyle(color: lightTextPrimary),
+        bodyMedium: const TextStyle(color: lightTextPrimary),
+        titleLarge: const TextStyle(color: lightTextPrimary),
+        titleMedium: const TextStyle(color: lightTextPrimary),
+        titleSmall: const TextStyle(color: lightTextPrimary),
+        labelLarge: const TextStyle(color: lightTextPrimary),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           foregroundColor: Colors.white,
-          backgroundColor: Colors.black,
+          backgroundColor: primaryBlue,
           disabledForegroundColor: Colors.white54,
-          disabledBackgroundColor: Colors.black26,
+          disabledBackgroundColor: primaryBlue.withValues(alpha: 0.3),
           minimumSize: const Size(88, 48),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
-          foregroundColor: Colors.black,
+          foregroundColor: primaryBlue,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.black,
-          side: const BorderSide(),
+          foregroundColor: primaryBlue,
+          side: const BorderSide(color: primaryBlue),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       ),
       appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: lightBackground,
+        foregroundColor: lightTextPrimary,
         elevation: 0,
       ),
       progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: Colors.black,
+        color: primaryBlue,
       ),
       iconButtonTheme: IconButtonThemeData(
-        style: IconButton.styleFrom(foregroundColor: Colors.black),
+        style: IconButton.styleFrom(foregroundColor: lightTextPrimary),
       ),
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: Colors.black,
+        backgroundColor: primaryBlue,
         foregroundColor: Colors.white,
       ),
       snackBarTheme: SnackBarThemeData(
-        backgroundColor: Colors.grey[850],
-        contentTextStyle: const TextStyle(color: Colors.white),
+        backgroundColor: lightSurface,
+        contentTextStyle: const TextStyle(color: lightTextPrimary),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        behavior: SnackBarBehavior.floating,
       ),
-      dividerTheme: DividerThemeData(
-        color: Colors.black.withValues(alpha: 0.1),
-        thickness: 1,
-      ),
+      dividerTheme: const DividerThemeData(color: lightDivider, thickness: 1),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.black.withValues(alpha: 0.5);
+            return primaryBlue.withValues(alpha: 0.5);
           }
-          return Colors.black.withValues(alpha: 0.2);
+          return lightDivider;
         }),
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.black;
+            return primaryBlue;
           }
-          return Colors.grey;
+          return lightTextSecondary;
         }),
       ),
     );

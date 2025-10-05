@@ -1,21 +1,11 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
+import 'package:uuid/uuid.dart';
+
+import 'package:eidolon_incremental/services/auth_service.dart';
 
 enum AuthStatus { uninitialized, authenticated, unauthenticated, loading }
 
@@ -23,36 +13,32 @@ class AuthProvider extends ChangeNotifier {
   AuthStatus _status = AuthStatus.uninitialized;
   String? _userEmail;
   final AuthService _authService = AuthService.instance;
-  final String _instanceId = DateTime.now().millisecondsSinceEpoch.toString();
+  final String _instanceId = const Uuid().v7();
 
   AuthStatus get status => _status;
   String? get userEmail => _userEmail;
   bool get isAuthenticated => _status == AuthStatus.authenticated;
 
   AuthProvider() {
-    debugPrint('AuthProvider: Creating new instance $_instanceId');
+    // debugPrint('AuthProvider: Creating new instance $_instanceId');
     _initializeAuth();
   }
 
   Future<void> _initializeAuth() async {
     try {
-      debugPrint('AuthProvider $_instanceId: Initializing auth service...');
+      // debugPrint('AuthProvider $_instanceId: Initializing auth service...');
       await _authService.initialize();
 
-      debugPrint(
-        'AuthProvider $_instanceId: Checking authentication status...',
-      );
+      // debugPrint('AuthProvider $_instanceId: Checking authentication status...');
       final isAuth = await _authService.isAuthenticated();
-      debugPrint('AuthProvider $_instanceId: isAuthenticated = $isAuth');
+      // debugPrint('AuthProvider $_instanceId: isAuthenticated = $isAuth');
 
       if (isAuth) {
         _userEmail = await _authService.currentUserEmail;
-        debugPrint(
-          'AuthProvider $_instanceId: User authenticated as $_userEmail',
-        );
+        // debugPrint('AuthProvider $_instanceId: User authenticated as $_userEmail');
         _status = AuthStatus.authenticated;
       } else {
-        debugPrint('AuthProvider $_instanceId: User not authenticated');
+        // debugPrint('AuthProvider $_instanceId: User not authenticated');
         _status = AuthStatus.unauthenticated;
       }
       notifyListeners();
@@ -101,20 +87,18 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint('AuthProvider: Starting signIn for $email');
+      // debugPrint('AuthProvider: Starting signIn for $email');
       await _authService.signIn(email, password);
       _userEmail = email;
       _status = AuthStatus.authenticated;
-      debugPrint(
-        'AuthProvider: SignIn successful, status set to authenticated',
-      );
+      // debugPrint('AuthProvider: SignIn successful, status set to authenticated');
       notifyListeners();
 
       // Verify auth status immediately after login
-      final isAuth = await _authService.isAuthenticated();
-      debugPrint('AuthProvider: Post-login auth check: $isAuth');
+      // final isAuth = await _authService.isAuthenticated();
+      // debugPrint('AuthProvider: Post-login auth check: $isAuth');
     } catch (err) {
-      debugPrint('AuthProvider: SignIn failed: $err');
+      // debugPrint('AuthProvider: SignIn failed: $err');
       _status = AuthStatus.unauthenticated;
       notifyListeners();
       rethrow;

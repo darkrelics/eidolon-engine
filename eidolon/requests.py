@@ -7,154 +7,49 @@ Lambda functions.
 
 import json
 
-from eidolon.logger import get_logger
-
-logger = get_logger(__name__)
+from eidolon.logger import logger
 
 
-def parse_json_body(event: dict) -> tuple:
+def parse_event_body(event: dict) -> dict:
     """
-    Parse JSON body from API Gateway event.
+    Parse the body from an API Gateway event.
+
+    Handles three cases:
+    1. Body is already a dict (direct Lambda invocation)
+    2. Body is a JSON string (API Gateway)
+    3. Body is missing or invalid (returns empty dict)
 
     Args:
         event: API Gateway Lambda event
 
     Returns:
-        Tuple of (body, error_response)
-        - If successful: (parsed_body, None)
-        - If error: (None, error_response_dict)
+        Parsed body as a dict, or empty dict if parsing fails
+
+    Raises:
+        ValueError: If body exists but contains invalid JSON
     """
-    body_content = event.get("body", "")
+    body = event.get("body", {})
 
-    # Handle empty body
-    if not body_content:
-        return {}, None
+    # Case 1: Already a dict (direct invocation)
+    if isinstance(body, dict):
+        return body
 
-    try:
-        body = json.loads(body_content)
-        if not isinstance(body, dict):
-            error_response = {
-                "statusCode": 400,
-                "headers": {"Content-Type": "application/json"},
-                "body": json.dumps({"error": "Request body must be a JSON object"}),
-            }
-            return None, error_response
-        return body, None
-    except json.JSONDecodeError:
-        error_response = {
-            "statusCode": 400,
-            "headers": {"Content-Type": "application/json"},
-            "body": json.dumps({"error": "Invalid JSON in request body"}),
-        }
-        return None, error_response
+    # Case 2: JSON string (API Gateway)
+    if isinstance(body, str):
+        if not body.strip():
+            return {}
+        try:
+            return json.loads(body)
+        except json.JSONDecodeError as err:
+            logger.error(f"Failed to parse JSON body: {err}, Body: {body[:500]}")
+            raise ValueError("Invalid JSON in request body") from err
+
+    # Case 3: Unexpected type
+    logger.warning(f"Unexpected body type: {type(body)}")
+    return {}
 
 
-def get_required_field(body: dict, field: str, field_type: type = str):
-    """
-    Extract and validate required field from request body.
-
-    Args:
-        body: Parsed request body
-        field: Field name to extract
-        field_type: Expected type of the field (default: str)
-
-    Returns:
-        Tuple of (value, error_message)
-        - If successful: (value, None)
-        - If error: (None, error_message)
-    """
-    if field not in body:
-        return None, f"Missing required field: {field}"
-
-    value = body[field]
-
-    # Special handling for strings - strip whitespace
-    if field_type is str:
-        if not isinstance(value, str):
-            return None, f"Field '{field}' must be a string"
-        value = value.strip()
-        if not value:
-            return None, f"Field '{field}' cannot be empty"
-        return value, None
-
-    # Type validation for other types
-    if not isinstance(value, field_type):
-        type_name = field_type.__name__
-        return None, f"Field '{field}' must be a {type_name}"
-
-    return value, None
-
-
-def get_optional_field(body: dict, field: str, field_type: type = str, default=None):
-    """
-    Extract optional field from request body with type validation.
-
-    Args:
-        body: Parsed request body
-        field: Field name to extract
-        field_type: Expected type of the field (default: str)
-        default: Default value if field is missing
-
-    Returns:
-        Field value or default
-    """
-    if field not in body:
-        return default
-
-    value = body[field]
-
-    # Special handling for strings
-    if field_type is str and isinstance(value, str):
-        value = value.strip()
-        return value if value else default
-
-    # Type validation
-    if not isinstance(value, field_type):
-        return default
-
-    return value
-
-
-def get_query_parameter(event: dict, param: str, required: bool = False) -> tuple:
-    """
-    Extract query parameter from API Gateway event.
-
-    Args:
-        event: API Gateway Lambda event
-        param: Parameter name
-        required: Whether parameter is required
-
-    Returns:
-        Tuple of (value, error_message)
-        - If successful: (value, None)
-        - If error and required: (None, error_message)
-        - If missing and not required: (None, None)
-    """
-    params = event.get("queryStringParameters") or {}
-    value = params.get(param, "").strip()
-
-    if not value and required:
-        return None, f"Missing required query parameter: {param}"
-
-    return value if value else None, None
-
-
-def get_path_parameter(event: dict, param: str):
-    """
-    Extract path parameter from API Gateway event.
-
-    Args:
-        event: API Gateway Lambda event
-        param: Parameter name
-
-    Returns:
-        Parameter value or None
-    """
-    params = event.get("pathParameters") or {}
-    return params.get(param)
-
-
-def get_header(event: dict, header: str, required: bool = False) -> tuple:
+def get_header(event: dict, header: str, required: bool = False):
     """
     Extract header from API Gateway event.
 
@@ -164,7 +59,10 @@ def get_header(event: dict, header: str, required: bool = False) -> tuple:
         required: Whether header is required
 
     Returns:
-        Tuple of (value, error_message)
+        Header value or None if not found and not required
+
+    Raises:
+        ValueError: If header is required but missing
     """
     headers = event.get("headers") or {}
 
@@ -172,77 +70,33 @@ def get_header(event: dict, header: str, required: bool = False) -> tuple:
     header_lower = header.lower()
     for key, value in headers.items():
         if key.lower() == header_lower:
-            return value, None
+            return value
 
     if required:
-        return None, f"Missing required header: {header}"
+        raise ValueError(f"Missing required header: {header}")
 
-    return None, None
+    return None
 
 
-def validate_content_type(event: dict, expected: str = "application/json") -> bool:
+def get_query_parameter(event: dict, param: str, required: bool = False):
     """
-    Validate request Content-Type header.
+    Extract query parameter from API Gateway event.
 
     Args:
         event: API Gateway Lambda event
-        expected: Expected content type
+        param: Parameter name
+        required: Whether parameter is required
 
     Returns:
-        True if content type matches or is not present, False otherwise
+        Parameter value or None if not found and not required
+
+    Raises:
+        ValueError: If parameter is required but missing
     """
-    content_type, _ = get_header(event, "Content-Type")
-    if not content_type:
-        return True  # Assume correct content type if not specified
+    params = event.get("queryStringParameters") or {}
+    value = params.get(param, "").strip()
 
-    # Extract just the media type, ignore parameters like charset
-    media_type = content_type.split(";")[0].strip().lower()
-    expected_type = expected.split(";")[0].strip().lower()
+    if not value and required:
+        raise ValueError(f"Missing required query parameter: {param}")
 
-    return media_type == expected_type
-
-
-def extract_player_id(event: dict) -> tuple:
-    """
-    Extract player ID from Cognito authorizer claims.
-
-    Args:
-        event: API Gateway event with Cognito authorizer.
-
-    Returns:
-        Tuple of (player_id, error_message).
-        - On success: (player_id, None)
-        - On failure: (None, "Unauthorized")
-    """
-    claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
-    player_id = claims.get("sub")
-
-    if not player_id:
-        return None, "Unauthorized"
-
-    return player_id, None
-
-
-def validate_required_fields(body: dict, required_fields: list) -> tuple:
-    """
-    Validate that all required fields are present in request body.
-
-    Args:
-        body: Parsed request body.
-        required_fields: List of required field names.
-
-    Returns:
-        Tuple of (is_valid, error_message).
-        - On success: (True, None)
-        - On failure: (False, error_message)
-    """
-    missing_fields = []
-    for field in required_fields:
-        value = body.get(field)
-        if value is None or (isinstance(value, str) and not value.strip()):
-            missing_fields.append(field)
-
-    if missing_fields:
-        return False, f"Missing required fields: {', '.join(missing_fields)}"
-
-    return True, None
+    return value if value else None

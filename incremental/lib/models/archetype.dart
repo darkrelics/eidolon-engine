@@ -9,6 +9,7 @@ class Archetype {
   final Map<String, double> attributes;
   final Map<String, double> skills;
   final List<StartingItem> startingItems;
+  final List<String> availableStories;
 
   Archetype({
     required this.archetypeName,
@@ -19,6 +20,7 @@ class Archetype {
     required this.attributes,
     required this.skills,
     required this.startingItems,
+    this.availableStories = const [],
   });
 
   factory Archetype.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,9 @@ class Archetype {
       startingItems: (json['StartingItems'] as List? ?? [])
           .map((item) => StartingItem.fromJson(item as Map<String, dynamic>))
           .toList(),
+      availableStories: (json['AvailableStories'] as List? ?? [])
+          .map((storyId) => storyId as String)
+          .toList(),
     );
   }
 
@@ -54,6 +59,7 @@ class Archetype {
       'Attributes': attributes,
       'Skills': skills,
       'StartingItems': startingItems.map((item) => item.toJson()).toList(),
+      'AvailableStories': availableStories,
     };
   }
 }
@@ -80,26 +86,5 @@ class StartingItem {
 
   Map<String, dynamic> toJson() {
     return {'PrototypeID': prototypeID, 'Slot': slot, 'IsWorn': isWorn};
-  }
-}
-
-/// Archetype manifest for dynamic loading
-class ArchetypeManifest {
-  final String version;
-  final DateTime lastUpdated;
-  final Map<String, String> archetypes; // id -> download URL
-
-  ArchetypeManifest({
-    required this.version,
-    required this.lastUpdated,
-    required this.archetypes,
-  });
-
-  factory ArchetypeManifest.fromJson(Map<String, dynamic> json) {
-    return ArchetypeManifest(
-      version: json['version'] as String,
-      lastUpdated: DateTime.parse(json['lastUpdated'] as String),
-      archetypes: Map<String, String>.from(json['archetypes'] as Map),
-    );
   }
 }

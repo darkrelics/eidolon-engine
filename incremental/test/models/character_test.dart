@@ -7,15 +7,15 @@ void main() {
 
     setUp(() {
       validJson = {
-        'id': 'test-id',
-        'name': 'Test Character',
-        'archetypeId': 'warrior',
-        'archetypeName': 'Warrior',
-        'health': 10.0,
-        'maxHealth': 12.0,
-        'essence': 2.0,
-        'maxEssence': 2.0,
-        'attributes': {
+        'CharacterID': 'test-id',
+        'CharacterName': 'Test Character',
+        'Archetype': 'Warrior',
+        'Health': 10.0,
+        'MaxHealth': 12.0,
+        'Essence': 2.0,
+        'MaxEssence': 2.0,
+        'GameMode': 'None',
+        'Attributes': {
           'Strength': 3.0,
           'Agility': 2.0,
           'Endurance': 3.0,
@@ -26,7 +26,7 @@ void main() {
           'Intelligence': 1.0,
           'Cunning': 1.0,
         },
-        'skills': {
+        'Skills': {
           'Melee': 1.0,
           'Archery': 0.0,
           'Brawling': 1.0,
@@ -43,8 +43,8 @@ void main() {
           'Foraging': 0.0,
           'Appraise': 0.0,
         },
-        'resources': {'gold': 100, 'supplies': 10},
-        'lastUpdated': '2024-01-01T00:00:00.000Z',
+        'Resources': {'gold': 100, 'supplies': 10},
+        'UpdatedAt': '2024-01-01T00:00:00.000Z',
       };
     });
 
@@ -53,7 +53,7 @@ void main() {
 
       expect(character.id, equals('test-id'));
       expect(character.name, equals('Test Character'));
-      expect(character.archetypeId, equals('warrior'));
+      expect(character.archetypeId, equals('Warrior'));
       expect(character.archetypeName, equals('Warrior'));
       expect(character.health, equals(10.0));
       expect(character.maxHealth, equals(12.0));
@@ -68,11 +68,11 @@ void main() {
       final character = Character.fromJson(validJson);
       final json = character.toJson();
 
-      expect(json['id'], equals('test-id'));
-      expect(json['name'], equals('Test Character'));
-      expect(json['attributes']['Strength'], equals(3.0));
-      expect(json['skills']['Melee'], equals(1.0));
-      expect(json['resources']['gold'], equals(100));
+      expect(json['CharacterID'], equals('test-id'));
+      expect(json['CharacterName'], equals('Test Character'));
+      expect(json['Attributes']['Strength'], equals(3.0));
+      expect(json['Skills']['Melee'], equals(1.0));
+      expect(json['Resources']['gold'], equals(100));
     });
 
     test('calculates effective score correctly', () {

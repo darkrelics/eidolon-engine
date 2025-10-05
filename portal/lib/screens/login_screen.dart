@@ -1,21 +1,10 @@
 // Eidolon Engine
 //
-// Copyright 2024‑2025 Jason Robinson
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2024‑2025 Jason E. Robinson
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../utils/auth_state.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -66,12 +55,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (mounted && authState.isAuthenticated) {
         _handleNavigation(context, widget.redirectRoute, widget.redirectArgs);
+      } else if (mounted && authState.message.isNotEmpty) {
+        // Show the specific error message from AuthState
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(authState.message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
     } catch (e) {
+      debugPrint('Login error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString()),
+            content: const Text('Failed to authenticate. Please try again.'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -86,9 +84,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _handleNavigation(BuildContext context, String? route, Object? args) {
-    final targetRoute = route ?? '/characters';
+    final targetRoute = route ?? '/character-management';
 
-    if (targetRoute == '/characters') {
+    if (targetRoute == '/character-management') {
       Navigator.of(context).pushReplacementNamed(targetRoute);
     } else {
       Navigator.of(context).pushReplacementNamed(targetRoute, arguments: args);

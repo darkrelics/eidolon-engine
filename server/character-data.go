@@ -1,19 +1,8 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 
 package main
@@ -42,7 +31,6 @@ type Character struct {
 	attributes       map[string]float64
 	skills           map[string]float64
 	essence          float64
-	health           int
 	maxHealth        int
 	wounds           []Wound
 	room             *Room
@@ -69,6 +57,9 @@ type Character struct {
 	prompt           string                // Character prompt
 	stopped          bool                  // Flag to ensure Stop is only executed once
 	gameMode         string                // Game mode: "MUD", "Incremental", etc.
+	availableStories []string              // Story IDs available to this character
+	abandonedStories []string              // Story IDs the character has abandoned
+	completedStories []string              // Story IDs the character has completed
 }
 
 // FleeState tracks an active flee attempt
@@ -80,22 +71,24 @@ type FleeState struct {
 
 // CharacterData for unmarshalling character.
 type CharacterData struct {
-	CharacterID   string             `json:"CharacterID" dynamodbav:"CharacterID"`
-	PlayerID      string             `json:"PlayerID" dynamodbav:"PlayerID"`
-	CharacterName string             `json:"Name" dynamodbav:"character_name"`
-	Attributes    map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
-	Skills        map[string]float64 `json:"Skills" dynamodbav:"Skills"`
-	Essence       float64            `json:"Essence" dynamodbav:"Essence"`
-	Health        int                `json:"Health" dynamodbav:"Health"`
-	MaxHealth     int                `json:"MaxHealth" dynamodbav:"MaxHealth"`
-	Wounds        []Wound            `json:"Wounds" dynamodbav:"Wounds"`
-	RoomID        int64              `json:"RoomID" dynamodbav:"RoomID"`
-	Inventory     map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
-	LeftHandID    string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
-	RightHandID   string             `json:"RightHandID,omitempty" dynamodbav:"RightHandID,omitempty"`
-	Hidden        bool               `json:"Hidden" dynamodbav:"Hidden"`
-	CharState     string             `json:"CharState" dynamodbav:"CharState"`
-	GameMode      string             `json:"GameMode" dynamodbav:"GameMode"`
+	CharacterID      string             `json:"CharacterID" dynamodbav:"CharacterID"`
+	PlayerID         string             `json:"PlayerID" dynamodbav:"PlayerID"`
+	CharacterName    string             `json:"Name" dynamodbav:"character_name"`
+	Attributes       map[string]float64 `json:"Attributes" dynamodbav:"Attributes"`
+	Skills           map[string]float64 `json:"Skills" dynamodbav:"Skills"`
+	Essence          float64            `json:"Essence" dynamodbav:"Essence"`
+	MaxHealth        int                `json:"MaxHealth" dynamodbav:"MaxHealth"`
+	Wounds           []Wound            `json:"Wounds" dynamodbav:"Wounds"`
+	RoomID           int64              `json:"RoomID" dynamodbav:"RoomID"`
+	Inventory        map[string]string  `json:"Inventory" dynamodbav:"Inventory"`
+	LeftHandID       string             `json:"LeftHandID,omitempty" dynamodbav:"LeftHandID,omitempty"`
+	RightHandID      string             `json:"RightHandID,omitempty" dynamodbav:"RightHandID,omitempty"`
+	Hidden           bool               `json:"Hidden" dynamodbav:"Hidden"`
+	CharState        string             `json:"CharState" dynamodbav:"CharState"`
+	GameMode         string             `json:"GameMode" dynamodbav:"GameMode"`
+	AvailableStories []string           `json:"AvailableStories,omitempty" dynamodbav:"AvailableStories,omitempty"`
+	AbandonedStories []string           `json:"AbandonedStories,omitempty" dynamodbav:"AbandonedStories,omitempty"`
+	CompletedStories []string           `json:"CompletedStories,omitempty" dynamodbav:"CompletedStories,omitempty"`
 }
 
 func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
@@ -129,6 +122,9 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		playerCommandIn:  make(chan string, 20),
 		end:              make(chan bool, 5),
 		prompt:           "\n\r> ",
+		availableStories: []string{},
+		abandonedStories: []string{},
+		completedStories: []string{},
 	}
 
 	// Database loading restores persistent character state
@@ -151,7 +147,6 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 	character.attributes = cd.Attributes
 	character.skills = cd.Skills
 	character.essence = cd.Essence
-	character.health = cd.Health
 	character.maxHealth = cd.MaxHealth
 	character.wounds = cd.Wounds
 	if character.wounds == nil {
@@ -171,6 +166,17 @@ func LoadCharacter(player *Player, characterID uuid.UUID) (*Character, error) {
 		character.gameMode = cd.GameMode
 	} else {
 		character.gameMode = "MUD"
+	}
+
+	// Restore story tracking fields
+	if cd.AvailableStories != nil {
+		character.availableStories = cd.AvailableStories
+	}
+	if cd.AbandonedStories != nil {
+		character.abandonedStories = cd.AbandonedStories
+	}
+	if cd.CompletedStories != nil {
+		character.completedStories = cd.CompletedStories
 	}
 
 	character.CalculateCurrentHealth()

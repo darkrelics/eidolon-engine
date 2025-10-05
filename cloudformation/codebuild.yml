@@ -1,27 +1,33 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: "CloudFormation template for CodeBuild Project and IAM Policy for Flutter Web application"
+Description: "CodeBuild projects for Eidolon Engine"
 
 Parameters:
-  UserPoolId:
+  GameName:
     Type: String
-    Description: The ID of the AWS Cognito User Pool
-
-  ClientId:
+    Default: "eidolon"
+    Description: "Name of the game"
+  CognitoUserPoolId:
     Type: String
-    Description: The Client ID of the AWS Cognito User Pool
-
-  S3BucketName:
+    Description: "The ID of the AWS Cognito User Pool"
+  CognitoUserPoolClientId:
     Type: String
-    Description: The name of the S3 bucket where build artifacts will be stored
+    Description: "The Client ID of the AWS Cognito User Pool"
+  CognitoIdentityPoolId:
+    Type: String
+    Description: "The ID of the AWS Cognito Identity Pool"
+  ApiUrl:
+    Type: String
+    Description: "The URL of the API Gateway"
   GitHubSourceRepo:
     Type: String
-    Description: The GitHub repository URL for the source code
-    Default: https://github.com/robinje/eidolon-engine
+    Description: "The GitHub repository URL for the source code"
+    Default: "https://github.com/robinje/eidolon-engine"
 
 Resources:
   CodeBuildAccessPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
+      ManagedPolicyName: !Sub "${GameName}-codebuild-policy"
       Description: "Managed policy for CodeBuild to access logs and S3"
       PolicyDocument:
         Version: "2012-10-17"
@@ -35,12 +41,17 @@ Resources:
           - Effect: Allow
             Action: "s3:*"
             Resource:
-              - !Sub "arn:aws:s3:::${S3BucketName}"
-              - !Sub "arn:aws:s3:::${S3BucketName}/*"
+              - !Sub "arn:aws:s3:::${GameName}-portal"
+              - !Sub "arn:aws:s3:::${GameName}-portal/*"
+              - !Sub "arn:aws:s3:::${GameName}-lambda"
+              - !Sub "arn:aws:s3:::${GameName}-lambda/*"
+              - !Sub "arn:aws:s3:::${GameName}-scripts"
+              - !Sub "arn:aws:s3:::${GameName}-scripts/*"
 
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub "${GameName}-codebuild-role"
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -52,11 +63,11 @@ Resources:
       ManagedPolicyArns:
         - !Ref CodeBuildAccessPolicy
 
-  PortalApplicationCodeBuild:
+  PortalBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: PortalApplicationBuild
-      Description: Build project for the Web Portal Application
+      Name: !Sub "${GameName}-portal-build"
+      Description: "Build project for the Web Portal Application"
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
         Type: NO_ARTIFACTS
@@ -66,22 +77,92 @@ Resources:
         Image: aws/codebuild/standard:7.0
         EnvironmentVariables:
           - Name: USER_POOL_ID
-            Value: !Ref UserPoolId
-          - Name: CLIENT_ID
-            Value: !Ref ClientId
+            Value: !Ref CognitoUserPoolId
+          - Name: USER_POOL_CLIENT_ID
+            Value: !Ref CognitoUserPoolClientId
+          - Name: IDENTITY_POOL_ID
+            Value: !Ref CognitoIdentityPoolId
+          - Name: API_URL
+            Value: !Ref ApiUrl
           - Name: S3_BUCKET
-            Value: !Ref S3BucketName
+            Value: !Sub "${GameName}-portal"
       Source:
         Type: GITHUB
         Location: !Ref GitHubSourceRepo
         BuildSpec: buildspec/portal.yml
       TimeoutInMinutes: 15
 
+  IncrementalBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${GameName}-incremental-build"
+      Description: "Build project for the Incremental Game"
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: USER_POOL_ID
+            Value: !Ref CognitoUserPoolId
+          - Name: USER_POOL_CLIENT_ID
+            Value: !Ref CognitoUserPoolClientId
+          - Name: IDENTITY_POOL_ID
+            Value: !Ref CognitoIdentityPoolId
+          - Name: API_URL
+            Value: !Ref ApiUrl
+          - Name: S3_BUCKET
+            Value: !Sub "${GameName}-portal"
+      Source:
+        Type: GITHUB
+        Location: !Ref GitHubSourceRepo
+        BuildSpec: buildspec/incremental.yml
+      TimeoutInMinutes: 15
+
+  LambdaBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${GameName}-lambda-build"
+      Description: "Build project for Lambda functions"
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: S3_BUCKET
+            Value: !Sub "${GameName}-lambda"
+      Source:
+        Type: GITHUB
+        Location: !Ref GitHubSourceRepo
+        BuildSpec: buildspec/lambda.yml
+      TimeoutInMinutes: 15
+
 Outputs:
   CodeBuildProjectName:
-    Description: "Portal CodeBuild Project"
-    Value: !Ref PortalApplicationCodeBuild
+    Description: "Portal CodeBuild Project Name"
+    Value: !Ref PortalBuildProject
+    Export:
+      Name: !Sub "${AWS::StackName}-PortalBuildProjectName"
 
-  CodeBuildProjectARN:
-    Description: "ARN of Portal Project"
-    Value: !GetAtt PortalApplicationCodeBuild.Arn
+  IncrementalBuildProjectName:
+    Description: "Incremental CodeBuild Project Name"
+    Value: !Ref IncrementalBuildProject
+    Export:
+      Name: !Sub "${AWS::StackName}-IncrementalBuildProjectName"
+
+  LambdaBuildProjectName:
+    Description: "Lambda CodeBuild Project Name"
+    Value: !Ref LambdaBuildProject
+    Export:
+      Name: !Sub "${AWS::StackName}-LambdaBuildProjectName"
+
+  CodeBuildServiceRoleArn:
+    Description: "ARN of CodeBuild Service Role"
+    Value: !GetAtt CodeBuildServiceRole.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-CodeBuildServiceRoleArn"

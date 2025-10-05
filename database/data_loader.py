@@ -1,30 +1,26 @@
-"""
-Eidolon Engine
-
-Copyright 2024-2025 Jason Robinson
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-Utility to add an item to a room in the DynamoDB database.
-"""
+"""Utility to load game data from JSON files into DynamoDB tables."""
 
 import argparse
 import json
 import logging
 import os
+import sys
 
-from eidolon.dynamo import convert_to_decimal, get_table
-from eidolon.validation_utils import validate_character_name
+from botocore.exceptions import ClientError
+
+# Ensure repo root is importable for eidolon modules before local imports
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
+
+try:
+    from eidolon.dynamo import TableName, dynamo
+    from eidolon.validation import validate_character_name
+except ModuleNotFoundError as err:
+    raise ModuleNotFoundError(
+        "Unable to import the 'eidolon' package. Run this script from the repository " "root or set PYTHONPATH to include it."
+    ) from err
 
 
 def load_json(file_path):
@@ -48,9 +44,8 @@ def store_exits(exits_data):
     Args:
         exits_data (dict): The exits data to store.
     """
-    exits_table = get_table(os.environ.get("EXITS_TABLE", "exits"))
     try:
-        for exit_data in exits_data.get("exits", []):
+        for exit_data in exits_data.get("Exits", []):
             exit_item = {
                 "ExitID": exit_data["ExitID"],
                 "Direction": exit_data["Direction"],
@@ -61,26 +56,36 @@ def store_exits(exits_data):
                 "ScriptID": exit_data.get("ScriptID", ""),
             }
 
-            # Build update expression dynamically
+            # Build update expression dynamically with attribute names to avoid reserved keywords
             update_expression = "SET "
             expression_attribute_values = {}
+            expression_attribute_names = {}
             expression_parts = []
 
             for key, value in exit_item.items():
                 if key != "ExitID":  # Skip the key
-                    expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    name_placeholder = f"#{key}"
+                    value_placeholder = f":{key.lower()}"
+                    expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                    expression_attribute_names[name_placeholder] = key
+                    expression_attribute_values[value_placeholder] = value
 
             update_expression += ", ".join(expression_parts)
 
-            exits_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.EXITS,
                 Key={"ExitID": exit_data["ExitID"]},
                 UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Exit data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(exits_data.get('Exits', []))} exits in DynamoDB")
+    except ClientError as err:
+        logging.error(f"Failed to store exits in DynamoDB: {err}")
+        raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing exits: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing exits: {err}")
+        raise
 
 
 def store_rooms(rooms_data):
@@ -90,9 +95,8 @@ def store_rooms(rooms_data):
     Args:
         rooms_data (dict): The rooms data to store.
     """
-    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
     try:
-        for room in rooms_data.get("rooms", []):
+        for room in rooms_data.get("Rooms", []):
             room_item = {
                 "RoomID": room["RoomID"],
                 "Area": room["Area"],
@@ -103,26 +107,36 @@ def store_rooms(rooms_data):
                 "ScriptID": room.get("ScriptID", ""),
             }
 
-            # Build update expression dynamically
+            # Build update expression dynamically with attribute names to avoid reserved keywords
             update_expression = "SET "
             expression_attribute_values = {}
+            expression_attribute_names = {}
             expression_parts = []
 
             for key, value in room_item.items():
                 if key != "RoomID":  # Skip the key
-                    expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    name_placeholder = f"#{key}"
+                    value_placeholder = f":{key.lower()}"
+                    expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                    expression_attribute_names[name_placeholder] = key
+                    expression_attribute_values[value_placeholder] = value
 
             update_expression += ", ".join(expression_parts)
 
-            rooms_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.ROOMS,
                 Key={"RoomID": room["RoomID"]},
                 UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Room data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(rooms_data.get('Rooms', []))} rooms in DynamoDB")
+    except ClientError as err:
+        logging.error(f"Failed to store rooms in DynamoDB: {err}")
+        raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing rooms: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing rooms: {err}")
+        raise
 
 
 def store_archetypes(archetypes_data):
@@ -132,18 +146,16 @@ def store_archetypes(archetypes_data):
     Args:
         archetypes_data (dict): The archetypes data to store.
     """
-    archetypes_table = get_table(os.environ.get("ARCHETYPES_TABLE", "archetypes"))
     try:
-        for name, archetype in archetypes_data.get("archetypes", {}).items():
-            is_valid, error_message = validate_character_name(name)
-            if not is_valid:
-                logging.error(f"Invalid archetype name '{name}': {error_message}")
+        for name, archetype in archetypes_data.get("Archetypes", {}).items():
+            try:
+                validate_character_name(name)
+            except ValueError as err:
+                logging.error(f"Invalid archetype name '{name}': {err}")
                 continue
 
-            # Convert attributes to lowercase
-            attributes = {k.lower(): v for k, v in archetype.get("Attributes", {}).items()}
-            # Convert skills to lowercase
-            skills = {k.lower(): v for k, v in archetype.get("Skills", {}).items()}
+            attributes = archetype.get("Attributes", {})
+            skills = archetype.get("Skills", {})
 
             archetype_item = {
                 "ArchetypeName": name,
@@ -161,26 +173,40 @@ def store_archetypes(archetypes_data):
             if "Essence" in archetype:
                 archetype_item["Essence"] = archetype["Essence"]
 
-            # Build update expression dynamically
+            # Add optional AvailableStories field if present
+            if "AvailableStories" in archetype:
+                archetype_item["AvailableStories"] = archetype["AvailableStories"]
+
+            # Build update expression dynamically with attribute names to avoid reserved keywords
             update_expression = "SET "
             expression_attribute_values = {}
+            expression_attribute_names = {}
             expression_parts = []
 
             for key, value in archetype_item.items():
                 if key != "ArchetypeName":  # Skip the key
-                    expression_parts.append(f"{key} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    name_placeholder = f"#{key}"
+                    value_placeholder = f":{key.lower()}"
+                    expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                    expression_attribute_names[name_placeholder] = key
+                    expression_attribute_values[value_placeholder] = value
 
             update_expression += ", ".join(expression_parts)
 
-            archetypes_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.ARCHETYPES,
                 Key={"ArchetypeName": name},
                 UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Archetype data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(archetypes_data.get('Archetypes', {}))} archetypes in DynamoDB")
+    except ClientError as err:
+        logging.error(f"Failed to store archetypes in DynamoDB: {err}")
+        raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing archetypes: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing archetypes: {err}")
+        raise
 
 
 def store_item_prototypes(prototypes_data):
@@ -190,11 +216,22 @@ def store_item_prototypes(prototypes_data):
     Args:
         prototypes_data (dict): The item prototypes data to store.
     """
-    prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
     try:
-        for prototype in prototypes_data.get("itemPrototypes", []):
+        for prototype in prototypes_data.get("ItemPrototypes", []):
             prototype_id = prototype["PrototypeID"]
             prototype_data = prototype.copy()
+
+            # Normalize prototype name to schema: ensure PrototypeName exists
+            if "PrototypeName" not in prototype_data and "Name" in prototype_data:
+                prototype_data["PrototypeName"] = prototype_data.pop("Name")
+
+            # Enforce WornOn is a list per schema
+            if "WornOn" in prototype_data:
+                worn_on = prototype_data["WornOn"]
+                if worn_on is None:
+                    prototype_data["WornOn"] = []
+                elif isinstance(worn_on, str):
+                    prototype_data["WornOn"] = [worn_on]
 
             # Build update expression dynamically
             update_expression = "SET "
@@ -208,19 +245,24 @@ def store_item_prototypes(prototypes_data):
                     attr_name_placeholder = f"#{key}"
                     expression_attribute_names[attr_name_placeholder] = key
                     expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
-                    expression_attribute_values[f":{key.lower()}"] = convert_to_decimal(value)
+                    expression_attribute_values[f":{key.lower()}"] = value
 
             update_expression += ", ".join(expression_parts)
 
-            prototypes_table.update_item(  # type: ignore
+            dynamo.update_item(
+                TableName.PROTOTYPES,
                 Key={"PrototypeID": prototype_id},
                 UpdateExpression=update_expression,
                 ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-        print("Item prototype data stored in DynamoDB successfully")
+        logging.info(f"Successfully stored {len(prototypes_data.get('ItemPrototypes', []))} item prototypes in DynamoDB")
+    except ClientError as err:
+        logging.error(f"Failed to store item prototypes in DynamoDB: {err}")
+        raise
     except Exception as err:
-        logging.error(f"An unexpected error occurred while storing item prototypes: {str(err)}")
+        logging.error(f"An unexpected error occurred while storing item prototypes: {err}")
+        raise
 
 
 def load_exits():
@@ -230,14 +272,17 @@ def load_exits():
     Returns:
         dict: A dictionary of exit data.
     """
-    exits_table = get_table(os.environ.get("EXITS_TABLE", "exits"))
     try:
-        exits_response = exits_table.scan()  # type: ignore
-        exits = {item["ExitID"]: item for item in exits_response.get("Items", [])}
-        print("Exit data loaded from DynamoDB successfully")
+        result: dict = dynamo.scan(TableName.EXITS)  # type: ignore
+        items = result.get("items", [])
+        exits = {item["ExitID"]: item for item in items}
+        logging.info(f"Successfully loaded {len(exits)} exits from DynamoDB")
         return exits
+    except ClientError as err:
+        logging.error(f"Failed to load exits from DynamoDB: {err}")
+        return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading exits: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading exits: {err}")
         return {}
 
 
@@ -248,14 +293,17 @@ def load_rooms():
     Returns:
         dict: A dictionary of room data.
     """
-    rooms_table = get_table(os.environ.get("ROOMS_TABLE", "rooms"))
     try:
-        rooms_response = rooms_table.scan()  # type: ignore
-        rooms = {item["RoomID"]: item for item in rooms_response.get("Items", [])}
-        print("Room data loaded from DynamoDB successfully")
+        result: dict = dynamo.scan(TableName.ROOMS)  # type: ignore
+        items = result.get("items", [])
+        rooms = {item["RoomID"]: item for item in items}  # type: ignore
+        logging.info(f"Successfully loaded {len(rooms)} rooms from DynamoDB")
         return rooms
+    except ClientError as err:
+        logging.error(f"Failed to load rooms from DynamoDB: {err}")
+        return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading rooms: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading rooms: {err}")
         return {}
 
 
@@ -266,14 +314,17 @@ def load_archetypes():
     Returns:
         dict: A dictionary containing the archetypes.
     """
-    archetypes_table = get_table(os.environ.get("ARCHETYPES_TABLE", "archetypes"))
     try:
-        response = archetypes_table.scan()  # type: ignore
-        archetypes = {"archetypes": {item["ArchetypeName"]: item for item in response.get("Items", [])}}
-        print("Archetype data loaded from DynamoDB successfully")
+        result: dict = dynamo.scan(TableName.ARCHETYPES)  # type: ignore
+        items = result.get("items", [])
+        archetypes = {"Archetypes": {item["ArchetypeName"]: item for item in items}}  # type: ignore
+        logging.info(f"Successfully loaded {len(archetypes.get('Archetypes', {}))} archetypes from DynamoDB")
         return archetypes
+    except ClientError as err:
+        logging.error(f"Failed to load archetypes from DynamoDB: {err}")
+        return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading archetypes: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading archetypes: {err}")
         return {}
 
 
@@ -284,14 +335,274 @@ def load_item_prototypes():
     Returns:
         dict: A dictionary containing the item prototypes.
     """
-    prototypes_table = get_table(os.environ.get("PROTOTYPES_TABLE", "prototypes"))
     try:
-        response = prototypes_table.scan()  # type: ignore
-        prototypes = {"itemPrototypes": response.get("Items", [])}
-        print("Item prototype data loaded from DynamoDB successfully")
+        result: dict = dynamo.scan(TableName.PROTOTYPES)  # type: ignore
+        items = result.get("items", [])
+        prototypes = {"ItemPrototypes": items}
+        logging.info(f"Successfully loaded {len(prototypes.get('ItemPrototypes', []))} item prototypes from DynamoDB")
         return prototypes
+    except ClientError as err:
+        logging.error(f"Failed to load item prototypes from DynamoDB: {err}")
+        return {}
     except Exception as err:
-        logging.error(f"An unexpected error occurred while loading item prototypes: {str(err)}")
+        logging.error(f"An unexpected error occurred while loading item prototypes: {err}")
+        return {}
+
+
+def store_opponents(opponents_data):
+    """
+    Stores opponent data into the 'opponents' DynamoDB table using update operations.
+
+    Supports both MUD-style opponents (with CombatRating, DefenseRating, etc.) and
+    Incremental-style opponents (with Attributes and Skills).
+
+    Args:
+        opponents_data (dict): The opponents data to store.
+    """
+    try:
+        for opponent in opponents_data.get("Opponents", []):
+            # Check if this is incremental game format (has Attributes/Skills)
+            if "Attributes" in opponent and "Skills" in opponent:
+                # Incremental game format
+                opponent_item = {
+                    "OpponentID": opponent["OpponentID"],
+                    "Name": opponent["Name"],
+                    "Description": opponent.get("Description", ""),
+                    "Health": opponent["Health"],
+                    "MaxHealth": opponent.get("MaxHealth", opponent["Health"]),
+                    "Attributes": opponent["Attributes"],
+                    "Skills": opponent["Skills"],
+                    "Level": opponent.get("Level", 1),
+                    "XPReward": opponent.get("XPReward", 10),
+                    "LootTable": opponent.get("LootTable", []),
+                    "Tags": opponent.get("Tags", []),
+                    "CreatedAt": opponent.get("CreatedAt", ""),
+                }
+            else:
+                # MUD format (legacy)
+                opponent_item = {
+                    "OpponentID": opponent["OpponentID"],
+                    "Name": opponent["Name"],
+                    "Description": opponent.get("Description", ""),
+                    "CombatRating": opponent["CombatRating"],
+                    "DefenseRating": opponent["DefenseRating"],
+                    "DamageRating": opponent["DamageRating"],
+                    "Toughness": opponent["Toughness"],
+                    "ArmorRating": opponent.get("ArmorRating", 0),
+                    "Health": opponent["Health"],
+                    "WeaponType": opponent.get("WeaponType", "bashing"),
+                    "WeaponDamage": opponent["WeaponDamage"],
+                    "LootTable": opponent.get("LootTable", []),
+                    "Tags": opponent.get("Tags", []),
+                    "CreatedAt": opponent.get("CreatedAt", ""),
+                }
+
+            # Build update expression dynamically
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_attribute_names = {}
+            expression_parts = []
+
+            for key, value in opponent_item.items():
+                if key != "OpponentID":  # Skip the key
+                    # Use expression attribute names to avoid reserved keyword issues
+                    attr_name_placeholder = f"#{key}"
+                    expression_attribute_names[attr_name_placeholder] = key
+                    expression_parts.append(f"{attr_name_placeholder} = :{key.lower()}")
+                    expression_attribute_values[f":{key.lower()}"] = value
+
+            update_expression += ", ".join(expression_parts)
+
+            dynamo.update_item(
+                TableName.OPPONENTS,
+                Key={"OpponentID": opponent["OpponentID"]},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
+        logging.info(f"Successfully stored {len(opponents_data.get('Opponents', []))} opponents in DynamoDB")
+    except ClientError as err:
+        logging.error(f"Failed to store opponents in DynamoDB: {err}")
+        raise
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while storing opponents: {err}")
+        raise
+
+
+def store_story(story_data):
+    """
+    Stores story and segments data into DynamoDB tables.
+
+    Expects format with "Stories" array containing story objects.
+
+    Args:
+        story_data (dict): The story data containing multiple stories and their segments.
+    """
+    try:
+        # Process each story in the Stories array
+        stories = story_data.get("Stories", [])
+        if not stories:
+            logging.warning("No stories found in the data")
+            return
+
+        total_stories = 0
+        total_segments = 0
+
+        for story_obj in stories:
+            story = story_obj.get("Story", {})
+            segments = story_obj.get("Segments", [])
+
+            if not story:
+                logging.warning("Story object missing 'Story' field, skipping")
+                continue
+
+            # Store the main story
+            story_item = {
+                "StoryID": story["StoryID"],
+                "Title": story["Title"],
+                "Description": story["Description"],
+                "NarrativeText": story["NarrativeText"],
+                "StoryType": story["StoryType"],
+                "EstimatedDuration": story["EstimatedDuration"],
+                "Prerequisites": story.get("Prerequisites", {}),
+                "DifficultyMap": story.get("DifficultyMap", {}),
+                "RewardTiers": story.get("RewardTiers", {}),
+                "BaseXPMultiplier": story.get("BaseXPMultiplier", 0.5),
+                "FirstSegmentID": story["FirstSegmentID"],
+                "CreatedAt": story["CreatedAt"],
+                "Version": story.get("Version", 1),
+            }
+
+            # Build update expression with attribute names
+            update_expression = "SET "
+            expression_attribute_values = {}
+            expression_attribute_names = {}
+            expression_parts = []
+
+            for key, value in story_item.items():
+                if key != "StoryID":  # Skip the key
+                    name_placeholder = f"#{key}"
+                    value_placeholder = f":{key.lower()}"
+                    expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                    expression_attribute_names[name_placeholder] = key
+                    expression_attribute_values[value_placeholder] = value
+
+            update_expression += ", ".join(expression_parts)
+
+            dynamo.update_item(
+                TableName.STORY,
+                Key={"StoryID": story["StoryID"]},
+                UpdateExpression=update_expression,
+                ExpressionAttributeNames=expression_attribute_names,
+                ExpressionAttributeValues=expression_attribute_values,
+            )
+            logging.info(f"Successfully stored story '{story['Title']}' (ID: {story['StoryID']}) in DynamoDB")
+            total_stories += 1
+
+            # Store all segments for this story
+            for segment in segments:
+                segment_item = {
+                    "StoryID": segment["StoryID"],
+                    "SegmentID": segment["SegmentID"],
+                    "SegmentType": segment["SegmentType"],
+                    "SegmentActivity": segment["SegmentActivity"],
+                    "SegmentTitle": segment.get("SegmentTitle", ""),
+                    "SegmentDuration": segment["SegmentDuration"],
+                }
+
+                # Add optional fields based on segment type
+                if segment["SegmentType"] == "decision":
+                    segment_item["DecisionText"] = segment.get("DecisionText", "")
+                    segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
+                    segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
+                elif segment["SegmentType"] == "mechanical":
+                    # NextSegmentID is now handled per-result in Results
+                    segment_item["Challenges"] = segment.get("Challenges", [])
+                    segment_item["Combat"] = segment.get("Combat", {})
+                    segment_item["Results"] = segment.get("Results", {})
+                else:
+                    print(f"Unknown segment type: {segment['SegmentType']}")
+
+                # Build update expression with attribute names
+                update_expression = "SET "
+                expression_attribute_values = {}
+                expression_attribute_names = {}
+                expression_parts = []
+
+                for key, value in segment_item.items():
+                    if key not in ["StoryID", "SegmentID"]:  # Skip the keys
+                        name_placeholder = f"#{key}"
+                        value_placeholder = f":{key.lower()}"
+                        expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                        expression_attribute_names[name_placeholder] = key
+                        expression_attribute_values[value_placeholder] = value
+
+                update_expression += ", ".join(expression_parts)
+
+                dynamo.update_item(
+                    TableName.SEGMENTS,
+                    Key={"StoryID": segment["StoryID"], "SegmentID": segment["SegmentID"]},
+                    UpdateExpression=update_expression,
+                    ExpressionAttributeNames=expression_attribute_names,
+                    ExpressionAttributeValues=expression_attribute_values,
+                )
+
+            total_segments += len(segments)
+
+        logging.info(f"Successfully stored {total_stories} stories with {total_segments} total segments in DynamoDB")
+
+    except ClientError as err:
+        logging.error(f"Failed to store story in DynamoDB: {err}")
+        raise
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while storing story: {err}")
+        raise
+
+
+def load_opponents():
+    """
+    Loads opponent data from the 'opponents' DynamoDB table.
+
+    Returns:
+        dict: A dictionary containing the opponents.
+    """
+    try:
+        result: dict = dynamo.scan(TableName.OPPONENTS)  # type: ignore
+        items = result.get("items", [])
+        opponents = {"Opponents": items}
+        logging.info(f"Successfully loaded {len(opponents.get('Opponents', []))} opponents from DynamoDB")
+        return opponents
+    except ClientError as err:
+        logging.error(f"Failed to load opponents from DynamoDB: {err}")
+        return {}
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while loading opponents: {err}")
+        return {}
+
+
+def load_story():
+    """
+    Loads story data from the 'story' and 'segments' DynamoDB tables.
+
+    Returns:
+        dict: A dictionary containing the story and segments data.
+    """
+    try:
+        # Load all stories
+        stories_result: dict = dynamo.scan(TableName.STORY)  # type: ignore
+        stories = stories_result.get("items", [])
+
+        # Load all segments
+        segments_result: dict = dynamo.scan(TableName.SEGMENTS)  # type: ignore
+        segments = segments_result.get("items", [])
+
+        logging.info(f"Successfully loaded {len(stories)} stories and {len(segments)} segments from DynamoDB")
+        return {"stories": stories, "segments": segments}
+    except ClientError as err:
+        logging.error(f"Failed to load story data from DynamoDB: {err}")
+        return {}
+    except Exception as err:
+        logging.error(f"An unexpected error occurred while loading story: {err}")
         return {}
 
 
@@ -343,7 +654,7 @@ def display_archetypes(archetypes):
         archetypes (dict): The archetypes data to display.
     """
     print("Archetypes:")
-    for name, archetype in archetypes.get("archetypes", {}).items():
+    for name, archetype in archetypes.get("Archetypes", {}).items():
         print(f"Name: {name}")
         print(f"  Description: {archetype.get('Description', 'No description')}")
         print("  Attributes:")
@@ -361,6 +672,13 @@ def display_archetypes(archetypes):
                 print(f"    Prototype: {item.get('PrototypeID', 'Unknown')}")
                 print(f"      Slot: {item.get('Slot', 'Unspecified')}")
                 print(f"      Worn: {item.get('IsWorn', False)}")
+
+        # Add available stories information
+        available_stories = archetype.get("AvailableStories", [])
+        if available_stories:
+            print("  Available Stories:")
+            for story_id in available_stories:
+                print(f"    {story_id}")
         print()
 
 
@@ -372,9 +690,9 @@ def display_item_prototypes(prototypes):
         prototypes (dict): The item prototypes data to display.
     """
     print("Item Prototypes:")
-    for prototype in prototypes.get("itemPrototypes", []):
+    for prototype in prototypes.get("ItemPrototypes", []):
         print(f"ID: {prototype.get('PrototypeID', 'No ID')}")
-        print(f"  Name: {prototype.get('prototype_name', 'No Name')}")
+        print(f"  Name: {prototype.get('PrototypeName', prototype.get('Name', 'No Name'))}")
         print(f"  Description: {prototype.get('Description', 'No description')}")
         print(f"  Mass: {prototype.get('Mass', 'Unknown')}")
         print(f"  Value: {prototype.get('Value', 'Unknown')}")
@@ -382,6 +700,117 @@ def display_item_prototypes(prototypes):
         if prototype.get("Wearable"):
             print(f"  Worn on: {', '.join(prototype.get('WornOn', []))}")
         print()
+
+
+def display_opponents(opponents_data):
+    """
+    Displays opponent information.
+
+    Args:
+        opponents_data (dict): The opponents data to display.
+    """
+    print("Opponents:")
+    for opponent in opponents_data.get("Opponents", []):
+        print(f"Opponent ID: {opponent.get('OpponentID', 'No ID')}")
+        print(f"  Name: {opponent.get('Name', 'No Name')}")
+        print(f"  Description: {opponent.get('Description', 'No description')}")
+
+        # Check if this is incremental format (has Attributes/Skills)
+        if "Attributes" in opponent and "Skills" in opponent:
+            # Incremental format
+            print(f"  Health: {opponent.get('Health', 0)} / {opponent.get('MaxHealth', opponent.get('Health', 0))}")
+            print(f"  Level: {opponent.get('Level', 1)}")
+            print(f"  XP Reward: {opponent.get('XPReward', 0)}")
+
+            print("  Attributes:")
+            for attr, value in opponent.get("Attributes", {}).items():
+                print(f"    {attr}: {value}")
+
+            print("  Skills:")
+            for skill, value in opponent.get("Skills", {}).items():
+                print(f"    {skill}: {value}")
+        else:
+            # MUD format (legacy)
+            print(f"  Combat Rating: {opponent.get('CombatRating', 0)}")
+            print(f"  Defense Rating: {opponent.get('DefenseRating', 0)}")
+            print(f"  Damage Rating: {opponent.get('DamageRating', 0)}")
+            print(f"  Toughness: {opponent.get('Toughness', 0)}")
+            print(f"  Armor Rating: {opponent.get('ArmorRating', 0)}")
+            print(f"  Health: {opponent.get('Health', 0)}")
+            print(f"  Weapon Type: {opponent.get('WeaponType', 'Unknown')}")
+            print(f"  Weapon Damage: {opponent.get('WeaponDamage', 0)}")
+
+        loot_table = opponent.get("LootTable", [])
+        if loot_table:
+            print("  Loot Table:")
+            for loot in loot_table:
+                if isinstance(loot, dict):
+                    print(f"    Item: {loot.get('ItemID', 'Unknown')} (chance: {loot.get('Chance', 0)})")
+                else:
+                    # Simple string format
+                    print(f"    {loot}")
+
+        tags = opponent.get("Tags", [])
+        if tags:
+            print(f"  Tags: {', '.join(tags)}")
+        print()
+
+
+def display_story(story_data):
+    """
+    Displays story and segments information.
+
+    Args:
+        story_data (dict): The story data to display.
+    """
+    # Display stories
+    print("Stories:")
+    for story in story_data.get("stories", []):
+        print(f"Story ID: {story.get('StoryID', 'No ID')}")
+        print(f"  Title: {story.get('Title', 'No Title')}")
+        print(f"  Description: {story.get('Description', 'No description')}")
+        print(f"  Type: {story.get('StoryType', 'Unknown')}")
+        print(f"  Duration: {story.get('EstimatedDuration', 0)} seconds")
+        print(f"  First Segment: {story.get('FirstSegmentID', 'None')}")
+        print(f"  Version: {story.get('Version', 1)}")
+        print()
+
+    # Display segments grouped by story
+    print("Segments:")
+    segments_by_story = {}
+    for segment in story_data.get("segments", []):
+        story_id = segment.get("StoryID")
+        if story_id not in segments_by_story:
+            segments_by_story[story_id] = []
+        segments_by_story[story_id].append(segment)
+
+    for story_id, segments in segments_by_story.items():
+        print(f"\nSegments for Story {story_id}:")
+        for segment in segments:
+            print(f"  Segment ID: {segment.get('SegmentID')}")
+            print(f"    Type: {segment.get('SegmentType')}")
+            print(f"    Status: {segment.get('SegmentActivity')}")
+            print(f"    Duration: {segment.get('SegmentDuration')} seconds")
+
+            if segment.get("SegmentType") == "decision":
+                print(f"    Decision Text: {segment.get('DecisionText', 'None')}")
+                options = segment.get("DecisionOptions", {})
+                if options:
+                    print("    Options:")
+                    for opt_key, opt_value in options.items():
+                        print(f"      {opt_key}: -> {opt_value}")
+            elif segment.get("SegmentType") == "mechanical":
+                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
+                challenges = segment.get("Challenges", [])
+                if challenges:
+                    print(f"    Challenges: {len(challenges)}")
+                combat = segment.get("Combat", {})
+                if combat:
+                    print(f"    Combat: Opponent ID: {combat.get('OpponentID', 'None')}, Max Rounds: {combat.get('MaxRounds', 0)}")
+            else:
+                print(f"    Unknown segment type: {segment.get('SegmentType')}")
+                print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
+            print()
 
 
 def main():
@@ -394,48 +823,128 @@ def main():
     - Loads data back from DynamoDB and displays it.
     """
     parser = argparse.ArgumentParser(description="Load and store game data in DynamoDB.")
-    parser.add_argument("-r", "--rooms", default="../data/test_rooms.json", help="Path to the Rooms JSON file.")
-    parser.add_argument("-e", "--exits", default="../data/test_exits.json", help="Path to the Exits JSON file.")
-    parser.add_argument("-a", "--archetypes", default="../data/test_archetypes.json", help="Path to the Archetypes JSON file.")
-    parser.add_argument("-p", "--prototypes", default="../data/test_prototypes.json", help="Path to the Prototypes JSON file.")
+    parser.add_argument(
+        "-r",
+        "--rooms",
+        default="../data/test_rooms.json",
+        help="Path to the Rooms JSON file (default: ../data/test_rooms.json)",
+    )
+    parser.add_argument(
+        "-e",
+        "--exits",
+        default="../data/test_exits.json",
+        help="Path to the Exits JSON file (default: ../data/test_exits.json)",
+    )
+    parser.add_argument(
+        "-a",
+        "--archetypes",
+        default="../data/test_archetypes.json",
+        help="Path to the Archetypes JSON file (default: ../data/test_archetypes.json)",
+    )
+    parser.add_argument(
+        "-p",
+        "--prototypes",
+        default="../data/test_prototypes.json",
+        help="Path to the Prototypes JSON file (default: ../data/test_prototypes.json)",
+    )
+    parser.add_argument(
+        "-s",
+        "--story",
+        default="../data/test_story.json",
+        help="Path to the Story JSON file (default: ../data/test_story.json)",
+    )
+    parser.add_argument(
+        "-o",
+        "--opponents",
+        default="../data/test_opponents.json",
+        help="Path to the Opponents JSON file (default: ../data/test_opponents.json)",
+    )
     parser.add_argument("-region", default="us-east-1", help="AWS region for DynamoDB.")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
+    # Configure logger for this module
+    logger = logging.getLogger(__name__)
+
+    logger.info("Starting data loader for Eidolon Engine")
+    logger.info(f"Loading data files from: {os.path.dirname(args.exits)}")
+
+    if args.region:
+        dynamo.set_region(args.region)
+
+    # Load and store exits
     try:
-        # Load and store exits
         exits_data = load_json(args.exits)
         store_exits(exits_data)
+    except FileNotFoundError:
+        logging.warning(f"Exits file not found: {args.exits}")
+    except Exception as err:
+        logging.error(f"Failed to load/store exits: {err}")
 
-        # Load and store rooms
+    # Load and store rooms
+    try:
         rooms_data = load_json(args.rooms)
         store_rooms(rooms_data)
+    except FileNotFoundError:
+        logging.warning(f"Rooms file not found: {args.rooms}")
+    except Exception as err:
+        logging.error(f"Failed to load/store rooms: {err}")
 
-        # Load and store archetypes
+    # Load and store archetypes
+    try:
         archetypes_data = load_json(args.archetypes)
         store_archetypes(archetypes_data)
+    except FileNotFoundError:
+        logging.warning(f"Archetypes file not found: {args.archetypes}")
+    except Exception as err:
+        logging.error(f"Failed to load/store archetypes: {err}")
 
-        # Load and store item prototypes
+    # Load and store item prototypes
+    try:
         prototypes_data = load_json(args.prototypes)
         store_item_prototypes(prototypes_data)
-
-        # Load data from DynamoDB and display
-        loaded_exits = load_exits()
-        display_exits(loaded_exits)
-
-        loaded_rooms = load_rooms()
-        display_rooms(loaded_rooms)
-
-        loaded_archetypes = load_archetypes()
-        display_archetypes(loaded_archetypes)
-
-        loaded_prototypes = load_item_prototypes()
-        display_item_prototypes(loaded_prototypes)
-
+    except FileNotFoundError:
+        logging.warning(f"Prototypes file not found: {args.prototypes}")
     except Exception as err:
-        logging.error(f"An unexpected error occurred: {str(err)}")
+        logging.error(f"Failed to load/store prototypes: {err}")
+
+    # Load and store story
+    try:
+        story_data = load_json(args.story)
+        store_story(story_data)
+    except FileNotFoundError:
+        logging.warning(f"Story file not found: {args.story}")
+    except Exception as err:
+        logging.error(f"Failed to load/store story: {err}")
+
+    # Load and store opponents
+    try:
+        opponents_data = load_json(args.opponents)
+        store_opponents(opponents_data)
+    except FileNotFoundError:
+        logging.warning(f"Opponents file not found: {args.opponents}")
+    except Exception as err:
+        logging.error(f"Failed to load/store opponents: {err}")
+
+    # Load data from DynamoDB and display
+    loaded_exits = load_exits()
+    display_exits(loaded_exits)
+
+    loaded_rooms = load_rooms()
+    display_rooms(loaded_rooms)
+
+    loaded_archetypes = load_archetypes()
+    display_archetypes(loaded_archetypes)
+
+    loaded_prototypes = load_item_prototypes()
+    display_item_prototypes(loaded_prototypes)
+
+    loaded_story = load_story()
+    display_story(loaded_story)
+
+    loaded_opponents = load_opponents()
+    display_opponents(loaded_opponents)
 
 
-if __name__ == "__main__":
-    main()
+main()

@@ -14,7 +14,3 @@ phases:
   post_build:
     commands:
       - aws s3 cp lambda-layer.zip "s3://$S3_BUCKET/lambda-layer/lambda-layer.zip"
-
-artifacts:
-  files:
-    - lambda-layer.zip

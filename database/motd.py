@@ -1,29 +1,17 @@
-"""
-Eidolon Engine
-
-Copyright 2024-2025 Jason Robinson
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
-This module adds a Message of the Day (MOTD) to the DynamoDB database.
-"""
+"""Add a Message of the Day (MOTD) entry to the DynamoDB motd table."""
 
 import argparse
 import os
-import uuid
-from datetime import datetime
+import sys
+from datetime import datetime, timezone
 
-from eidolon.dynamo import get_table, put_item
+from botocore.exceptions import ClientError
+from uuid_extension import uuid7
+
+from eidolon.dynamo import TableName, dynamo
+
+# Ensure eidolon modules can be imported when running as a script
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def add_or_update_motd(message: str, active: bool = True) -> dict:
@@ -35,29 +23,36 @@ def add_or_update_motd(message: str, active: bool = True) -> dict:
         active (bool): Indicates whether the MOTD is active.
 
     Returns:
-        dict: The response from DynamoDB if the operation was successful.
+        dict: The MOTD item that was added.
 
     Raises:
-        ClientError: If an error occurs during the DynamoDB operation.
+        ValueError: If message is empty.
+        RuntimeError: If DynamoDB operation fails.
     """
-    motd_id: str = str(uuid.uuid4())
+    if not message:
+        raise ValueError("Message cannot be empty")
+
+    # Use time-ordered UUIDv7 for better locality and sorting
+    motd_id: str = str(uuid7())
 
     # Prepare the item data to put into the table
     motd_item = {
         "MotdID": motd_id,
         "Active": active,
         "Message": message,
-        "CreatedAt": datetime.utcnow().isoformat(),
+        # RFC3339/ISO-8601 timestamp with UTC timezone offset
+        "CreatedAt": datetime.now(timezone.utc).isoformat(),
     }
 
-    motd_table = get_table(os.environ.get("MOTD_TABLE", "motd"))
-    if put_item(motd_table, motd_item):
+    try:
+        dynamo.put_item(TableName.MOTD, motd_item)
         print("MOTD added successfully.")
         print(f"MOTD ID: {motd_id}")
         return motd_item
-    else:
-        print("Error adding/updating MOTD.")
-        return {}
+    except ClientError as err:
+        raise RuntimeError(f"Failed to add MOTD to DynamoDB: {err}") from err
+    except Exception as err:
+        raise RuntimeError(f"Unexpected error adding MOTD: {err}") from err
 
 
 def main() -> None:
@@ -69,15 +64,33 @@ def main() -> None:
     """
     parser = argparse.ArgumentParser(description="Add or update a Message of the Day (MOTD)")
     parser.add_argument("message", type=str, help="The MOTD message")
-    parser.add_argument("--inactive", action="store_true", help="Set this flag to make the MOTD inactive")
+    parser.add_argument(
+        "--inactive",
+        action="store_true",
+        help="Set this flag to make the MOTD inactive",
+    )
+    parser.add_argument(
+        "--region",
+        default="us-east-1",
+        help="AWS region for DynamoDB (default: us-east-1)",
+    )
 
     args = parser.parse_args()
 
     # The MOTD is active by default unless --inactive is specified
     is_active = not args.inactive
 
+    dynamo.set_region(args.region)
+
     # Add or update the MOTD
-    add_or_update_motd(args.message, active=is_active)
+    try:
+        add_or_update_motd(args.message, active=is_active)
+    except ValueError as err:
+        print(f"Invalid input: {err}")
+        sys.exit(1)
+    except RuntimeError as err:
+        print(f"Error: {err}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

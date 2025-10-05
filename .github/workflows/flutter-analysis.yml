@@ -3,8 +3,13 @@ name: Dart Format and Analyze
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "portal/**"
+      - "incremental/**"
   pull_request:
-    branches: "**"
+    paths:
+      - "portal/**"
+      - "incremental/**"
 
 permissions:
   pull-requests: write
@@ -15,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # Fetch all history for all branches and tags
 
@@ -44,7 +49,6 @@ jobs:
         working-directory: portal
         run: |
           dart fix --apply 
-          dart analyze
           flutter analyze
 
       - name: Check for changes

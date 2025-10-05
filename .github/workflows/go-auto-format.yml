@@ -3,9 +3,11 @@ name: Go Format and Check
 on:
   push:
     branches: [develop, qa, prod]
+    paths:
+      - "server/**"
   pull_request:
-    branches: "**"
-
+    paths:
+      - "server/**"
 permissions:
   pull-requests: write
   contents: write
@@ -15,12 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: 1.24
+          go-version-file: server/go.mod
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest

@@ -1,28 +1,17 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason Robinson
+Copyright 2024-2025 Jason E. Robinson
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 */
 
 package main
 
 import (
-	"context"
 	"fmt"
-	"github.com/gofrs/uuid/v5"
 	"strings"
+
+	"github.com/gofrs/uuid/v5"
 )
 
 func GenerateUUIDv7() uuid.UUID {
@@ -101,20 +90,6 @@ func SafeSendString(ch chan<- string, msg string, recipientName string) bool {
 	select {
 	case ch <- msg:
 		return true
-	default:
-		Logger.Warn("Channel send failed", "recipient", recipientName, "messageLength", len(msg))
-		return false
-	}
-}
-
-// SafeSendStringContext sends a string to a channel with context cancellation support
-func SafeSendStringContext(ctx context.Context, ch chan<- string, msg string, recipientName string) bool {
-	select {
-	case ch <- msg:
-		return true
-	case <-ctx.Done():
-		Logger.Debug("Channel send cancelled", "recipient", recipientName, "reason", ctx.Err())
-		return false
 	default:
 		Logger.Warn("Channel send failed", "recipient", recipientName, "messageLength", len(msg))
 		return false
