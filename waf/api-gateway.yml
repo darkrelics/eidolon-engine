@@ -9,6 +9,9 @@ default_action: allow
 
 rules:
   # Priority 0: Rate limiting for authenticated requests
+  # Note: This rate-limits by Authorization header presence, not per-user.
+  # All authenticated requests share the same limit pool.
+  # For true per-user rate limiting, implement in Lambda using user_id from JWT.
   - name: RateLimitAuthenticated
     priority: 0
     statement:

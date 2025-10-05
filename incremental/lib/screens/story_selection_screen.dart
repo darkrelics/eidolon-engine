@@ -73,7 +73,8 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Capture provider and navigator before async operations
+      // Capture provider and navigator references before async operations
+      // This allows using them safely after await without accessing BuildContext
       final characterProvider = context.read<CharacterProvider>();
       final navigator = Navigator.of(context);
 

@@ -275,6 +275,8 @@ class _DecisionWidgetState extends State<DecisionWidget>
       children: choiceEntries.map((entry) {
         final choiceId = entry.key;
         final choiceData = entry.value as Map<String, dynamic>?;
+        // TODO: Standardize on lowercase 'text' once all story data is migrated
+        // Fallback to 'Text' (capitalized) for legacy data compatibility
         final choiceText =
             choiceData?['Text'] ?? choiceData?['text'] ?? choiceId;
         final description =
