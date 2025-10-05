@@ -20,12 +20,13 @@ class Character {
   Map<String, dynamic>? storyState; // Current story position
   final String? activeStoryID; // Currently active story ID
   final String? activeSegmentID; // Currently active segment ID
-  final String gameMode; // "MUD" or "Incremental"
+  final String gameMode; // "None", "Incremental", or "MUD"
   final DateTime lastUpdated;
   final List<String> availableStories;
   final List<String> abandonedStories;
   final List<String> completedStories;
   final List<Map<String, dynamic>>? availableStoriesDetails; // Full story metadata when no active story
+  final List<Map<String, dynamic>>? wounds; // List of wound objects with DamageType and HealAt
 
   Character({
     required this.id,
@@ -51,6 +52,7 @@ class Character {
     this.abandonedStories = const [],
     this.completedStories = const [],
     this.availableStoriesDetails,
+    this.wounds,
   });
 
   /// Safely parse a map of dynamic values to doubles.
@@ -147,13 +149,16 @@ class Character {
       storyState: json['StoryState'] as Map<String, dynamic>?,
       activeStoryID: json['ActiveStoryID'] as String?,
       activeSegmentID: json['ActiveSegmentID'] as String?,
-      gameMode: json['GameMode'] as String? ?? 'Incremental',
+      gameMode: json['GameMode'] as String? ?? 'None',
       lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
       availableStories: (json['AvailableStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
       abandonedStories: (json['AbandonedStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
       completedStories: (json['CompletedStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
       availableStoriesDetails: json['AvailableStoriesDetails'] != null
           ? (json['AvailableStoriesDetails'] as List).map((story) => story as Map<String, dynamic>).toList()
+          : null,
+      wounds: json['Wounds'] != null
+          ? (json['Wounds'] as List).map((wound) => wound as Map<String, dynamic>).toList()
           : null,
     );
   }
@@ -181,6 +186,7 @@ class Character {
       'AbandonedStories': abandonedStories,
       'CompletedStories': completedStories,
       if (availableStoriesDetails != null) 'AvailableStoriesDetails': availableStoriesDetails,
+      if (wounds != null) 'Wounds': wounds,
     };
   }
 
@@ -202,6 +208,7 @@ class Character {
     List<String>? abandonedStories,
     List<String>? completedStories,
     List<Map<String, dynamic>>? availableStoriesDetails,
+    List<Map<String, dynamic>>? wounds,
   }) {
     return Character(
       id: id,
@@ -227,6 +234,7 @@ class Character {
       abandonedStories: abandonedStories ?? this.abandonedStories,
       completedStories: completedStories ?? this.completedStories,
       availableStoriesDetails: availableStoriesDetails ?? this.availableStoriesDetails,
+      wounds: wounds ?? this.wounds,
     );
   }
 

@@ -162,6 +162,7 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
         final story = _filteredStories[index];
         return _StoryCard(
           story: story,
+          character: widget.character,
           onTap: widget.onStorySelect != null
               ? () => widget.onStorySelect!(story)
               : null,
@@ -181,6 +182,7 @@ class _AvailableStoriesWidgetState extends State<AvailableStoriesWidget> {
           padding: const EdgeInsets.only(bottom: 12),
           child: _StoryCard(
             story: story,
+            character: widget.character,
             onTap: widget.onStorySelect != null
                 ? () => widget.onStorySelect!(story)
                 : null,
@@ -338,15 +340,22 @@ class _FilterChip extends StatelessWidget {
 
 class _StoryCard extends StatelessWidget {
   final StoryMetadata story;
+  final Character character;
   final VoidCallback? onTap;
   final bool isGrid;
 
-  const _StoryCard({required this.story, this.onTap, required this.isGrid});
+  const _StoryCard({
+    required this.story,
+    required this.character,
+    this.onTap,
+    required this.isGrid,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isAvailable = story.available;
+    // Story is only available if it's marked available AND character is in "None" mode
+    final isAvailable = story.available && character.gameMode == 'None';
 
     return Card(
       elevation: isAvailable ? 4 : 1,

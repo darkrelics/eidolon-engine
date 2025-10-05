@@ -107,7 +107,7 @@ void main() {
     });
 
     test('handles missing resources gracefully', () {
-      validJson.remove('resources');
+      validJson.remove('Resources');
       final character = Character.fromJson(validJson);
 
       expect(character.resources, isEmpty);
@@ -120,15 +120,62 @@ void main() {
       expect(character1, equals(character2));
 
       // Different lastUpdated
-      validJson['lastUpdated'] = '2024-01-02T00:00:00.000Z';
+      validJson['UpdatedAt'] = '2024-01-02T00:00:00.000Z';
       final character3 = Character.fromJson(validJson);
       expect(character1, isNot(equals(character3)));
 
       // Different id
-      validJson['id'] = 'different-id';
-      validJson['lastUpdated'] = '2024-01-01T00:00:00.000Z';
+      validJson['CharacterID'] = 'different-id';
+      validJson['UpdatedAt'] = '2024-01-01T00:00:00.000Z';
       final character4 = Character.fromJson(validJson);
       expect(character1, isNot(equals(character4)));
+    });
+
+    test('parses wounds from JSON', () {
+      validJson['Wounds'] = [
+        {'DamageType': 'bashing', 'HealAt': '2024-01-01T12:00:00.000Z'},
+        {'DamageType': 'lethal', 'HealAt': '2024-01-01T18:00:00.000Z'},
+      ];
+      final character = Character.fromJson(validJson);
+
+      expect(character.wounds, isNotNull);
+      expect(character.wounds!.length, equals(2));
+      expect(character.wounds![0]['DamageType'], equals('bashing'));
+      expect(character.wounds![1]['DamageType'], equals('lethal'));
+    });
+
+    test('handles missing wounds gracefully', () {
+      final character = Character.fromJson(validJson);
+      expect(character.wounds, isNull);
+    });
+
+    test('handles empty wounds list', () {
+      validJson['Wounds'] = [];
+      final character = Character.fromJson(validJson);
+
+      expect(character.wounds, isNotNull);
+      expect(character.wounds, isEmpty);
+    });
+
+    test('defaults gameMode to None when missing', () {
+      validJson.remove('GameMode');
+      final character = Character.fromJson(validJson);
+
+      expect(character.gameMode, equals('None'));
+    });
+
+    test('parses gameMode correctly', () {
+      validJson['GameMode'] = 'Incremental';
+      final character1 = Character.fromJson(validJson);
+      expect(character1.gameMode, equals('Incremental'));
+
+      validJson['GameMode'] = 'MUD';
+      final character2 = Character.fromJson(validJson);
+      expect(character2.gameMode, equals('MUD'));
+
+      validJson['GameMode'] = 'None';
+      final character3 = Character.fromJson(validJson);
+      expect(character3.gameMode, equals('None'));
     });
   });
 
