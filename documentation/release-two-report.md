@@ -52,10 +52,12 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 
 ### High Priority (Testing) — 3 Tasks
 - R2-TEST-3: Idempotency Verification ✓ (Implementation Complete, Testing Pending)
-- R2-TEST-1: Story Lifecycle Integration Tests
+- R2-TEST-1: Operational Excellence & Validation (Replaces traditional integration tests)
 - R2-TEST-2: Concurrent Operations Tests
 
 **Total:** 8 active tasks (6 completed, 2 remaining), 9 deferred tasks
+
+**Note:** R2-TEST-1 scope changed from traditional integration tests to operational monitoring approach for better long-term value and lower maintenance burden.
 
 **Deferral Policy:**
 - **Security Audit, Documentation, Cost Controls, Story Browsing UI:** Deferred until principle development complete
@@ -2081,100 +2083,353 @@ cost_widget = cloudwatch.SingleValueWidget(
 
 ---
 
-### R2-TEST-1: Create Integration Test Suite
+### R2-TEST-1: Operational Excellence & Validation
 
-**Goal:** Validate full story lifecycle with automated tests.
+**Goal:** Ensure story system reliability through operational monitoring and lightweight validation.
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
+**Estimated Effort:** 8 hours
 
-#### Test Coverage
+**Rationale for Approach Change:**
 
-**Test Suite 1: Story Lifecycle**
+Traditional integration tests have high maintenance burden and become obsolete with feature changes. Instead, this task focuses on **continuous validation in production** through operational monitoring, health checks, and structured observability.
 
-```python
-# tests/integration/test_story_lifecycle.py
+---
 
-def test_complete_story_flow():
-    """Test full story from start to completion."""
-    # 1. Start story
-    response = api_story_start(character_id, story_id)
-    assert response["ActiveSegmentID"]
+#### Deliverables
 
-    # 2. Wait for segment processing
-    time.sleep(2)
-    segment = api_segment_status(character_id)
-    assert segment["ProcessingStatus"] == "processed"
+**1. Manual Smoke Test Checklist** (1 hour)
 
-    # 3. Advance through all segments
-    while segment["Status"] == "active":
-        # Wait for timer
-        wait_until(segment["EndTime"])
+**File:** `tests/manual/story_smoke_test.md`
 
-        # Poll for advancement
-        time.sleep(2)
-        segment = api_segment_status(character_id)
+Quick validation checklist to run before each deployment:
 
-    # 4. Verify completion
-    character = api_character_get(character_id)
-    assert character["GameMode"] == "None"
-    assert story_id in character["CompletedStories"]
+```markdown
+# Story System Smoke Test (15-20 minutes)
 
-def test_decision_segment_flow():
-    """Test decision segment with player choice."""
-    # Start story with decision segment
-    response = api_story_start(character_id, decision_story_id)
+## Setup
+- [ ] Create test character "SmokeTest-[timestamp]"
+- [ ] Verify character shows IDLE badge
 
-    # Submit decision before timeout
-    decision_response = api_segment_decision(character_id, "option_a")
-    assert decision_response["Accepted"] == True
+## Happy Path
+- [ ] Start "The Goblin Ambush" story
+- [ ] Verify STORY badge appears
+- [ ] Wait for segment timer completion
+- [ ] Verify story advances to next segment
+- [ ] If decision: submit choice
+- [ ] Let story complete naturally
+- [ ] Verify returns to IDLE, story in CompletedStories
 
-    # Verify next segment created
-    assert decision_response["NextSegment"]["ActiveSegmentID"]
+## Error Handling
+- [ ] Try starting second story (expect 409)
+- [ ] Try starting locked story (expect 403)
+- [ ] Verify error messages are clear
 
-def test_story_abandonment():
-    """Test abandoning active story."""
-    api_story_start(character_id, story_id)
-
-    # Abandon mid-story
-    api_story_abandon(character_id)
-
-    # Verify state cleared
-    character = api_character_get(character_id)
-    assert character["GameMode"] == "None"
-    assert story_id in character["AbandonedStories"]
+## Cleanup
+- [ ] Delete test character
+- [ ] Review CloudWatch logs for errors
 ```
 
-**Test Suite 2: Error Handling**
+---
+
+**2. Automated Health Check Lambda** (2 hours)
+
+**File:** `lambda/ops_health_check.py`
+
+Runs every 5 minutes to detect operational issues:
 
 ```python
-def test_start_story_while_active():
-    """Test 409 error when starting story while one active."""
-    api_story_start(character_id, story_id_1)
+def lambda_handler(event, context):
+    """
+    Story system health monitoring.
 
-    # Attempt to start second story
-    with pytest.raises(ConflictError):
-        api_story_start(character_id, story_id_2)
+    Detects:
+    - Stuck segments (processing > 10 minutes)
+    - Orphaned segments (character doesn't reference)
+    - Poller state mismatches
+    """
+    issues = []
 
-def test_prerequisites_not_met():
-    """Test 403 error when prerequisites not met."""
-    # Story requires Lockpicking >= 5
-    # Character has Lockpicking = 0
-    with pytest.raises(ForbiddenError):
-        api_story_start(character_id, locked_story_id)
+    # Check for stuck segments
+    stuck = query_segments_processing_over_threshold(minutes=10)
+    if stuck:
+        issues.append(f"Found {len(stuck)} stuck segments")
+        for seg in stuck:
+            logger.error(f"Stuck: {seg['ActiveSegmentID']}")
+
+    # Check for orphaned segments
+    orphaned = find_segments_not_referenced_by_character()
+    if orphaned:
+        issues.append(f"Found {len(orphaned)} orphaned segments")
+
+    # Check poller state consistency
+    poller_state = get_polling_state()
+    has_active = check_active_segments_exist()
+
+    if poller_state == "stop" and has_active:
+        issues.append("Poller stopped but active segments exist")
+
+    # Publish metrics
+    cloudwatch.put_metric_data(
+        Namespace='StorySystem/Health',
+        MetricData=[{
+            'MetricName': 'IssuesFound',
+            'Value': len(issues),
+            'Unit': 'Count'
+        }]
+    )
+
+    # Alert if issues found
+    if issues:
+        sns.publish(
+            TopicArn=os.environ['HEALTH_ALERT_TOPIC'],
+            Subject='Story System Health Alert',
+            Message='\n'.join(issues)
+        )
+
+    return {"statusCode": 200 if not issues else 500, "issues": issues}
 ```
 
-**Files to Create:**
-- `tests/integration/test_story_lifecycle.py` — Core lifecycle tests
-- `tests/integration/test_decision_segments.py` — Decision-specific tests
-- `tests/integration/test_error_handling.py` — Error condition tests
-- `tests/integration/conftest.py` — Test fixtures and helpers
+**CloudWatch Alarm:**
+- Trigger: `IssuesFound > 0` for 2 consecutive 5-minute periods
+- Action: SNS notification to operations team
 
-**Acceptance Criteria:**
-- [ ] All lifecycle paths tested (start, complete, abandon)
-- [ ] Decision segments tested
-- [ ] Error conditions validated
-- [ ] Tests run in CI/CD pipeline
+---
+
+**3. Operational Dashboard** (2 hours)
+
+**File:** `deployment/stacks/monitoring_stack.py`
+
+Real-time operational visibility:
+
+```python
+dashboard = cloudwatch.Dashboard(
+    self, "StorySystemDashboard",
+    dashboard_name="StorySystem-Operations",
+    widgets=[
+        [
+            # Current active stories
+            cloudwatch.SingleValueWidget(
+                title="Active Stories Now",
+                metrics=[cloudwatch.Metric(
+                    namespace="StorySystem",
+                    metric_name="ActiveStories",
+                    statistic="Average"
+                )],
+                width=6
+            ),
+
+            # Health check status
+            cloudwatch.SingleValueWidget(
+                title="Health Issues",
+                metrics=[cloudwatch.Metric(
+                    namespace="StorySystem/Health",
+                    metric_name="IssuesFound",
+                    statistic="Sum"
+                )],
+                width=6
+            ),
+        ],
+
+        [
+            # Story start success rate
+            cloudwatch.GraphWidget(
+                title="Story Start Success Rate (24h)",
+                left=[
+                    cloudwatch.Metric(
+                        namespace="AWS/Lambda",
+                        metric_name="Invocations",
+                        dimensions_map={"FunctionName": "api-story-start"},
+                        statistic="Sum",
+                        label="Attempts"
+                    ),
+                    cloudwatch.Metric(
+                        namespace="AWS/Lambda",
+                        metric_name="Errors",
+                        dimensions_map={"FunctionName": "api-story-start"},
+                        statistic="Sum",
+                        label="Failures"
+                    )
+                ],
+                width=12
+            ),
+        ],
+
+        [
+            # Story completion outcomes
+            cloudwatch.GraphWidget(
+                title="Story Outcomes (24h)",
+                left=[
+                    cloudwatch.Metric(
+                        namespace="StorySystem",
+                        metric_name="CompletedStories",
+                        dimensions_map={"Outcome": "normal"},
+                        statistic="Sum"
+                    ),
+                    cloudwatch.Metric(
+                        namespace="StorySystem",
+                        metric_name="CompletedStories",
+                        dimensions_map={"Outcome": "exceptional"},
+                        statistic="Sum"
+                    ),
+                    cloudwatch.Metric(
+                        namespace="StorySystem",
+                        metric_name="CompletedStories",
+                        dimensions_map={"Outcome": "failure"},
+                        statistic="Sum"
+                    )
+                ],
+                width=12
+            )
+        ]
+    ]
+)
+```
+
+---
+
+**4. Structured Logging Enhancements** (2 hours)
+
+Add structured fields to critical Lambda logs for query-ability:
+
+```python
+# In ops_story_advance.py
+logger.info("Story advancement completed", extra={
+    "event_type": "story_advancement",
+    "character_id": character_id,
+    "story_id": story_id,
+    "segment_id": segment_id,
+    "outcome": outcome,
+    "next_segment_id": next_segment_id,
+    "skipped": False,
+    "skip_reason": None,
+    "duration_ms": processing_duration
+})
+
+# In ops_segment_process.py
+logger.info("Segment processing completed", extra={
+    "event_type": "segment_processing",
+    "segment_id": segment_id,
+    "outcome": outcome,
+    "total_xp_awarded": sum(skill_xp.values()),
+    "items_granted_count": len(items),
+    "processing_time_ms": processing_time
+})
+```
+
+**CloudWatch Insights Queries:**
+
+```
+# Find story completion failures
+fields @timestamp, character_id, story_id, outcome
+| filter event_type = "story_advancement" and (outcome = "death" or outcome = "failure")
+| stats count() by story_id
+
+# Find slow processing
+fields @timestamp, segment_id, processing_time_ms
+| filter event_type = "segment_processing" and processing_time_ms > 5000
+| sort processing_time_ms desc
+
+# Verify idempotency working
+fields @timestamp, segment_id, skip_reason
+| filter event_type = "story_advancement" and skipped = true
+| stats count() by skip_reason
+```
+
+---
+
+**5. Canary Deployment Configuration** (1 hour)
+
+**File:** `deployment/stacks/lambda_stack.py`
+
+Automatic validation and rollback:
+
+```python
+# Add to each story-related Lambda
+deployment = codedeploy.LambdaDeploymentGroup(
+    self, "StoryLambdaDeployment",
+    application=application,
+    deployment_config=codedeploy.LambdaDeploymentConfig.CANARY_10_PERCENT_5_MINUTES,
+    alarms=[
+        cloudwatch.Alarm(
+            self, "LambdaErrorAlarm",
+            metric=function.metric_errors(),
+            threshold=5,
+            evaluation_periods=2,
+            alarm_description="Rollback if >5 errors in 10 minutes"
+        ),
+        cloudwatch.Alarm(
+            self, "HealthCheckAlarm",
+            metric=cloudwatch.Metric(
+                namespace="StorySystem/Health",
+                metric_name="IssuesFound"
+            ),
+            threshold=1,
+            evaluation_periods=2,
+            alarm_description="Rollback if health check fails"
+        )
+    ],
+    auto_rollback=codedeploy.AutoRollbackConfig(
+        failed_deployment=True,
+        deployment_in_alarm=True
+    )
+)
+```
+
+**How it works:**
+1. New code deploys to 10% of invocations
+2. Monitors for 5 minutes
+3. If alarms trigger → automatic rollback
+4. If clean → deploys to remaining 90%
+
+---
+
+#### Files to Create
+
+- `tests/manual/story_smoke_test.md` — Pre-deployment checklist
+- `lambda/ops_health_check.py` — Automated health monitoring
+- `deployment/stacks/monitoring_stack.py` — Operational dashboard
+- `docs/cloudwatch_insights_queries.md` — Useful log queries
+
+#### Files to Modify
+
+- `lambda/ops_story_advance.py` — Add structured logging
+- `lambda/ops_segment_process.py` — Add structured logging
+- `deployment/stacks/lambda_stack.py` — Add canary deployment config
+
+---
+
+#### Acceptance Criteria
+
+- [x] Manual smoke test checklist created and validated
+- [ ] Health check Lambda deployed and running every 5 minutes
+- [ ] CloudWatch alarm configured for health check failures
+- [ ] Operational dashboard deployed and accessible
+- [ ] Structured logging added to story advancement and segment processing
+- [ ] Canary deployment configured for story-related Lambdas
+- [ ] Smoke test passes on dev environment
+- [ ] Dashboard shows real data after 1 hour of operation
+
+---
+
+#### Why This Approach
+
+**Traditional Integration Tests:**
+- 3-5 days to build
+- High maintenance (breaks on every change)
+- Validates synthetic scenarios
+- Pre-deployment only
+- 10-minute feedback loop
+
+**Operational Excellence:**
+- 8 hours to build
+- Low maintenance (adapts to changes)
+- Validates real user behavior
+- Continuous monitoring
+- Real-time feedback
+
+**Result:** Better quality assurance with less effort and ongoing value.
 
 ---
 

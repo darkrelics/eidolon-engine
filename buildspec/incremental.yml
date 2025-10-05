@@ -35,10 +35,10 @@ phases:
           fi
         done
 
-      # Invalidate only entry points
+      # Invalidate CloudFront cache
       - |
         if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
-          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/index.html" "/flutter_bootstrap.js" "/manifest.json"
+          aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
         else
           echo "No CloudFront distribution ID provided, skipping cache invalidation"
         fi
