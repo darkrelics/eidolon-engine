@@ -379,6 +379,7 @@ class _GameScreenState extends State<GameScreen> {
           activeStoryId: initialSegment['StoryID']?.toString(),
           activeSegmentId: initialSegment['ActiveSegmentID']?.toString() ?? initialSegment['SegmentID']?.toString(),
           storyState: newStoryState,
+          gameMode: 'Incremental',
         );
 
         _lastStoryDetails = Map<String, dynamic>.from(newStoryState['Story'] as Map<String, dynamic>);
@@ -793,7 +794,7 @@ class _GameScreenState extends State<GameScreen> {
           }
         }
 
-        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate);
+        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
       }
 
       _isLoading = false;
@@ -842,7 +843,7 @@ class _GameScreenState extends State<GameScreen> {
           }
         }
 
-        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate);
+        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
       }
 
       _isLoading = false;
@@ -869,7 +870,7 @@ class _GameScreenState extends State<GameScreen> {
     if (mounted) {
       setState(() {
         if (_character != null) {
-          _character = _character!.copyWith(storyState: null);
+          _character = _character!.copyWith(storyState: null, gameMode: 'None');
         }
         _lastStoryDetails = null;
       });
