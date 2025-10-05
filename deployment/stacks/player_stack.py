@@ -1,12 +1,40 @@
 """Player stack for Cognito User Pool and Lambda function."""
 
 import aws_cdk as cdk
+from pathlib import Path
 from aws_cdk import CfnOutput, Duration, RemovalPolicy, Stack, Tags
 from aws_cdk import aws_cognito as cognito
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_lambda as lambda_
 from aws_cdk import aws_s3 as s3
 from constructs import Construct
+
+
+def load_email_template(template_name: str) -> str:
+    """Load email template from data directory.
+
+    Args:
+        template_name: Name of template file (e.g., 'cognito-verification-email.html')
+
+    Returns:
+        Template content as string, or empty string if file not found
+    """
+    # Get project root (parent of deployment directory)
+    project_root = Path(__file__).parent.parent.parent
+    template_path = project_root / "data" / template_name
+
+    if not template_path.exists():
+        print(f"  Warning: Email template not found: {template_path}")
+        return ""
+
+    try:
+        with open(template_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        print(f"  Loaded email template: {template_name} ({len(content)} bytes)")
+        return content
+    except Exception as e:
+        print(f"  Error loading template {template_name}: {e}")
+        return ""
 
 
 class PlayerStack(Stack):
@@ -77,7 +105,7 @@ class PlayerStack(Stack):
         self._add_outputs()
 
     def _create_user_pool(self):
-        """Create Cognito User Pool."""
+        """Create Cognito User Pool with custom email template."""
         user_pool_name = "eidolon-users"
 
         # Check if we should import from context
@@ -89,6 +117,34 @@ class PlayerStack(Stack):
 
         print(f"  Creating/updating user pool: {user_pool_name}")
         print(f"  Reply email: {self.reply_email}")
+
+        # Load email template from data directory
+        html_template = load_email_template("cognito-verification-email.html")
+
+        # Prepare user verification config
+        if html_template:
+            # Use custom HTML template
+            user_verification = cognito.UserVerificationConfig(
+                email_subject="Verify your Eidolon Engine account",
+                email_body=html_template,
+                email_style=cognito.VerificationEmailStyle.CODE,
+            )
+        else:
+            # Fallback to simple text template
+            user_verification = cognito.UserVerificationConfig(
+                email_subject="Verify your Eidolon Engine account",
+                email_body="""Welcome to Eidolon Engine!
+
+Please verify your email using one of these methods:
+
+METHOD 1 - Click this link: {##Verify Email##}
+
+METHOD 2 - Enter this code in the app: {####}
+
+Code expires in 24 hours. Need a new code? Tap "Resend Code" in the app.""",
+                email_style=cognito.VerificationEmailStyle.CODE,
+            )
+
         self.is_imported_pool = False
         return cognito.UserPool(
             self,
@@ -103,6 +159,7 @@ class PlayerStack(Stack):
             account_recovery=cognito.AccountRecovery.EMAIL_ONLY,
             removal_policy=RemovalPolicy.RETAIN,
             email=cognito.UserPoolEmail.with_cognito(reply_to=self.reply_email),
+            user_verification=user_verification,
         )
 
     def _create_app_client(self) -> cognito.UserPoolClient:

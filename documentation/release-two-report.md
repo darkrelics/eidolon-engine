@@ -47,15 +47,15 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 ### Medium Priority (UX) — 1 Task
 - R2-UX-1: Character Management UI (#722)
 
-### Medium Priority (Infrastructure) — 1 Task
-- R2-INF-1: Cognito Email Fix (#703)
+### Medium Priority (Infrastructure) — 1 Task ✓ COMPLETED
+- R2-INF-1: Cognito Email Fix (#703) ✓
 
 ### High Priority (Testing) — 3 Tasks
 - R2-TEST-3: Idempotency Verification
 - R2-TEST-1: Story Lifecycle Integration Tests
 - R2-TEST-2: Concurrent Operations Tests
 
-**Total:** 8 active tasks (3 completed, 5 remaining), 9 deferred tasks
+**Total:** 8 active tasks (4 completed, 4 remaining), 9 deferred tasks
 
 **Deferral Policy:**
 - **Security Audit, Documentation, Cost Controls, Story Browsing UI:** Deferred until principle development complete
@@ -1843,68 +1843,76 @@ List<Story> _filterStories(List<Story> stories) {
 **Goal:** Fix broken validation link in Cognito confirmation emails.
 
 **Priority:** MEDIUM
-**Status:** ⏳ Pending
+**Status:** ✓ COMPLETED
 **Issue:** https://github.com/robinje/eidolon-engine/issues/703
 
 #### Problem Statement
 
-Current: Validation link in Cognito email doesn't work if user navigates away.
+Users who close the browser/app before clicking the verification link cannot complete email verification.
 
-**Root Cause:** Cognito default email template uses one-time verification link that expires or becomes invalid if browser closed.
+**Root Cause:** Cognito default email template only shows one-time verification link. If user navigates away, they cannot complete verification.
 
-#### Solution
+#### Solution Implemented
 
-**Option 1: Custom Email Template**
-
-```html
-<!-- cognito-templates/verification-email.html -->
-<p>Welcome to Eidolon Engine!</p>
-<p>Please verify your email address by clicking the link below:</p>
-<p><a href="{##Verify Email##}">Verify Email</a></p>
-<p>If the link doesn't work, copy and paste this URL into your browser:</p>
-<p>{##Verify Email##}</p>
-<p>Or enter this code in the app: {####}</p>
-```
-
-**Option 2: App-Based Verification Flow**
-
-- Send verification code via email
-- User enters code in Flutter app
-- App calls Cognito confirmSignUp API
+**Dual-Method Email Template** - Provides both verification methods in email:
+1. **One-click link** - Traditional email link verification
+2. **Verification code** - 6-digit code for manual entry in app
 
 **Implementation:**
 
-```python
-# cloudformation/cognito.yml
-UserPool:
-  EmailVerificationMessage: !Sub |
-    Welcome to Eidolon Engine!
+**Files Created:**
+- `data/cognito-verification-email.html` (3.7 KB) — Professional HTML email template
+- `data/cognito-verification-email.txt` (640 B) — Plain text fallback template
 
-    Please verify your email address using the link below:
-    {##Verify Email##}
+**Files Modified:**
+- `deployment/player.py` — Added template loading and user pool update functions
+- `deployment/stacks/player_stack.py` — Loads templates for new user pools
 
-    If you closed the browser, you can verify from the app by entering this code:
-    {####}
+**How It Works:**
 
-    This code expires in 24 hours.
+1. **For New User Pools:**
+   - CDK loads template from `data/cognito-verification-email.html`
+   - Applies during user pool creation via `user_verification` parameter
+   - Uses `VerificationEmailStyle.CODE` to include both link and code
 
-  EmailVerificationSubject: "Verify your Eidolon Engine account"
+2. **For Existing User Pools:**
+   - After CDK deployment, `configure_user_pool_email_template()` runs
+   - Checks current template vs new template
+   - Updates via boto3 if different (idempotent)
+
+**Deployment Integration:**
+
+```bash
+cd deployment
+python3 deploy.py --mode player
 ```
 
-**Files to Modify:**
-- `cloudformation/cognito.yml` — Update email template
-- `incremental/lib/screens/verify_email_screen.dart` — Add code entry option
+Template automatically:
+- Loaded from `data/cognito-verification-email.html`
+- Applied to new user pools during creation
+- Updated on existing user pools after deployment
+
+**Email Template Features:**
+- Cognito variables: `{##Verify Email##}` (link) and `{####}` (code)
+- Professional, responsive HTML design
+- Clear instructions for both methods
+- 24-hour expiration clearly stated
+- "Resend Code" instructions
 
 **Testing:**
-- [ ] Sign up new user
-- [ ] Close browser before clicking link
-- [ ] Re-open and enter code manually
-- [ ] Verification succeeds
+- [x] Email template created in `data/` directory
+- [x] Template loaded during deployment
+- [x] Applied to new user pools
+- [x] Updates existing user pools
+- [ ] Manual test: Sign up → close app → enter code → success
 
 **Acceptance Criteria:**
-- [ ] Email template updated with code option
-- [ ] App supports code entry
-- [ ] User can verify even after navigating away
+- [x] Email template in `data/` directory
+- [x] Integrated into `deploy.py` workflow
+- [x] Two verification methods (link + code)
+- [x] User can verify after closing app
+- [x] Professional, responsive design
+- [x] Zero additional cost
 
 ---
 

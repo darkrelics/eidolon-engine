@@ -12,6 +12,90 @@ from stacks import stack_utilities as utils
 from utilities import extract_stack_outputs, run_cdk_deploy
 
 
+def load_email_template(template_name: str) -> str:
+    """Load email template from data directory.
+
+    Args:
+        template_name: Name of template file (e.g., 'cognito-verification-email.html')
+
+    Returns:
+        Template content as string, or empty string if file not found
+    """
+    project_root = Path(__file__).parent.parent
+    template_path = project_root / "data" / template_name
+
+    if not template_path.exists():
+        print(f"  [WARNING] Email template not found: {template_path}")
+        return ""
+
+    try:
+        with open(template_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        print(f"  Loaded email template: {template_name} ({len(content)} bytes)")
+        return content
+    except Exception as e:
+        print(f"  [ERROR] Failed to load template {template_name}: {e}")
+        return ""
+
+
+def configure_user_pool_email_template(user_pool_id: str, region: str) -> bool:
+    """Configure email verification template for User Pool.
+
+    Args:
+        user_pool_id: ID of the User Pool
+        region: AWS region
+
+    Returns:
+        True if template is configured successfully
+    """
+    try:
+        cognito = boto3.client("cognito-idp", region_name=region)
+
+        # Load email template from data directory
+        html_template = load_email_template("cognito-verification-email.html")
+
+        if not html_template:
+            print("  [INFO] No custom email template found, using Cognito default")
+            return True  # Not a failure - just use default
+
+        # Get current user pool configuration
+        print("  Checking current email verification template...")
+        response = cognito.describe_user_pool(UserPoolId=user_pool_id)
+        current_config = response.get("UserPool", {})
+
+        # Check current verification template
+        current_template = current_config.get("VerificationMessageTemplate", {})
+        current_email = current_template.get("EmailMessage", "")
+
+        # Check if update is needed
+        template_needs_update = current_email != html_template
+
+        if not template_needs_update:
+            print("  [OK] Email verification template already up to date")
+            return True
+
+        print("  Updating email verification template...")
+
+        # Update the user pool with new email template
+        cognito.update_user_pool(
+            UserPoolId=user_pool_id,
+            VerificationMessageTemplate={
+                'DefaultEmailOption': 'CONFIRM_WITH_CODE',
+                'EmailMessage': html_template,
+                'EmailSubject': 'Verify your Eidolon Engine account',
+            }
+        )
+
+        print("  [OK] Email verification template updated successfully")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        error_msg = err.response.get("Error", {}).get("Message", "")
+        print(f"  [ERROR] Failed to update email template: {error_code} - {error_msg}")
+        return False
+
+
 def get_shared_resources(params, state: CDKState) -> dict:
     """Get shared Lambda resources from Lambda stack.
 
@@ -334,6 +418,12 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
                 print("  [ERROR] Failed to configure trigger")
         else:
             print("  [WARNING] cognito-player-new Lambda not found - trigger not configured")
+
+        # Configure email verification template (works for both new and existing pools)
+        print("\nConfiguring email verification template...")
+        email_configured = configure_user_pool_email_template(validation["user_pool_id"], params.region)
+        if not email_configured:
+            print("  [WARNING] Failed to configure email template - using Cognito default")
 
     # Update configuration with Cognito settings
     if validation.get("user_pool", False) and validation.get("user_pool_id"):

@@ -1,0 +1,24 @@
+Welcome to Eidolon Engine!
+
+Thank you for creating an account. To start your adventure, please verify your email address.
+
+TWO WAYS TO VERIFY:
+
+METHOD 1 - One-Click Link:
+Click here: {##Verify Email##}
+
+METHOD 2 - Verification Code:
+Enter this code in the app: {####}
+
+WHERE TO ENTER THE CODE:
+Open the Eidolon app → Verification screen → Enter the code above
+
+IMPORTANT:
+• Code expires in 24 hours
+• Need a new code? Tap "Resend Code" in the app
+• Make sure you're on the verification screen before entering the code
+
+If you didn't create this account, please ignore this email.
+
+---
+© 2025 Jason Robinson
