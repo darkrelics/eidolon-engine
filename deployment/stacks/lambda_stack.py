@@ -84,11 +84,18 @@ class LambdaStack(Stack):
             managed_policy_name="eidolon-lambda-logs-policy",
             description="CloudWatch Logs permissions for Lambda functions",
             statements=[
+                # CreateLogGroup needs log-group ARN without :*
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
-                    actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-                    resources=[f"arn:aws:logs:{self.region_name}:*:*"],
-                )
+                    actions=["logs:CreateLogGroup"],
+                    resources=[f"arn:aws:logs:{self.region_name}:{self.account}:log-group:/aws/lambda/*"],
+                ),
+                # CreateLogStream and PutLogEvents need log-group ARN with :*
+                iam.PolicyStatement(
+                    effect=iam.Effect.ALLOW,
+                    actions=["logs:CreateLogStream", "logs:PutLogEvents"],
+                    resources=[f"arn:aws:logs:{self.region_name}:{self.account}:log-group:/aws/lambda/*:*"],
+                ),
             ],
         )
         role.add_managed_policy(logs_policy)
