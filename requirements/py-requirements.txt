@@ -1,8 +1,8 @@
 # Directly called packages.
 bandit==1.8.6
 pip-audit==2.9.0
-pylint==3.3.8
-ruff==0.13.2
+pylint==3.3.9
+ruff==0.13.3
 vulture==2.14
 
 # Supporting Libraries
@@ -10,15 +10,15 @@ CacheControl==0.14.3
 PyYAML==6.0.3 
 astroid==3.3.11 
 boolean.py==5.0 
-certifi==2025.8.3
+certifi==2025.10.5
 charset-normalizer==3.4.3 
 cognitive-complexity==1.3.0 
-cyclonedx-python-lib==9.1.0
+cyclonedx-python-lib==11.1.0
 defusedxml==0.7.1 
 dill==0.4.0 
 filelock==3.19.1 
 idna==3.10 
-isort==6.0.1 
+isort==6.1.0 
 license-expression==30.4.4 
 markdown-it-py==3.0.0 
 mccabe==0.7.0 
