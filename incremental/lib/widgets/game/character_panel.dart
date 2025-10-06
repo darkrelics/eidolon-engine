@@ -84,7 +84,7 @@ class CharacterPanel extends StatelessWidget {
                     current: character.health,
                     max: character.maxHealth,
                     color: Colors.red,
-                    icon: RpgAwesome.health,
+                    icon: RpgAwesome.hearts,
                   ),
                   const SizedBox(height: 12),
 

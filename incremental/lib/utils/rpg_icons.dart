@@ -91,7 +91,7 @@ class RpgIcons {
       case 'wisdom':
         return Icons.auto_awesome;
       case 'charisma':
-        return Icons.record_voice_over_outlined;
+        return RpgAwesome.speech_bubbles;
       case 'presence':
         return RpgAwesome.aura;
       case 'intrigue':
@@ -142,7 +142,7 @@ class RpgIcons {
       case 'firstaid':
       case 'first_aid':
       case 'healing':
-        return RpgAwesome.health;
+        return RpgAwesome.hearts;
       case 'foraging':
       case 'survival':
         return RpgAwesome.leaf;
@@ -169,7 +169,7 @@ class RpgIcons {
       case 'fame':
         return RpgAwesome.crown;
       case 'health':
-        return RpgAwesome.health;
+        return RpgAwesome.hearts;
       case 'essence':
       case 'mana':
       case 'magic':
