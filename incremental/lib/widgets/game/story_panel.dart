@@ -89,7 +89,7 @@ class _StoryPanelState extends State<StoryPanel> {
             ),
             child: Row(
               children: [
-                Icon(RpgAwesome.scroll_unfurled, color: colorScheme.onPrimaryContainer),
+                Icon(Icons.import_contacts, color: colorScheme.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Text(
                   _getHeaderTitle(),

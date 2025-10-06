@@ -72,7 +72,7 @@ class RpgIcons {
       case 'bag':
         return RpgAwesome.key;
       default:
-        return Icons.account_balance_wallet;
+        return Icons.paid;
     }
   }
 
@@ -82,10 +82,10 @@ class RpgIcons {
         return RpgAwesome.muscle_up;
       case 'agility':
       case 'dexterity':
-        return Icons.directions_run;
+        return Icons.flash_on;
       case 'endurance':
       case 'constitution':
-        return Icons.run_circle;
+        return Icons.directions_run;
       case 'intelligence':
         return Icons.psychology;
       case 'wisdom':
@@ -119,7 +119,7 @@ class RpgIcons {
       case 'dodge':
         return RpgAwesome.player_dodge;
       case 'parry':
-        return Icons.shield;
+        return RpgAwesome.crossed_swords;
       case 'stealth':
         return Icons.visibility_off;
       case 'investigation':
@@ -138,7 +138,7 @@ class RpgIcons {
         return RpgAwesome.book;
       case 'arcane':
       case 'magic':
-        return Icons.blur_on;
+        return Icons.blur_circular;
       case 'firstaid':
       case 'first_aid':
       case 'healing':
