@@ -4,6 +4,8 @@ Archetype management utilities for Lambda functions.
 Provides functions for loading and filtering player-available archetypes.
 """
 
+from functools import cache
+
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
@@ -63,6 +65,7 @@ def get_archetypes() -> list:
     return player_archetypes
 
 
+@cache
 def get_archetype(archetype_name: str) -> dict:
     """
     Retrieve and validate an archetype from DynamoDB.
