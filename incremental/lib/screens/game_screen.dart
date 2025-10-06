@@ -46,6 +46,7 @@ class _GameScreenState extends State<GameScreen> {
 
   // Character update timer (when not in active story)
   Timer? _characterUpdateTimer;
+  int _characterUpdateTimerCount = 0;
 
   // Segment history (completion view only)
   List<Map<String, dynamic>> _segmentHistory = const [];
@@ -172,12 +173,14 @@ class _GameScreenState extends State<GameScreen> {
     _decisionDebouncer.dispose();
     _refreshDebouncer.dispose();
     _characterUpdateTimer?.cancel();
+    _characterUpdateTimerCount = 0;
     super.dispose();
   }
 
   void _resetForNewCharacter() {
     _runtime.cancel();
     _characterUpdateTimer?.cancel();
+    _characterUpdateTimerCount = 0;
     _orchestratedSegmentId = null;
     _segmentHistory = <Map<String, dynamic>>[];
     _lastStoryDetails = null;
@@ -197,15 +200,27 @@ class _GameScreenState extends State<GameScreen> {
         debugPrint('GameScreen: Stopping character update timer (in active story)');
         _characterUpdateTimer?.cancel();
         _characterUpdateTimer = null;
+        _characterUpdateTimerCount = 0;
       }
     } else {
       // Start timer if not in active story and timer not already running
       if (_characterUpdateTimer == null && _character != null) {
         debugPrint('GameScreen: Starting character update timer (no active story) - first update in 2 minutes');
+        _characterUpdateTimerCount = 0;
 
         // Start periodic timer - fires every 2 minutes
         _characterUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
-          debugPrint('GameScreen: Auto-refreshing character (2-minute timer tick)');
+          _characterUpdateTimerCount++;
+          debugPrint('GameScreen: Auto-refreshing character (2-minute timer tick $_characterUpdateTimerCount/60)');
+
+          if (_characterUpdateTimerCount >= 60) {
+            debugPrint('GameScreen: Timer count reached 60, stopping timer');
+            timer.cancel();
+            _characterUpdateTimer = null;
+            _characterUpdateTimerCount = 0;
+            return;
+          }
+
           _loadCharacterData(
             strategy: CharacterLoadRateLimitStrategy.automated,
             showLoadingIndicator: false,
