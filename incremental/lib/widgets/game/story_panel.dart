@@ -89,7 +89,7 @@ class _StoryPanelState extends State<StoryPanel> {
             ),
             child: Row(
               children: [
-                Icon(Icons.import_contacts, color: colorScheme.onPrimaryContainer),
+                Icon(Icons.auto_stories_outlined, color: colorScheme.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Text(
                   _getHeaderTitle(),
@@ -99,7 +99,7 @@ class _StoryPanelState extends State<StoryPanel> {
                 // History toggle button
                 if (!_hasActiveStory() && (widget.character.completedStories.isNotEmpty || widget.storyHistoryArchive.isNotEmpty))
                   IconButton(
-                    icon: Icon(_showHistory ? Icons.receipt : Icons.import_contacts, color: colorScheme.onPrimaryContainer),
+                    icon: Icon(_showHistory ? Icons.receipt_outlined : Icons.auto_stories_outlined, color: colorScheme.onPrimaryContainer),
                     onPressed: () {
                       setState(() {
                         _showHistory = !_showHistory;
