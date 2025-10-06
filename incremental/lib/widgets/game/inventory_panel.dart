@@ -32,7 +32,7 @@ class InventoryPanel extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(RpgAwesome.key, color: colorScheme.onPrimaryContainer),
+                Icon(Icons.inventory_2, color: colorScheme.onPrimaryContainer),
                 const SizedBox(width: 8),
                 Text(
                   'Inventory',
@@ -85,7 +85,7 @@ class InventoryPanel extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            RpgAwesome.key,
+            Icons.inventory_2,
             size: 64,
             color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),

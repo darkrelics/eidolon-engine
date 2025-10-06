@@ -99,7 +99,7 @@ class _StoryPanelState extends State<StoryPanel> {
                 // History toggle button
                 if (!_hasActiveStory() && (widget.character.completedStories.isNotEmpty || widget.storyHistoryArchive.isNotEmpty))
                   IconButton(
-                    icon: Icon(_showHistory ? RpgAwesome.book : RpgAwesome.cycle, color: colorScheme.onPrimaryContainer),
+                    icon: Icon(_showHistory ? Icons.receipt : Icons.import_contacts, color: colorScheme.onPrimaryContainer),
                     onPressed: () {
                       setState(() {
                         _showHistory = !_showHistory;

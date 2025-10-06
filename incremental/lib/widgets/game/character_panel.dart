@@ -35,7 +35,7 @@ class CharacterPanel extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(RpgAwesome.player, color: colorScheme.onPrimaryContainer),
+                    Icon(Icons.emoji_people, color: colorScheme.onPrimaryContainer),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -74,7 +74,7 @@ class CharacterPanel extends StatelessWidget {
                   _InfoRow(
                     label: 'Archetype',
                     value: character.archetypeName,
-                    icon: RpgAwesome.crown,
+                    icon: Icons.theater_comedy,
                   ),
                   const SizedBox(height: 16),
 

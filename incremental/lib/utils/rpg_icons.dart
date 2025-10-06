@@ -72,7 +72,7 @@ class RpgIcons {
       case 'bag':
         return RpgAwesome.key;
       default:
-        return RpgAwesome.ankh;
+        return Icons.account_balance_wallet;
     }
   }
 
@@ -85,21 +85,21 @@ class RpgIcons {
         return Icons.directions_run;
       case 'endurance':
       case 'constitution':
-        return RpgAwesome.heart_bottle;
+        return Icons.run_circle;
       case 'intelligence':
-        return RpgAwesome.scroll_unfurled;
+        return Icons.psychology;
       case 'wisdom':
         return Icons.auto_awesome;
       case 'charisma':
-        return RpgAwesome.player_king;
+        return Icons.chat;
       case 'presence':
-        return Icons.wb_sunny;
+        return RpgAwesome.aura;
       case 'intrigue':
         return RpgAwesome.hood;
       case 'cunning':
-        return RpgAwesome.eye_shield;
+        return Icons.record_voice_over;
       case 'perception':
-        return RpgAwesome.aware;
+        return Icons.visibility;
       default:
         return RpgAwesome.double_team;
     }
@@ -119,15 +119,15 @@ class RpgIcons {
       case 'dodge':
         return RpgAwesome.player_dodge;
       case 'parry':
-        return RpgAwesome.shield;
+        return Icons.shield;
       case 'stealth':
         return Icons.visibility_off;
       case 'investigation':
       case 'perception':
-        return RpgAwesome.eyeball;
+        return Icons.hearing;
       case 'tumbling':
       case 'acrobatics':
-        return Icons.gesture;
+        return Icons.sports_gymnastics;
       case 'climbing':
         return Icons.terrain;
       case 'lockpicking':
@@ -138,7 +138,7 @@ class RpgIcons {
         return RpgAwesome.book;
       case 'arcane':
       case 'magic':
-        return RpgAwesome.crystal_wand;
+        return Icons.blur_on;
       case 'firstaid':
       case 'first_aid':
       case 'healing':
@@ -148,7 +148,7 @@ class RpgIcons {
         return RpgAwesome.leaf;
       case 'appraise':
       case 'merchant':
-        return Icons.assessment;
+        return Icons.balance;
       case 'crafting':
         return RpgAwesome.hammer;
       default:
