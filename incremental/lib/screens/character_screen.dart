@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/providers/character_provider.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:eidolon_incremental/utils/error_handler.dart';
@@ -381,35 +382,65 @@ class _CharacterScreenState extends State<CharacterScreen> {
   }
 
   Future<void> _showEnterGameDialog(CharacterInfo character) async {
-    // Show loading dialog
-    LoadingDialog.show(
-      context: context,
-      title: 'Entering Game',
-      message: 'Loading ${character.name}...',
-      subtitle: 'Preparing your adventure',
-      barrierDismissible: false,
-    );
-
     try {
+      debugPrint('CharacterScreen: Starting game dialog for ${character.name}');
+
+      // Capture navigators and provider BEFORE any async operations
+      final rootNavigator = Navigator.of(context, rootNavigator: true);
+      final navigator = Navigator.of(context);
+      final characterProvider = context.read<CharacterProvider>();
+
+      debugPrint('CharacterScreen: Navigators captured');
+
+      // Show loading dialog (don't await - we want it to show while loading)
+      LoadingDialog.show(
+        context: context,
+        title: 'Entering Game',
+        message: 'Loading ${character.name}...',
+        subtitle: 'Preparing your adventure',
+        barrierDismissible: false,
+      );
+
+      debugPrint('CharacterScreen: Dialog shown, loading character data for ${character.id}');
+
       // Pre-load character data
       final fullCharacter = await _apiService.getCharacterById(character.id);
 
-      if (!mounted) return;
+      debugPrint('CharacterScreen: Character loaded: ${fullCharacter?.name ?? "null"}');
 
-      // Close the loading dialog
-      LoadingDialog.hide(context);
+      if (!mounted) {
+        debugPrint('CharacterScreen: Widget not mounted, aborting navigation');
+        return;
+      }
+
+      // Save character to provider for reload persistence
+      if (fullCharacter != null) {
+        debugPrint('CharacterScreen: Saving character to provider');
+        await characterProvider.updateCharacter(fullCharacter);
+      }
+
+      // Close the loading dialog using root navigator
+      debugPrint('CharacterScreen: Closing loading dialog');
+      rootNavigator.pop();
 
       // Navigate to game screen with pre-loaded character data
-      Navigator.pushReplacementNamed(
-        context,
+      debugPrint('CharacterScreen: Navigating to /game with character: ${fullCharacter?.name ?? character.name}');
+      navigator.pushReplacementNamed(
         '/game',
         arguments: fullCharacter ?? character,
       );
-    } catch (e) {
+      debugPrint('CharacterScreen: Navigation complete');
+    } catch (e, stackTrace) {
+      debugPrint('CharacterScreen: ERROR loading character: $e');
+      debugPrint('CharacterScreen: Stack trace: $stackTrace');
       if (!mounted) return;
 
-      // Close the loading dialog
-      LoadingDialog.hide(context);
+      // Try to close the loading dialog (might fail if it wasn't shown)
+      try {
+        Navigator.of(context, rootNavigator: true).pop();
+      } catch (popError) {
+        debugPrint('CharacterScreen: Failed to pop dialog: $popError');
+      }
 
       // Show error
       ScaffoldMessenger.of(context).showSnackBar(

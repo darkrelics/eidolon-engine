@@ -312,9 +312,9 @@ In this example:
 | `SegmentActivity` | `STRING` |           | Activity indicator text shown while the segment is active.                     |
 | `SegmentTitle`    | `STRING` |           | Title text displayed on the segment card (e.g., "Walking through the forest"). |
 | `SegmentDuration` | `NUMBER` |           | Time in seconds for this segment.                                              |
-| `DecisionText`    | `STRING` |           | For decision segments: the choice presented.                                   |
-| `DecisionOptions` | `MAP`    |           | For decision segments: map of option ID to next segment ID.                    |
-| `DefaultDecision` | `STRING` |           | For decision segments: which option to auto-select.                            |
+| `DecisionText`    | `STRING` |           | For decision segments: the choice presented to the player.                     |
+| `DecisionOptions` | `MAP`    |           | For decision segments: map of option ID to option data (Text, Description, Narrative, NextSegmentID). |
+| `DefaultDecision` | `STRING` |           | For decision segments: which option key to auto-select on timeout.             |
 | `Challenges`      | `LIST`   |           | For mechanical segments: list of skill/attribute challenges.                   |
 | `Combat`          | `MAP`    |           | For mechanical segments: combat configuration (if applicable).                 |
 | `Results`         | `MAP`    |           | For mechanical segments: outcome-based results (see structure below).          |
@@ -328,6 +328,16 @@ Each challenge in the Challenges list contains:
 - `Skill` (STRING): The skill being tested (e.g., "Investigation", "Stealth")
 - `Difficulty` (NUMBER): The difficulty rating for the challenge
 - `Attempts` (NUMBER): Maximum number of attempts allowed
+
+**DecisionOptions Structure:**
+Each option in the DecisionOptions map contains:
+
+- `Text` (STRING): Short button text for the choice (e.g., "Follow the sound of water")
+- `Description` (STRING): Longer description explaining the choice
+- `Narrative` (STRING): Story text shown when this choice is made (enriches segment history)
+- `NextSegmentID` (STRING): UUID of the segment to transition to when this option is chosen
+
+**Note:** Decision segments are purely narrative. They contain NO Difficulty ratings, skill checks, or mechanical calculations. All game mechanics belong in mechanical segments.
 
 **Combat Structure:**
 The Combat map contains:

@@ -99,7 +99,6 @@ func (p *Player) HandlePasswordChange() {
 
 		err := p.server.ChangePassword(p, currentPassword, newPassword)
 		if err != nil {
-			// TODO: Provide more verbose feedback based on the error
 			p.commandOut <- "Password change failed. Please try again.\n"
 			continue
 		}

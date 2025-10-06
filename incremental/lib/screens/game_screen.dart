@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/models/story.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/providers/character_provider.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:eidolon_incremental/services/notification_service.dart';
@@ -42,6 +43,9 @@ class _GameScreenState extends State<GameScreen> {
   bool _isSubmittingDecision = false;
   bool _storyCompletionNotified = false;
   Future<void>? _activeCharacterLoad;
+
+  // Character update timer (when not in active story)
+  Timer? _characterUpdateTimer;
 
   // Segment history (completion view only)
   List<Map<String, dynamic>> _segmentHistory = const [];
@@ -102,6 +106,7 @@ class _GameScreenState extends State<GameScreen> {
         });
 
         _startOrchestrationIfNeeded();
+        _manageCharacterUpdateTimer();
       }
     } else if (args is CharacterInfo) {
       // Only update if it's a different character or first load
@@ -116,8 +121,48 @@ class _GameScreenState extends State<GameScreen> {
         _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate)
             .then((_) => _loadSegmentHistory());
       }
-    } else if (args != null) {
-      // Unexpected argument type provided via navigation; ignoring.
+    } else {
+      // No route arguments (page reload or direct URL navigation)
+      // Try to load from CharacterProvider (local storage)
+      if (_characterInfo == null && _character == null) {
+        debugPrint('GameScreen: No route arguments, checking CharacterProvider');
+
+        // Try to get character from provider
+        final characterProvider = context.read<CharacterProvider>();
+        final savedCharacter = characterProvider.character;
+
+        if (savedCharacter != null) {
+          debugPrint('GameScreen: Found saved character: ${savedCharacter.name}');
+          setState(() {
+            _resetForNewCharacter();
+            _character = savedCharacter;
+            _characterInfo = CharacterInfo(
+              name: savedCharacter.name,
+              id: savedCharacter.id,
+              dead: savedCharacter.health <= 0,
+            );
+            _isLoading = false;
+            _error = null;
+          });
+
+          _startOrchestrationIfNeeded();
+          _manageCharacterUpdateTimer();
+
+          // Refresh character data from server in background
+          _loadCharacterData(
+            strategy: CharacterLoadRateLimitStrategy.immediate,
+            showLoadingIndicator: false,
+          );
+        } else {
+          // No saved character, redirect to selection
+          debugPrint('GameScreen: No saved character, redirecting to character selection');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              Navigator.pushReplacementNamed(context, '/character-selection');
+            }
+          });
+        }
+      }
     }
   }
 
@@ -126,15 +171,52 @@ class _GameScreenState extends State<GameScreen> {
     _runtime.dispose();
     _decisionDebouncer.dispose();
     _refreshDebouncer.dispose();
+    _characterUpdateTimer?.cancel();
     super.dispose();
   }
 
   void _resetForNewCharacter() {
     _runtime.cancel();
+    _characterUpdateTimer?.cancel();
     _orchestratedSegmentId = null;
     _segmentHistory = <Map<String, dynamic>>[];
     _lastStoryDetails = null;
     _storyCompletionNotified = false;
+  }
+
+  /// Manage character update timer based on story state.
+  /// Timer runs every 2 minutes when NOT in an active story.
+  void _manageCharacterUpdateTimer() {
+    final hasActiveStory = _character?.activeSegmentID != null;
+
+    debugPrint('GameScreen: _manageCharacterUpdateTimer called - hasActiveStory=$hasActiveStory, timerExists=${_characterUpdateTimer != null}, characterId=${_character?.id}');
+
+    if (hasActiveStory) {
+      // Stop timer if in active story
+      if (_characterUpdateTimer != null) {
+        debugPrint('GameScreen: Stopping character update timer (in active story)');
+        _characterUpdateTimer?.cancel();
+        _characterUpdateTimer = null;
+      }
+    } else {
+      // Start timer if not in active story and timer not already running
+      if (_characterUpdateTimer == null && _character != null) {
+        debugPrint('GameScreen: Starting character update timer (no active story) - first update in 2 minutes');
+
+        // Start periodic timer - fires every 2 minutes
+        _characterUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
+          debugPrint('GameScreen: Auto-refreshing character (2-minute timer tick)');
+          _loadCharacterData(
+            strategy: CharacterLoadRateLimitStrategy.automated,
+            showLoadingIndicator: false,
+          );
+        });
+      } else if (_characterUpdateTimer != null) {
+        debugPrint('GameScreen: Timer already running, not starting new one');
+      } else if (_character == null) {
+        debugPrint('GameScreen: Cannot start timer - no character loaded');
+      }
+    }
   }
 
   Future<void> _loadCharacterData({
@@ -204,6 +286,7 @@ class _GameScreenState extends State<GameScreen> {
         });
 
         _startOrchestrationIfNeeded();
+        _manageCharacterUpdateTimer();
       }
     } catch (e) {
       debugPrint('GameScreen: ERROR loading character: $e');
@@ -296,6 +379,7 @@ class _GameScreenState extends State<GameScreen> {
           activeStoryId: initialSegment['StoryID']?.toString(),
           activeSegmentId: initialSegment['ActiveSegmentID']?.toString() ?? initialSegment['SegmentID']?.toString(),
           storyState: newStoryState,
+          gameMode: 'Incremental',
         );
 
         _lastStoryDetails = Map<String, dynamic>.from(newStoryState['Story'] as Map<String, dynamic>);
@@ -303,6 +387,7 @@ class _GameScreenState extends State<GameScreen> {
       });
 
       _startOrchestrationIfNeeded(force: true);
+      _manageCharacterUpdateTimer();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -376,6 +461,7 @@ class _GameScreenState extends State<GameScreen> {
 
         // New segment or completed
         _startOrchestrationIfNeeded(force: true);
+        _manageCharacterUpdateTimer();
       },
       onStatusUpdated: (status) {
         if (!mounted || _character == null) return;
@@ -538,17 +624,19 @@ class _GameScreenState extends State<GameScreen> {
         throwOnRateLimit: true,
       );
 
-      final previousSegment = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+      // Use the completed segment from response (includes narrative ClientEvents)
+      final completedSegment = response['CompletedSegment'] as Map<String, dynamic>?;
 
       // Use the next segment from response instead of reloading
       if (response['NextSegment'] != null) {
         final nextSegment = response['NextSegment'] as Map<String, dynamic>;
 
-        // Capture the completed segment before transitioning
-        if (previousSegment != null && _isSegmentComplete(previousSegment)) {
-          final oldSegmentId = previousSegment['ActiveSegmentID']?.toString() ?? previousSegment['SegmentID']?.toString();
-          if (oldSegmentId != null) {
-            final segmentCopy = Map<String, dynamic>.from(previousSegment);
+        // Add the completed decision segment to history with its narrative
+        // Backend provides this with ClientEvents already generated
+        if (completedSegment != null) {
+          final segmentId = completedSegment['ActiveSegmentID']?.toString() ?? completedSegment['SegmentID']?.toString();
+          if (segmentId != null) {
+            final segmentCopy = Map<String, dynamic>.from(completedSegment);
 
             // Add story title for display
             if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
@@ -558,12 +646,12 @@ class _GameScreenState extends State<GameScreen> {
             // Add to history if not already present
             final exists = _segmentHistory.any((s) {
               final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
-              return id == oldSegmentId;
+              return id == segmentId;
             });
 
             if (!exists) {
               _segmentHistory = [..._segmentHistory, segmentCopy];
-              debugPrint('GameScreen: Added completed segment to history (decision): $oldSegmentId');
+              debugPrint('GameScreen: Added completed decision segment to history with narrative: $segmentId');
             }
           }
         }
@@ -588,15 +676,16 @@ class _GameScreenState extends State<GameScreen> {
 
         // Start orchestration for the new segment
         _startOrchestrationIfNeeded(force: true);
+        _manageCharacterUpdateTimer();
       } else {
         // No next segment means the story has finished
         _runtime.cancel();
         await _handleStoryCompletion(refreshCharacter: true);
       }
 
-      if (mounted && previousSegment != null) {
+      if (mounted && completedSegment != null) {
         // Show notification for decision outcome
-        final outcome = previousSegment['Outcome'];
+        final outcome = completedSegment['Outcome'];
         String? outcomeType;
         Map<String, dynamic>? rewards;
 
@@ -705,11 +794,13 @@ class _GameScreenState extends State<GameScreen> {
           }
         }
 
-        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate);
+        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
       }
 
       _isLoading = false;
     });
+
+    _manageCharacterUpdateTimer();
 
     if (showMessage && !_storyCompletionNotified) {
       final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
@@ -752,11 +843,13 @@ class _GameScreenState extends State<GameScreen> {
           }
         }
 
-        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate);
+        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
       }
 
       _isLoading = false;
     });
+
+    _manageCharacterUpdateTimer();
 
     if (!_storyCompletionNotified) {
       final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
@@ -777,7 +870,7 @@ class _GameScreenState extends State<GameScreen> {
     if (mounted) {
       setState(() {
         if (_character != null) {
-          _character = _character!.copyWith(storyState: null);
+          _character = _character!.copyWith(storyState: null, gameMode: 'None');
         }
         _lastStoryDetails = null;
       });
@@ -796,6 +889,7 @@ class _GameScreenState extends State<GameScreen> {
         _lastStoryDetails = null;
       });
     }
+    _manageCharacterUpdateTimer();
   }
 
   Future<void> _handleAbandonStory() async {

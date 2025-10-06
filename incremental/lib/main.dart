@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/auth_provider.dart';
+import 'providers/character_provider.dart';
 import 'providers/theme_provider.dart';
 import 'providers/timer_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/account_settings_screen.dart';
 import 'screens/character_screen.dart';
 import 'screens/game_screen.dart';
@@ -14,7 +16,13 @@ import 'screens/password_reset_confirm_screen.dart';
 import 'screens/password_reset_screen.dart';
 import 'screens/registration_screen.dart';
 
-void main() {
+void main() async {
+  // Ensure Flutter is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize SharedPreferences
+  final prefs = await SharedPreferences.getInstance();
+
   // Set up global error handlers
   FlutterError.onError = (FlutterErrorDetails details) {
     debugPrint('========== FLUTTER ERROR ==========');
@@ -32,6 +40,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => AuthProvider()),
+            ChangeNotifierProvider(create: (_) => CharacterProvider(prefs: prefs)),
             ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
             ChangeNotifierProvider(create: (_) => TimerProvider()),
           ],

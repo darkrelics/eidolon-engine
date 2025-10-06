@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/models/story.dart';
+import 'package:eidolon_incremental/providers/character_provider.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:eidolon_incremental/utils/error_handler.dart';
@@ -71,24 +73,35 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Capture provider and navigator references before async operations
+      // This allows using them safely after await without accessing BuildContext
+      final characterProvider = context.read<CharacterProvider>();
+      final navigator = Navigator.of(context);
+
       final initialSegment = await _apiService.startStory(characterId: widget.character.id, storyId: story.storyID);
 
       if (!mounted) return;
 
+      // Update character with story data
+      final updatedCharacter = widget.character.copyWith(
+        gameMode: 'Incremental',
+        activeStoryId: initialSegment['StoryID']?.toString(),
+        activeSegmentId: initialSegment['ActiveSegmentID']?.toString(),
+        storyState: {
+          'ActiveSegment': initialSegment,
+          'Story': {'Title': story.title, 'Description': story.description, 'Type': story.type, 'StoryID': story.storyID},
+        },
+      );
+
+      // Save to provider for reload persistence
+      await characterProvider.updateCharacter(updatedCharacter);
+
       // Navigate to game screen with complete character data
-      Navigator.pushReplacement(
-        context,
+      navigator.pushReplacement(
         MaterialPageRoute(
           builder: (context) => const GameScreen(),
           settings: RouteSettings(
-            arguments: widget.character.copyWith(
-              activeStoryId: initialSegment['StoryID']?.toString(),
-              activeSegmentId: initialSegment['ActiveSegmentID']?.toString(),
-              storyState: {
-                'ActiveSegment': initialSegment,
-                'Story': {'Title': story.title, 'Description': story.description, 'Type': story.type, 'StoryID': story.storyID},
-              },
-            ),
+            arguments: updatedCharacter,
           ),
         ),
       );

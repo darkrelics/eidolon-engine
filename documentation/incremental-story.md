@@ -37,10 +37,10 @@ The Segments table contains prototype definitions for all story segments:
 - **SegmentID** (RANGE): Segment UUID
 - **SegmentType**: decision or mechanical
 - **SegmentDuration**: Time in seconds for completion
-- **DecisionOptions**: For decisions, maps choice ID to next segment ID
+- **DecisionOptions**: For decision segments, maps choice ID to option data (Text, Description, Narrative, NextSegmentID)
 - **Results**: For mechanical segments, outcome-specific branches (see Weighted Branching below)
-- **Challenges**: List of skill/attribute challenges
-- **Combat**: Combat configuration if applicable
+- **Challenges**: List of skill/attribute challenges (mechanical segments only)
+- **Combat**: Combat configuration if applicable (mechanical segments only)
 - **TimeoutBehavior**: For decisions, optional weighted timeout branches
 
 ### ActiveSegments Table
@@ -291,11 +291,15 @@ stateDiagram-v2
 
 #### Decision Segments
 
-- Present choices to player
+Decision segments are **purely narrative** - they contain no skill checks, combat, or mechanical calculations. All game mechanics belong in mechanical segments.
+
+- Present story choices to the player
 - Created with ProcessingStatus="processed" and default decision pre-applied
 - Player can override decision via api-segment-decision before timer expires
 - NextSegmentID is always set (either default or player's choice)
 - Timer expiry uses whatever Decision is currently set
+- Generate ClientEvents with narrative text to enrich segment history
+- **No Difficulty ratings** - decision segments are about story, not mechanics
 
 #### Wound Healing
 

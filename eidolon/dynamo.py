@@ -445,7 +445,7 @@ class DynamoInterface:
         Returns:
             Dict with:
                 - items: List of items with Decimals converted to floats
-                - last_evaluated_key: Optional dict for pagination
+                - last_evaluated_key: dict for pagination
                 - count: Number of items scanned
 
         Raises:
@@ -515,7 +515,7 @@ class DynamoInterface:
         Args:
             table_enum: TableName enum value
             keys: List of primary key dicts
-            attributes_to_get: Optional list of attributes to retrieve
+            attributes_to_get: list of attributes to retrieve
 
         Returns:
             List of items with Decimals converted to floats

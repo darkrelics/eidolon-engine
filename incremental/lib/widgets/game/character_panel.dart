@@ -28,28 +28,35 @@ class CharacterPanel extends StatelessWidget {
                 topRight: Radius.circular(12),
               ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.person, color: colorScheme.onPrimaryContainer),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    character.name,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: colorScheme.onPrimaryContainer,
-                      fontWeight: FontWeight.bold,
+                Row(
+                  children: [
+                    Icon(Icons.person, color: colorScheme.onPrimaryContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        character.name,
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (onRefresh != null)
+                      IconButton(
+                        icon: Icon(
+                          Icons.refresh,
+                          color: colorScheme.onPrimaryContainer,
+                        ),
+                        onPressed: onRefresh,
+                        tooltip: 'Refresh Character',
+                      ),
+                  ],
                 ),
-                if (onRefresh != null)
-                  IconButton(
-                    icon: Icon(
-                      Icons.refresh,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
-                    onPressed: onRefresh,
-                    tooltip: 'Refresh Character',
-                  ),
+                const SizedBox(height: 8),
+                _GameModeBadge(gameMode: character.gameMode),
               ],
             ),
           ),
@@ -87,6 +94,12 @@ class CharacterPanel extends StatelessWidget {
                     color: Colors.blue,
                     icon: Icons.water_drop,
                   ),
+
+                  // Wounds Indicator
+                  if (character.wounds != null && character.wounds!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    _WoundsIndicator(wounds: character.wounds!),
+                  ],
                   const SizedBox(height: 20),
 
                   // Attributes Section
@@ -382,6 +395,133 @@ class _StatBar extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _GameModeBadge extends StatelessWidget {
+  final String gameMode;
+
+  const _GameModeBadge({required this.gameMode});
+
+  Color _getModeColor() {
+    switch (gameMode) {
+      case 'None':
+        return Colors.grey;
+      case 'Incremental':
+        return Colors.blue;
+      case 'MUD':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  IconData _getModeIcon() {
+    switch (gameMode) {
+      case 'None':
+        return Icons.hourglass_empty;
+      case 'Incremental':
+        return Icons.auto_stories;
+      case 'MUD':
+        return Icons.terminal;
+      default:
+        return Icons.help_outline;
+    }
+  }
+
+  String _getModeLabel() {
+    switch (gameMode) {
+      case 'None':
+        return 'IDLE';
+      case 'Incremental':
+        return 'STORY';
+      case 'MUD':
+        return 'MUD';
+      default:
+        return gameMode.toUpperCase();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final modeColor = _getModeColor();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: modeColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: modeColor,
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_getModeIcon(), size: 12, color: modeColor),
+          const SizedBox(width: 4),
+          Text(
+            _getModeLabel(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: modeColor,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WoundsIndicator extends StatelessWidget {
+  final List<Map<String, dynamic>> wounds;
+
+  const _WoundsIndicator({required this.wounds});
+
+  String _formatWounds() {
+    // Count wounds by type
+    final Map<String, int> counts = {};
+    for (final wound in wounds) {
+      final type = wound['DamageType'] as String? ?? 'unknown';
+      counts[type] = (counts[type] ?? 0) + 1;
+    }
+
+    // Format: "2 bashing, 1 lethal"
+    return counts.entries
+      .map((e) => '${e.value} ${e.key}')
+      .join(', ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange, width: 1),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Wounds: ${_formatWounds()}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

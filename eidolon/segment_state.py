@@ -21,7 +21,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         active_segment_id: Active segment UUID
         outcome: Outcome type
         results: Challenge or combat results
-        segment_def: Optional segment definition containing Results narratives
+        segment_def: segment definition containing Results narratives
     """
     if not outcome:
         logger.warning(f"No outcome computed for {active_segment_id}; defaulting to 'normal'")
@@ -211,7 +211,7 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         raise RuntimeError(f"Failed to create active segment: {err}") from err
 
 
-def update_segment_processing_status(active_segment_id: str, outcome: str, character_updates: dict) -> None:
+def update_segment_processing_status(active_segment_id: str, outcome: str, character_updates: dict, client_events=None) -> None:
     """
     Update active segment with processing results.
 
@@ -219,6 +219,7 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
         active_segment_id: Active segment UUID
         outcome: Processing outcome
         character_updates: Character updates to apply
+        client_events: list of client events (for decision segments)
 
     Raises:
         RuntimeError: If database operation fails
@@ -228,17 +229,26 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
         outcome = "normal"
 
     try:
+        update_expr = (
+            "SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, ProcessedAt = :processed_at"
+        )
+        expr_values = {
+            ":status": "processed",
+            ":outcome": outcome,
+            ":updates": character_updates,
+            ":processed_at": now_unix(),
+        }
+
+        if client_events is not None:
+            update_expr += ", ClientEvents = :events"
+            expr_values[":events"] = client_events
+
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status, #outcome = :outcome, CharacterUpdates = :updates, ProcessedAt = :processed_at",
+            UpdateExpression=update_expr,
             ExpressionAttributeNames={"#outcome": "Outcome"},
-            ExpressionAttributeValues={
-                ":status": "processed",
-                ":outcome": outcome,
-                ":updates": character_updates,
-                ":processed_at": now_unix(),
-            },
+            ExpressionAttributeValues=expr_values,
         )
         logger.info(f"Updated segment processing status for {active_segment_id}")
     except ClientError as err:

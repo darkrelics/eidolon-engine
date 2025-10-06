@@ -20,11 +20,17 @@ phases:
 
   build:
     commands:
-      - flutter build web --release --no-wasm-dry-run --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
+      - flutter build web --release --pwa-strategy=none --no-wasm-dry-run --dart-define=USER_POOL_ID=$USER_POOL_ID --dart-define=CLIENT_ID=$CLIENT_ID --dart-define=API_DOMAIN=$API_DOMAIN
 
   post_build:
     commands:
-      - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "max-age=86400"
+      # Remove empty service worker file (not needed with --pwa-strategy=none)
+      - rm -f build/web/flutter_service_worker.js
+
+      # Upload all files with 24-hour cache
+      - aws s3 sync build/web s3://$S3_BUCKET/ --delete --cache-control "public, max-age=86400"
+
+      # Invalidate CloudFront cache (all paths)
       - |
         if [ ! -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
           aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"

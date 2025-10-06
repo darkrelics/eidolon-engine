@@ -22,7 +22,7 @@ def send_message(queue_url: str, message_body, message_attributes=None) -> str:
     Args:
         queue_url: URL of the SQS queue
         message_body: Message body (dict will be JSON encoded, string sent as-is)
-        message_attributes: Optional message attributes
+        message_attributes: message attributes
 
     Returns:
         Message ID of the sent message
