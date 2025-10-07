@@ -1,17 +1,14 @@
 Welcome to Eidolon Engine!
 
-Thank you for creating an account. To start your adventure, please verify your email address.
+Thank you for creating an account. To start your adventure, please verify your email address by entering the code below in the Eidolon app.
 
-TWO WAYS TO VERIFY:
+YOUR VERIFICATION CODE:
+{####}
 
-METHOD 1 - One-Click Link:
-Click here: {##Verify Email##}
-
-METHOD 2 - Verification Code:
-Enter this code in the app: {####}
-
-WHERE TO ENTER THE CODE:
-Open the Eidolon app → Verification screen → Enter the code above
+HOW TO VERIFY:
+1. Open the Eidolon app
+2. Go to the verification screen
+3. Enter the code above
 
 IMPORTANT:
 • Code expires in 24 hours
