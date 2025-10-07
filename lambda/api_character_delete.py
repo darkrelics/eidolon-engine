@@ -14,6 +14,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player_character import delete_character
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
+from eidolon.validation import validate_uuid
 
 
 def character_deletion(player_id: str, character_id: str) -> dict:
@@ -91,6 +92,9 @@ def lambda_handler(event: dict, context: object) -> dict:
     character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+
+    if not validate_uuid(character_id):
+        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
 
     # Call business logic
     try:

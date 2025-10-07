@@ -17,6 +17,7 @@ from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.time_utils import from_unix, now_iso
+from eidolon.validation import validate_uuid
 
 
 def get_segment_history_business_logic(character_id: str, player_id: str) -> dict:
@@ -257,6 +258,9 @@ def lambda_handler(event: dict, context: object) -> dict:
     character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+
+    if not validate_uuid(character_id):
+        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
 
     # Call business logic
     try:

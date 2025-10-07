@@ -35,53 +35,32 @@ jobs:
           pip install checkov
 
       # CRITICAL TESTS - Must pass for build to succeed
-      - name: Scan CDK with Checkov (Critical)
+      - name: Scan CDK with Checkov (Security-Critical Checks)
         continue-on-error: true
-        id: checkov_critical
-        run: |
-          checkov -d deployment/ \
-            --framework cloudformation \
-            --check CRITICAL \
-            --compact \
-            --quiet
+        id: checkov_blocking
+        run: checkov -d deployment/ --framework cloudformation --config-file .checkov.yaml --skip-download
 
-      - name: Scan CDK with Checkov (High Severity)
-        continue-on-error: true
-        id: checkov_high
-        run: |
-          checkov -d deployment/ \
-            --framework cloudformation \
-            --check HIGH \
-            --compact \
-            --quiet
-
-      # COMPREHENSIVE EVALUATION - Informational only
+      # COMPREHENSIVE EVALUATION - Informational only (all checks)
       - name: Scan CDK with Checkov (Full Report)
         continue-on-error: true
         id: checkov_full
-        run: |
-          checkov -d deployment/ \
-            --framework cloudformation \
-            --compact \
-            --exit-zero
+        run: checkov -d deployment/ --framework cloudformation --compact --skip-download
 
       - name: Check for critical failures
         if: always()
         run: |
-          if [[ ${{ steps.checkov_critical.outcome }} != 'success' ]] || \
-             [[ ${{ steps.checkov_high.outcome }} != 'success' ]]; then
-            echo "One or more critical security checks failed"
+          if [[ ${{ steps.checkov_blocking.outcome }} != 'success' ]]; then
+            echo "Checkov security scan found issues"
+            echo "Review the scan output above for details"
             exit 1
           else
-            echo "All critical security checks passed"
+            echo "All Checkov security checks passed"
           fi
 
       - name: Generate Analysis Summary
         if: always()
         run: |
           echo "## CDK Security Analysis Summary" >> $GITHUB_STEP_SUMMARY
-          echo "### Critical Tests" >> $GITHUB_STEP_SUMMARY
-          echo "- Checkov Critical: ${{ steps.checkov_critical.outcome }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Checkov High: ${{ steps.checkov_high.outcome }}" >> $GITHUB_STEP_SUMMARY
-          echo "### Comprehensive Evaluation" >> $GITHUB_STEP_SUMMARY
-          echo "- Checkov Full Scan: ${{ steps.checkov_full.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Scan" >> $GITHUB_STEP_SUMMARY
+          echo "- Checkov Blocking: ${{ steps.checkov_blocking.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Checkov Full Report: ${{ steps.checkov_full.outcome }}" >> $GITHUB_STEP_SUMMARY

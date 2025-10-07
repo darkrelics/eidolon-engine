@@ -13,6 +13,7 @@ from eidolon.logger import log_lambda_statistics, logger
 from eidolon.requests import parse_event_body
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.story_decision import submit_decision_for_character
+from eidolon.validation import validate_uuid
 
 
 def submit_decision_business_logic(character_id: str, decision_id: str, player_id: str) -> dict:
@@ -72,6 +73,9 @@ def lambda_handler(event: dict, context: object) -> dict:
             return lambda_response(400, {"Error": "Missing CharacterID"}, event)
         if not decision_id:
             return lambda_response(400, {"Error": "Missing Decision"}, event)
+
+        if not validate_uuid(character_id):
+            return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
 
     except ValueError as err:
         return lambda_response(400, {"Error": str(err)}, event)
