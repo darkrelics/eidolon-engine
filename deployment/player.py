@@ -38,6 +38,47 @@ def load_email_template(template_name: str) -> str:
         return ""
 
 
+def configure_user_pool_auto_verify(user_pool_id: str, region: str) -> bool:
+    """Configure auto-verified attributes for User Pool.
+
+    Args:
+        user_pool_id: ID of the User Pool
+        region: AWS region
+
+    Returns:
+        True if auto-verify is configured successfully
+    """
+    try:
+        cognito = boto3.client("cognito-idp", region_name=region)
+
+        # Get current user pool configuration
+        print("  Checking auto-verified attributes...")
+        response = cognito.describe_user_pool(UserPoolId=user_pool_id)
+        current_config = response.get("UserPool", {})
+
+        # Check current auto-verified attributes
+        current_auto_verify = current_config.get("AutoVerifiedAttributes", [])
+
+        # Ensure email is in auto-verified attributes
+        if "email" in current_auto_verify:
+            print("  [OK] Email auto-verification already enabled")
+            return True
+
+        print("  Enabling email auto-verification...")
+
+        # Update the user pool to enable email auto-verification
+        cognito.update_user_pool(UserPoolId=user_pool_id, AutoVerifiedAttributes=["email"])
+
+        print("  [OK] Email auto-verification enabled successfully")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        error_msg = err.response.get("Error", {}).get("Message", "")
+        print(f"  [ERROR] Failed to enable auto-verification: {error_code} - {error_msg}")
+        return False
+
+
 def configure_user_pool_email_template(user_pool_id: str, region: str) -> bool:
     """Configure email verification template for User Pool.
 
@@ -418,6 +459,12 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
                 print("  [ERROR] Failed to configure trigger")
         else:
             print("  [WARNING] cognito-player-new Lambda not found - trigger not configured")
+
+        # Configure auto-verified attributes (works for both new and existing pools)
+        print("\nConfiguring auto-verified attributes...")
+        auto_verify_configured = configure_user_pool_auto_verify(validation["user_pool_id"], params.region)
+        if not auto_verify_configured:
+            print("  [WARNING] Failed to configure auto-verification - emails may not be sent")
 
         # Configure email verification template (works for both new and existing pools)
         print("\nConfiguring email verification template...")
