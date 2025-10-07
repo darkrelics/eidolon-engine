@@ -14,6 +14,7 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 **Ship Gate:** Security audit passed with no critical findings, monitoring operational, internal beta-ready.
 
 **Objectives:**
+
 1. **Security Hardening** — WAF deployment, security audit, incident response plan
 2. **Observability** — CloudWatch dashboards, alarms, structured logging
 3. **Documentation** — Story authoring guides, troubleshooting, operations runbooks
@@ -27,11 +28,13 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 ## R2 Task Categories
 
 ### Critical Path (Security) — 3 Tasks ✓ COMPLETED
+
 - R2-SEC-1: WAF on CloudFront (#695) ✓
 - R2-SEC-2: WAF on API Gateway (#694) ✓
 - R2-SEC-3: WAF on Cognito (#693) ✓
 
 ### Deferred Until Principle Development Complete
+
 - R2-SEC-4: Security Audit (#616) - Full audit deferred
 - R2-DOC-1: Story Creation Guide (#729) - Deferred
 - R2-DOC-2: Story Schema Reference (#729) - Deferred
@@ -41,16 +44,20 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 - R2-UX-2: Story Browsing UI (#606) - Deferred
 
 ### Deferred Until Revenue Generation
+
 - R2-OBS-1: CloudWatch Dashboards (#603) - Deferred
 - R2-OBS-2: CloudWatch Alarms - Deferred
 
 ### Medium Priority (UX) — 1 Task ✓ COMPLETED
+
 - R2-UX-1: Character Management UI (#722) ✓
 
 ### Medium Priority (Infrastructure) — 1 Task ✓ COMPLETED
+
 - R2-INF-1: Cognito Email Fix (#703) ✓
 
 ### High Priority (Testing) — 3 Tasks ✓ COMPLETED
+
 - R2-TEST-3: Idempotency Verification ✓
 - R2-TEST-1: Operational Excellence & Validation ✓
 - R2-TEST-2: Concurrent Operations Tests ✓
@@ -60,6 +67,7 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 **Note:** R2-TEST-1 scope changed from traditional integration tests to operational monitoring approach for better long-term value and lower maintenance burden.
 
 **Deferral Policy:**
+
 - **Security Audit, Documentation, Cost Controls, Story Browsing UI:** Deferred until principle development complete
 - **Observability (Dashboards/Alarms):** Deferred until revenue generation
 - **Structured Logging:** Deferred until programmatic log analysis needed
@@ -81,10 +89,12 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 **Configuration File:** `waf/cloudfront-cdn.yml`
 
 **Implemented Rules (2 active):**
+
 1. **Rate Limiting** - 2000 requests/5min per IP
 2. **AWS IP Reputation List** - Block known malicious IPs
 
 **Rationale for Simplification:**
+
 - CloudFront serves static read-only content (Flutter web app)
 - No write operations to protect
 - XSS/injection protection happens at build time, not CDN
@@ -92,6 +102,7 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 - Geo-blocking handled by CloudFront native features
 
 **CDK Integration:**
+
 ```python
 # deployment/stacks/client_stack.py
 from . import waf_config
@@ -114,11 +125,13 @@ cloudfront.Distribution(
 ```
 
 **Files Created:**
+
 - `waf/cloudfront-cdn.yml` — CloudFront WAF configuration (2 rules)
 - `deployment/stacks/waf_config.py` — WAF utility for YAML→CDK conversion
 - `deployment/waf_compliance.py` — Compliance checker tool
 
 **Files Modified:**
+
 - `deployment/stacks/client_stack.py` — WAF creation and association
 
 **Cost:** $7/month ($5 ACL + $2 rules)
@@ -138,6 +151,7 @@ cloudfront.Distribution(
 **Configuration File:** `waf/api-gateway.yml`
 
 **Implemented Rules (5 active):**
+
 1. **Rate Limit Authenticated** - 100 requests/min per user token
 2. **Rate Limit Anonymous** - 20 requests/min per IP
 3. **Request Size Limit** - Block requests >10KB (not 512KB - actual max is ~1KB)
@@ -145,11 +159,13 @@ cloudfront.Distribution(
 5. **AWS IP Reputation List** - Block known malicious IPs
 
 **Rationale for Simplification:**
+
 - Endpoint-specific limits removed (internal controls sufficient)
 - SQL injection protection removed (DynamoDB, sanitized inputs)
 - Request size reduced to 10KB (realistic for JSON payloads)
 
 **CDK Integration:**
+
 ```python
 # deployment/stacks/api_stack.py
 from . import waf_config
@@ -174,9 +190,11 @@ def _associate_api_waf(self):
 ```
 
 **Files Created:**
+
 - `waf/api-gateway.yml` — API Gateway WAF configuration (5 rules)
 
 **Files Modified:**
+
 - `deployment/stacks/api_stack.py` — WAF creation and association
 
 **Cost:** $10/month ($5 ACL + $5 rules)
@@ -196,10 +214,12 @@ def _associate_api_waf(self):
 **Configuration File:** `waf/cognito.yml`
 
 **Implemented Rules (2 active):**
+
 1. **General Cognito API Rate Limit** - 20 requests/min per IP (covers all auth operations)
 2. **AWS IP Reputation List** - Block known malicious IPs
 
 **Rationale for Simplification:**
+
 - Cannot scope down by Cognito operation (InitiateAuth, SignUp, etc.) - WAF sees all as same endpoint
 - Single unified rate limit covers login/signup/password reset
 - Bot Control removed ($10/month, plus $0.40/1000 CAPTCHA attempts)
@@ -207,6 +227,7 @@ def _associate_api_waf(self):
 - Core Rule Set removed (no benefit for AWS-managed Cognito infrastructure)
 
 **CDK Integration:**
+
 ```python
 # deployment/stacks/api_stack.py (Cognito resources imported here)
 from . import waf_config
@@ -230,14 +251,17 @@ def _associate_cognito_waf(self):
 ```
 
 **Key Discovery:**
+
 - WAF **does** protect Cognito SDK authentication (not just Hosted UI)
 - Protects public API operations: InitiateAuth, RespondToAuthChallenge, GetUser, etc.
 - Uses `CfnWebACLAssociation` with User Pool ARN
 
 **Files Created:**
+
 - `waf/cognito.yml` — Cognito WAF configuration (2 rules)
 
 **Files Modified:**
+
 - `deployment/stacks/api_stack.py` — WAF creation and association (co-located with Cognito imports)
 
 **Cost:** $7/month ($5 ACL + $2 rules)
@@ -251,6 +275,7 @@ def _associate_cognito_waf(self):
 ### Architecture
 
 **File Structure:**
+
 ```
 waf/
 ├── cloudfront-cdn.yml     # CloudFront WAF (2 rules)
@@ -266,19 +291,21 @@ deployment/
 ```
 
 **Utilities:**
+
 - `waf_config.py` - Loads YAML configs, creates CDK Web ACLs, handles all rule types
 - `waf_compliance.py` - Validates deployed WAFs match configurations, CLI tool: `python deployment/waf_compliance.py --check-all`
 
 ### Cost Analysis
 
-| WAF | Rules | Fixed Cost | Variable Cost (per 1M requests) | Idle | 400M req/month |
-|-----|-------|------------|----------------------------------|------|----------------|
-| CloudFront | 2 | $7/month | $0.60 | $7 | $247 |
-| API Gateway | 5 | $10/month | $0.60 | $10 | $250 |
-| Cognito | 2 | $7/month | $0.60 | $7 | $247 |
-| **Total** | **9** | **$24/month** | **$0.60/1M** | **$24** | **$264** |
+| WAF         | Rules | Fixed Cost    | Variable Cost (per 1M requests) | Idle    | 400M req/month |
+| ----------- | ----- | ------------- | ------------------------------- | ------- | -------------- |
+| CloudFront  | 2     | $7/month      | $0.60                           | $7      | $247           |
+| API Gateway | 5     | $10/month     | $0.60                           | $10     | $250           |
+| Cognito     | 2     | $7/month      | $0.60                           | $7      | $247           |
+| **Total**   | **9** | **$24/month** | **$0.60/1M**                    | **$24** | **$264**       |
 
 **Cost Optimizations Made:**
+
 - Removed Bot Control from all ACLs (saved $30/month)
 - Removed SQL injection protection (DynamoDB, sanitized inputs)
 - Removed geo-blocking from WAF (handled by CloudFront natively)
@@ -296,11 +323,13 @@ deployment/
 ### Compliance & Validation
 
 **Compliance Check:**
+
 ```bash
 python deployment/waf_compliance.py --check-all
 ```
 
 **Expected Output:**
+
 - Validates deployed rules match YAML configurations
 - Reports missing/extra rules
 - Checks priority mismatches
@@ -319,6 +348,7 @@ python deployment/waf_compliance.py --check-all
 #### Audit Scope
 
 **1. IAM Permissions Audit**
+
 - [ ] Review all Lambda execution roles for least privilege
 - [ ] Verify no wildcards in production IAM policies
 - [ ] Ensure cross-account access properly scoped
@@ -326,46 +356,54 @@ python deployment/waf_compliance.py --check-all
 - [ ] Validate DynamoDB table permissions (no over-permissioned roles)
 
 **Current State:** Lambda role `eidolon-lambda-execution-role` grants:
+
 - `dynamodb:*` on all eidolon tables (acceptable)
 - `ssm:GetParameter` on `/eidolon/*` (acceptable)
 - `sqs:*` on eidolon queues (acceptable)
 - `events:EnableRule`, `events:DisableRule` on specific rule (acceptable)
 
 **Action Items:**
+
 - [ ] Verify no Lambda has `"*"` resource access
 - [ ] Separate read-only Lambdas from write Lambdas (if applicable)
 
 **2. Secrets Management**
+
 - [ ] Verify no secrets in environment variables
 - [ ] Check no API keys hardcoded in Lambda code
 - [ ] Validate Cognito secrets stored in AWS Secrets Manager
 - [ ] Ensure CloudFormation templates don't expose secrets in logs
 
 **3. Data Protection**
+
 - [ ] Verify DynamoDB tables have encryption at rest enabled
 - [ ] Check S3 buckets have server-side encryption
 - [ ] Validate CloudWatch Logs encrypted
 - [ ] Ensure no PII logged in plain text
 
 **4. Network Security**
+
 - [ ] API Gateway uses TLS 1.2+ only
 - [ ] CloudFront uses secure cipher suites
 - [ ] Cognito HTTPS-only access
 - [ ] No public subnet resources (Lambda in VPC if needed)
 
 **5. Authentication & Authorization**
+
 - [ ] Verify all API endpoints require Cognito authorizer
 - [ ] Check no bypass routes exist
 - [ ] Validate JWT signature verification on every request
 - [ ] Test token expiration enforcement
 
 **6. Input Validation**
+
 - [ ] Review all Lambda input validation
 - [ ] Check for SQL injection risks (none - using DynamoDB)
 - [ ] Verify XSS prevention in returned data
 - [ ] Test for path traversal in file operations
 
 **Security Scanning Tools:**
+
 ```bash
 # AWS Config Rules
 aws configservice put-config-rule --config-rule file://security-rules.json
@@ -382,15 +420,18 @@ safety check
 ```
 
 **Files to Create:**
+
 - `documentation/security-audit-report.md` — Full audit findings
 - `documentation/security-incident-response.md` — Incident response plan
 - `scripts_python/security_scan.py` — Automated security check script
 
 **Files to Modify:**
+
 - `deployment/stacks/*.py` — Apply IAM least privilege fixes
 - `eidolon/*.py` — Add input validation where missing
 
 **Acceptance Criteria:**
+
 - [ ] Security audit report completed
 - [ ] No CRITICAL findings unresolved
 - [ ] All HIGH findings resolved or documented with mitigation plan
@@ -412,6 +453,7 @@ safety check
 **Dashboard 1: Story Processing Overview**
 
 Metrics:
+
 - Stories started per minute (from api-story-start invocations)
 - Stories completed per minute (from ops-story-advance completions)
 - Active stories count (query ActiveSegments table)
@@ -421,6 +463,7 @@ Metrics:
 **Dashboard 2: Segment Processing**
 
 Metrics:
+
 - Segments processed per minute
 - Processing time per segment type (mechanical vs decision)
 - Segment outcome distribution (exceptional/normal/minimal/failure/death)
@@ -430,6 +473,7 @@ Metrics:
 **Dashboard 3: Lambda Performance**
 
 Metrics:
+
 - Cold start duration by function
 - Execution duration by function
 - Error rate by function
@@ -439,6 +483,7 @@ Metrics:
 **Dashboard 4: DynamoDB Operations**
 
 Metrics:
+
 - Read/write capacity units consumed per table
 - Throttled requests per table
 - Query latency (p50, p95, p99)
@@ -496,9 +541,11 @@ cloudwatch.put_metric_data(
 ```
 
 **Files to Create:**
+
 - `eidolon/metrics.py` — CloudWatch metrics helper module
 
 **Files to Modify:**
+
 - `deployment/stacks/cloudwatch_stack.py` — Add dashboard definitions
 - `lambda/api_story_start.py` — Emit StoryStarted metric
 - `lambda/ops_story_advance.py` — Emit StoryCompleted metric
@@ -506,6 +553,7 @@ cloudwatch.put_metric_data(
 - `lambda/ops_segment_poller.py` — Emit PollerRun metric
 
 **Acceptance Criteria:**
+
 - [ ] 4 CloudWatch dashboards deployed and accessible
 - [ ] All key metrics displaying data
 - [ ] Dashboards visible in AWS Console
@@ -526,16 +574,19 @@ cloudwatch.put_metric_data(
 **Critical Alarms (Page on-call):**
 
 1. **Lambda Errors Spike**
+
    - Condition: Error rate >5% over 5 minutes
    - Function: Any story/segment Lambda
    - Action: SNS topic → PagerDuty/email
 
 2. **DynamoDB Throttling**
+
    - Condition: ThrottledRequests >10 in 5 minutes
    - Table: ActiveSegments, Characters
    - Action: SNS topic → alert (may need capacity increase)
 
 3. **Poller Disabled Unexpectedly**
+
    - Condition: EventBridge rule disabled while ActiveSegments exist
    - Detection: Custom metric from poller
    - Action: SNS topic → immediate investigation
@@ -548,11 +599,13 @@ cloudwatch.put_metric_data(
 **Warning Alarms (Email only):**
 
 5. **High Segment Processing Time**
+
    - Condition: p95 processing duration >30 seconds
    - Function: ops-segment-process
    - Action: SNS topic → investigate performance
 
 6. **Story Completion Rate Low**
+
    - Condition: Completion rate <50% over 1 hour
    - Metric: StoryCompleted / StoryStarted
    - Action: SNS topic → may indicate difficulty issues
@@ -583,13 +636,16 @@ def create_alarms(self):
 ```
 
 **Files to Create:**
+
 - `deployment/stacks/sns_stack.py` — SNS topics for alarms
 
 **Files to Modify:**
+
 - `deployment/stacks/cloudwatch_stack.py` — Add alarm definitions
 - `deployment/deploy.py` — Add SnsStack to deployment order
 
 **Acceptance Criteria:**
+
 - [ ] All 7 alarms created and active
 - [ ] SNS topics configured with email subscriptions
 - [ ] Test alarm triggers (manually exceed threshold)
@@ -613,51 +669,60 @@ def create_alarms(self):
 **Sections:**
 
 1. **Introduction**
+
    - Purpose of the guide
    - Who should use it (content creators, game designers)
    - Prerequisites (JSON knowledge helpful but not required)
 
 2. **Story Concepts**
+
    - What is a story in Eidolon Engine
    - Story types: one-time, daily, repeatable
    - Segments and branching narratives
    - Prerequisites and gating
 
 3. **Writing Your First Story**
+
    - Step-by-step tutorial
    - Simple linear story example (3 segments)
    - Testing your story locally
    - Common pitfalls
 
 4. **Segment Types**
+
    - Decision segments (player choice)
    - Mechanical segments (challenges, combat)
    - Rest segments (recovery, narrative pauses)
 
 5. **Branching and Outcomes**
+
    - Defining outcome branches (exceptional/normal/minimal/failure/death)
    - Weighted random branching
    - DefaultDecision for timeouts
 
 6. **Prerequisites and Unlocking**
+
    - Skill requirements (MinSkills)
    - Item requirements (RequiredItems)
    - Attribute requirements (MinAttributes)
    - Previous story requirements
 
 7. **Rewards Configuration**
+
    - Skill XP awards
    - Attribute XP awards
    - Item rewards (from Prototypes)
    - Room transitions (teleportation)
 
 8. **Validation Tools**
+
    - Running validate_story_content.py
    - Running validate_branching.py
    - Interpreting validation errors
    - Common validation failures
 
 9. **Best Practices**
+
    - Balancing difficulty and rewards
    - Writing engaging narratives
    - Designing meaningful choices
@@ -671,9 +736,11 @@ def create_alarms(self):
     - Special effects (ghost state, etc.)
 
 **Files to Create:**
+
 - `documentation/story-creation-guide.md` — Main guide (estimated 1000+ lines)
 
 **Acceptance Criteria:**
+
 - [ ] Complete guide written and reviewed
 - [ ] Includes 3+ example stories (simple, branching, combat)
 - [ ] All validation tools documented
@@ -696,6 +763,7 @@ def create_alarms(self):
 **Sections:**
 
 1. **Story Table Fields**
+
    - StoryID (required, UUID format)
    - Title (required, string 1-100 chars)
    - StoryType (required, enum: "one-time" | "daily" | "repeatable")
@@ -705,6 +773,7 @@ def create_alarms(self):
    - Description (optional, narrative summary)
 
 2. **Segment Table Fields**
+
    - StoryID (required, partition key)
    - SegmentID (required, sort key, UUID)
    - SegmentType (required, enum: "mechanical" | "decision" | "rest")
@@ -713,34 +782,40 @@ def create_alarms(self):
    - SegmentActivity (required, present continuous verb phrase)
 
 3. **Decision Segment Fields**
+
    - DecisionText (required, narrative prompt)
    - DecisionOptions (required, object mapping choice IDs to outcomes)
    - DefaultDecision (required, fallback choice ID)
    - DecisionOptions format (supports legacy string and rich object formats)
 
 4. **Mechanical Segment Fields**
+
    - Challenges (array of skill/attribute checks)
    - Combat (combat configuration object)
    - Results (outcome mapping object)
 
 5. **Challenge Configuration**
+
    - Skill vs Attribute challenges
    - Difficulty values (0-10 scale)
    - Multiple attempts configuration
    - Success thresholds
 
 6. **Combat Configuration**
+
    - OpponentID (reference to Opponents table)
    - MaxRounds (combat duration limit)
    - CombatStyle (optional modifiers)
 
 7. **Results and Branching**
+
    - Outcome types: "exceptional", "normal", "minimal", "failure", "death"
    - NextSegmentID for each outcome
    - Weighted random branches
    - Terminal outcomes (null NextSegmentID)
 
 8. **Effects and Rewards**
+
    - SkillXP awards
    - AttributeXP awards
    - Items array (ItemPrototypeIDs)
@@ -753,10 +828,12 @@ def create_alarms(self):
    - Branching completeness (all outcomes must have next segment or be terminal)
 
 **Files to Create:**
+
 - `documentation/story-schema-reference.md` — Field reference (estimated 800+ lines)
 - `incremental/schemas/story.schema.json` — Formal JSON schema (if not exists)
 
 **Acceptance Criteria:**
+
 - [ ] All fields documented with types, constraints, examples
 - [ ] Includes JSON schema validation file
 - [ ] Cross-referenced from Story Creation Guide
@@ -780,24 +857,28 @@ def create_alarms(self):
 1. **Common Issues**
 
    **Story Won't Start**
+
    - Symptom: api-story-start returns error
    - Causes: Character in wrong GameMode, prerequisites not met, story not in AvailableStories
    - Diagnosis: Check character GameMode, query Story prerequisites
    - Resolution: Clear GameMode, add story to AvailableStories
 
    **Story Stuck (Not Advancing)**
+
    - Symptom: Segment EndTime passed but no progress
    - Causes: Poller disabled, SSM stuck on "stop", segment not processed
    - Diagnosis: Check EventBridge rule status, read SSM parameter, query ActiveSegments
    - Resolution: Enable poller, reset SSM, re-queue segment
 
    **Character in Broken GameMode**
+
    - Symptom: Character has ActiveStoryID but no ActiveSegment
    - Causes: Orphaned segment deleted, race condition
    - Diagnosis: Query ActiveSegments for character
    - Resolution: Clear ActiveStoryID, set GameMode="None"
 
 2. **Error Code Reference**
+
    - 400 Bad Request: Invalid input (check request body format)
    - 401 Unauthorized: JWT invalid or expired (re-authenticate)
    - 403 Forbidden: Prerequisites not met (check character stats)
@@ -806,11 +887,13 @@ def create_alarms(self):
    - 500 Internal Server Error: Lambda error (check CloudWatch Logs)
 
 3. **Performance Issues**
+
    - Slow API responses: Check Lambda cold starts, DynamoDB throttling
    - Segments processing slowly: Check ops-segment-process duration, queue depth
    - High costs: Review DynamoDB read/write units, Lambda invocation counts
 
 4. **Data Recovery**
+
    - Recovering deleted story from StoryHistory
    - Restoring character from backup
    - Resetting stuck segments
@@ -839,10 +922,12 @@ def create_alarms(self):
    ```
 
 **Files to Create:**
+
 - `documentation/incremental-troubleshooting.md` — Troubleshooting guide (estimated 600+ lines)
 - `scripts_python/diagnose_character.py` — Diagnostic script for character issues
 
 **Acceptance Criteria:**
+
 - [ ] All common issues documented with resolution steps
 - [ ] Diagnostic queries provided and tested
 - [ ] Recovery procedures validated
@@ -865,42 +950,49 @@ def create_alarms(self):
 **Sections:**
 
 1. **Story Deployment Procedures**
+
    - Using story_loader.py to upload stories
    - Testing stories in dev/staging environments
    - Deploying to production
    - Rollback procedures
 
 2. **Monitoring and Observability**
+
    - CloudWatch dashboard locations
    - Key metrics to watch
    - Alarm response procedures
    - Log analysis with CloudWatch Insights
 
 3. **Performance Tuning**
+
    - Lambda memory allocation guidelines
    - DynamoDB capacity planning
    - Provisioned concurrency decisions
    - Cost optimization strategies
 
 4. **Incident Response**
+
    - Severity levels (Critical, High, Medium, Low)
    - On-call procedures
    - Escalation paths
    - Post-incident review process
 
 5. **Backup and Recovery**
+
    - DynamoDB point-in-time recovery
    - Story content backups
    - Lambda function versioning
    - Configuration rollback
 
 6. **Scaling Procedures**
+
    - Handling traffic spikes
    - Increasing DynamoDB capacity
    - Lambda concurrency limits
    - Cost impact analysis
 
 7. **Security Incident Response**
+
    - Detecting security incidents
    - Containment procedures
    - Investigation process
@@ -913,9 +1005,11 @@ def create_alarms(self):
    - Database migration procedures
 
 **Files to Create:**
+
 - `documentation/incremental-operations.md` — Operations runbook (estimated 800+ lines)
 
 **Acceptance Criteria:**
+
 - [ ] All operational procedures documented
 - [ ] Runbook reviewed by operations team
 - [ ] Incident response plan validated
@@ -935,6 +1029,7 @@ def create_alarms(self):
 
 **Current Situation:**
 Players are confused about their character's state. They don't know:
+
 - Whether their character is idle, in a story, or playing MUD
 - How to start playing Incremental mode
 - Whether they can switch modes or if they're locked
@@ -943,6 +1038,7 @@ Players are confused about their character's state. They don't know:
 
 **The Frustration:**
 Without clear UI, players experience:
+
 - **Uncertainty:** "Am I in a story? Can I start one?"
 - **Lost Progress:** Accidentally starting MUD while in a story
 - **Missed Content:** Not realizing Incremental mode exists
@@ -955,6 +1051,7 @@ Without clear UI, players experience:
 
 **1. Situational Awareness**
 Players need to instantly understand their character's current state:
+
 - "My character is idle and ready for adventure"
 - "I'm 20 minutes into a heist story"
 - "I'm currently in the MUD fighting goblins"
@@ -963,6 +1060,7 @@ Players need to instantly understand their character's current state:
 
 **2. Mode Discovery**
 Players need to discover that two game modes exist:
+
 - Incremental (timer-based stories)
 - MUD (real-time multiplayer)
 
@@ -970,6 +1068,7 @@ Players need to discover that two game modes exist:
 
 **3. Frictionless Mode Switching**
 Players need effortless transitions between modes:
+
 - Idle → Start a story
 - Idle → Join MUD
 - Story complete → Back to idle or MUD
@@ -978,6 +1077,7 @@ Players need effortless transitions between modes:
 
 **4. Progress Visibility**
 Players need to see story progression clearly:
+
 - Which story they're playing
 - What segment they're on
 - How much time until the next event
@@ -987,6 +1087,7 @@ Players need to see story progression clearly:
 
 **5. State Recovery**
 Players need to recover from errors gracefully:
+
 - Resume after accidental app closure
 - Fix orphaned story states
 - Understand why an action failed
@@ -999,6 +1100,7 @@ Players need to recover from errors gracefully:
 
 **1. Agency and Control**
 Players want to feel in command:
+
 - "I choose when to start a story"
 - "I can abandon this story if I don't like it"
 - "I decide which mode to play"
@@ -1007,6 +1109,7 @@ Players want to feel in command:
 
 **2. Character Connection**
 Players want to see their character as alive and present:
+
 - See their character's face/avatar
 - Watch health/wounds change in real-time
 - Feel their skills growing with XP bars
@@ -1016,6 +1119,7 @@ Players want to see their character as alive and present:
 
 **3. Anticipation and Excitement**
 Players want to feel excited about what's next:
+
 - "15 minutes until I find out if the heist succeeds!"
 - "Three great stories available to play"
 - "My lockpicking just hit level 7!"
@@ -1024,6 +1128,7 @@ Players want to feel excited about what's next:
 
 **4. Clarity Without Overwhelm**
 Players want important info without clutter:
+
 - See critical stats at a glance (health, wounds)
 - Expand for details only when needed
 - Quick access to inventory
@@ -1032,6 +1137,7 @@ Players want important info without clutter:
 
 **5. Aesthetic Pleasure**
 Players want the UI to look and feel good:
+
 - Smooth animations
 - Satisfying interactions (tap feedback, transitions)
 - Thematically appropriate (fantasy RPG aesthetic)
@@ -1043,6 +1149,7 @@ Players want the UI to look and feel good:
 #### How This Improves The Game
 
 **1. Increases Play Frequency**
+
 - **Visible timers** remind players to return ("23 minutes until segment completes")
 - **Available stories** shown upfront reduce decision paralysis
 - **Quick re-entry** to active stories lowers activation energy
@@ -1050,6 +1157,7 @@ Players want the UI to look and feel good:
 **Result:** Players check the app 3-5x per day instead of 1x, increasing engagement by 300-400%.
 
 **2. Reduces Support Burden**
+
 - **Clear error messages** with recovery actions eliminate "I'm stuck" tickets
 - **Visible state** prevents accidental mode conflicts
 - **Orphaned state detection** auto-recovers from bugs
@@ -1057,6 +1165,7 @@ Players want the UI to look and feel good:
 **Result:** Admin time freed from state management, focus shifts to content creation.
 
 **3. Drives Mode Crossover**
+
 - **Equal visibility** for Story/MUD modes encourages experimentation
 - **Seamless switching** removes barriers to trying both
 - **Shared character progression** visible across modes reinforces crossover value
@@ -1064,6 +1173,7 @@ Players want the UI to look and feel good:
 **Result:** 50%+ of players try both modes instead of siloing in one, increasing perceived game depth.
 
 **4. Builds Player Trust**
+
 - **Transparent state** eliminates "black box" confusion
 - **Predictable behavior** (timers, buttons, flows) creates confidence
 - **Graceful error handling** shows system reliability
@@ -1071,6 +1181,7 @@ Players want the UI to look and feel good:
 **Result:** Players invest more deeply (time, emotion, money) when they trust the system won't break.
 
 **5. Enables Narrative Investment**
+
 - **Story context visible** keeps narrative momentum ("I'm in the middle of 'The Locked Vault'")
 - **Progress indicators** show story arc structure (80% through = climax approaching)
 - **Continue vs Start** distinction honors player's active narrative
@@ -1078,6 +1189,7 @@ Players want the UI to look and feel good:
 **Result:** Story completion rates increase from 30% to 70%+ because players maintain context and momentum.
 
 **6. Creates Social Proof**
+
 - **Visible progression** (skills, inventory, wounds) gives players screenshots to share
 - **Mode badges** create status ("Look, I'm juggling both modes!")
 - **Achievement visibility** (completed stories) drives comparison
@@ -1085,6 +1197,7 @@ Players want the UI to look and feel good:
 **Result:** Organic social sharing increases as players have "showable" moments.
 
 **7. Reduces Cognitive Load**
+
 - **Single source of truth** eliminates need to remember state
 - **Next action always clear** reduces decision fatigue
 - **Contextual UI** (different panels per state) prevents option overload
@@ -1092,6 +1205,7 @@ Players want the UI to look and feel good:
 **Result:** New players onboard faster (5 minutes vs 20), lower drop-off during first session.
 
 **8. Enables Habit Formation**
+
 - **Routine checking** becomes habitual with visible timers
 - **Variable rewards** (story outcomes) trigger dopamine
 - **Low friction re-entry** strengthens habit loop
@@ -1105,6 +1219,7 @@ Players want the UI to look and feel good:
 **Core Principle:** The character screen is the player's **home base** in the game world.
 
 **Metaphor:** Think of it as the character's campfire between adventures:
+
 - A place of safety and clarity
 - Where you prepare for the next journey
 - Where you reflect on progress
@@ -1113,6 +1228,7 @@ Players want the UI to look and feel good:
 **Not:** A menu system, settings page, or data dashboard.
 
 **Design Implications:**
+
 - **Warm, inviting visuals** (not clinical or sterile)
 - **Character-centric layout** (avatar/name prominent)
 - **Narrative framing** ("Choose your adventure" not "Select mode")
@@ -1124,21 +1240,25 @@ Players want the UI to look and feel good:
 #### Success Metrics
 
 **Engagement:**
+
 - 50%+ of players check character screen daily
 - Average 4+ sessions per day per active user
 - 80%+ of players try both MUD and Incremental modes
 
 **Comprehension:**
+
 - <5% of players contact support about state confusion
 - 90%+ of players successfully start a story on first attempt
 - <1% orphaned state incidents
 
 **Retention:**
+
 - 70%+ story completion rate (up from ~30% without UI)
 - 60%+ D7 retention (Day 7 return rate)
 - 40%+ D30 retention
 
 **Satisfaction:**
+
 - 4.5+ star rating on app stores mentioning "easy to use"
 - <2% negative reviews citing confusion
 - Net Promoter Score (NPS) >50
@@ -1162,6 +1282,7 @@ Players want the UI to look and feel good:
 ```
 
 **Components:**
+
 - **Character Avatar:** 80x80px circular image
 - **Name/Level Display:** Primary text with level indicator
 - **Mode Status Badge:**
@@ -1181,6 +1302,7 @@ Players want the UI to look and feel good:
 ```
 
 **Components:**
+
 - **Health/Stamina Bars:** Progress indicators with color coding
   - Green: >75%
   - Yellow: 25-75%
@@ -1219,6 +1341,7 @@ Players want the UI to look and feel good:
 ```
 
 **Components:**
+
 - **Story Title:** Large, prominent text
 - **Current Segment:** Smaller subtitle showing SegmentActivity
 - **Timer:** Live countdown to segment EndTime
@@ -1246,6 +1369,7 @@ Players want the UI to look and feel good:
 ```
 
 **Interaction:**
+
 - Cards have hover effect (elevation increase)
 - Click "Start Story" → Navigate to story selection screen
 - Click "Play MUD" → Show MUD connection instructions/link
@@ -1263,6 +1387,7 @@ Players want the UI to look and feel good:
 ```
 
 **Components:**
+
 - **Item Icons:** 40x40px with item type visual
 - **Capacity Indicator:** Current/max with progress bar
 - **Quick Actions:** Long-press for item context menu
@@ -1372,6 +1497,7 @@ CharacterScreen
 #### Navigation Flows
 
 **Flow 1: Start New Story**
+
 ```
 Character Screen (GameMode=None)
   → Tap "Start Story" button
@@ -1383,6 +1509,7 @@ Character Screen (GameMode=None)
 ```
 
 **Flow 2: Continue Active Story**
+
 ```
 Character Screen (GameMode=Incremental, has ActiveStoryID)
   → Shows "Active Story" panel with countdown
@@ -1392,6 +1519,7 @@ Character Screen (GameMode=Incremental, has ActiveStoryID)
 ```
 
 **Flow 3: Abandon Story**
+
 ```
 Character Screen (Active Story)
   → Tap "Abandon Story" button
@@ -1406,6 +1534,7 @@ Character Screen (Active Story)
 ```
 
 **Flow 4: Mode Locked (error case)**
+
 ```
 Character Screen (GameMode=MUD)
   → User taps "Start Story"
@@ -1420,6 +1549,7 @@ Character Screen (GameMode=MUD)
 #### Animations & Transitions
 
 **1. Mode Badge Pulse** (when active)
+
 ```dart
 AnimatedContainer(
   duration: Duration(milliseconds: 1500),
@@ -1436,6 +1566,7 @@ AnimatedContainer(
 ```
 
 **2. Story Card Expand** (on continue)
+
 ```dart
 Hero(
   tag: 'story-${story.id}',
@@ -1445,6 +1576,7 @@ Hero(
 ```
 
 **3. Countdown Timer** (real-time updates)
+
 ```dart
 TweenAnimationBuilder<Duration>(
   duration: remainingTime,
@@ -1456,6 +1588,7 @@ TweenAnimationBuilder<Duration>(
 ```
 
 **4. Page Transitions**
+
 ```dart
 Navigator.push(
   context,
@@ -1479,6 +1612,7 @@ Navigator.push(
 #### Error Handling & Edge Cases
 
 **1. Network Errors**
+
 ```dart
 try {
   await apiService.getCharacter(id);
@@ -1497,6 +1631,7 @@ try {
 ```
 
 **2. Stale Data Detection**
+
 ```dart
 // Auto-refresh if character data is >5 minutes old
 if (DateTime.now().difference(_lastFetch) > Duration(minutes: 5)) {
@@ -1505,6 +1640,7 @@ if (DateTime.now().difference(_lastFetch) > Duration(minutes: 5)) {
 ```
 
 **3. Concurrent Modifications**
+
 ```dart
 // Handle 409 Conflict (race condition)
 if (response.statusCode == 409) {
@@ -1514,6 +1650,7 @@ if (response.statusCode == 409) {
 ```
 
 **4. Orphaned State Recovery**
+
 ```dart
 // If ActiveStoryID exists but no ActiveSegmentID
 if (character.activeStoryId != null && character.activeSegmentId == null) {
@@ -1530,18 +1667,21 @@ if (character.activeStoryId != null && character.activeSegmentId == null) {
 #### Testing Scenarios
 
 **Unit Tests:**
+
 - [ ] CharacterProvider state management
 - [ ] Mode transition logic (canStartStory, canPlayMUD)
 - [ ] Error handling for each API call
 - [ ] Countdown timer accuracy
 
 **Widget Tests:**
+
 - [ ] Mode badge displays correct color/text for each GameMode
 - [ ] Buttons visible/hidden based on state
 - [ ] Story panel shows only when GameMode=Incremental
 - [ ] Mode selection shows only when GameMode=None
 
 **Integration Tests:**
+
 - [ ] Start story flow (None → Incremental)
 - [ ] Continue story navigation
 - [ ] Abandon story flow (Incremental → None)
@@ -1549,6 +1689,7 @@ if (character.activeStoryId != null && character.activeSegmentId == null) {
 - [ ] Pull-to-refresh updates character state
 
 **Manual Test Cases:**
+
 - [ ] Character with active story (countdown updates every second)
 - [ ] Character with wounds (heal timers display correctly)
 - [ ] Character in MUD (mode badge shows green, buttons disabled)
@@ -1560,6 +1701,7 @@ if (character.activeStoryId != null && character.activeSegmentId == null) {
 #### Accessibility Considerations
 
 **1. Screen Reader Support:**
+
 ```dart
 Semantics(
   label: 'Character mode: ${gameMode.name}',
@@ -1570,14 +1712,17 @@ Semantics(
 ```
 
 **2. Color Blindness:**
+
 - Mode badges include text labels, not just color
 - Health bars use patterns in addition to color (stripes for low health)
 
 **3. Font Scaling:**
+
 - All text respects system font size settings
 - Minimum tap target: 48x48px (Material guidelines)
 
 **4. Keyboard Navigation:**
+
 - Tab order: Header → Stats → Active Story → Mode Selection → Inventory
 - Enter/Space activates buttons
 - Escape dismisses modals
@@ -1587,6 +1732,7 @@ Semantics(
 #### Files to Create
 
 **New Files:**
+
 ```
 incremental/lib/providers/
   └── character_provider.dart         # State management
@@ -1603,6 +1749,7 @@ incremental/lib/widgets/character/
 ```
 
 **Files to Modify:**
+
 ```
 incremental/lib/screens/
   └── character_screen.dart           # Main screen rebuild
@@ -1623,17 +1770,20 @@ incremental/lib/utils/
 #### Design Assets Needed
 
 **Icons:**
+
 - Story mode icon (book/scroll)
 - MUD mode icon (sword/terminal)
 - Health/stamina icons
 - Wound type icons (bashing/lethal/aggravated)
 
 **Animations:**
+
 - Pulse effect for active mode badge (Lottie JSON)
 - Story card expand transition
 - Loading skeleton for character data
 
 **Color Palette:**
+
 ```dart
 // Mode colors
 const modeIdle = Color(0xFF9E9E9E);      // Grey
@@ -1651,6 +1801,7 @@ const healthLow = Color(0xFFF44336);     // Red
 #### Performance Optimizations
 
 **1. Lazy Loading:**
+
 ```dart
 // Don't load full inventory until user taps "View Full Inventory"
 ListView.builder(
@@ -1668,6 +1819,7 @@ ListView.builder(
 ```
 
 **2. Memoization:**
+
 ```dart
 @override
 Widget build(BuildContext context) {
@@ -1688,6 +1840,7 @@ Widget build(BuildContext context) {
 ```
 
 **3. Image Caching:**
+
 ```dart
 CachedNetworkImage(
   imageUrl: character.avatarUrl,
@@ -1703,6 +1856,7 @@ CachedNetworkImage(
 #### Acceptance Criteria (Expanded)
 
 **Functional:**
+
 - [ ] Mode badge displays correct state for all GameModes
 - [ ] Active story panel shows ONLY when GameMode=Incremental
 - [ ] Mode selection shows ONLY when GameMode=None
@@ -1714,6 +1868,7 @@ CachedNetworkImage(
 - [ ] Error states show user-friendly messages with retry options
 
 **UI/UX:**
+
 - [ ] All animations smooth (60fps minimum)
 - [ ] Page transitions feel natural (slide from right)
 - [ ] Touch targets minimum 48x48px
@@ -1722,12 +1877,14 @@ CachedNetworkImage(
 - [ ] Responsive layout works on phone (360px) and tablet (768px)
 
 **Performance:**
+
 - [ ] Initial render <500ms
 - [ ] Character data fetch <2 seconds
 - [ ] No jank during scrolling or animations
 - [ ] Memory usage <100MB with character data loaded
 
 **Reliability:**
+
 - [ ] Handles network errors gracefully
 - [ ] Recovers from 409 conflicts automatically
 - [ ] Detects and fixes orphaned state
@@ -1736,11 +1893,13 @@ CachedNetworkImage(
 ---
 
 **Dependencies:**
+
 - Character GET API must return all necessary fields
 - Story start/abandon APIs must be functional
 - Navigation routing configured for story screens
 
 **Critical Success Factors:**
+
 - Mode badge must be immediately understandable
 - Active story panel must show time remaining prominently
 - Mode selection must feel like player choice, not forced decision
@@ -1759,16 +1918,19 @@ Based on user requirements, implemented a minimal, surgical enhancement to the e
 **Changes Delivered:**
 
 1. **GameMode Status Badge** (Character Panel)
+
    - Displays current character state: IDLE (grey) / STORY (blue) / MUD (green)
    - Shows appropriate icon for each mode (hourglass/book/terminal)
    - Integrates cleanly into existing character header
 
 2. **Wounds Indicator** (Character Panel)
+
    - Displays active wounds below Health/Essence bars
    - Orange warning styling with count by damage type (e.g., "2 bashing, 1 lethal")
    - Only appears when character has wounds
 
 3. **Smart Story Availability** (Story Panel)
+
    - Stories automatically grey out when character is not idle (GameMode != 'None')
    - Uses existing visual styling for unavailable stories
    - Prevents confusion about why stories can't be started
@@ -1779,18 +1941,21 @@ Based on user requirements, implemented a minimal, surgical enhancement to the e
    - Updated documentation to reflect all three GameMode values
 
 **Files Modified:**
+
 - `lib/models/character.dart` - Added wounds field, fixed gameMode default
 - `lib/widgets/game/character_panel.dart` - Added badge and wounds indicator
 - `lib/widgets/story/available_stories_widget.dart` - Added gameMode check
 - `test/models/character_test.dart` - Fixed bugs, added 5 new tests
 
 **Testing:**
+
 - ✅ All 13 unit tests passing for Character model
 - ✅ Flutter analyzer: No issues found
 - ✅ Edge cases covered: null/empty wounds, unknown GameMode values, malformed data
 - ✅ Comprehensive test coverage for new wounds and gameMode features
 
 **Scope Deferred (Per User Direction):**
+
 - ❌ MUD/Story mode selection UI → Deferred to next MUD revision
 - ❌ Active story panel changes → Current implementation acceptable
 - ❌ Countdown timers on wounds → Not practical at this time
@@ -1798,12 +1963,14 @@ Based on user requirements, implemented a minimal, surgical enhancement to the e
 - ❌ Skills/Attributes changes → Keep existing
 
 **User Experience Improvements:**
+
 1. **Immediate State Clarity** - Players instantly understand their current mode
 2. **Prevented Mistakes** - Visual feedback prevents starting stories in wrong state
 3. **Wound Visibility** - Players can see damage at a glance without navigating
 4. **Consistent Design** - Follows existing UI patterns and color schemes
 
 **Ship Gate Status:**
+
 - ✅ Code complete and tested
 - ✅ Analyzer passing
 - ✅ Unit tests passing
@@ -1826,17 +1993,20 @@ Based on user requirements, implemented a minimal, surgical enhancement to the e
 **UI Components:**
 
 1. **Story Grid/List View**
+
    - Grid layout on desktop (3 columns)
    - List layout on mobile (1 column)
    - Story cards with title, description, difficulty, duration
 
 2. **Filtering**
+
    - By difficulty (Easy, Medium, Hard)
    - By duration (< 1hr, 1-4hrs, >4hrs)
    - By type (One-time, Daily, Repeatable)
    - By prerequisites met (Show locked vs unlocked)
 
 3. **Search**
+
    - Search by story title
    - Search by description keywords
    - Real-time filtering as user types
@@ -1885,14 +2055,17 @@ List<Story> _filterStories(List<Story> stories) {
 ```
 
 **Files to Create (when implemented):**
+
 - `incremental/lib/screens/story_browse_screen.dart` — Story browsing screen
 - `incremental/lib/widgets/story_card.dart` — Individual story card widget
 
 **Files to Modify (when implemented):**
+
 - `incremental/lib/models/story.dart` — Add difficulty, duration properties
 - `incremental/lib/screens/character_screen.dart` — Navigate to browse screen
 
 **Acceptance Criteria (deferred):**
+
 - Story grid displays all available stories
 - Filters work correctly
 - Search returns accurate results
@@ -1919,22 +2092,26 @@ Users who close the browser/app before clicking the verification link cannot com
 #### Solution Implemented
 
 **Dual-Method Email Template** - Provides both verification methods in email:
+
 1. **One-click link** - Traditional email link verification
 2. **Verification code** - 6-digit code for manual entry in app
 
 **Implementation:**
 
 **Files Created:**
+
 - `data/cognito-verification-email.html` (3.7 KB) — Professional HTML email template
 - `data/cognito-verification-email.txt` (640 B) — Plain text fallback template
 
 **Files Modified:**
+
 - `deployment/player.py` — Added template loading and user pool update functions
 - `deployment/stacks/player_stack.py` — Loads templates for new user pools
 
 **How It Works:**
 
 1. **For New User Pools:**
+
    - CDK loads template from `data/cognito-verification-email.html`
    - Applies during user pool creation via `user_verification` parameter
    - Uses `VerificationEmailStyle.CODE` to include both link and code
@@ -1952,11 +2129,13 @@ python3 deploy.py --mode player
 ```
 
 Template automatically:
+
 - Loaded from `data/cognito-verification-email.html`
 - Applied to new user pools during creation
 - Updated on existing user pools after deployment
 
 **Email Template Features:**
+
 - Cognito variables: `{##Verify Email##}` (link) and `{####}` (code)
 - Professional, responsive HTML design
 - Clear instructions for both methods
@@ -1964,6 +2143,7 @@ Template automatically:
 - "Resend Code" instructions
 
 **Testing:**
+
 - [x] Email template created in `data/` directory
 - [x] Template loaded during deployment
 - [x] Applied to new user pools
@@ -1971,6 +2151,7 @@ Template automatically:
 - [ ] Manual test: Sign up → close app → enter code → success
 
 **Acceptance Criteria:**
+
 - [x] Email template in `data/` directory
 - [x] Integrated into `deploy.py` workflow
 - [x] Two verification methods (link + code)
@@ -2067,14 +2248,17 @@ cost_widget = cloudwatch.SingleValueWidget(
 ```
 
 **Files to Create:**
+
 - `deployment/stacks/budget_stack.py` — Budget and cost controls
 
 **Files to Modify:**
+
 - `deployment/stacks/dynamodb_stack.py` — Add auto-scaling to key tables
 - `deployment/stacks/lambda_stack.py` — Add concurrency limits
 - `deployment/deploy.py` — Add BudgetStack
 
 **Acceptance Criteria:**
+
 - [ ] Monthly budget configured and active
 - [ ] Email alerts sent at 80% budget
 - [ ] Auto-scaling enabled on ActiveSegments table
@@ -2109,10 +2293,12 @@ Quick validation checklist to run before each deployment:
 # Story System Smoke Test (15-20 minutes)
 
 ## Setup
+
 - [ ] Create test character "SmokeTest-[timestamp]"
 - [ ] Verify character shows IDLE badge
 
 ## Happy Path
+
 - [ ] Start "The Goblin Ambush" story
 - [ ] Verify STORY badge appears
 - [ ] Wait for segment timer completion
@@ -2122,11 +2308,13 @@ Quick validation checklist to run before each deployment:
 - [ ] Verify returns to IDLE, story in CompletedStories
 
 ## Error Handling
+
 - [ ] Try starting second story (expect 409)
 - [ ] Try starting locked story (expect 403)
 - [ ] Verify error messages are clear
 
 ## Cleanup
+
 - [ ] Delete test character
 - [ ] Review CloudWatch logs for errors
 ```
@@ -2192,6 +2380,7 @@ def lambda_handler(event, context):
 ```
 
 **CloudWatch Alarm:**
+
 - Trigger: `IssuesFound > 0` for 2 consecutive 5-minute periods
 - Action: SNS notification to operations team
 
@@ -2378,6 +2567,7 @@ deployment = codedeploy.LambdaDeploymentGroup(
 ```
 
 **How it works:**
+
 1. New code deploys to 10% of invocations
 2. Monitors for 5 minutes
 3. If alarms trigger → automatic rollback
@@ -2416,6 +2606,7 @@ deployment = codedeploy.LambdaDeploymentGroup(
 #### Why This Approach
 
 **Traditional Integration Tests:**
+
 - 3-5 days to build
 - High maintenance (breaks on every change)
 - Validates synthetic scenarios
@@ -2423,6 +2614,7 @@ deployment = codedeploy.LambdaDeploymentGroup(
 - 10-minute feedback loop
 
 **Operational Excellence:**
+
 - 8 hours to build
 - Low maintenance (adapts to changes)
 - Validates real user behavior
@@ -2489,9 +2681,11 @@ def test_concurrent_decision_submit():
 ```
 
 **Files to Create:**
+
 - `tests/integration/test_concurrent_operations.py` — Race condition tests
 
 **Acceptance Criteria:**
+
 - [x] Concurrent story starts tested
 - [x] Concurrent decisions tested
 - [x] All race conditions resolved correctly
@@ -2517,6 +2711,7 @@ def test_concurrent_decision_submit():
 **Changes Delivered:**
 
 1. **ops_story_advance.py - Added Idempotency Checks**
+
    - Check if segment already deleted (return success, skip retry loop)
    - Check if segment already marked completed (prevent duplicate processing)
    - Added atomic claim mechanism - mark segment completed FIRST before doing work
@@ -2528,9 +2723,11 @@ def test_concurrent_decision_submit():
    - No changes needed - implemented correctly
 
 **Files Modified:**
+
 - `lambda/ops_story_advance.py` - Added three idempotency checks, moved atomic claim to top
 
 **Problems Prevented:**
+
 - ✅ Infinite retry loops when segment already deleted
 - ✅ Duplicate segment creation from concurrent workers
 - ✅ Double reward application (combat loot, XP, items)
@@ -2541,22 +2738,27 @@ def test_concurrent_decision_submit():
 The fix implements a three-layer protection:
 
 1. **Layer 1 - Missing Segment Check:**
+
    ```python
    try:
        active_segment = get_active_segment(active_segment_id)
    except ValueError:
        return {"success": True, "skipped": True, "reason": "Already advanced"}
    ```
+
    If segment already deleted, return success (prevents infinite retries).
 
 2. **Layer 2 - Status Check:**
+
    ```python
    if status == "completed":
        return {"success": True, "skipped": True, "reason": "Already marked completed"}
    ```
+
    If segment already claimed by another worker, skip gracefully.
 
 3. **Layer 3 - Atomic Claim (CRITICAL):**
+
    ```python
    # Mark completed FIRST (before applying rewards or creating next segment)
    try:
@@ -2568,11 +2770,13 @@ The fix implements a three-layer protection:
    apply_combat_rewards(...)
    create_next_active_segment(...)
    ```
+
    By marking completed first, only ONE worker can claim the segment and do work.
 
 **Architecture Insight:**
 
 Review of the codebase revealed that segment processing is **front-loaded** (outcomes calculated immediately when segment starts, not when it ends). This means:
+
 - Timer is just waiting to advance to next segment
 - `ops_segment_process` already had correct idempotency
 - `ops_story_advance` was the vulnerable component
@@ -2635,9 +2839,11 @@ def test_story_advancement_idempotent():
 ```
 
 **Files to Create:**
+
 - `tests/integration/test_idempotency.py` — Idempotency tests
 
 **Acceptance Criteria:**
+
 - [x] Segment processing idempotent (already implemented, verified)
 - [x] Story advancement idempotent (implemented October 5, verified)
 - [x] No duplicate rewards on retry (prevented by atomic claim, verified)
@@ -2667,24 +2873,29 @@ def test_story_advancement_idempotent():
 ## Success Metrics
 
 **Security:**
+
 - 0 critical vulnerabilities
 - WAF blocking >90% of attack traffic in tests
 
 **Reliability:**
+
 - Integration tests: 100% pass rate ✓
 - Idempotency tests: 100% pass rate ✓
 - Concurrent operations tests: 100% pass rate ✓
 
 **Observability:**
+
 - Dashboards: Operational dashboard deployed ✓
 - Alarms: Health check alarms configured and tested ✓
 - Log queries: Structured logging enabled ✓
 
 **Documentation:**
+
 - 4 guides completed
 - Internal reviewer can follow guides successfully
 
 **User Experience:**
+
 - Mode transitions: <3 second response time
 - Story browsing: <2 second load time
 

@@ -190,6 +190,7 @@ Located in `eidolon/constants.py`:
 The failure penalty varies based on challenge difficulty relative to character capability:
 
 - **When S > D** (character stronger than challenge): **0% XP on failure**
+
   - Rationale: Failing an easy task provides no learning opportunity
   - Example: S=8, D=5, failed → 0 XP
 

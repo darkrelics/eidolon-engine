@@ -6,10 +6,12 @@ This document provides comprehensive rules for integrating Figma designs into th
 
 **Project Type**: Multi-mode game engine with Flutter web frontends
 **Primary Applications**:
+
 - Incremental RPG (story-driven gameplay)
 - MUD Portal (traditional multi-user dungeon interface)
 
 **Technology Stack**:
+
 - Frontend: Flutter 3.32+ (Web)
 - Language: Dart 3.9+
 - State Management: Provider pattern
@@ -161,12 +163,14 @@ lib/
 #### Component Types
 
 1. **Screen Components** (`screens/`)
+
    - Full-page routes
    - Scaffold-based layouts
    - Consume providers for state
    - Example: `GameScreen`, `LoginScreen`
 
 2. **Panel Components** (`widgets/game/`)
+
    - Major UI sections (left/center/right panels)
    - Composite widgets
    - Example: `CharacterPanel`, `StoryPanel`, `InventoryPanel`
@@ -400,6 +404,7 @@ Icon(Icons.terminal)         // MUD mode
 ### Icon Mapping Conventions
 
 **Character Attributes**:
+
 ```dart
 strength: Icons.fitness_center
 agility: Icons.speed
@@ -410,6 +415,7 @@ constitution: Icons.shield
 ```
 
 **Skills**:
+
 ```dart
 melee: Icons.sports_martial_arts
 ranged: Icons.gps_fixed
@@ -420,6 +426,7 @@ crafting: Icons.build
 ```
 
 **Resources**:
+
 ```dart
 gold/coins: Icons.monetization_on
 experience/xp: Icons.trending_up
@@ -427,6 +434,7 @@ reputation: Icons.military_tech
 ```
 
 **UI Actions**:
+
 ```dart
 refresh: Icons.refresh
 settings: Icons.settings
@@ -686,6 +694,7 @@ incremental/lib/
 **Example**: Game features in `widgets/game/`, story features in `widgets/story/`
 
 **Separation of Concerns**:
+
 - **Screens**: Route-level composition, provider consumption
 - **Widgets**: Presentation and UI logic
 - **Providers**: State management, business logic orchestration
@@ -785,28 +794,34 @@ class MyWidget extends StatelessWidget {
 ## Design System Constraints
 
 ### No Custom Fonts
+
 - Use system default fonts only
 - Typography scale from Material Design 2021
 
 ### No External CSS
+
 - All styling via Flutter widgets
 - No separate CSS files or inline styles
 
 ### No Custom Icon Sets
+
 - Material Icons only (included with Flutter)
 - SVG icons only if absolutely necessary (rare)
 
 ### Limited Asset Usage
+
 - Minimal image assets (primarily backgrounds)
 - No icon fonts beyond Material Icons
 - No sprite sheets or icon sets
 
 ### Color Limitations
+
 - All colors defined in theme provider
 - No dynamic color generation
 - Theme switching between light/dark only
 
 ### Responsive Strategy
+
 - Breakpoint-based responsive design
 - Mobile-first approach
 - 3 breakpoints: mobile (< 768), tablet (768-1200), desktop (> 1200)
@@ -818,6 +833,7 @@ All generated code must follow project coding standards:
 **Reference**: `documentation/flutter-style.md`, `CLAUDE.md`
 
 **Key Rules**:
+
 - Maximum line length: 132 characters
 - No private methods (use public or package-private)
 - Prefer const constructors
@@ -856,6 +872,7 @@ When implementing Figma designs, ensure:
 ## Deployment Context
 
 Generated code will be deployed as:
+
 - Flutter web application (JavaScript + WebAssembly)
 - Served via AWS CloudFront CDN
 - Integrated with AWS Lambda backend

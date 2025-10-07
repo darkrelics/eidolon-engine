@@ -24,13 +24,13 @@ Release 0 (R0) establishes the foundation for the Eidolon Engine incremental sub
 
 ### R0 Exit Criteria Status — FINAL
 
-| Criterion                | Status          | Notes                                                        |
-| ------------------------ | --------------- | ------------------------------------------------------------ |
-| Fresh clone can deploy   | ✅ **COMPLETE** | All stacks deployed and tested in AWS                        |
-| Docs match code          | ✅ **COMPLETE** | Comprehensive documentation aligned with implementation      |
-| CI gates bad stories     | ✅ **COMPLETE** | `.github/workflows/story-validation.yml` enforcing validation |
-| Architecture docs exist  | ✅ **COMPLETE** | Created consolidated `architecture.md` with Mermaid diagrams |
-| Dashboard/alarm exist    | 🟡 **DEFERRED** | Deferred until revenue generation (per stakeholder decision) |
+| Criterion               | Status          | Notes                                                         |
+| ----------------------- | --------------- | ------------------------------------------------------------- |
+| Fresh clone can deploy  | ✅ **COMPLETE** | All stacks deployed and tested in AWS                         |
+| Docs match code         | ✅ **COMPLETE** | Comprehensive documentation aligned with implementation       |
+| CI gates bad stories    | ✅ **COMPLETE** | `.github/workflows/story-validation.yml` enforcing validation |
+| Architecture docs exist | ✅ **COMPLETE** | Created consolidated `architecture.md` with Mermaid diagrams  |
+| Dashboard/alarm exist   | 🟡 **DEFERRED** | Deferred until revenue generation (per stakeholder decision)  |
 
 ---
 
@@ -42,18 +42,18 @@ Release 0 (R0) establishes the foundation for the Eidolon Engine incremental sub
 
 **Status:** ✅ All stacks deployed to AWS
 
-| Stack                 | Purpose                 | Components                                     | Status     |
-| --------------------- | ----------------------- | ---------------------------------------------- | ---------- |
-| `dynamodb_stack.py`   | Database tables         | 14 tables, 3 GSIs                              | ✅ Deployed |
-| `lambda_stack.py`     | Shared Lambda resources | Layer, IAM role, policies                      | ✅ Deployed |
-| `character_stack.py`  | Character API           | Character Lambda functions                     | ✅ Deployed |
+| Stack                 | Purpose                 | Components                                        | Status      |
+| --------------------- | ----------------------- | ------------------------------------------------- | ----------- |
+| `dynamodb_stack.py`   | Database tables         | 14 tables, 3 GSIs                                 | ✅ Deployed |
+| `lambda_stack.py`     | Shared Lambda resources | Layer, IAM role, policies                         | ✅ Deployed |
+| `character_stack.py`  | Character API           | Character Lambda functions                        | ✅ Deployed |
 | `story_stack.py`      | Story/segment API + ops | Story Lambda functions, 2 SQS queues, EventBridge | ✅ Deployed |
-| `api_stack.py`        | API Gateway             | REST API, authorizer                           | ✅ Deployed |
-| `client_stack.py`     | CloudFront + S3         | CDN, static hosting                            | ✅ Deployed |
-| `cloudwatch_stack.py` | Observability           | Log group, metrics namespace, IAM policy       | ✅ Deployed |
-| `s3_stack.py`         | Artifact storage        | Lambda code bucket                             | ✅ Deployed |
-| `codebuild_stack.py`  | Build infrastructure    | CodeBuild projects, artifacts bucket           | ✅ Deployed |
-| `player_stack.py`     | Cognito integration     | User pool triggers                             | ✅ Deployed |
+| `api_stack.py`        | API Gateway             | REST API, authorizer                              | ✅ Deployed |
+| `client_stack.py`     | CloudFront + S3         | CDN, static hosting                               | ✅ Deployed |
+| `cloudwatch_stack.py` | Observability           | Log group, metrics namespace, IAM policy          | ✅ Deployed |
+| `s3_stack.py`         | Artifact storage        | Lambda code bucket                                | ✅ Deployed |
+| `codebuild_stack.py`  | Build infrastructure    | CodeBuild projects, artifacts bucket              | ✅ Deployed |
+| `player_stack.py`     | Cognito integration     | User pool triggers                                | ✅ Deployed |
 
 **Deployment Info:** All 10 stacks deployed and tested. Deployment order managed by `deploy.py`.
 
@@ -562,6 +562,7 @@ update docs.
 **Status:** Delivered in R0
 
 **Achievement:** Created `documentation/architecture.md` consolidating:
+
 - System diagram (Lambda → DynamoDB → SQS → EventBridge) with Mermaid
 - Complete table reference (14 tables, keys, GSIs, indexes)
 - State machine summaries with 7 Mermaid diagrams
@@ -654,13 +655,13 @@ update docs.
 
 ### Exit Criteria Matrix
 
-| Criterion              | Status          | Blocker? | Action Required                     |
-| ---------------------- | --------------- | -------- | ----------------------------------- |
-| Fresh clone can deploy | ✅ **COMPLETE** | No       | None                                |
-| Docs match code        | ✅ **COMPLETE** | No       | None                                |
-| CI gates bad stories   | ✅ **COMPLETE** | No       | None                                |
-| Architecture docs      | ✅ **COMPLETE** | No       | None                                |
-| Dashboard/alarm exist  | 🟡 **DEFERRED** | No       | Awaiting revenue                    |
+| Criterion              | Status          | Blocker? | Action Required  |
+| ---------------------- | --------------- | -------- | ---------------- |
+| Fresh clone can deploy | ✅ **COMPLETE** | No       | None             |
+| Docs match code        | ✅ **COMPLETE** | No       | None             |
+| CI gates bad stories   | ✅ **COMPLETE** | No       | None             |
+| Architecture docs      | ✅ **COMPLETE** | No       | None             |
+| Dashboard/alarm exist  | 🟡 **DEFERRED** | No       | Awaiting revenue |
 
 ---
 
@@ -669,6 +670,7 @@ update docs.
 ### 9.1 All R0 Objectives Achieved
 
 **R0 Scope Completed:**
+
 - ✅ Infrastructure deployed and tested in AWS
 - ✅ All 10 CDK stacks deployed
 - ✅ All 16 Lambda functions deployed
@@ -685,6 +687,7 @@ update docs.
 Deployment complete with all core infrastructure tested and operational. R1 work is in progress on the inc-25 branch.
 
 **R1 Status (Per release-one-report.md):**
+
 - ✅ **State Machine Formalization (Task 1):** Phases 1-2 complete
   - Created `eidolon/state_machines.py` with GameMode, ProcessingStatus, StoryLifecycle enums
   - Implemented atomic transition functions with DynamoDB conditional writes
@@ -693,6 +696,7 @@ Deployment complete with all core infrastructure tested and operational. R1 work
   - Phase 3 (integration testing) pending
 
 **R1 Next Steps:**
+
 1. Complete integration testing for state machine transitions
 2. Combat system enhancements (in progress)
 3. Atomic outcome application (Task 2)
@@ -710,11 +714,13 @@ Deployment complete with all core infrastructure tested and operational. R1 work
 ### R1 Immediate Actions
 
 1. **Complete Combat System Rework** (in progress)
+
    - Address combat mechanics issues
    - Update combat processing logic
    - Test combat outcomes
 
 2. **Integration Testing**
+
    - End-to-end Lambda testing with local DynamoDB
    - Test state machine transitions
    - Test idempotency keys
@@ -730,6 +736,7 @@ Deployment complete with all core infrastructure tested and operational. R1 work
 ### R1 Medium-Term Actions
 
 4. **Failure Injection Testing**
+
    - DynamoDB throttling scenarios
    - Lambda timeout handling
    - SQS message replay
@@ -775,6 +782,7 @@ Deployment complete with all core infrastructure tested and operational. R1 work
 **R0 Achievement:**
 
 The Eidolon Engine incremental subsystem has a complete baseline with:
+
 - Full serverless infrastructure deployed and tested on AWS
 - Comprehensive architectural documentation with modern diagrams
 - Automated story validation enforcing data quality

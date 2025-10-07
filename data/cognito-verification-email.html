@@ -1,137 +1,143 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      margin: 0;
-      padding: 0;
-      background-color: #f4f4f4;
-    }
-    .container {
-      max-width: 600px;
-      margin: 20px auto;
-      background: white;
-      border-radius: 8px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .header {
-      background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-      color: white;
-      padding: 30px 20px;
-      text-align: center;
-    }
-    .header h1 {
-      margin: 0;
-      font-size: 28px;
-      font-weight: 600;
-    }
-    .content {
-      padding: 30px 20px;
-    }
-    .method-section {
-      margin: 25px 0;
-      padding: 20px;
-      background: #f8f9fa;
-      border-left: 4px solid #3498db;
-      border-radius: 4px;
-    }
-    .method-section h3 {
-      margin-top: 0;
-      color: #2c3e50;
-      font-size: 18px;
-    }
-    .button {
-      display: inline-block;
-      padding: 14px 28px;
-      background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-      color: white;
-      text-decoration: none;
-      border-radius: 6px;
-      margin: 15px 0;
-      font-weight: 600;
-      box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
-    }
-    .code-box {
-      background: white;
-      border: 3px solid #3498db;
-      padding: 20px;
-      text-align: center;
-      font-size: 32px;
-      font-weight: bold;
-      letter-spacing: 8px;
-      margin: 20px 0;
-      border-radius: 8px;
-      font-family: 'Courier New', monospace;
-      color: #2c3e50;
-    }
-    .info-box {
-      background: #e3f2fd;
-      border-left: 4px solid #2196f3;
-      padding: 15px;
-      margin: 20px 0;
-      border-radius: 4px;
-    }
-    .footer {
-      text-align: center;
-      padding: 20px;
-      background: #f8f9fa;
-      color: #666;
-      font-size: 13px;
-      border-top: 1px solid #e0e0e0;
-    }
-    @media only screen and (max-width: 600px) {
-      .container { margin: 0; border-radius: 0; }
-      .code-box { font-size: 24px; letter-spacing: 4px; }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>🎮 Welcome to Eidolon Engine!</h1>
-    </div>
-
-    <div class="content">
-      <p style="font-size: 16px; margin-bottom: 20px;">
-        Thank you for creating an account. To start your adventure, please verify your email address.
-      </p>
-
-      <div class="method-section">
-        <h3>✨ Method 1: One-Click Verification</h3>
-        <p>Click the button below to verify instantly:</p>
-        <a href="{##Verify Email##}" class="button">Verify Email Address</a>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+        color: white;
+        padding: 30px 20px;
+        text-align: center;
+      }
+      .header h1 {
+        margin: 0;
+        font-size: 28px;
+        font-weight: 600;
+      }
+      .content {
+        padding: 30px 20px;
+      }
+      .method-section {
+        margin: 25px 0;
+        padding: 20px;
+        background: #f8f9fa;
+        border-left: 4px solid #3498db;
+        border-radius: 4px;
+      }
+      .method-section h3 {
+        margin-top: 0;
+        color: #2c3e50;
+        font-size: 18px;
+      }
+      .button {
+        display: inline-block;
+        padding: 14px 28px;
+        background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+        color: white;
+        text-decoration: none;
+        border-radius: 6px;
+        margin: 15px 0;
+        font-weight: 600;
+        box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+      }
+      .code-box {
+        background: white;
+        border: 3px solid #3498db;
+        padding: 20px;
+        text-align: center;
+        font-size: 32px;
+        font-weight: bold;
+        letter-spacing: 8px;
+        margin: 20px 0;
+        border-radius: 8px;
+        font-family: "Courier New", monospace;
+        color: #2c3e50;
+      }
+      .info-box {
+        background: #e3f2fd;
+        border-left: 4px solid #2196f3;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 4px;
+      }
+      .footer {
+        text-align: center;
+        padding: 20px;
+        background: #f8f9fa;
+        color: #666;
+        font-size: 13px;
+        border-top: 1px solid #e0e0e0;
+      }
+      @media only screen and (max-width: 600px) {
+        .container {
+          margin: 0;
+          border-radius: 0;
+        }
+        .code-box {
+          font-size: 24px;
+          letter-spacing: 4px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🎮 Welcome to Eidolon Engine!</h1>
       </div>
 
-      <div class="method-section">
-        <h3>🔑 Method 2: Enter Verification Code</h3>
-        <p>If you closed the app or the button doesn't work, enter this code:</p>
-        <div class="code-box">{####}</div>
-        <p style="margin-top: 15px;">
-          <strong>Where to enter the code:</strong><br>
-          Open the Eidolon app → Verification screen → Enter the code above
+      <div class="content">
+        <p style="font-size: 16px; margin-bottom: 20px">
+          Thank you for creating an account. To start your adventure, please verify your email address.
+        </p>
+
+        <div class="method-section">
+          <h3>✨ Method 1: One-Click Verification</h3>
+          <p>Click the button below to verify instantly:</p>
+          <a href="{##Verify Email##}" class="button">Verify Email Address</a>
+        </div>
+
+        <div class="method-section">
+          <h3>🔑 Method 2: Enter Verification Code</h3>
+          <p>If you closed the app or the button doesn't work, enter this code:</p>
+          <div class="code-box">{####}</div>
+          <p style="margin-top: 15px">
+            <strong>Where to enter the code:</strong><br />
+            Open the Eidolon app → Verification screen → Enter the code above
+          </p>
+        </div>
+
+        <div class="info-box">
+          <strong>⏰ Code expires in 24 hours</strong><br />
+          If you need a new code, tap "Resend Code" in the app.
+        </div>
+
+        <p style="font-size: 14px; color: #666; margin-top: 30px">
+          Need help? Make sure you're on the verification screen in the app before entering the code.
         </p>
       </div>
 
-      <div class="info-box">
-        <strong>⏰ Code expires in 24 hours</strong><br>
-        If you need a new code, tap "Resend Code" in the app.
+      <div class="footer">
+        <p style="margin: 0 0 10px 0">If you didn't create this account, please ignore this email.</p>
+        <p style="margin: 0">&copy; 2025 Jason Robinson.</p>
       </div>
-
-      <p style="font-size: 14px; color: #666; margin-top: 30px;">
-        Need help? Make sure you're on the verification screen in the app before entering the code.
-      </p>
     </div>
-
-    <div class="footer">
-      <p style="margin: 0 0 10px 0;">If you didn't create this account, please ignore this email.</p>
-      <p style="margin: 0;">&copy; 2025 Jason Robinson.</p>
-    </div>
-  </div>
-</body>
+  </body>
 </html>

@@ -41,6 +41,7 @@ graph TB
 ### Infrastructure Components
 
 **AWS Services:**
+
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
 - **16 Lambda Functions**: API handlers and operational functions
@@ -49,6 +50,7 @@ graph TB
 - **1 EventBridge Rule**: 1-minute polling for segment completion
 
 **Key Design Principles:**
+
 - **Fixed Logical IDs**: Preventing resource recreation on updates
 - **Server-Side Authority**: All game state in DynamoDB, no client-side state
 - **Front-Loaded Processing**: Outcomes calculated at segment start, not completion
@@ -114,6 +116,7 @@ stateDiagram-v2
 - **Decision Segments**: Player choices with optional weighted timeout branching
 
 **Key Features:**
+
 - Front-loaded outcome calculation for predictable client experience
 - Weighted random branching with prerequisite gating
 - Flexible narrative branching (any outcome can lead to any path)
@@ -139,6 +142,7 @@ stateDiagram-v2
 14. **opponents**: Combat opponent definitions
 
 **Key Schema Patterns:**
+
 - GSI for secondary access patterns (CharacterNameIndex, EndTimeIndex)
 - Server-side state authority with no client caching
 - ProcessingStatus field for idempotent segment processing
@@ -151,6 +155,7 @@ See [schema.md](schema.md) for detailed table schemas.
 **Shared Execution Role:**
 
 All Lambda functions use `eidolon-lambda-execution-role` with:
+
 - DynamoDB access via managed policy `eidolon-dynamodb-policy`
 - CloudWatch Logs permissions
 - Additional policies attached by dependent stacks
@@ -158,6 +163,7 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 **Function Categories:**
 
 **API Layer (8 functions):**
+
 - `api-character-list`: List player's characters
 - `api-character-get`: Retrieve character details with GameMode cleanup
 - `api-character-add`: Create new character with name validation
@@ -168,11 +174,13 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 - `cognito-player-new`: PostConfirmation trigger for new accounts
 
 **Operational Layer (8 functions):**
+
 - `ops-segment-poller`: EventBridge-triggered poller (1-minute schedule)
 - `ops-segment-process`: Process mechanical segments via SQS
 - `ops-story-advance`: Advance story and create next segment via SQS
 
 **Lambda Configuration:**
+
 - **Runtime**: Python 3.12
 - **Memory**: 128MB
 - **Timeout**: 30 seconds
@@ -184,6 +192,7 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 The dual-queue design separates immediate mechanical processing from timed segment advancement, enabling parallel processing while maintaining strict ordering guarantees.
 
 **processing-queue (SQS Standard Queue):**
+
 - Feeds `ops-segment-process` Lambda
 - Handles mechanical segments only
 - Message retention: 4 days
@@ -191,6 +200,7 @@ The dual-queue design separates immediate mechanical processing from timed segme
 - Dead-letter queue after 3 retries
 
 **advancement-queue (SQS Standard Queue):**
+
 - Feeds `ops-story-advance` Lambda
 - Handles all segment types for completion
 - Message retention: 4 days
@@ -198,6 +208,7 @@ The dual-queue design separates immediate mechanical processing from timed segme
 - Dead-letter queue after 3 retries
 
 **Queue Flow:**
+
 1. Mechanical segments queued IMMEDIATELY at creation to processing queue
 2. All segments queued to advancement queue when EndTime reached
 3. SQS triggers Lambda functions for asynchronous processing
@@ -206,11 +217,13 @@ The dual-queue design separates immediate mechanical processing from timed segme
 ### 5. Polling Infrastructure
 
 **EventBridge Rule: `eidolon-story-poller`**
+
 - Schedule: rate(1 minute)
 - Target: `ops-segment-poller` Lambda
 - State: DISABLED by default, enabled when stories start
 
 **SSM Parameter: `/eidolon/story/config`**
+
 - Stores polling state: "run" or "stop"
 - Checked by poller each invocation
 - Enables/disables polling based on active segment count
@@ -256,6 +269,7 @@ stateDiagram-v2
 ```
 
 **Stuck Segment Recovery:**
+
 - Segments stuck >5 minutes get retried
 - ProcessingStatus reset to "pending" to allow reprocessing
 - Maximum 3 retry attempts via DLQ
@@ -266,11 +280,13 @@ stateDiagram-v2
 ### GameMode State Management
 
 **Server-Authoritative State:**
+
 - All game state stored in DynamoDB tables only
 - Client maintains no authoritative state or calculations
 - GameMode field prevents concurrent access between MUD and Incremental modes
 
 **GameMode Values:**
+
 - **None**: Character idle, can enter either mode
 - **MUD**: Character active in traditional MUD gameplay
 - **Incremental**: Character active in story progression
@@ -436,6 +452,7 @@ stateDiagram-v2
 3. **Segment Processing Guarantee**: `ops-story-advance` ensures eventual processing of all segments
 
 **Failure Recovery Scenarios:**
+
 - **Client crash or network loss**: Next API call triggers automatic GameMode cleanup
 - **Lambda timeout**: EventBridge ensures retry within 1 minute maximum
 - **Orphaned segments**: Automatic timeout to exceptional outcome protects players
@@ -463,16 +480,19 @@ Each wound is a map structure:
 ```
 
 **Wound Types:**
+
 - **Bashing**: Heal in 15 minutes (bruises, stunning)
 - **Lethal**: Heal in 6 hours (serious injuries)
 - **Aggravated**: Heal in 7 days (grievous wounds)
 
 **Character States:**
+
 - **Standing**: Health > 0, normal activity
 - **Unconscious**: Health = 0 with at least one bashing wound
 - **Dead**: Health = 0 with only lethal/aggravated wounds
 
 **Cross-Mode Persistence:**
+
 - Wounds received in either mode persist when switching
 - Healing continues automatically regardless of active game mode
 - Strategic timing of mode switches can optimize healing downtime
@@ -480,22 +500,26 @@ Each wound is a map structure:
 ### Combat System
 
 **Dual Action System:**
+
 - Each combatant performs offensive and defensive actions per round
 - Character uses best offensive skill (Arcane/Brawling/Melee/Archery)
 - Defense determined by offensive choice (Parry for Melee, Dodge otherwise)
 
 **Damage Application:**
+
 - Success on opposed check = damage to opponent
 - Sigma > 3.0 = critical hit (2 wounds)
 - Normal hit = 1 wound
 - Wound type from weapon (bashing/lethal/aggravated)
 
 **Victory Conditions:**
+
 - **Opponent Defeated**: Lethal wounds ≥ Health OR Total wounds ≥ Health × 2
 - **Character Defeated**: Lethal wounds ≥ 5 OR Total wounds ≥ 10
 - **Timeout**: Max rounds reached, opponent escapes (failure)
 
 **Outcome Quality:**
+
 - **Exceptional**: Victory with 0 wounds
 - **Normal**: Victory with 1-2 wounds
 - **Minimal**: Victory with 3+ wounds
@@ -505,15 +529,18 @@ Each wound is a map structure:
 ### Experience System
 
 **XP Calculation:**
+
 - Base XP + difficulty modifier (abs(diff) × 0.5)
 - Success penalty: 0 XP for failing easy checks
 - Failure penalty: 50% XP for failing hard checks
 
 **XP Distribution:**
+
 - **Skill XP**: Full amount to used skill
 - **Attribute XP**: 10% of skill XP to governing attribute
 
 **XP Accumulation:**
+
 - All checks in a segment accumulate XP
 - Applied immediately during segment processing
 - Persists across mode switches (MUD ↔ Incremental)
@@ -544,16 +571,19 @@ graph LR
 ### Deployment Modes
 
 **MUD Mode (9 Stacks):**
+
 - Excludes Story Stack (no SQS/EventBridge)
 - Includes S3 Scripts and CloudWatch for Lua support
 - Portal frontend via `buildspec/portal.yml`
 
 **Incremental Mode (8 Stacks):**
+
 - Includes Story Stack for segment processing
 - Excludes S3 Scripts and CloudWatch stacks
 - Incremental frontend via `buildspec/incremental.yml`
 
 **Hybrid Mode (10 Stacks - Default):**
+
 - Includes all stacks for complete functionality
 - Supports both MUD and Incremental gameplay
 - Incremental frontend with mode selection
@@ -575,6 +605,7 @@ graph LR
 11. **Lambda Updates**: Update function code from S3 artifacts
 
 **Key Deployment Features:**
+
 - Fixed logical IDs prevent resource recreation
 - CDK context pattern for all parameters
 - No AWS API calls during CDK synthesis
@@ -584,17 +615,20 @@ graph LR
 ### Multi-Account Strategy
 
 **Environment Isolation:**
+
 - **Development**: Separate AWS account for individual developer testing
 - **Staging**: Dedicated AWS account for integration testing
 - **Production**: Isolated AWS account for live system
 
 **Benefits:**
+
 - Complete isolation with no resource name conflicts
 - Account-level security separation
 - Clear cost attribution per environment
 - No complex environment-based permissions needed
 
 **Resource Naming:**
+
 - Same names across accounts (account isolation eliminates conflicts)
 - No environment prefixes needed
 - Consistent configuration structure
@@ -606,11 +640,13 @@ graph LR
 The ProcessingStatus state machine ensures atomic segment processing using DynamoDB conditional writes.
 
 **ProcessingStatus State Machine:**
+
 - **pending**: Mechanical segment awaiting processing
 - **processing**: Segment claimed by Lambda for exclusive processing
 - **processed**: Segment ready for advancement when timer expires
 
 **Atomic Transitions:**
+
 - DynamoDB conditional updates ensure only one Lambda processes each segment
 - SQS provides at-least-once delivery with idempotent processing
 - ProcessingStatus prevents duplicate processing
@@ -620,11 +656,13 @@ The ProcessingStatus state machine ensures atomic segment processing using Dynam
 System failures are handled gracefully with player-favorable defaults to prevent indefinite waiting.
 
 **Segment Timeout Protection:**
+
 - Segments past EndTime marked exceptional (best outcome)
 - Prevents indefinite waiting from system failures
 - Player-favorable defaults protect user experience
 
 **Stuck Segment Recovery:**
+
 - Mechanical segments stuck over 5 minutes get retried
 - ProcessingStatus reset to pending for reprocessing
 - Maximum 3 retry attempts before DLQ
@@ -632,16 +670,19 @@ System failures are handled gracefully with player-favorable defaults to prevent
 ### Failure Modes
 
 **Processing Failure:**
+
 - Segment remains in processing state
 - Poller eventually marks as exceptional
 - Player protected from system errors
 
 **Queue Message Loss:**
+
 - Poller re-queues unprocessed segments
 - Idempotent processing prevents duplicate effects
 - History tables provide audit trail
 
 **Lambda Timeout:**
+
 - ProcessingStatus remains in processing state
 - Poller detects stuck segment
 - Automatic retry after 5 minutes
@@ -649,22 +690,26 @@ System failures are handled gracefully with player-favorable defaults to prevent
 ## Performance Optimization
 
 **Database Access:**
+
 - Pay-per-request DynamoDB pricing (no capacity planning)
 - GSI queries for efficient secondary access patterns
 - Conditional writes prevent race conditions
 
 **Lambda Optimization:**
+
 - Cold start caching of archetype data
 - Shared layer for common dependencies
 - 128MB memory sufficient for all functions
 - 30-second timeout handles complex processing
 
 **Queue Optimization:**
+
 - Batch processing via SQS
 - Auto-disable polling when no active stories
 - Immediate queueing of mechanical segments eliminates latency
 
 **Client Optimization:**
+
 - Front-loaded processing eliminates runtime calculations
 - Pre-calculated ClientEvents for entire segment duration
 - Server-authoritative state eliminates client synchronization
@@ -672,22 +717,26 @@ System failures are handled gracefully with player-favorable defaults to prevent
 ## Security Considerations
 
 **Authentication and Authorization:**
+
 - Cognito User Pool (`eidolon-users`) for authentication
 - API Gateway with Cognito authorizer
 - JWT token validation on all protected endpoints
 
 **IAM and Permissions:**
+
 - Shared execution role: `eidolon-lambda-execution-role`
 - Managed policies (no inline policies)
 - Least privilege access per stack
 - Fixed logical IDs prevent accidental recreation
 
 **CORS Configuration:**
+
 - Lambda-level CORS validation
 - Environment variable configuration
 - Credentials support for authenticated requests
 
 **State Protection:**
+
 - GameMode field only modifiable through authorized Lambdas
 - Mode transitions require validation of game state
 - ProcessingStatus state transitions prevent concurrent processing
@@ -696,11 +745,13 @@ System failures are handled gracefully with player-favorable defaults to prevent
 ## Monitoring and Observability
 
 **CloudWatch Integration:**
+
 - All Lambda functions log to CloudWatch
 - Structured logging with correlation IDs
 - Error tracking with stack traces
 
 **Metrics and Alarms:**
+
 - Lambda execution metrics (duration, errors, throttles)
 - DynamoDB metrics (read/write capacity, throttles)
 - Queue metrics (message age, DLQ depth)
@@ -711,6 +762,7 @@ System failures are handled gracefully with player-favorable defaults to prevent
 ## References
 
 **Detailed Documentation:**
+
 - [Incremental Design](incremental-design.md): Technical design details
 - [Incremental Story](incremental-story.md): Story and segment state machines
 - [Incremental Implementation](incremental-implementation.md): Flutter client architecture
@@ -720,6 +772,7 @@ System failures are handled gracefully with player-favorable defaults to prevent
 - [Architecture Diagrams](incremental-architecture-diagrams.md): Comprehensive Mermaid diagrams
 
 **Deployment Infrastructure:**
+
 - Region: us-east-1
 - Deployment Mode: Hybrid
 - Status: All systems deployed and tested
