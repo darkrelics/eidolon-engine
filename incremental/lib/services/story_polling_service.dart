@@ -1,205 +1,181 @@
 import 'dart:async';
 
-import 'package:eidolon_incremental/models/character.dart';
+import 'package:flutter/foundation.dart';
 import 'api_service.dart';
 
-/// Coordinates the network cadence for story segments:
-/// - Start: UI is updated immediately from /story/start
-/// - First status: GET /segment/status at T+60s from segment start
-/// - While unprocessed: repeat status calls every 30s
-/// - Expiry: at EndTime, GET /character to load next segment or completion
+/// Server-authoritative story polling service.
+///
+/// Uses GET /segment/status exclusively for all polling operations.
+/// This endpoint includes:
+/// - TimeRemaining (server-calculated)
+/// - ActiveSegmentID (for completion detection)
+/// - ProcessingStatus, narrative, outcomes
+///
+/// Design: 2 API calls per segment
+/// - Initial check: GET /segment/status to get TimeRemaining
+/// - Completion check: GET /segment/status after waiting TimeRemaining
 class StoryPollingService {
   StoryPollingService({required ApiService apiService}) : _apiService = apiService;
-
-  // Tunables (seconds)
-  static const int firstStatusDelaySeconds = 60;
-  static const int repeatStatusDelaySeconds = 30;
 
   final ApiService _apiService;
 
   String? _characterId;
-  // Track only character ID; segment ID not needed for cadence
-
-  Timer? _firstStatusTimer;
-  Timer? _repeatStatusTimer;
-  Timer? _expiryTimer;
-
-  bool _processed = false;
-  Map<String, dynamic>? _lastStatus;
+  Timer? _pollingTimer;
+  bool _isPolling = false;
   int _consecutiveErrors = 0;
+  static const int _maxConsecutiveErrors = 3;
+  static const int _errorRetryDelaySeconds = 30;
 
   void dispose() {
-    cancel();
+    stopPolling();
   }
 
-  void cancel() {
-    _firstStatusTimer?.cancel();
-    _firstStatusTimer = null;
-    _repeatStatusTimer?.cancel();
-    _repeatStatusTimer = null;
-    _expiryTimer?.cancel();
-    _expiryTimer = null;
+  void stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    _isPolling = false;
+    _characterId = null;
+    _consecutiveErrors = 0;
   }
 
-  /// Starts orchestration for the character's current active segment.
+  /// Start polling for the character's active story.
   ///
-  /// Callbacks should be lightweight UI updates; network is handled here.
-  void start({
-    required Character character,
-    required void Function(Character newCharacter) onCharacterReloaded,
-    void Function(Map<String, dynamic> status)? onStatusUpdated,
-    void Function(Map<String, dynamic>? finalStatus)? onStoryComplete,
+  /// Callbacks:
+  /// - onStatusUpdate: Called with segment status data from GET /segment/status
+  /// - onStoryComplete: Called when ActiveSegmentID becomes null
+  /// - onError: Called when API errors occur
+  void startPolling({
+    required String characterId,
+    required void Function(Map<String, dynamic> status) onStatusUpdate,
+    required void Function() onStoryComplete,
     void Function(Object error)? onError,
   }) {
-    cancel();
+    if (_isPolling && _characterId == characterId) {
+      debugPrint('StoryPollingService: Already polling for character $characterId');
+      return;
+    }
 
-    _characterId = character.id;
+    stopPolling();
+    _characterId = characterId;
+    _isPolling = true;
     _consecutiveErrors = 0;
-    final storyState = character.storyState ?? const <String, dynamic>{};
-    final activeSegment = storyState['ActiveSegment'] as Map<String, dynamic>?;
-    if (activeSegment == null) {
-      return; // Nothing to orchestrate
-    }
 
-    _processed = _isProcessed(activeSegment);
+    debugPrint('StoryPollingService: Started polling for character $characterId');
 
-    final segmentStart = _parseDate(activeSegment['StartTime']) ?? DateTime.now().toUtc();
-    final end = _resolveEndTime(activeSegment, segmentStart);
-
-    // If segment is already processed when we start orchestration, fetch status immediately
-    // This handles the case where we load a character with a processed segment
-    if (_processed) {
-      // Delay slightly to allow UI to mount
-      Future.delayed(const Duration(milliseconds: 100), () async {
-        await _performStatusCheck(onStatusUpdated: onStatusUpdated, onError: onError);
-      });
-    } else {
-      // First status at T+60s from segment start
-      final firstStatusAt = segmentStart.add(const Duration(seconds: firstStatusDelaySeconds));
-      final delayToFirst = firstStatusAt.difference(DateTime.now().toUtc());
-      final firstDelay = delayToFirst.isNegative ? Duration.zero : delayToFirst;
-
-      _firstStatusTimer = Timer(firstDelay, () async {
-        await _performStatusCheck(onStatusUpdated: onStatusUpdated, onError: onError);
-        // If not yet processed, schedule repeating status every 30s
-        if (!_processed) {
-          _repeatStatusTimer = Timer.periodic(
-            const Duration(seconds: repeatStatusDelaySeconds),
-            (_) async {
-              await _performStatusCheck(onStatusUpdated: onStatusUpdated, onError: onError);
-              if (_processed) {
-                _repeatStatusTimer?.cancel();
-                _repeatStatusTimer = null;
-              }
-            },
-          );
-        }
-      });
-    }
-
-    // Expiry timer triggers character reload exactly at EndTime
-    if (end != null) {
-      final untilExpiry = end.difference(DateTime.now().toUtc());
-      final expiryDelay = untilExpiry.isNegative ? Duration.zero : untilExpiry;
-      _expiryTimer = Timer(expiryDelay, () async {
-        try {
-          final id = _characterId;
-          if (id == null) return;
-          final updated = await _apiService.getCharacterById(id);
-          if (updated == null) return;
-
-          onCharacterReloaded(updated);
-
-          // Determine if story ended
-          if (updated.activeSegmentID == null) {
-            // Completed
-            onStoryComplete?.call(_lastStatus);
-          } else {
-            // New segment -> restart orchestration
-            start(
-              character: updated,
-              onCharacterReloaded: onCharacterReloaded,
-              onStatusUpdated: onStatusUpdated,
-              onStoryComplete: onStoryComplete,
-              onError: onError,
-            );
-          }
-        } catch (e) {
-          onError?.call(e);
-        }
-      });
-    }
+    _pollOnce(
+      characterId: characterId,
+      onStatusUpdate: onStatusUpdate,
+      onStoryComplete: onStoryComplete,
+      onError: onError,
+    );
   }
 
-  Future<void> _performStatusCheck({
-    void Function(Map<String, dynamic>)? onStatusUpdated,
-    void Function(Object)? onError,
+  /// Single poll iteration - gets status and schedules next check.
+  Future<void> _pollOnce({
+    required String characterId,
+    required void Function(Map<String, dynamic> status) onStatusUpdate,
+    required void Function() onStoryComplete,
+    void Function(Object error)? onError,
   }) async {
-    final id = _characterId;
-    if (id == null) return;
-    try {
-      final status = await _apiService.getSegmentStatus(characterId: id);
-      onStatusUpdated?.call(status);
-      _lastStatus = status;
+    if (!_isPolling || _characterId != characterId) {
+      debugPrint('StoryPollingService: Polling stopped before execution');
+      return;
+    }
 
-      // Mark processed if server indicates completion
-      if (_isProcessed(status)) {
-        _processed = true;
-      }
-      // Successful call resets error counter
+    try {
+      // Single API call - GET /segment/status includes all needed data
+      final segmentStatus = await _apiService.getSegmentStatus(characterId: characterId);
+
+      // Reset error counter on successful call
       _consecutiveErrors = 0;
-    } catch (e) {
-      // Treat 404/no active segment as completion edge case; allow expiry GET to handle transition
-      final msg = e.toString().toLowerCase();
-      if (msg.contains('no active segment')) {
-        _processed = true; // Avoid further status polls
-        _repeatStatusTimer?.cancel();
-        _repeatStatusTimer = null;
+
+      // Update UI with segment status
+      onStatusUpdate(segmentStatus);
+
+      // Check if story is complete (ActiveSegmentID will be null)
+      final activeSegmentId = segmentStatus['ActiveSegmentID'] as String?;
+      if (activeSegmentId == null) {
+        debugPrint('StoryPollingService: Story complete - stopping polling');
+        stopPolling();
+        onStoryComplete();
         return;
       }
-      _consecutiveErrors += 1;
+
+      // Get server-calculated TimeRemaining
+      final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
+
+      if (timeRemaining > 0) {
+        // Segment in progress - wait exact duration then check again
+        debugPrint('StoryPollingService: Segment in progress, checking again in $timeRemaining seconds');
+        _scheduleNextPoll(
+          Duration(seconds: timeRemaining),
+          characterId: characterId,
+          onStatusUpdate: onStatusUpdate,
+          onStoryComplete: onStoryComplete,
+          onError: onError,
+        );
+      } else {
+        // Segment complete - brief delay then check for next segment
+        debugPrint('StoryPollingService: Segment complete, checking for next segment in 2 seconds');
+        _scheduleNextPoll(
+          const Duration(seconds: 2),
+          characterId: characterId,
+          onStatusUpdate: onStatusUpdate,
+          onStoryComplete: onStoryComplete,
+          onError: onError,
+        );
+      }
+    } catch (e) {
+      debugPrint('StoryPollingService: Polling error: $e');
+      _consecutiveErrors++;
+
+      // Check for "no active segment" which indicates story completion
+      final errorMsg = e.toString().toLowerCase();
+      if (errorMsg.contains('no active segment') || errorMsg.contains('404')) {
+        debugPrint('StoryPollingService: No active segment - story complete');
+        stopPolling();
+        onStoryComplete();
+        return;
+      }
+
+      // Notify error handler
       onError?.call(e);
-      if (_consecutiveErrors >= 3) {
-        // Stop all timers after too many consecutive failures
-        cancel();
+
+      // Stop polling after too many consecutive errors
+      if (_consecutiveErrors >= _maxConsecutiveErrors) {
+        debugPrint('StoryPollingService: Too many consecutive errors ($_consecutiveErrors) - stopping polling');
+        stopPolling();
+        return;
       }
+
+      // Retry after 30 seconds on error
+      debugPrint('StoryPollingService: Retrying in $_errorRetryDelaySeconds seconds (error count: $_consecutiveErrors)');
+      _scheduleNextPoll(
+        const Duration(seconds: _errorRetryDelaySeconds),
+        characterId: characterId,
+        onStatusUpdate: onStatusUpdate,
+        onStoryComplete: onStoryComplete,
+        onError: onError,
+      );
     }
   }
 
-  static bool _isProcessed(Map<String, dynamic> segmentOrStatus) {
-    final storyComplete = segmentOrStatus['StoryComplete'] == true;
-    if (storyComplete) return true;
-    final proc = segmentOrStatus['ProcessingStatus']?.toString().toLowerCase();
-    if (proc == 'processed') return true;
-    final status = segmentOrStatus['Status']?.toString().toLowerCase();
-    return status == 'completed' || status == 'complete';
-  }
-
-  static DateTime? _parseDate(Object? value) {
-    if (value == null) return null;
-    if (value is DateTime) return value.toUtc();
-    if (value is String && value.isNotEmpty) {
-      try {
-        return DateTime.parse(value).toUtc();
-      } catch (_) {
-        return null;
-      }
-    }
-    return null;
-  }
-
-  static DateTime? _resolveEndTime(Map<String, dynamic> segment, DateTime start) {
-    final end = _parseDate(segment['EndTime']);
-    if (end != null) return end;
-
-    final rawDuration = segment['Duration'] ?? segment['SegmentDuration'] ?? segment['ExpectedDuration'];
-    int duration = 60;
-    if (rawDuration is num) {
-      duration = rawDuration.toInt();
-    } else if (rawDuration is String) {
-      duration = int.tryParse(rawDuration) ?? 60;
-    }
-    if (duration <= 0) duration = 60;
-    return start.add(Duration(seconds: duration));
+  /// Schedule the next poll.
+  void _scheduleNextPoll(
+    Duration delay, {
+    required String characterId,
+    required void Function(Map<String, dynamic> status) onStatusUpdate,
+    required void Function() onStoryComplete,
+    void Function(Object error)? onError,
+  }) {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer(delay, () {
+      _pollOnce(
+        characterId: characterId,
+        onStatusUpdate: onStatusUpdate,
+        onStoryComplete: onStoryComplete,
+        onError: onError,
+      );
+    });
   }
 }

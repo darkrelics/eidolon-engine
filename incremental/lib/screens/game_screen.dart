@@ -178,7 +178,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   void _resetForNewCharacter() {
-    _runtime.cancel();
+    _runtime.stopPolling();
     _characterUpdateTimer?.cancel();
     _characterUpdateTimerCount = 0;
     _orchestratedSegmentId = null;
@@ -426,18 +426,28 @@ class _GameScreenState extends State<GameScreen> {
 
     if (segId == null) return; // No active story
 
-    _runtime.start(
-      character: _character!,
-      onCharacterReloaded: (updated) {
-        if (!mounted) return;
+    _runtime.startPolling(
+      characterId: _character!.id,
+      onStatusUpdate: (status) {
+        if (!mounted || _character == null) return;
 
-        // Before updating character, capture the completed segment if transitioning
-        final oldActiveSegment = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
-        final newActiveSegmentId = updated.activeSegmentID;
+        // Check if transitioning to new segment
+        final oldActiveSegment = _character!.storyState?['ActiveSegment'] as Map<String, dynamic>?;
         final oldActiveSegmentId = oldActiveSegment?['ActiveSegmentID']?.toString() ?? oldActiveSegment?['SegmentID']?.toString();
+        final newActiveSegmentId = status['ActiveSegmentID'] as String?;
 
-        // If we're transitioning to a new segment (not completing the story), save the old one to history
-        // Don't add if story is completing (newActiveSegmentId == null) - let _handleStoryCompletion handle it
+        // Update character with new segment status
+        final storyState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{});
+        storyState['ActiveSegment'] = status;
+
+        // Preserve story details
+        final story = status['Story'] as Map<String, dynamic>?;
+        if (story != null) {
+          storyState['Story'] = story;
+          _lastStoryDetails = Map<String, dynamic>.from(story);
+        }
+
+        // Save completed segment to history if transitioning
         if (oldActiveSegment != null &&
             oldActiveSegmentId != null &&
             newActiveSegmentId != null &&
@@ -445,12 +455,10 @@ class _GameScreenState extends State<GameScreen> {
             _isSegmentComplete(oldActiveSegment)) {
           final segmentCopy = Map<String, dynamic>.from(oldActiveSegment);
 
-          // Add story title for display
           if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
             segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
           }
 
-          // Add to history if not already present
           final exists = _segmentHistory.any((s) {
             final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
             return id == oldActiveSegmentId;
@@ -463,37 +471,35 @@ class _GameScreenState extends State<GameScreen> {
         }
 
         setState(() {
-          _character = updated;
-          _error = null;
-          _isLoading = false;
-
-          // Preserve last story details for completion screen
-          final storyData = updated.storyState?['Story'] as Map<String, dynamic>?;
-          if (storyData != null) {
-            _lastStoryDetails = Map<String, dynamic>.from(storyData);
-          }
-        });
-
-        // New segment or completed
-        _startOrchestrationIfNeeded(force: true);
-        _manageCharacterUpdateTimer();
-      },
-      onStatusUpdated: (status) {
-        if (!mounted || _character == null) return;
-        final storyState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{});
-        final active = Map<String, dynamic>.from((storyState['ActiveSegment'] as Map<String, dynamic>?) ?? <String, dynamic>{});
-        // Merge minimal status fields so UI can reveal processed results
-        for (final entry in status.entries) {
-          active[entry.key] = entry.value;
-        }
-        storyState['ActiveSegment'] = active;
-        setState(() {
           _character = _character!.copyWith(storyState: storyState);
+          _error = null;
         });
       },
-      onStoryComplete: (finalStatus) async {
-        // Load history and show completion
-        await _handleStoryCompletion(refreshCharacter: false, showMessage: true, finalActiveSegment: finalStatus);
+      onStoryComplete: () async {
+        if (!mounted) return;
+
+        // Reload character to get final state after story completion
+        debugPrint('GameScreen: Story complete, reloading character');
+        try {
+          final updated = await _apiService.getCharacterById(_character!.id);
+          if (!mounted || updated == null) return;
+
+          setState(() {
+            _character = updated;
+          });
+
+          // Handle completion with refreshed character
+          await _handleStoryCompletion(refreshCharacter: false, showMessage: true);
+        } catch (e) {
+          debugPrint('GameScreen: Error reloading character after story completion: $e');
+          if (mounted) {
+            setState(() {
+              _error = 'Failed to reload character after story completion';
+            });
+          }
+        }
+
+        _manageCharacterUpdateTimer();
       },
       onError: (err) {
         if (!mounted) return;
@@ -694,7 +700,7 @@ class _GameScreenState extends State<GameScreen> {
         _manageCharacterUpdateTimer();
       } else {
         // No next segment means the story has finished
-        _runtime.cancel();
+        _runtime.stopPolling();
         await _handleStoryCompletion(refreshCharacter: true);
       }
 
@@ -749,7 +755,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _handleStoryCompletion({bool refreshCharacter = true, bool showMessage = true, Map<String, dynamic>? finalActiveSegment}) async {
     debugPrint('GameScreen: Handling story completion');
-    _runtime.cancel();
+    _runtime.stopPolling();
 
     // Capture the final segment BEFORE reloading character
     // This ensures we have the complete segment data even if backend clears it
@@ -832,7 +838,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _handleStoryAbandonment() async {
     debugPrint('GameScreen: Handling story abandonment');
-    _runtime.cancel();
+    _runtime.stopPolling();
 
     try {
       // Reload character to clear story state and history
@@ -881,7 +887,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _handleReturnToStories() async {
     // Clear story state locally and reload to get available stories
-    _runtime.cancel();
+    _runtime.stopPolling();
     if (mounted) {
       setState(() {
         if (_character != null) {
@@ -940,7 +946,7 @@ class _GameScreenState extends State<GameScreen> {
       );
 
       // Stop runtime to prevent duplicate completion detection
-      _runtime.cancel();
+      _runtime.stopPolling();
 
       // Handle abandonment with specific messaging
       await _handleStoryAbandonment();

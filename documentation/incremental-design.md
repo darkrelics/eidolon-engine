@@ -571,9 +571,10 @@ Character and inventory panels maintain instant responsiveness with IndexedDB da
 
 1. **Server Authority**: Always trust server timing and state
 2. **Single Polling Loop**: Only one timer, one source of truth
-3. **Minimal API Calls**: Maximum 2 calls per segment
-4. **Simple Error Handling**: Exponential backoff only
-5. **No Local State Management**: Server provides all timing information
+3. **Single API Endpoint**: GET /segment/status provides all needed data
+4. **Minimal API Calls**: 2 calls per segment (1 initial + 1 completion check)
+5. **Simple Error Handling**: 30-second retry delay only
+6. **No Local State Management**: Server provides all timing information
 
 #### **Why Polling Architecture is Optimal**
 
@@ -614,32 +615,31 @@ class ServerAuthoritativePolling {
     if (_isPolling) return;
     _isPolling = true;
 
-    // ALWAYS wait 60 seconds for initial server processing
-    await Future.delayed(const Duration(seconds: 60));
-
     while (_isPolling) {
       try {
-        // 1. Get character state (includes activeSegmentID)
-        final character = await apiService.getCharacterById(characterId);
-        updateUIWithServerState(character);
-
-        // 2. Check if story is complete
-        if (character?.activeSegmentID == null) {
-          break; // Story finished - stop polling
-        }
-
-        // 3. Get segment timing from server
+        // Single API call - GET /segment/status includes all needed data:
+        // - TimeRemaining (server-calculated)
+        // - ActiveSegmentID (for completion check)
+        // - ProcessingStatus, narrative, outcomes
         final segmentStatus = await apiService.getSegmentStatus(
           characterId: characterId
         );
 
-        // 4. Wait exactly the time server specifies
+        // Update UI with segment status
+        updateUIWithServerState(segmentStatus);
+
+        // Check if story is complete (ActiveSegmentID will be null)
+        if (segmentStatus.activeSegmentID == null) {
+          break; // Story finished - stop polling
+        }
+
+        // Wait exactly the time server specifies
         final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
         if (timeRemaining > 0) {
           await Future.delayed(Duration(seconds: timeRemaining));
         } else {
           // Segment complete, brief delay before next check
-          await Future.delayed(const Duration(seconds: 5));
+          await Future.delayed(const Duration(seconds: 2));
         }
 
       } catch (e) {
@@ -657,14 +657,19 @@ class ServerAuthoritativePolling {
 
 **All Segment Types Use Same Pattern:**
 
-1. Wait 60 seconds for server processing (mechanical segments) or immediate availability (decision)
-2. Get character state to check story completion
-3. Get segment status to determine remaining time
-4. Wait server-specified time
-5. Repeat until `activeSegmentID == null`
+1. GET /segment/status - returns TimeRemaining and ActiveSegmentID
+2. Check if story complete (ActiveSegmentID == null)
+3. Wait server-specified TimeRemaining
+4. Repeat until story complete
 
 **Decision Segments**: Server provides timing - client waits and polls normally
 **Mechanical Segments**: Server processes outcomes - client waits and polls normally
+
+**Why Single Endpoint Works:**
+- GET /segment/status includes ActiveSegmentID (for completion detection)
+- GET /segment/status includes TimeRemaining (server-calculated)
+- GET /segment/status includes all narrative, outcomes, and effects
+- GET /character only needed for initial story selection, not polling
 
 #### **What NOT to Implement**
 
@@ -687,7 +692,7 @@ class ServerAuthoritativePolling {
 #### **Common Implementation Problems**
 
 ❌ **Dual Polling Systems**: Multiple timers competing for same resources (GameScreen + SegmentProvider)
-❌ **API Call Explosion**: 10x more calls than necessary (10 vs 2 per segment)
+❌ **API Call Explosion**: 10x more calls than necessary (10+ vs 2 per segment)
 ❌ **Race Conditions**: Multiple async operations updating UI state simultaneously
 ❌ **Complex Client Logic**: Attempting to predict server behavior instead of trusting it
 ❌ **Local State Management**: Maintaining segment history client-side instead of using server API

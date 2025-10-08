@@ -291,4 +291,4 @@ Professionalism means making informed decisions about tradeoffs, not following d
 
 | Date       | Change                  | Author           |
 | ---------- | ----------------------- | ---------------- |
-| 2025-10-02 | Initial policy document | Development Team |
+| 2025-10-02 | Initial policy document | Jason E. Robinson|

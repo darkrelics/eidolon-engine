@@ -13,7 +13,9 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 **Core Principle:** Fix what's broken, measure before spending, ship minimal docs, add real content.
 
-**Ship Gate:** Currency persists correctly, client polling reduced to design intent, performance baseline documented, idempotency proven, authors can create content, security sanity checks complete.
+**Ship Gate:** Client polling reduced to design intent, performance baseline documented, idempotency proven, authors can create content, security sanity checks complete.
+
+**Note:** Currency persistence (R3-T1) moved to Release 4 to focus on core beta readiness blockers.
 
 ---
 
@@ -41,16 +43,16 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 ### Remaining Work
 
 **P0 Blockers (Must Complete for Beta):**
-- ❌ R3-T1: Fix currency reward application (~4-8 hours)
-- ❌ R3-T2: Fix client polling cadence (~8-16 hours)
+- ❌ R3-T1: Fix client polling cadence
 
 **P1 Tasks (Should Complete for Beta):**
-- ❌ R3-T3: Performance baseline and load testing
-- ❌ R3-T4: Integration tests (idempotency scenarios)
-- ❌ R3-T5: Author documentation (Quick-Start guide)
-- ❌ R3-T6: Beta story content (3 playable stories)
+- ❌ R3-T2: Performance baseline and load testing
+- ❌ R3-T3: Integration tests (idempotency scenarios)
+- ❌ R3-T4: Author documentation (Quick-Start guide)
+- ❌ R3-T5: Beta story content (3 playable stories)
 
-**Estimated Time to Beta:** 40-60 hours remaining work
+**Moved to R4:**
+- ⏭️ R3-T1 (Currency Rewards) → R4-T1 - Deferred to Release 4 Economy & Inventory System
 
 ---
 
@@ -75,212 +77,52 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ## R3 Task Categories
 
-### Critical Path (Bug Fixes) — 2 Tasks
+### Critical Path (Bug Fixes) — 1 Task
 
-- R3-T1: Fix currency reward application (stub implementation)
-- R3-T2: Fix client polling cadence (10× API waste)
+- R3-T1: Fix client polling cadence (10× API waste) — *Previously R3-T2*
 
 ### Performance Baseline — 1 Task
 
-- R3-T3: Load testing and provisioned concurrency decision
+- R3-T2: Load testing and provisioned concurrency decision — *Previously R3-T3*
 
 ### Quality Assurance — 1 Task
 
-- R3-T4: Automated idempotency and integration tests
+- R3-T3: Automated idempotency and integration tests — *Previously R3-T4*
 
 ### Enablement — 2 Tasks
 
-- R3-T5: Author Quick-Start documentation
-- R3-T6: Create real beta story content
+- R3-T4: Author Quick-Start documentation — *Previously R3-T5*
+- R3-T5: Create real beta story content — *Previously R3-T6*
 
 ### Security — 1 Task
 
-- R3-T7: Scoped security sanity pass
+- R3-T6: Scoped security sanity pass — *Previously R3-T7* — ✅ **COMPLETE**
 
-**Total:** 7 tasks (all critical for beta)
+### Deferred to Release 4
+
+- ~~R3-T1: Fix currency reward application~~ → **R4-T1** (Economy & Inventory focus)
+
+**Total:** 6 tasks (5 remaining for beta, 1 complete)
 
 ---
 
 ## Task Details
 
-### R3-T1: Fix Currency Reward Application
+### ~~R3-T1: Fix Currency Reward Application~~ → Moved to R4-T1
 
-**Status:** 🔴 CRITICAL - Core progression feature broken
-**Priority:** P0 - Must complete first
-**Issues:** #726 (effects integration), #639 (economy framework - partial)
+**Decision:** This task has been **moved to Release 4** to focus R3 on critical beta readiness blockers (client polling, performance, testing, content).
 
-#### Current State
+**Rationale:**
+- Currency rewards are a progression feature, not a beta blocker
+- R4 will focus on complete economy system (currency + store + inventory)
+- Allows R3 to ship faster with core functionality stable
+- Better grouped with inventory management features
 
-**What Exists:**
-
-- `eidolon/story_rewards.py:12-48` - `calculate_story_rewards()` correctly computes currency amounts
-- `eidolon/story_rewards.py:51-69` - `apply_story_rewards()` is a **stub that does nothing**
-- Currency field references in `documentation/schema.md` at lines 53, 98, 105, 108, 111, 114, 601
-- Story JSON supports currency rewards in outcome definitions
-
-**What's Broken:**
-
-```python
-def apply_story_rewards(character_id: str, rewards: dict) -> None:
-    """Apply calculated rewards to a character."""
-    try:
-        # Story rewards currently only handle items and currency
-        # XP is awarded through segment processing for specific skills
-
-        logger.info(f"Applied story rewards for {character_id}")  # ← DOES NOTHING
-    except ClientError as err:
-        logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to apply rewards: {err}") from err
-```
-
-**Impact:** Players complete stories expecting currency rewards but receive nothing.
-
-#### Implementation Requirements
-
-**1. Verify Character Schema**
-
-Check if `Currency` or `Gold` field exists in Characters table:
-
-```python
-# Check actual character records in DynamoDB
-# Expected: Either field exists or needs migration
-```
-
-**Action:** If field missing, add to Character schema as `Currency` (Number, default 0).
-
-**2. Implement Atomic Currency Update**
-
-```python
-def apply_story_rewards(character_id: str, rewards: dict) -> None:
-    """Apply calculated rewards to a character."""
-    try:
-        currency_amount = rewards.get("currency", 0)
-        items = rewards.get("items", [])
-
-        if currency_amount == 0 and not items:
-            logger.info(f"No rewards to apply for {character_id}")
-            return
-
-        # Build update expression
-        update_parts = []
-        attr_values = {}
-
-        if currency_amount > 0:
-            update_parts.append("Currency = if_not_exists(Currency, :zero) + :currency")
-            attr_values[":currency"] = currency_amount
-            attr_values[":zero"] = 0
-
-        if items:
-            # Item application already handled by apply_segment_outcome
-            # This is for story-level completion bonuses only
-            pass
-
-        if update_parts:
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression=f"SET {', '.join(update_parts)}",
-                ExpressionAttributeValues=attr_values,
-            )
-            logger.info(f"Applied rewards for {character_id}: currency={currency_amount}")
-    except ClientError as err:
-        logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to apply rewards: {err}") from err
-```
-
-**3. Update Callers**
-
-Verify all calls to `apply_story_rewards()` pass correct rewards dict:
-
-- `eidolon/story_completion.py` - Story completion path
-- Check any segment outcome paths that grant currency
-
-**4. Add Validation**
-
-Update `scripts_python/validate_story_content.py`:
-
-```python
-def validate_currency_rewards(story_data: dict):
-    """Validate currency reward values are reasonable."""
-    errors = []
-    for segment in story_data.get("Segments", []):
-        results = segment.get("Results", {})
-        for outcome_name, outcome_data in results.items():
-            effects = outcome_data.get("Effects", {})
-            currency = effects.get("currency", 0)
-            if currency < 0:
-                errors.append(f"Segment {segment['SegmentID']}: {outcome_name} has negative currency: {currency}")
-            if currency > 10000:  # Arbitrary sanity limit
-                errors.append(f"Segment {segment['SegmentID']}: {outcome_name} has excessive currency: {currency}")
-    return errors
-```
-
-#### Testing Requirements
-
-**Unit Tests:**
-
-```python
-# tests/unit/test_story_rewards.py
-def test_apply_currency_reward():
-    """Test currency is added to character balance."""
-    character_id = create_test_character(currency=100)
-    rewards = {"currency": 50, "items": []}
-
-    apply_story_rewards(character_id, rewards)
-
-    character = get_character(character_id)
-    assert character["Currency"] == 150
-
-def test_apply_currency_idempotent():
-    """Test replayed reward application doesn't double-grant."""
-    # This will be covered in R3-T4 integration tests
-    pass
-```
-
-**Integration Test:**
-
-- Start story → complete with currency reward → verify balance increased exactly once
-- Retry story advancement (simulate SQS replay) → verify currency not double-granted
-
-#### Files Modified
-
-- `eidolon/story_rewards.py` - Implement apply_story_rewards
-- `eidolon/character_data.py` - Add get_currency/update_currency helpers if needed
-- `documentation/schema.md` - Document Currency field if adding
-- `scripts_python/validate_story_content.py` - Add currency validation
-- `data/test_story.json` or `data/test_story_branching.json` - Add currency reward example
-
-#### Acceptance Criteria
-
-- [ ] Currency field exists in Characters table schema
-- [ ] `apply_story_rewards()` implementation persists currency to DynamoDB
-- [ ] Update uses atomic ADD operation (prevents race conditions)
-- [ ] Validator checks currency values in story JSON
-- [ ] Unit tests verify currency application
-- [ ] Integration test proves single application on replay
-- [ ] At least one test story includes currency reward
-- [ ] Character GET API returns currency balance
-
-#### Definition of Done
-
-**Code Review Checklist:**
-
-- Uses `if_not_exists(Currency, :zero) + :currency` pattern for safety
-- No direct `character["Currency"] = X` assignments (prevents races)
-- Error handling preserves atomicity (no partial updates)
-- Logging includes actual currency amount applied
-
-**Manual Verification:**
-
-1. Load story with currency reward
-2. Complete story successfully
-3. Verify `GET /character?CharacterID=X` shows increased currency
-4. Attempt to replay completion (manually trigger ops_story_advance)
-5. Verify currency did not double
+**See:** `documentation/release-four-report.md` for full R4-T1 specification
 
 ---
 
-### R3-T2: Fix Client Polling Cadence
+### R3-T1: Fix Client Polling Cadence
 
 **Status:** 🟡 HIGH - Performance and cost impact
 **Priority:** P0 - Required for beta
@@ -301,9 +143,10 @@ From `documentation/incremental-design.md:686-695`:
 
 **Expected Behavior:**
 
-- **~2 API calls per segment**: 1× GET /character at segment start, 1× GET /segment/status when timer expires
-- **Server-authoritative timing**: Client waits for server-provided EndTime
+- **2 API calls per segment**: GET /segment/status at start + completion check
+- **Server-authoritative timing**: Client waits for server-calculated TimeRemaining
 - **Single polling loop**: One source of truth, no competing timers
+- **Single endpoint**: GET /segment/status provides all needed data
 
 **Current Behavior:**
 
@@ -356,32 +199,31 @@ class ServerAuthoritativePolling {
     if (_isPolling) return;
     _isPolling = true;
 
-    // ALWAYS wait 60 seconds for initial server processing
-    await Future.delayed(const Duration(seconds: 60));
-
     while (_isPolling) {
       try {
-        // 1. Get character state (includes activeSegmentID)
-        final character = await apiService.getCharacterById(characterId);
-        updateUIWithServerState(character);
-
-        // 2. Check if story is complete
-        if (character?.activeSegmentID == null) {
-          break; // Story finished - stop polling
-        }
-
-        // 3. Get segment timing from server
+        // Single API call - GET /segment/status includes all needed data:
+        // - TimeRemaining (server-calculated)
+        // - ActiveSegmentID (for completion check)
+        // - ProcessingStatus, narrative, outcomes
         final segmentStatus = await apiService.getSegmentStatus(
           characterId: characterId
         );
 
-        // 4. Wait exactly the time server specifies
+        // Update UI with segment status
+        updateUIWithServerState(segmentStatus);
+
+        // Check if story is complete (ActiveSegmentID will be null)
+        if (segmentStatus.activeSegmentID == null) {
+          break; // Story finished - stop polling
+        }
+
+        // Wait exactly the time server specifies
         final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
         if (timeRemaining > 0) {
           await Future.delayed(Duration(seconds: timeRemaining));
         } else {
           // Segment complete, brief delay before next check
-          await Future.delayed(const Duration(seconds: 5));
+          await Future.delayed(const Duration(seconds: 2));
         }
 
       } catch (e) {
@@ -400,6 +242,7 @@ class ServerAuthoritativePolling {
 1. **Create Single Polling Service**
 
    - `incremental/lib/services/story_polling_service.dart`
+   - Use GET /segment/status exclusively (includes all needed data)
    - Implement server-authoritative pattern above
    - Add proper error handling and retry logic
 
@@ -407,18 +250,20 @@ class ServerAuthoritativePolling {
 
    - Audit and remove any existing polling in GameScreen
    - Remove provider-level polling timers
-   - Consolidate to single service
+   - Remove any GET /character calls during polling
+   - Consolidate to single service with single endpoint
 
 3. **Add Metrics Collection**
 
    - Log API calls per segment (client-side counter)
-   - Track timing accuracy (segment completion within 5s of EndTime)
+   - Track timing accuracy (segment completion within 2s of TimeRemaining)
    - Monitor error rates
 
 4. **Update UI Integration**
    - GameScreen calls polling service after story start
    - Providers update from polling callbacks, don't initiate polls
    - Clear separation: service polls, providers store, widgets display
+   - Use GET /character only for initial story selection
 
 #### Testing Requirements
 
@@ -428,24 +273,24 @@ class ServerAuthoritativePolling {
 Baseline (Current):
 - Story with 5-minute segment
 - Expected: 2 API calls
-- Actual: ??? (measure)
+- Actual: ??? (measure, likely 10-15 calls)
 
 After Fix:
 - Same story, same segment
-- Target: ≤3 API calls (GET /character once, GET /segment/status 1-2 times)
+- Target: 2 API calls (GET /segment/status at start, GET /segment/status at completion)
 ```
 
 **Test Scenarios:**
 
 1. **Happy Path**
 
-   - Start story → 60s delay → status check → wait TimeRemaining → completion
+   - Start story → GET /segment/status (TimeRemaining=300s) → wait 300s → GET /segment/status (complete)
    - Verify: Exactly 2 API calls
 
 2. **Network Interruption**
 
    - Start story → disconnect network mid-segment → reconnect
-   - Verify: Graceful retry, story completes correctly
+   - Verify: Graceful 30s retry, story completes correctly
 
 3. **Multiple Characters**
 
@@ -454,7 +299,7 @@ After Fix:
 
 4. **App Background/Resume**
    - Start story → background app → resume after segment completion
-   - Verify: Resumes correctly, fetches current state
+   - Verify: Resumes correctly, GET /segment/status fetches current state
 
 #### Files Modified
 
@@ -466,8 +311,9 @@ After Fix:
 #### Acceptance Criteria
 
 - [ ] Single polling service implementation exists
+- [ ] Uses GET /segment/status exclusively (no GET /character during polling)
 - [ ] All competing polling code removed
-- [ ] Measured API calls reduced from baseline to ≤3 per segment
+- [ ] Measured API calls reduced from baseline to 2 per segment
 - [ ] Test scenarios pass (happy path, network interruption, multi-character, background/resume)
 - [ ] Client-side metrics logged for verification
 - [ ] No race conditions or state update conflicts
@@ -480,26 +326,27 @@ After Fix:
 ```
 BEFORE (Measured):
 - Segment Duration: 5 minutes
-- API Calls: _____ (document actual)
-- Pattern: (document observed behavior)
+- API Calls: _____ (document actual, likely 10-15)
+- Pattern: (document observed behavior - likely multiple competing timers)
 
 AFTER (Target):
 - Segment Duration: 5 minutes
-- API Calls: ≤3
-- Pattern: GET /character (1×) → wait → GET /segment/status (1-2×)
+- API Calls: 2
+- Pattern: GET /segment/status (initial) → wait TimeRemaining → GET /segment/status (completion)
 ```
 
 **Code Review Checklist:**
 
-- Single source of polling truth
+- Single source of polling truth (StoryPollingService)
+- Uses GET /segment/status only (not GET /character)
 - No Timer.periodic outside polling service
 - Providers are passive (updated by service, don't poll)
-- Error handling includes exponential backoff
-- Service properly cancels on story completion
+- Error handling uses 30-second fixed retry (not exponential backoff)
+- Service properly cancels on story completion (ActiveSegmentID == null)
 
 ---
 
-### R3-T3: Performance Baseline and Provisioned Concurrency Decision
+### R3-T2: Performance Baseline and Provisioned Concurrency Decision
 
 **Status:** 🟡 IMPORTANT - Evidence-based optimization
 **Priority:** P1 - Should complete before beta launch
@@ -758,7 +605,7 @@ Create `documentation/performance-baseline-r3.md` with:
 
 ---
 
-### R3-T4: Automated Idempotency and Integration Tests
+### R3-T3: Automated Idempotency and Integration Tests
 
 **Status:** 🟡 IMPORTANT - Regression prevention
 **Priority:** P1 - Required for beta confidence
@@ -1113,7 +960,7 @@ jobs:
 
 ---
 
-### R3-T5: Author Quick-Start Documentation
+### R3-T4: Author Quick-Start Documentation
 
 **Status:** 🟢 STRAIGHTFORWARD - Documentation task
 **Priority:** P1 - Required for beta content creation
@@ -1386,7 +1233,7 @@ Have a non-developer (or simulated non-dev using ONLY the Quick-Start) attempt t
 
 ---
 
-### R3-T6: Create Real Beta Story Content
+### R3-T5: Create Real Beta Story Content
 
 **Status:** 🟢 STRAIGHTFORWARD - Content creation
 **Priority:** P1 - Beta needs playable content
@@ -1673,7 +1520,7 @@ See [Story Author Quick-Start](../../documentation/story-author-quickstart.md)
 
 ---
 
-### R3-T7: Scoped Security Sanity Pass
+### R3-T6: Scoped Security Sanity Pass
 
 **Status:** 🟢 80% COMPLETE - Substantially complete, input validation remaining
 **Priority:** P2 - Should complete before beta
@@ -2359,15 +2206,15 @@ curl -X POST https://api.yourdomain.com/character \
 - [✓] Automated tools run (Checkov, Bandit) - **Now automated in CI/CD**
 - [ ] Prowler manual run (OPTIONAL - manual verification redundant with code review)
 - [ ] Manual authentication bypass tests (OPTIONAL - code review confirms protection)
-- [ ] Input validation audit (4-6 hours remaining - 13 Lambda functions)
-- [ ] Logging PII review (2-3 hours remaining - grep audit)
+- [ ] Input validation audit (13 Lambda functions)
+- [ ] Logging PII review (grep audit)
 - [✓] Findings documented with severity
 - [✓] Critical and High findings fixed or mitigated (3 IAM fixes deployed)
 - [✓] Remaining LOW findings documented (R3-IAM-002, R3-IAM-004, R3-IAM-005) - deferred to R4
 
 **Completion Status:** 8/10 categories complete (80%)
 
-**Remaining Work:** Input validation + logging review (6-9 hours total)
+**Remaining Work:** Input validation + logging review
 
 ````
 
@@ -2896,7 +2743,7 @@ if not validate_uuid(character_id):
 
 **Functions Audited:** 13 Lambda functions
 **Total Findings:** 1 (LOW severity)
-**Time Elapsed:** ~1.5 hours
+**Time Elapsed:** Completed
 
 **Overall Assessment:** ⭐⭐⭐⭐ (4/5) - Good validation practices, minor consistency issue fixed
 
@@ -2940,7 +2787,7 @@ if not validate_uuid(character_id):
 - [✓] GitHub issue #873 created for MFA (deferred to R4)
 - [✓] Zero Critical findings open after remediation
 - [✓] Zero High findings open (or documented mitigation with rationale in this report)
-- [ ] Logging PII review (2-3 hours remaining)
+- [ ] Logging PII review
 - [ ] Manual authentication bypass testing (OPTIONAL - code review confirms protection)
 
 #### Definition of Done
@@ -3211,6 +3058,10 @@ After R3 ships, clean up these items:
 
 ---
 
-**Document Version:** 1.0
-**Last Updated:** 2025-10-06
+**Document Version:** 1.1
+**Last Updated:** 2025-10-07
 **Next Review:** Upon R3 completion
+
+**Revision History:**
+- v1.1 (2025-10-07): Moved R3-T1 (Currency Rewards) to R4-T1, renumbered remaining tasks
+- v1.0 (2025-10-06): Initial release plan
