@@ -431,11 +431,6 @@ class _GameScreenState extends State<GameScreen> {
       onStatusUpdate: (status) {
         if (!mounted || _character == null) return;
 
-        // Check if transitioning to new segment
-        final oldActiveSegment = _character!.storyState?['ActiveSegment'] as Map<String, dynamic>?;
-        final oldActiveSegmentId = oldActiveSegment?['ActiveSegmentID']?.toString() ?? oldActiveSegment?['SegmentID']?.toString();
-        final newActiveSegmentId = status['ActiveSegmentID'] as String?;
-
         // Update character with new segment status
         final storyState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{});
         storyState['ActiveSegment'] = status;
@@ -447,58 +442,66 @@ class _GameScreenState extends State<GameScreen> {
           _lastStoryDetails = Map<String, dynamic>.from(story);
         }
 
-        // Save completed segment to history if transitioning
-        if (oldActiveSegment != null &&
-            oldActiveSegmentId != null &&
-            newActiveSegmentId != null &&
-            newActiveSegmentId != oldActiveSegmentId &&
-            _isSegmentComplete(oldActiveSegment)) {
-          final segmentCopy = Map<String, dynamic>.from(oldActiveSegment);
-
-          if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-            segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-          }
-
-          final exists = _segmentHistory.any((s) {
-            final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
-            return id == oldActiveSegmentId;
-          });
-
-          if (!exists) {
-            _segmentHistory = [..._segmentHistory, segmentCopy];
-            debugPrint('GameScreen: Added completed segment to history: $oldActiveSegmentId');
-          }
-        }
-
         setState(() {
           _character = _character!.copyWith(storyState: storyState);
           _error = null;
         });
       },
-      onStoryComplete: () async {
+      onCharacterReload: (characterData) {
         if (!mounted) return;
 
-        // Reload character to get final state after story completion
-        debugPrint('GameScreen: Story complete, reloading character');
+        // Parse character data and update
         try {
-          final updated = await _apiService.getCharacterById(_character!.id);
-          if (!mounted || updated == null) return;
+          final updated = Character.fromJson(characterData);
+
+          // Check if transitioning to new segment
+          final oldActiveSegment = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+          final oldActiveSegmentId = oldActiveSegment?['ActiveSegmentID']?.toString() ?? oldActiveSegment?['SegmentID']?.toString();
+          final newActiveSegmentId = updated.activeSegmentID;
+
+          // Save completed segment to history if transitioning
+          if (oldActiveSegment != null &&
+              oldActiveSegmentId != null &&
+              newActiveSegmentId != null &&
+              newActiveSegmentId != oldActiveSegmentId &&
+              _isSegmentComplete(oldActiveSegment)) {
+            final segmentCopy = Map<String, dynamic>.from(oldActiveSegment);
+
+            if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
+              segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
+            }
+
+            final exists = _segmentHistory.any((s) {
+              final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
+              return id == oldActiveSegmentId;
+            });
+
+            if (!exists) {
+              _segmentHistory = [..._segmentHistory, segmentCopy];
+              debugPrint('GameScreen: Added completed segment to history: $oldActiveSegmentId');
+            }
+          }
 
           setState(() {
             _character = updated;
+            _error = null;
           });
 
-          // Handle completion with refreshed character
-          await _handleStoryCompletion(refreshCharacter: false, showMessage: true);
+          debugPrint('GameScreen: Character reloaded at segment boundary');
         } catch (e) {
-          debugPrint('GameScreen: Error reloading character after story completion: $e');
-          if (mounted) {
-            setState(() {
-              _error = 'Failed to reload character after story completion';
-            });
-          }
+          debugPrint('GameScreen: Error parsing character data: $e');
+          setState(() {
+            _error = 'Failed to update character';
+          });
         }
+      },
+      onStoryComplete: () async {
+        if (!mounted) return;
 
+        debugPrint('GameScreen: Story complete');
+
+        // Handle completion
+        await _handleStoryCompletion(refreshCharacter: true, showMessage: true);
         _manageCharacterUpdateTimer();
       },
       onError: (err) {
