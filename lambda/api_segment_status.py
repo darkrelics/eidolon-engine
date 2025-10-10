@@ -20,6 +20,7 @@ from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_re
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
 from eidolon.time_utils import from_unix
+from eidolon.validation import validate_uuid
 
 
 def filter_decision_options(raw_options: dict) -> dict:
@@ -310,6 +311,9 @@ def lambda_handler(event: dict, context: object) -> dict:
     character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+
+    if not validate_uuid(character_id):
+        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
 
     # Call business logic
     try:

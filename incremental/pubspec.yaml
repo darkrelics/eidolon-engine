@@ -59,6 +59,9 @@ dependencies:
   intl: ^0.20.2
   uuid: ^4.5.1
 
+  # RPG-themed icons
+  fluttericon: ^2.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

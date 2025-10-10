@@ -38,6 +38,96 @@ def load_email_template(template_name: str) -> str:
         return ""
 
 
+def configure_user_pool_settings(user_pool_id: str, lambda_arn: str, region: str) -> bool:
+    """Configure all User Pool settings in a single update to prevent AWS from resetting values.
+
+    Args:
+        user_pool_id: ID of the User Pool
+        lambda_arn: ARN of the cognito-player-new Lambda function
+        region: AWS region
+
+    Returns:
+        True if all settings configured successfully
+    """
+    try:
+        cognito = boto3.client("cognito-idp", region_name=region)
+
+        # Load email template
+        html_template = load_email_template("cognito-verification-email.html")
+
+        # Build update parameters
+        update_params = {
+            "UserPoolId": user_pool_id,
+            "AutoVerifiedAttributes": ["email"],
+            "LambdaConfig": {"PostConfirmation": lambda_arn},
+        }
+
+        # Add email template if available
+        if html_template:
+            update_params["VerificationMessageTemplate"] = {
+                "DefaultEmailOption": "CONFIRM_WITH_CODE",
+                "EmailMessage": html_template,
+                "EmailSubject": "Verify your Eidolon Engine account",
+            }
+            print("  Configuring User Pool with all settings (including custom email template)...")
+        else:
+            update_params["VerificationMessageTemplate"] = {"DefaultEmailOption": "CONFIRM_WITH_CODE"}
+            print("  Configuring User Pool with all settings (using default email template)...")
+
+        # Apply all settings in a single update
+        cognito.update_user_pool(**update_params)
+
+        print("  [OK] User Pool settings configured successfully")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        error_msg = err.response.get("Error", {}).get("Message", "")
+        print(f"  [ERROR] Failed to configure User Pool settings: {error_code} - {error_msg}")
+        return False
+
+
+def configure_user_pool_auto_verify(user_pool_id: str, region: str) -> bool:
+    """Configure auto-verified attributes for User Pool.
+
+    Args:
+        user_pool_id: ID of the User Pool
+        region: AWS region
+
+    Returns:
+        True if auto-verify is configured successfully
+    """
+    try:
+        cognito = boto3.client("cognito-idp", region_name=region)
+
+        # Get current user pool configuration
+        print("  Checking auto-verified attributes...")
+        response = cognito.describe_user_pool(UserPoolId=user_pool_id)
+        current_config = response.get("UserPool", {})
+
+        # Check current auto-verified attributes (handle null/None)
+        current_auto_verify = current_config.get("AutoVerifiedAttributes") or []
+
+        # Ensure email is in auto-verified attributes
+        if "email" in current_auto_verify:
+            print("  [OK] Email auto-verification already enabled")
+            return True
+
+        print("  Enabling email auto-verification...")
+
+        # Update the user pool to enable email auto-verification
+        cognito.update_user_pool(UserPoolId=user_pool_id, AutoVerifiedAttributes=["email"])
+
+        print("  [OK] Email auto-verification enabled successfully")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        error_msg = err.response.get("Error", {}).get("Message", "")
+        print(f"  [ERROR] Failed to enable auto-verification: {error_code} - {error_msg}")
+        return False
+
+
 def configure_user_pool_email_template(user_pool_id: str, region: str) -> bool:
     """Configure email verification template for User Pool.
 
@@ -63,9 +153,9 @@ def configure_user_pool_email_template(user_pool_id: str, region: str) -> bool:
         response = cognito.describe_user_pool(UserPoolId=user_pool_id)
         current_config = response.get("UserPool", {})
 
-        # Check current verification template
+        # Check current verification template (handle null/None)
         current_template = current_config.get("VerificationMessageTemplate", {})
-        current_email = current_template.get("EmailMessage", "")
+        current_email = current_template.get("EmailMessage") or ""
 
         # Check if update is needed
         template_needs_update = current_email != html_template
@@ -278,8 +368,71 @@ def validate_user_pool_client(user_pool_id: str, region: str) -> tuple[bool, str
         return False, ""
 
 
-def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str) -> bool:
-    """Check and configure PostConfirmation trigger on existing User Pool if needed.
+def verify_user_pool_trigger_configuration(user_pool_id: str, expected_lambda_arn: str, region: str) -> tuple[bool, bool]:
+    """Verify User Pool trigger and Lambda permissions are correctly configured.
+
+    Args:
+        user_pool_id: ID of the User Pool
+        expected_lambda_arn: Expected ARN of the Lambda function
+        region: AWS region
+
+    Returns:
+        Tuple of (trigger_configured, permissions_configured)
+    """
+    trigger_ok = False
+    permissions_ok = False
+
+    try:
+        # Check trigger configuration
+        cognito = boto3.client("cognito-idp", region_name=region)
+        response = cognito.describe_user_pool(UserPoolId=user_pool_id)
+        lambda_config = response.get("UserPool", {}).get("LambdaConfig", {})
+        current_trigger = lambda_config.get("PostConfirmation", "")
+
+        if current_trigger == expected_lambda_arn:
+            trigger_ok = True
+        else:
+            print(f"  [ERROR] Trigger verification failed - Expected: {expected_lambda_arn}, Got: {current_trigger}")
+
+        # Check Lambda permissions
+        lambda_client = boto3.client("lambda", region_name=region)
+        try:
+            policy_response = lambda_client.get_policy(FunctionName="cognito-player-new")
+            policy_str = policy_response.get("Policy", "{}")
+            policy = json.loads(policy_str)
+            statements = policy.get("Statement", [])
+
+            # Look for Cognito invoke permission
+            for statement in statements:
+                if (
+                    statement.get("Effect") == "Allow"
+                    and statement.get("Action") == "lambda:InvokeFunction"
+                    and statement.get("Principal", {}).get("Service") == "cognito-idp.amazonaws.com"
+                ):
+                    source_arn = statement.get("Condition", {}).get("ArnLike", {}).get("AWS:SourceArn", "")
+                    if user_pool_id in source_arn:
+                        permissions_ok = True
+                        break
+
+            if not permissions_ok:
+                print("  [ERROR] Permission verification failed - Cognito invoke permission not found")
+
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code", "")
+            if error_code == "ResourceNotFoundException":
+                print("  [ERROR] Permission verification failed - No policy found on Lambda function")
+
+    except ClientError as err:
+        print(f"  [ERROR] Verification failed: {err}")
+
+    return trigger_ok, permissions_ok
+
+
+def configure_lambda_permissions_and_verify(user_pool_id: str, lambda_arn: str, region: str) -> bool:
+    """Configure Lambda permissions and verify User Pool trigger configuration.
+
+    NOTE: This function does NOT update the User Pool trigger - that must be done by
+    configure_user_pool_settings() to avoid resetting other User Pool settings.
 
     Args:
         user_pool_id: ID of the User Pool
@@ -287,47 +440,13 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
         region: AWS region
 
     Returns:
-        True if trigger is configured (already was or newly configured)
+        True if permissions configured and trigger verified successfully
     """
-
     try:
-        cognito = boto3.client("cognito-idp", region_name=region)
-
-        # STEP 1: CHECK - Get current user pool configuration
-        print("  Checking current User Pool trigger configuration...")
-        response = cognito.describe_user_pool(UserPoolId=user_pool_id)
-        current_config = response.get("UserPool", {})
-
-        # Check if trigger is already configured
-        lambda_config = current_config.get("LambdaConfig", {})
-        current_trigger = lambda_config.get("PostConfirmation", "")
-
-        trigger_needs_update = False
-
-        if current_trigger == lambda_arn:
-            print("  [OK] PostConfirmation trigger already configured correctly")
-        elif current_trigger:
-            print(f"  [WARNING] Different trigger configured: {current_trigger}")
-            print(f"  [INFO] Will update to: {lambda_arn}")
-            trigger_needs_update = True
-        else:
-            print("  [INFO] No PostConfirmation trigger currently configured")
-            trigger_needs_update = True
-
-        # STEP 2: APPLY - Update the Lambda configuration if needed
-        if trigger_needs_update:
-            print("  Applying PostConfirmation trigger configuration...")
-            lambda_config["PostConfirmation"] = lambda_arn
-
-            # Update the user pool with the new trigger
-            cognito.update_user_pool(UserPoolId=user_pool_id, LambdaConfig=lambda_config)
-
-            print("  [OK] PostConfirmation trigger configured successfully")
-
-        # STEP 3: PERMISSIONS - Always ensure Lambda has permission to be invoked by Cognito
+        # STEP 1: PERMISSIONS - Ensure Lambda has permission to be invoked by Cognito
         # This is needed even if the trigger is already configured, as permissions can be lost
         # when Lambda functions are redeployed or recreated
-        print("  Checking Lambda invoke permissions...")
+        print("  Configuring Lambda invoke permissions...")
         lambda_client = boto3.client("lambda", region_name=region)
         sts_client = boto3.client("sts")
         account_id = sts_client.get_caller_identity()["Account"]
@@ -351,11 +470,26 @@ def configure_user_pool_trigger(user_pool_id: str, lambda_arn: str, region: str)
             print("  [OK] Lambda invoke permission granted to Cognito")
         except ClientError as err:
             error_code = err.response.get("Error", {}).get("Code", "")
-            print(f"  [ERROR] Could not add Lambda permission: {err}")
             if error_code == "ResourceConflictException":
-                print("  [INFO] Permission may already exist with a different configuration")
+                print("  [INFO] Permission already exists")
+            else:
+                print(f"  [ERROR] Could not add Lambda permission: {err}")
+                return False
 
-        return True
+        # STEP 2: VERIFY - Confirm trigger and permissions are configured correctly
+        print("  Verifying trigger and permission configuration...")
+        trigger_ok, permissions_ok = verify_user_pool_trigger_configuration(user_pool_id, lambda_arn, region)
+
+        if trigger_ok and permissions_ok:
+            print("  [OK] Trigger and permissions verified successfully")
+            return True
+
+        if not trigger_ok:
+            print("  [ERROR] Trigger verification failed")
+        if not permissions_ok:
+            print("  [ERROR] Permissions verification failed")
+
+        return False
 
     except ClientError as err:
         print(f"  [ERROR] Failed to configure User Pool trigger: {err}")
@@ -408,22 +542,33 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
         if not validation.get("client", False):
             print("  - User Pool Client was not created")
 
-    # Configure Lambda trigger for existing User Pool (CDK can't do this for imported pools)
+    # Configure User Pool settings (trigger, auto-verify, email template)
+    # This must run on every deployment to ensure all settings are properly configured
+    # (CDK cannot do this for imported pools, and AWS can reset settings when updating individual parameters)
+    trigger_configured = False
     if validation.get("user_pool_id"):
         lambda_arn = get_cognito_player_new_arn(params.region)
         if lambda_arn:
-            print("\nConfiguring PostConfirmation trigger for User Pool...")
-            trigger_configured = configure_user_pool_trigger(validation["user_pool_id"], lambda_arn, params.region)
-            if not trigger_configured:
-                print("  [ERROR] Failed to configure trigger")
-        else:
-            print("  [WARNING] cognito-player-new Lambda not found - trigger not configured")
+            print("\nConfiguring User Pool settings (trigger, auto-verify, email template)...")
 
-        # Configure email verification template (works for both new and existing pools)
-        print("\nConfiguring email verification template...")
-        email_configured = configure_user_pool_email_template(validation["user_pool_id"], params.region)
-        if not email_configured:
-            print("  [WARNING] Failed to configure email template - using Cognito default")
+            # Configure all settings together to prevent AWS from resetting values
+            settings_configured = configure_user_pool_settings(validation["user_pool_id"], lambda_arn, params.region)
+
+            if settings_configured:
+                # Configure Lambda permissions and verify settings
+                trigger_configured = configure_lambda_permissions_and_verify(validation["user_pool_id"], lambda_arn, params.region)
+                if not trigger_configured:
+                    print("  [ERROR] Failed to configure permissions or verify trigger - new user registration may not work")
+                    print("  [ERROR] Deployment continuing with errors")
+            else:
+                print("  [ERROR] Failed to configure User Pool settings")
+                print("  [ERROR] New user registration will not work until this is fixed")
+        else:
+            print("  [ERROR] cognito-player-new Lambda not found - User Pool cannot be configured")
+            print("  [ERROR] New user registration will not work until this is fixed")
+    else:
+        print("  [ERROR] User Pool ID not found - cannot configure settings")
+        print("  [ERROR] New user registration will not work until this is fixed")
 
     # Update configuration with Cognito settings
     if validation.get("user_pool", False) and validation.get("user_pool_id"):

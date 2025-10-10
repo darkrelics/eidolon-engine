@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:eidolon_incremental/models/active_segment.dart';
 import 'package:eidolon_incremental/utils/time_utils.dart';
+import 'package:fluttericon/rpg_awesome_icons.dart';
 
 /// Widget to display mechanical segment events progressively
 class MechanicalSegmentDisplay extends StatefulWidget {
@@ -243,35 +244,35 @@ class _MechanicalSegmentDisplayState extends State<MechanicalSegmentDisplay> {
 
       switch (eventType) {
         case 'skillCheck':
-          icon = Icons.psychology;
+          icon = RpgAwesome.scroll_unfurled;
           iconColor = data['success'] == true ? Colors.green : Colors.orange;
           break;
         case 'combat':
-          icon = Icons.shield;
+          icon = RpgAwesome.crossed_swords;
           iconColor = Colors.red;
           break;
         case 'combatAttack':
-          icon = Icons.sports_martial_arts;
+          icon = RpgAwesome.axe;
           iconColor = Colors.deepOrange;
           break;
         case 'combatDefense':
-          icon = Icons.shield_outlined;
+          icon = RpgAwesome.shield;
           iconColor = Colors.blue;
           break;
         case 'combatDamage':
-          icon = Icons.favorite;
+          icon = RpgAwesome.health_decrease;
           iconColor = Colors.red;
           break;
         case 'combatVictory':
-          icon = Icons.workspace_premium;
+          icon = RpgAwesome.trophy;
           iconColor = Colors.amber;
           break;
         case 'combatDefeat':
-          icon = Icons.heart_broken;
+          icon = RpgAwesome.skull;
           iconColor = Colors.grey;
           break;
         default:
-          icon = Icons.info;
+          icon = RpgAwesome.quill_ink;
           iconColor = Colors.grey;
       }
 

@@ -46,6 +46,7 @@ class _GameScreenState extends State<GameScreen> {
 
   // Character update timer (when not in active story)
   Timer? _characterUpdateTimer;
+  int _characterUpdateTimerCount = 0;
 
   // Segment history (completion view only)
   List<Map<String, dynamic>> _segmentHistory = const [];
@@ -172,12 +173,14 @@ class _GameScreenState extends State<GameScreen> {
     _decisionDebouncer.dispose();
     _refreshDebouncer.dispose();
     _characterUpdateTimer?.cancel();
+    _characterUpdateTimerCount = 0;
     super.dispose();
   }
 
   void _resetForNewCharacter() {
-    _runtime.cancel();
+    _runtime.stopPolling();
     _characterUpdateTimer?.cancel();
+    _characterUpdateTimerCount = 0;
     _orchestratedSegmentId = null;
     _segmentHistory = <Map<String, dynamic>>[];
     _lastStoryDetails = null;
@@ -197,15 +200,27 @@ class _GameScreenState extends State<GameScreen> {
         debugPrint('GameScreen: Stopping character update timer (in active story)');
         _characterUpdateTimer?.cancel();
         _characterUpdateTimer = null;
+        _characterUpdateTimerCount = 0;
       }
     } else {
       // Start timer if not in active story and timer not already running
       if (_characterUpdateTimer == null && _character != null) {
         debugPrint('GameScreen: Starting character update timer (no active story) - first update in 2 minutes');
+        _characterUpdateTimerCount = 0;
 
         // Start periodic timer - fires every 2 minutes
         _characterUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
-          debugPrint('GameScreen: Auto-refreshing character (2-minute timer tick)');
+          _characterUpdateTimerCount++;
+          debugPrint('GameScreen: Auto-refreshing character (2-minute timer tick $_characterUpdateTimerCount/60)');
+
+          if (_characterUpdateTimerCount >= 60) {
+            debugPrint('GameScreen: Timer count reached 60, stopping timer');
+            timer.cancel();
+            _characterUpdateTimer = null;
+            _characterUpdateTimerCount = 0;
+            return;
+          }
+
           _loadCharacterData(
             strategy: CharacterLoadRateLimitStrategy.automated,
             showLoadingIndicator: false,
@@ -383,6 +398,13 @@ class _GameScreenState extends State<GameScreen> {
         );
 
         _lastStoryDetails = Map<String, dynamic>.from(newStoryState['Story'] as Map<String, dynamic>);
+
+        // Add initial segment to history for tracking
+        final initialSegmentCopy = Map<String, dynamic>.from(initialSegment);
+        initialSegmentCopy['StoryTitle'] = story.title;
+        _segmentHistory = [initialSegmentCopy];
+        debugPrint('GameScreen: Added initial segment to history: ${_character!.activeSegmentID}');
+
         _isLoading = false;
       });
 
@@ -411,74 +433,107 @@ class _GameScreenState extends State<GameScreen> {
 
     if (segId == null) return; // No active story
 
-    _runtime.start(
-      character: _character!,
-      onCharacterReloaded: (updated) {
-        if (!mounted) return;
+    _runtime.startPolling(
+      characterId: _character!.id,
+      onStatusUpdate: (status) {
+        if (!mounted || _character == null) return;
 
-        // Before updating character, capture the completed segment if transitioning
-        final oldActiveSegment = _character?.storyState?['ActiveSegment'] as Map<String, dynamic>?;
-        final newActiveSegmentId = updated.activeSegmentID;
-        final oldActiveSegmentId = oldActiveSegment?['ActiveSegmentID']?.toString() ?? oldActiveSegment?['SegmentID']?.toString();
-
-        // If we're transitioning to a new segment (not completing the story), save the old one to history
-        // Don't add if story is completing (newActiveSegmentId == null) - let _handleStoryCompletion handle it
-        if (oldActiveSegment != null &&
-            oldActiveSegmentId != null &&
-            newActiveSegmentId != null &&
-            newActiveSegmentId != oldActiveSegmentId &&
-            _isSegmentComplete(oldActiveSegment)) {
-          final segmentCopy = Map<String, dynamic>.from(oldActiveSegment);
-
-          // Add story title for display
-          if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-            segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-          }
-
-          // Add to history if not already present
+        // Add segment to history for tracking (if not already present)
+        final segmentId = status['ActiveSegmentID']?.toString() ?? status['SegmentID']?.toString();
+        if (segmentId != null) {
           final exists = _segmentHistory.any((s) {
             final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
-            return id == oldActiveSegmentId;
+            return id == segmentId;
           });
 
           if (!exists) {
+            final segmentCopy = Map<String, dynamic>.from(status);
+            if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
+              segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
+            }
             _segmentHistory = [..._segmentHistory, segmentCopy];
-            debugPrint('GameScreen: Added completed segment to history: $oldActiveSegmentId');
+            debugPrint('GameScreen: Added segment to history for tracking: $segmentId');
+          } else {
+            // Update existing segment in history with latest data
+            _segmentHistory = _segmentHistory.map((s) {
+              final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
+              if (id == segmentId) {
+                final updated = Map<String, dynamic>.from(status);
+                if (!updated.containsKey('StoryTitle') && _lastStoryDetails != null) {
+                  updated['StoryTitle'] = _lastStoryDetails!['Title'];
+                }
+                return updated;
+              }
+              return s;
+            }).toList();
           }
         }
 
-        setState(() {
-          _character = updated;
-          _error = null;
-          _isLoading = false;
-
-          // Preserve last story details for completion screen
-          final storyData = updated.storyState?['Story'] as Map<String, dynamic>?;
-          if (storyData != null) {
-            _lastStoryDetails = Map<String, dynamic>.from(storyData);
-          }
-        });
-
-        // New segment or completed
-        _startOrchestrationIfNeeded(force: true);
-        _manageCharacterUpdateTimer();
-      },
-      onStatusUpdated: (status) {
-        if (!mounted || _character == null) return;
+        // Update character with new segment status
         final storyState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{});
-        final active = Map<String, dynamic>.from((storyState['ActiveSegment'] as Map<String, dynamic>?) ?? <String, dynamic>{});
-        // Merge minimal status fields so UI can reveal processed results
-        for (final entry in status.entries) {
-          active[entry.key] = entry.value;
+        storyState['ActiveSegment'] = status;
+
+        // Preserve story details
+        final story = status['Story'] as Map<String, dynamic>?;
+        if (story != null) {
+          storyState['Story'] = story;
+          _lastStoryDetails = Map<String, dynamic>.from(story);
         }
-        storyState['ActiveSegment'] = active;
+
         setState(() {
           _character = _character!.copyWith(storyState: storyState);
+          _error = null;
         });
       },
-      onStoryComplete: (finalStatus) async {
-        // Load history and show completion
-        await _handleStoryCompletion(refreshCharacter: false, showMessage: true, finalActiveSegment: finalStatus);
+      onCharacterReload: (characterData) {
+        if (!mounted) return;
+
+        // Parse character data and update
+        try {
+          final updated = Character.fromJson(characterData);
+
+          // Add new segment to history if present
+          // (Segments are tracked in history immediately when encountered)
+          final newActiveSegment = updated.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+          final newActiveSegmentId = updated.activeSegmentID;
+
+          if (newActiveSegment != null && newActiveSegmentId != null) {
+            final exists = _segmentHistory.any((s) {
+              final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
+              return id == newActiveSegmentId;
+            });
+
+            if (!exists) {
+              final segmentCopy = Map<String, dynamic>.from(newActiveSegment);
+              if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
+                segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
+              }
+              _segmentHistory = [..._segmentHistory, segmentCopy];
+              debugPrint('GameScreen: Added new segment to history from character reload: $newActiveSegmentId');
+            }
+          }
+
+          setState(() {
+            _character = updated;
+            _error = null;
+          });
+
+          debugPrint('GameScreen: Character reloaded at segment boundary');
+        } catch (e) {
+          debugPrint('GameScreen: Error parsing character data: $e');
+          setState(() {
+            _error = 'Failed to update character';
+          });
+        }
+      },
+      onStoryComplete: () async {
+        if (!mounted) return;
+
+        debugPrint('GameScreen: Story complete');
+
+        // Handle completion
+        await _handleStoryCompletion(refreshCharacter: true, showMessage: true);
+        _manageCharacterUpdateTimer();
       },
       onError: (err) {
         if (!mounted) return;
@@ -656,6 +711,24 @@ class _GameScreenState extends State<GameScreen> {
           }
         }
 
+        // Add next segment to history for tracking
+        final nextSegmentId = (nextSegment['ActiveSegmentID'] ?? nextSegment['SegmentID'])?.toString();
+        if (nextSegmentId != null) {
+          final exists = _segmentHistory.any((s) {
+            final id = s['SegmentID']?.toString() ?? s['ActiveSegmentID']?.toString();
+            return id == nextSegmentId;
+          });
+
+          if (!exists) {
+            final nextSegmentCopy = Map<String, dynamic>.from(nextSegment);
+            if (!nextSegmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
+              nextSegmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
+            }
+            _segmentHistory = [..._segmentHistory, nextSegmentCopy];
+            debugPrint('GameScreen: Added next segment to history after decision: $nextSegmentId');
+          }
+        }
+
         if (mounted) {
           setState(() {
             // Update character's active segment locally
@@ -679,7 +752,7 @@ class _GameScreenState extends State<GameScreen> {
         _manageCharacterUpdateTimer();
       } else {
         // No next segment means the story has finished
-        _runtime.cancel();
+        _runtime.stopPolling();
         await _handleStoryCompletion(refreshCharacter: true);
       }
 
@@ -734,7 +807,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _handleStoryCompletion({bool refreshCharacter = true, bool showMessage = true, Map<String, dynamic>? finalActiveSegment}) async {
     debugPrint('GameScreen: Handling story completion');
-    _runtime.cancel();
+    _runtime.stopPolling();
 
     // Capture the final segment BEFORE reloading character
     // This ensures we have the complete segment data even if backend clears it
@@ -817,7 +890,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _handleStoryAbandonment() async {
     debugPrint('GameScreen: Handling story abandonment');
-    _runtime.cancel();
+    _runtime.stopPolling();
 
     try {
       // Reload character to clear story state and history
@@ -866,7 +939,7 @@ class _GameScreenState extends State<GameScreen> {
 
   Future<void> _handleReturnToStories() async {
     // Clear story state locally and reload to get available stories
-    _runtime.cancel();
+    _runtime.stopPolling();
     if (mounted) {
       setState(() {
         if (_character != null) {
@@ -925,7 +998,7 @@ class _GameScreenState extends State<GameScreen> {
       );
 
       // Stop runtime to prevent duplicate completion detection
-      _runtime.cancel();
+      _runtime.stopPolling();
 
       // Handle abandonment with specific messaging
       await _handleStoryAbandonment();
@@ -1107,8 +1180,21 @@ class _GameScreenState extends State<GameScreen> {
     }
   }
 
+  /// Get segments that are completed (not currently active)
+  /// Segments are tracked in history immediately, but only displayed as "completed"
+  /// when they're no longer the active segment
+  List<Map<String, dynamic>> _getCompletedSegments() {
+    final activeSegmentId = _character?.activeSegmentID;
+    return _segmentHistory.where((segment) {
+      final segmentId = segment['SegmentID']?.toString() ?? segment['ActiveSegmentID']?.toString();
+      // Only show as completed if it's NOT the current active segment
+      return segmentId != activeSegmentId && _isSegmentComplete(segment);
+    }).toList();
+  }
+
   List<Map<String, dynamic>> _buildStoryHistoryArchive() {
     final Map<String, Map<String, dynamic>> deduped = {};
+    final activeSegmentId = _character?.activeSegmentID;
 
     void addSegments(Iterable<Map<String, dynamic>> segments) {
       for (final segment in segments) {
@@ -1116,7 +1202,11 @@ class _GameScreenState extends State<GameScreen> {
         final segmentId =
             copy['SegmentID']?.toString() ?? copy['ActiveSegmentID']?.toString();
         final key = segmentId ?? copy.hashCode.toString();
-        deduped[key] = copy;
+
+        // Only add if it's NOT the current active segment (completed mode only)
+        if (segmentId != activeSegmentId) {
+          deduped[key] = copy;
+        }
       }
     }
 
@@ -1137,7 +1227,37 @@ class _GameScreenState extends State<GameScreen> {
       addSegments(historyCopies);
     }
 
-    return deduped.values.toList(growable: false);
+    final segments = deduped.values.toList();
+
+    // Sort by CompletedAt timestamp to ensure correct order
+    segments.sort((a, b) {
+      final aCompleted = a['CompletedAt'];
+      final bCompleted = b['CompletedAt'];
+
+      // Parse timestamps
+      DateTime? aTime;
+      DateTime? bTime;
+
+      if (aCompleted is String && aCompleted.isNotEmpty) {
+        aTime = DateTime.tryParse(aCompleted);
+      } else if (aCompleted is num) {
+        aTime = DateTime.fromMillisecondsSinceEpoch((aCompleted * 1000).toInt());
+      }
+
+      if (bCompleted is String && bCompleted.isNotEmpty) {
+        bTime = DateTime.tryParse(bCompleted);
+      } else if (bCompleted is num) {
+        bTime = DateTime.fromMillisecondsSinceEpoch((bCompleted * 1000).toInt());
+      }
+
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+
+      return aTime.compareTo(bTime);
+    });
+
+    return segments;
   }
 
   Widget _buildDesktopLayout() {
@@ -1152,7 +1272,7 @@ class _GameScreenState extends State<GameScreen> {
         Expanded(
           child: StoryPanel(
             character: _character!,
-            segmentHistory: _segmentHistory,
+            segmentHistory: _getCompletedSegments(),
             storyHistoryArchive: _buildStoryHistoryArchive(),
             isLoading: _isLoading,
             error: _error,
@@ -1183,7 +1303,7 @@ class _GameScreenState extends State<GameScreen> {
         Expanded(
           child: StoryPanel(
             character: _character!,
-            segmentHistory: _segmentHistory,
+            segmentHistory: _getCompletedSegments(),
             storyHistoryArchive: _buildStoryHistoryArchive(),
             isLoading: _isLoading,
             error: _error,
@@ -1209,7 +1329,7 @@ class _GameScreenState extends State<GameScreen> {
       case 1:
         return StoryPanel(
           character: _character!,
-          segmentHistory: _segmentHistory,
+          segmentHistory: _getCompletedSegments(),
           storyHistoryArchive: _buildStoryHistoryArchive(),
           isLoading: _isLoading,
           error: _error,

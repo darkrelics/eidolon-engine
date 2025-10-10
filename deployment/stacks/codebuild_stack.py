@@ -83,7 +83,7 @@ class CodeBuildStack(Stack):
                 iam.PolicyStatement(
                     effect=iam.Effect.ALLOW,
                     actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-                    resources=[f"arn:aws:logs:{self.region_name}:*:log-group:/aws/codebuild/*"],
+                    resources=[f"arn:aws:logs:{self.region_name}:{self.account}:log-group:/aws/codebuild/*"],
                 )
             ],
         )

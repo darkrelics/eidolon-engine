@@ -485,8 +485,8 @@ Retrieves story history entries for a character by story instance IDs.
       "CompletedAt": 1705330800,
       "Outcome": "normal",
       "SegmentHistory": ["seg1", "seg2", "seg3"],
-      "TotalSkillXP": {"Investigation": 15},
-      "TotalAttributeXP": {"Perception": 5}
+      "TotalSkillXP": { "Investigation": 15 },
+      "TotalAttributeXP": { "Perception": 5 }
     }
   ],
   "Missing": ["uuid3"]

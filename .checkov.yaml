@@ -1,0 +1,41 @@
+# Checkov configuration for Eidolon Engine
+# Skips checks that are not applicable for a game application in beta
+
+# Framework to scan
+framework:
+  - cloudformation
+
+# Skip checks that are not security-critical for game data
+skip-check:
+  # Lambda VPC - Not needed, no private resources
+  - CKV_AWS_117  # Lambda inside VPC
+
+  # Lambda operational features - Nice-to-have, not security-critical
+  - CKV_AWS_116  # Lambda Dead Letter Queue
+  - CKV_AWS_115  # Lambda concurrent execution limit
+
+  # Lambda env encryption - Not needed, no secrets in env vars (verified manually)
+  - CKV_AWS_173  # Lambda environment variable encryption
+
+  # SQS encryption - Not needed for non-sensitive game data
+  - CKV_AWS_27   # SQS encryption
+
+  # API Gateway operational features - Nice-to-have for production
+  - CKV_AWS_120  # API Gateway caching
+  - CKV_AWS_73   # API Gateway X-Ray tracing
+  - CKV_AWS_76   # API Gateway access logging
+
+  # WAF log4j - Not applicable (Python 3.12, not Java)
+  - CKV_AWS_192  # WAF log4j protection
+
+  # CloudFront logging - Nice-to-have for analytics
+  - CKV_AWS_86   # CloudFront access logging
+
+  # Lambda permissions - Low risk, API Gateway already has auth
+  - CKV_AWS_364  # Lambda permission SourceArn/SourceAccount
+
+# Compact output
+compact: true
+
+# Continue on soft failures
+soft-fail: false

@@ -37,18 +37,19 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 
 #### Subtasks
 
-| Subtask | Status | Notes |
-|---------|--------|-------|
-| Define Character GameMode state machine | ✅ Complete | GameMode enum with validation |
-| Implement Segment ProcessingStatus transitions | ✅ Complete | Atomic claim/mark functions |
-| Implement Story Lifecycle state machine | ✅ Complete | StoryLifecycle enum defined |
-| Create state transition helper functions | ✅ Complete | state_machines.py module |
-| Integration testing for state transitions | ⏳ Pending | End-to-end story flow validation |
-| Create state diagrams in documentation | ✅ Complete | 3 Mermaid diagrams in architecture.md |
+| Subtask                                        | Status      | Notes                                 |
+| ---------------------------------------------- | ----------- | ------------------------------------- |
+| Define Character GameMode state machine        | ✅ Complete | GameMode enum with validation         |
+| Implement Segment ProcessingStatus transitions | ✅ Complete | Atomic claim/mark functions           |
+| Implement Story Lifecycle state machine        | ✅ Complete | StoryLifecycle enum defined           |
+| Create state transition helper functions       | ✅ Complete | state_machines.py module              |
+| Integration testing for state transitions      | ⏳ Pending  | End-to-end story flow validation      |
+| Create state diagrams in documentation         | ✅ Complete | 3 Mermaid diagrams in architecture.md |
 
 **Implementation Details:**
 
 **Character GameMode:**
+
 - Allowed states: `{None, Incremental, MUD}`
 - No direct MUD ↔ Incremental switch
 - Character can only start story if `GameMode == None`
@@ -56,18 +57,21 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - Helper function: `set_game_mode(character, new_mode)` with validation
 
 **Segment ProcessingStatus:**
+
 - States: `pending → processing → processed`
 - Use conditional writes (DynamoDB) to enforce transitions
 - Atomic claim: only set to `processing` if currently `pending`
 - Idempotent: attempts to set `processed` twice fail gracefully
 
 **Story Lifecycle:**
+
 - States: `Available → Active → Completed/Abandoned`
 - `api-story-start`: Only if `ActiveStoryID` is null
 - On completion: Clear `ActiveStoryID`, set `GameMode = None`
 - On abandonment: Move to `AbandonedStories`, clear active state
 
 **Acceptance Criteria:**
+
 - [ ] Integration testing validates state transitions in full story run
 - [x] Concurrent story start requests: only one succeeds, other blocked (conditional writes implemented)
 - [ ] During full story run, logs show correct state transitions (pending integration testing)
@@ -75,9 +79,11 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - [ ] Issue #491 can be closed (pending integration testing)
 
 **Files Created:**
+
 - `eidolon/state_machines.py` - State machine module with enums and transition functions
 
 **Files Modified:**
+
 - `eidolon/segment_polling.py` - Delegates to state machine for claim operation
 - `eidolon/story_active.py` - Uses state machine for GameMode transitions
 - `eidolon/character_story.py` - Uses state machine for reset operation
@@ -85,6 +91,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - `documentation/architecture.md` - Added 3 state machine diagrams (lines 274-424)
 
 **Phase 1 Accomplishments (Create State Machine Module):**
+
 - ✅ Created `state_machines.py` with GameMode, ProcessingStatus, StoryLifecycle enums
 - ✅ Implemented `set_character_game_mode()` with atomic DynamoDB conditional writes
 - ✅ Implemented `claim_segment_for_processing()` for atomic pending → processing transition
@@ -93,6 +100,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - ✅ Added state diagrams to architecture.md (Character GameMode, Segment ProcessingStatus, Story Lifecycle)
 
 **Phase 2 Accomplishments (Integration):**
+
 - ✅ Updated `segment_polling.py` to delegate to state machine for claim operation
 - ✅ Updated `story_active.py` to use `set_character_game_mode()` for transitions
 - ✅ Updated `character_story.py` to use state machine for reset operation
@@ -101,6 +109,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - ✅ All linter checks passed
 
 **Phase 3 Remaining Work (Testing & Documentation):**
+
 - ⏳ Integration testing with full story run
 - ⏳ Manual verification of state transitions in production-like environment
 
@@ -116,34 +125,38 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 **Status:** 🔄 Deferred (Currency aspects moved to R6)
 
 **Note:** Currency system implementation deferred to R6 (Economy & Balance). Basic accounting/banking processes should all be created together. This task will be completed in two parts:
+
 - **R1**: Idempotency and atomic effects application (non-currency)
 - **R6**: Currency system with full economy implementation
 
 #### Subtasks
 
-| Subtask | Status | Notes |
-|---------|--------|-------|
-| Design effects application routine | ⏳ R1 | Consolidate all updates (XP, items, wounds) |
-| Implement idempotency mechanism | ✅ Complete | Via segment deletion (existing implementation) |
-| Add Currency field to Character schema | 🔄 R6 | Deferred to Economy release |
-| Implement currency rewards in outcomes | 🔄 R6 | Deferred to Economy release |
-| Write duplicate processing tests | ⏳ R1 | Verify no double rewards |
-| Document atomicity approach | ✅ Complete | In release-one-report.md |
+| Subtask                                | Status      | Notes                                          |
+| -------------------------------------- | ----------- | ---------------------------------------------- |
+| Design effects application routine     | ⏳ R1       | Consolidate all updates (XP, items, wounds)    |
+| Implement idempotency mechanism        | ✅ Complete | Via segment deletion (existing implementation) |
+| Add Currency field to Character schema | 🔄 R6       | Deferred to Economy release                    |
+| Implement currency rewards in outcomes | 🔄 R6       | Deferred to Economy release                    |
+| Write duplicate processing tests       | ⏳ R1       | Verify no double rewards                       |
+| Document atomicity approach            | ✅ Complete | In release-one-report.md                       |
 
 **Implementation Details:**
 
 **Effects Plan Consolidation:**
+
 - When outcome determined, compile all updates: `{table_name: [updates]}`
 - Example: +50 XP, new item, health update, room change
 - Execute atomically using DynamoDB conditional writes
 
 **Idempotency:**
+
 - SQS delivers only `ActiveSegmentID` as message body
 - On successful processing, `delete_active_segment()` removes the segment
 - SQS redelivery attempts fail at `get_active_segment()` - segment no longer exists
 - Natural idempotency via segment deletion (no additional fields needed)
 
 **Currency Implementation (Deferred to R6):**
+
 - Add `Gold` (integer) field to Character table (Python int, no overflow risk)
 - Update schema to include `rewards.resources.gold`
 - Implement currency increment in outcome application
@@ -151,6 +164,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - **Rationale:** All economy/banking/currency features should be designed and implemented together in R6
 
 **Atomicity Strategy:**
+
 - Use DynamoDB conditional writes exclusively (transactions untenable due to cost/performance)
 - `ProcessingStatus` field prevents duplicate processing at segment level
 - Single-table updates with conditional expressions for Characters table
@@ -161,6 +175,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 **Design Principle:** Keep related data in the same table when atomicity is required. Character XP, wounds, and state live in Characters table for single atomic update. Items table uses UUID primary keys for natural idempotency without conditional writes.
 
 **Acceptance Criteria (R1 Scope):**
+
 - [ ] Story completion yields consistent DB results
 - [ ] Double-invocation of ops-story-advance doesn't duplicate XP/item rewards
 - [ ] Test logs confirm no partial updates in failure scenarios
@@ -168,10 +183,12 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - [ ] Issue #726 partially complete (atomicity done, currency deferred to R6)
 
 **Deferred to R6:**
+
 - [ ] Currency rewards properly granted for stories that specify them
 - [ ] Full economy system with banking/trading processes
 
 **Files to Modify/Create (R1 Scope):**
+
 - `eidolon/segment_processing.py` - Effects consolidation
 - `eidolon/effects.py` (new) - Atomic effects application
 - `eidolon/story_rewards.py` - XP and item rewards
@@ -180,6 +197,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - `documentation/incremental-design.md` - Atomicity documentation
 
 **Deferred to R6:**
+
 - `deployment/stacks/dynamodb_stack.py` - Currency field addition
 - Currency reward logic in story_rewards.py
 
@@ -201,6 +219,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 5. **No Static Files Needed:** Story data fetched from DynamoDB, always current
 
 **Why This Approach is Superior:**
+
 - Per-character customization (different archetypes see different stories)
 - Dynamic prerequisite checking
 - Cooldown and completion tracking
@@ -212,18 +231,19 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 
 #### ~~Subtasks~~ (Obsolete)
 
-| Subtask | Status | Notes |
-|---------|--------|-------|
-| ~~Design story-index.json manifest format~~ | ❌ Not Needed | Stories returned via GET /character |
-| ~~Create manifest generation script~~ | ❌ Not Needed | get_stories_with_character() queries DynamoDB |
-| ~~Determine manifest storage location~~ | ❌ Not Needed | No static manifest required |
-| ~~Add missing Story table fields~~ | ❌ Not Needed | All fields already present |
-| ~~Validate referential integrity~~ | ❌ Not Needed | Runtime validation sufficient |
-| ~~Document content loading procedure~~ | ❌ Not Needed | Already documented in code |
+| Subtask                                     | Status        | Notes                                         |
+| ------------------------------------------- | ------------- | --------------------------------------------- |
+| ~~Design story-index.json manifest format~~ | ❌ Not Needed | Stories returned via GET /character           |
+| ~~Create manifest generation script~~       | ❌ Not Needed | get_stories_with_character() queries DynamoDB |
+| ~~Determine manifest storage location~~     | ❌ Not Needed | No static manifest required                   |
+| ~~Add missing Story table fields~~          | ❌ Not Needed | All fields already present                    |
+| ~~Validate referential integrity~~          | ❌ Not Needed | Runtime validation sufficient                 |
+| ~~Document content loading procedure~~      | ❌ Not Needed | Already documented in code                    |
 
 **Existing Implementation (No Changes Required):**
 
 **Story Discovery Flow:**
+
 1. Character created with archetype's `AvailableStories` array
 2. Client calls `GET /character?CharacterID=xxx`
 3. Response includes `AvailableStories` with full story details
@@ -231,11 +251,13 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 5. User selects story, client calls `POST /story/start`
 
 **Key Functions:**
+
 - `eidolon.character_data.create_character()` - Inherits stories from archetype
 - `eidolon.character_story.get_stories_with_character()` - Fetches and validates stories
 - `lambda.api_character_get.get_character_logic()` - Returns available stories to client
 
 **Acceptance Criteria:**
+
 - [x] System supports >1 story concurrently (2 stories in test data)
 - [x] Stories accessible via existing API (GET /character endpoint)
 - [x] Per-character story filtering (archetype-based)
@@ -253,28 +275,32 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 
 #### Subtasks
 
-| Subtask | Status | Notes |
-|---------|--------|-------|
-| Audit Lambda handlers for I/O | ⏳ Pending | Document each endpoint |
-| Document all API endpoints | ⏳ Pending | Request/response schemas |
-| Document error responses | ⏳ Pending | HTTP codes + messages |
-| Add cURL examples | ⏳ Pending | For each endpoint |
+| Subtask                          | Status     | Notes                     |
+| -------------------------------- | ---------- | ------------------------- |
+| Audit Lambda handlers for I/O    | ⏳ Pending | Document each endpoint    |
+| Document all API endpoints       | ⏳ Pending | Request/response schemas  |
+| Document error responses         | ⏳ Pending | HTTP codes + messages     |
+| Add cURL examples                | ⏳ Pending | For each endpoint         |
 | Review API Gateway configuration | ⏳ Pending | Verify paths/integrations |
 
 **API Endpoints to Document:**
 
 **Story Management:**
+
 - `POST /story/start` - Start a story
+
   - Payload: `{CharacterID, StoryID}`
   - Response: `{Success, Segment: {ActiveSegmentID, SegmentType, StartTime, EndTime, ...}}`
   - Errors: 400 (invalid ID), 409 (already in story), 403 (prerequisites not met)
 
 - `POST /story/abandon` - Abandon active story
+
   - Payload: `{CharacterID}` or `{StoryID}`
   - Response: `{Success}`
   - Errors: 400 (no active story)
 
 - `GET /story/status` - Get current segment status
+
   - Query: `?characterId=uuid`
   - Response: Active segment details or null
   - Errors: 401 (unauthorized)
@@ -285,7 +311,9 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
   - Errors: 401 (unauthorized)
 
 **Segment Operations:**
+
 - `POST /segment/decision` - Make choice in decision segment
+
   - Payload: `{CharacterID, SegmentID, Decision}`
   - Response: `{Success}`
   - Errors: 400 (invalid choice), 409 (already decided)
@@ -296,7 +324,8 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
   - Errors: 401 (unauthorized)
 
 **Documentation Format:**
-```markdown
+
+````markdown
 ## POST /story/start
 
 Start a new story for a character.
@@ -309,6 +338,7 @@ Start a new story for a character.
   "StoryID": "uuid-string"
 }
 ```
+````
 
 ### Response (200 OK)
 
@@ -339,6 +369,7 @@ curl -X POST https://api.domain.com/story/start \
   -H "Content-Type: application/json" \
   -d '{"CharacterID":"abc-123","StoryID":"story-456"}'
 ```
+
 ```
 
 **Acceptance Criteria:**
@@ -547,3 +578,4 @@ Upon R1 completion, the backend will be:
 - Currency system deferred to R6 (economy release)
 - Story discovery already works via archetype-based GET /character endpoint (no manifest needed)
 - API documentation (Task 4) is the only remaining R1 work
+```

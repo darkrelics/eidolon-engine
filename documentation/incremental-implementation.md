@@ -2584,6 +2584,7 @@ This design ensures characters naturally recover over time regardless of segment
 The current combat system has been evaluated and a redesign is proposed to better utilize character skills and provide more tactical depth. The new system introduces separate offensive and defensive actions per combat round.
 
 **Key Design Decisions:**
+
 - **All rounds processed at once** - no tick-based processing, async Lambda handles full combat
 - **Character action determined at combat start** - consistency until inventory/magic systems enable dynamic choices
 - **Combat awards XP** - both offensive and defensive skills gain experience
@@ -2598,18 +2599,21 @@ The current combat system has been evaluated and a redesign is proposed to bette
 **Dual Action System**
 
 Each combat round consists of:
+
 1. **Character Offensive Action** - attempts to deal damage
 2. **Character Defensive Action** - attempts to avoid damage
 3. **Opponent Offensive Action** - attempts to deal damage
 4. **Opponent Defensive Action** - attempts to avoid damage
 
 **Action Resolution**
+
 - **Offensive Success** AND **Defensive Failure** → Damage dealt
 - **Offensive Failure** OR **Defensive Success** → No damage
 - Both combatants resolve actions simultaneously each round
 - Damage applied based on: `(attacker_offensive_success AND defender_defensive_failure)`
 
 **Combat Processing**
+
 - Process ALL rounds specified in `Combat.MaxRounds` in a single execution
 - No tick-based processing - async Lambda handles full combat duration
 - Character's best action determined once at combat start
@@ -2621,21 +2625,21 @@ Each combat round consists of:
 
 Character automatically selects the highest-rated combination:
 
-| Action | Calculation | Notes |
-|--------|-------------|-------|
-| **Arcane** | Intelligence + Arcane | Magical attack |
-| **Brawling** | Strength + Brawling | Unarmed combat |
-| **Melee** | Strength + Melee | Melee weapons |
-| **Archery** | Agility + Archery | Ranged weapons |
+| Action       | Calculation           | Notes          |
+| ------------ | --------------------- | -------------- |
+| **Arcane**   | Intelligence + Arcane | Magical attack |
+| **Brawling** | Strength + Brawling   | Unarmed combat |
+| **Melee**    | Strength + Melee      | Melee weapons  |
+| **Archery**  | Agility + Archery     | Ranged weapons |
 
 **Character Defensive Actions**
 
 Defensive action is determined by offensive action chosen:
 
-| Offensive Action | Defensive Action | Calculation |
-|-----------------|------------------|-------------|
-| Melee | **Parry** | Strength + Parry |
-| Arcane, Brawling, Archery | **Dodge** | Agility + Dodge |
+| Offensive Action          | Defensive Action | Calculation      |
+| ------------------------- | ---------------- | ---------------- |
+| Melee                     | **Parry**        | Strength + Parry |
+| Arcane, Brawling, Archery | **Dodge**        | Agility + Dodge  |
 
 **Rationale:** Melee combat allows blocking/parrying with weapon. Other styles require mobility/dodging.
 
@@ -2646,6 +2650,7 @@ Opponents use the same system but configured via opponent data.
 #### 4.5.3 Combat Flow
 
 **Combat Start Sequence:**
+
 ```
 1. Determine character's best offensive action (calculated once)
 2. Determine character's defensive action (based on offensive choice)
@@ -2654,6 +2659,7 @@ Opponents use the same system but configured via opponent data.
 ```
 
 **Per-Round Sequence:**
+
 ```
 1. Character offensive check vs Opponent defensive rating → (char_off_success, char_off_sigma)
 2. Opponent offensive check vs Character defensive rating → (opp_off_success, opp_off_sigma)
@@ -2668,6 +2674,7 @@ Opponents use the same system but configured via opponent data.
 ```
 
 **Example Combat:**
+
 ```
 Character: Wizard (determined at combat start)
   - Arcane (Int 3 + Arcane 1) = 4
@@ -2698,16 +2705,19 @@ Round 1 Resolution:
 #### 4.5.4 Damage System
 
 **Damage Amount**
+
 - **Critical Hit** (sigma > 3.0) → 2 wounds
 - **Normal Hit** (sigma ≤ 3.0) → 1 wound
 
 **Wound Type**
+
 - Determined by attacker's `WeaponType` attribute:
   - `"lethal"` → lethal wounds
   - `"bashing"` → bashing wounds
   - `"aggravated"` → aggravated wounds
 
 **Experience Points**
+
 - Combat actions MUST award XP for skill improvement
 - Use XP-granting opposed check function (not the current `resolve_opposed_check()`)
 - XP awarded for:
@@ -2718,6 +2728,7 @@ Round 1 Resolution:
 **Future Enhancements (With Inventory/Equipment)**
 
 When inventory/equipment is implemented:
+
 - Weapon damage bonuses (modify base damage)
 - Armor damage reduction
 - Special weapon effects (poison, fire, etc.)
@@ -2732,14 +2743,14 @@ The current opponent schema defines many fields that are unused:
 
 ```json
 {
-  "CombatRating": 8,      // UNUSED - code expects Attributes.Strength
-  "DefenseRating": 7,     // UNUSED - code expects Skills.Dodge/Parry
-  "DamageRating": 6,      // UNUSED
-  "Toughness": 5,         // UNUSED
-  "ArmorRating": 1,       // UNUSED
+  "CombatRating": 8, // UNUSED - code expects Attributes.Strength
+  "DefenseRating": 7, // UNUSED - code expects Skills.Dodge/Parry
+  "DamageRating": 6, // UNUSED
+  "Toughness": 5, // UNUSED
+  "ArmorRating": 1, // UNUSED
   "WeaponType": "lethal", // UNUSED
-  "WeaponDamage": 2,      // UNUSED
-  "Health": 6             // ONLY USED FIELD
+  "WeaponDamage": 2, // UNUSED
+  "Health": 6 // ONLY USED FIELD
 }
 ```
 
@@ -2823,11 +2834,13 @@ The current opponent schema defines many fields that are unused:
 Changes needed:
 
 1. **Remove COMBAT_ROUNDS_PER_TICK** and tick-based processing:
+
    - Process all rounds in `Combat.MaxRounds` in single execution
    - Remove `CombatState.Round` tracking between ticks
    - Simplify to full combat resolution
 
 2. **Update `process_combat_segment()` function:**
+
    - Calculate character's best offensive action (once at combat start)
    - Determine character's defensive action (based on offensive choice)
    - Process all rounds with 4 opposed checks per round:
@@ -2842,6 +2855,7 @@ Changes needed:
    - Use opponent's `WeaponType` to determine wound type
 
 3. **Update opponent data schema:**
+
    - Add `OffensiveAction` (Arcane|Brawling|Melee|Archery)
    - Add `OffensiveRating` (total skill value)
    - Add `DefensiveAction` (Parry|Dodge)
@@ -2851,6 +2865,7 @@ Changes needed:
    - Reserve `WeaponDamage` and `ArmorRating` for future use
 
 4. **New helper functions:**
+
    ```python
    def get_character_best_offensive_action(attributes, skills) -> tuple[str, float]:
        """Determine character's best offensive action."""
@@ -2886,12 +2901,14 @@ Changes needed:
 Changes for later:
 
 1. Equipment modifiers:
+
    - Weapon damage bonuses from `WeaponDamage`
    - Armor damage reduction from `ArmorRating`
    - Equipment stat bonuses
    - Shield bonuses to Parry
 
 2. Opponent full stats:
+
    - Use Attributes + Skills like characters (instead of ratings)
    - Equipment system for opponents
    - Dynamic action selection for opponents
@@ -2926,6 +2943,7 @@ Changes for later:
 **Victory Conditions (checked after each round):**
 
 Priority order:
+
 1. **Character Death:** Character reaches 0 health → DEATH outcome
 2. **Opponent Defeat:** Opponent reaches 0 health → Victory (quality based on wounds)
 3. **Max Rounds:** All rounds completed without decisive outcome → FAILURE (opponent escapes)
@@ -2933,6 +2951,7 @@ Priority order:
 **Victory Quality (when opponent defeated):**
 
 Based on wounds taken by character during combat:
+
 - **0 wounds** → EXCEPTIONAL outcome (flawless victory)
 - **1-2 wounds** → NORMAL outcome (clean victory)
 - **3+ wounds** → MINIMAL outcome (costly victory)
@@ -2940,6 +2959,7 @@ Based on wounds taken by character during combat:
 **Combat Log Structure:**
 
 Each round logs:
+
 ```python
 {
     "Round": 1,
@@ -3439,11 +3459,13 @@ Combat events use template-based narrative generation to create engaging descrip
 #### System Architecture
 
 **Backend (`eidolon/segment_combat.py`):**
+
 - Stores `OpponentName` in CombatState for client use
 - Provides full combat round data including offensive/defensive actions
 - No server-side narrative generation - keeps backend data-focused
 
 **Frontend (`incremental/lib/utils/combat_narrative.dart`):**
+
 - Client-side template engine for combat narratives
 - Generates text on-demand from combat data
 - Easily modifiable templates without backend deployment
@@ -3451,9 +3473,11 @@ Combat events use template-based narrative generation to create engaging descrip
 #### Implementation Files
 
 **Backend:**
+
 - `eidolon/segment_combat.py` - Adds `OpponentName` to CombatState (lines 134, 277, 291, 322, 336)
 
 **Frontend:**
+
 - `incremental/lib/utils/combat_narrative.dart` - Template-based narrative generator
 - `incremental/lib/widgets/story/active_story_widget.dart` - Integration into active story display
 - `incremental/lib/widgets/game/story_panel.dart` - Integration into completed segment cards
@@ -3473,6 +3497,7 @@ Combat events use template-based narrative generation to create engaging descrip
 The combat narrative generator is integrated in multiple locations for consistent combat display:
 
 **Active Story Display (`active_story_widget.dart`):**
+
 ```dart
 import 'package:eidolon_incremental/utils/combat_narrative.dart';
 
@@ -3496,6 +3521,7 @@ displayText = clientEvents
 ```
 
 **Completed Segment Cards (`story_panel.dart`):**
+
 ```dart
 String _extractSegmentNarrative(Map<String, dynamic> segment) {
   final clientEvents = segment['ClientEvents'] as List<dynamic>?;
@@ -3554,6 +3580,7 @@ String _extractOpponentName(Map<String, dynamic> segment) {
 ```
 
 **Segment History Viewer (`segment_history_viewer.dart`):**
+
 ```dart
 Widget _buildEventSummary(Map<String, dynamic> event) {
   final eventType = event['eventType'] as String? ?? event['EventType'] as String?;
@@ -3597,26 +3624,29 @@ static const _offensiveTemplates = {
 ```
 
 Defensive actions (Dodge/Parry) are appended to failed attacks when the defense succeeds:
+
 - "...but the attack is deflected **while the gremlin evades with quick reflexes**"
 - "...but the attack is deflected **as you parry expertly**"
 
 #### Example Output
 
 **Input Data (from backend):**
+
 ```json
 {
   "EventType": "combat",
   "Title": "Round 1",
   "Description": "Combat round",
   "Data": {
-    "CharacterOffensive": {"Action": "Arcane", "Success": true, "Sigma": 2.5},
-    "OpponentDefensive": {"Action": "Dodge", "Success": false},
-    "Damage": {"OpponentTook": 1}
+    "CharacterOffensive": { "Action": "Arcane", "Success": true, "Sigma": 2.5 },
+    "OpponentDefensive": { "Action": "Dodge", "Success": false },
+    "Damage": { "OpponentTook": 1 }
   }
 }
 ```
 
 **Generated Narrative:**
+
 ```
 Arthos unleashes arcane energy that strikes the gremlin with solid power.
 The gremlin swings their blade at Arthos, but the attack is deflected as Arthos parries expertly.
@@ -4768,6 +4798,7 @@ def test_story_start_integration():
 The primary testing approach is manual verification of system behavior:
 
 **Story Flow Testing:**
+
 1. Create test character via API
 2. Start story via `POST /story/start`
 3. Verify `GameMode = "Incremental"` in DynamoDB Characters table
@@ -4778,11 +4809,13 @@ The primary testing approach is manual verification of system behavior:
 8. Complete story and verify `GameMode` returns to `"None"`
 
 **Concurrent Request Testing:**
+
 1. Use `curl` or Postman to send 2+ simultaneous `/story/start` requests
 2. Verify only one succeeds (others get 409 Conflict)
 3. Check DynamoDB for conditional write metrics
 
 **State Machine Validation:**
+
 1. Attempt to start story with character already in Incremental mode (should fail)
 2. Verify logs show GameMode validation
 3. Test story abandonment resets GameMode correctly
@@ -4790,14 +4823,15 @@ The primary testing approach is manual verification of system behavior:
 ### 9.3 Flutter Client Testing
 
 Client testing uses Flutter's built-in test framework:
-        event = {}  # EventBridge event
-        context = Mock()
+event = {} # EventBridge event
+context = Mock()
 
         result = segment_poller_handler(event, context)
 
         assert result['processed'] == 2  # ready + stuck
         assert result['statusCode'] == 200
-```
+
+````
 
 ### 9.3 Load Testing
 
@@ -4854,7 +4888,7 @@ class IncrementalUser(HttpUser):
                 },
                 headers=self.headers
             )
-```
+````
 
 ## 10. Performance Optimization
 

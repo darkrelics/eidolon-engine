@@ -18,6 +18,7 @@ from eidolon.player import validate_player
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.story_retrieval import enrich_segment_with_narrative
+from eidolon.validation import validate_uuid
 
 
 def get_character_logic(character_id: str, player_id: str) -> dict:
@@ -145,6 +146,9 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     if not character_id:
         return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+
+    if not validate_uuid(character_id):
+        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
 
     # Call business logic
     try:

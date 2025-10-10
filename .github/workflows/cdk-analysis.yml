@@ -1,0 +1,66 @@
+name: CDK Security Analysis
+
+on:
+  push:
+    branches: [develop, qa, prod]
+    paths:
+      - "deployment/**/*.py"
+  pull_request:
+    branches: "**"
+    paths:
+      - "deployment/**/*.py"
+
+permissions:
+  pull-requests: read
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Checkov
+        run: |
+          python -m pip install --upgrade pip
+          pip install checkov
+
+      # CRITICAL TESTS - Must pass for build to succeed
+      - name: Scan CDK with Checkov (Security-Critical Checks)
+        continue-on-error: true
+        id: checkov_blocking
+        run: checkov -d deployment/ --framework cloudformation --config-file .checkov.yaml --skip-download
+
+      # COMPREHENSIVE EVALUATION - Informational only (all checks)
+      - name: Scan CDK with Checkov (Full Report)
+        continue-on-error: true
+        id: checkov_full
+        run: checkov -d deployment/ --framework cloudformation --compact --skip-download
+
+      - name: Check for critical failures
+        if: always()
+        run: |
+          if [[ ${{ steps.checkov_blocking.outcome }} != 'success' ]]; then
+            echo "Checkov security scan found issues"
+            echo "Review the scan output above for details"
+            exit 1
+          else
+            echo "All Checkov security checks passed"
+          fi
+
+      - name: Generate Analysis Summary
+        if: always()
+        run: |
+          echo "## CDK Security Analysis Summary" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Scan" >> $GITHUB_STEP_SUMMARY
+          echo "- Checkov Blocking: ${{ steps.checkov_blocking.outcome }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Checkov Full Report: ${{ steps.checkov_full.outcome }}" >> $GITHUB_STEP_SUMMARY

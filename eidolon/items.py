@@ -2,11 +2,26 @@
 
 import uuid
 from datetime import datetime, timezone
+from functools import cache
 
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
+
+
+@cache
+def get_prototype(prototype_id: str) -> dict | None:
+    """
+    Retrieve a prototype from DynamoDB with caching.
+
+    Args:
+        prototype_id: Prototype ID to fetch
+
+    Returns:
+        Prototype data dict or None if not found
+    """
+    return dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
 
 
 def build_item_payload(
@@ -55,7 +70,7 @@ def create_item_from_prototype(
         logger.warning("Cannot create item: missing prototype ID")
         return None
 
-    prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
+    prototype = get_prototype(prototype_id)
     if not prototype:
         logger.warning(f"Prototype not found for {prototype_id}")
         return None
@@ -172,15 +187,16 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
         slot_num = 0
         container_id = None
         items_for_container = []
-        items_before_container = []  # Track items that went into container at creation
+        items_before_container = []
+        items_to_create = []
 
-        # Single pass through all items
+        # First pass: Build all item payloads
         for item_def in starting_items:
             prototype_id = item_def.get("PrototypeID")
             is_worn = item_def.get("IsWorn", False)
             is_container = item_def.get("Container", False)
 
-            prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
+            prototype = get_prototype(prototype_id)
 
             if not prototype:
                 logger.warning(f"Prototype not found for {prototype_id}")
@@ -198,7 +214,7 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
                 container_id = item_id
                 # Update contents with items collected so far (items before container)
                 item_data["Contents"] = items_for_container.copy()
-                items_before_container = items_for_container.copy()  # Remember what we put in
+                items_before_container = items_for_container.copy()
                 # Clear the list for items after container
                 items_for_container = []
 
@@ -207,15 +223,21 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
             if not is_worn and not is_container:
                 items_for_container.append(item_id)
 
-            # Put item in Items table
-            dynamo.put_item(TableName.ITEMS, item_data)
+            # Add to batch write list
+            items_to_create.append(item_data)
 
             # Add to inventory only if worn or is the container
             if is_worn or (is_container and item_id == container_id):
                 inventory[str(slot_num)] = item_id
                 slot_num += 1
 
-            logger.info(f"Created item from prototype for {character_id}")
+        # Batch write all items at once
+        if items_to_create:
+            failed = dynamo.batch_write_with_retries(TableName.ITEMS, items_to_create, operation="put")
+            if failed:
+                logger.warning(f"Failed to create {len(failed)} items for {character_id}")
+            else:
+                logger.info(f"Created {len(items_to_create)} items from prototypes for {character_id}")
 
         # After all items are created, update container with items added after it
         if container_id and items_for_container:

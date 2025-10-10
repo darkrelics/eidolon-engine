@@ -3,6 +3,7 @@
 This document provides visual architecture diagrams for the Eidolon Engine incremental subsystem using Mermaid.js.
 
 ## Table of Contents
+
 1. [System Context (C4 Level 1)](#system-context-c4-level-1)
 2. [Container Architecture (C4 Level 2)](#container-architecture-c4-level-2)
 3. [Component Architecture (C4 Level 3)](#component-architecture-c4-level-3)

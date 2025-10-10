@@ -19,6 +19,7 @@ The Eidolon Engine prioritizes well-designed, simple, readable code over test co
 Code that is simple, focused, and properly designed is self-evident in correctness. When functions do one thing well, have clear inputs and outputs, and avoid complex state management, their correctness can be verified by inspection.
 
 **Project Example:**
+
 ```python
 def validate_uuid(uuid_string: str) -> bool:
     """Check if string is valid UUID format."""
@@ -41,6 +42,7 @@ When tests are bad but code is good, developers waste time debugging correct cod
 - Test maintenance becomes a project of its own
 
 **Common Anti-Patterns:**
+
 - Tests that pass regardless of code correctness (false positives)
 - Tests that fail on correct code due to environment issues (false negatives)
 - Tests that encode implementation details, breaking when code is refactored correctly
@@ -49,12 +51,14 @@ When tests are bad but code is good, developers waste time debugging correct cod
 ### 3. Unit Tests Double the Effort for Changes
 
 Every code change requires:
+
 1. Changing the implementation
 2. Updating tests to match new behavior
 3. Verifying tests still provide value
 4. Debugging test failures unrelated to actual bugs
 
 **Cognitive Load Multiplication:**
+
 - Change a function signature → update 10 tests
 - Refactor internal implementation → fix 20 mocks
 - Rename a variable → update test assertions
@@ -67,6 +71,7 @@ This effort multiplication hinders rapid iteration and experimentation.
 The most valuable changes in software are fundamental redesigns that improve architecture. Unit tests actively resist these changes:
 
 **Resistance to Improvement:**
+
 - Large-scale refactoring breaks hundreds of tests
 - "Don't refactor, the tests will break" becomes the default mindset
 - Tests encode old assumptions that should be challenged
@@ -74,6 +79,7 @@ The most valuable changes in software are fundamental redesigns that improve arc
 
 **Example Scenario:**
 A state machine implementation needs fundamental redesign. With comprehensive unit tests:
+
 - 200 tests need updating
 - Tests encode old state transition logic
 - Developer abandons improvement to avoid test maintenance
@@ -84,6 +90,7 @@ A state machine implementation needs fundamental redesign. With comprehensive un
 Many developers write unit tests because "that's what professional developers do" without understanding the actual value proposition. This leads to:
 
 **Cargo Cult Behaviors:**
+
 - Aiming for 100% code coverage as a metric, not a measure of quality
 - Writing tests that exercise code without verifying meaningful behavior
 - Testing trivial getters/setters that can't fail
@@ -91,6 +98,7 @@ Many developers write unit tests because "that's what professional developers do
 - Treating "test-driven development" as religious doctrine
 
 **Coverage Theater:**
+
 ```python
 def test_get_character_id():
     """Test that get_character_id returns character ID."""
@@ -103,6 +111,7 @@ This test adds no value. It verifies dictionary access works in Python.
 ### 6. False Sense of Security
 
 "All tests pass" does not mean "code is correct." The most critical bugs are often:
+
 - Race conditions (not caught by single-threaded unit tests)
 - Integration failures (not caught by isolated unit tests)
 - Performance issues (not measured by functional tests)
@@ -113,6 +122,7 @@ This test adds no value. It verifies dictionary access works in Python.
 ### 7. Opportunity Cost
 
 Time spent writing and maintaining unit tests could be spent on:
+
 - Better design and architecture
 - Integration testing that verifies actual system behavior
 - Production monitoring and observability
@@ -127,6 +137,7 @@ Time spent writing and maintaining unit tests could be spent on:
 ### 1. Integration Testing
 
 We test real workflows end-to-end:
+
 - Create character → start story → complete segment → verify state
 - Tests run against actual DynamoDB (local or test account)
 - Verifies the entire system works together correctly
@@ -134,6 +145,7 @@ We test real workflows end-to-end:
 ### 2. Manual Testing
 
 For a system of this scale, manual testing of critical paths is:
+
 - Faster than writing comprehensive unit tests
 - More effective at catching real issues
 - Better aligned with actual user experience
@@ -142,6 +154,7 @@ For a system of this scale, manual testing of critical paths is:
 ### 3. Code Review
 
 All code is reviewed for:
+
 - Simplicity and clarity
 - Correct business logic
 - Proper error handling
@@ -152,6 +165,7 @@ A good code review catches bugs that unit tests miss.
 ### 4. Production Monitoring
 
 Observability in production provides:
+
 - Real user behavior patterns
 - Actual error rates and types
 - Performance bottlenecks
@@ -160,6 +174,7 @@ Observability in production provides:
 ### 5. Design for Correctness
 
 The best testing strategy is designing code that can't fail:
+
 - Use type hints to catch errors at development time
 - Use enums instead of magic strings
 - Use DynamoDB conditional writes for atomic operations
@@ -167,6 +182,7 @@ The best testing strategy is designing code that can't fail:
 - Keep functions small and focused
 
 **Example:**
+
 ```python
 class GameMode(str, Enum):
     NONE = "None"
@@ -185,6 +201,7 @@ There are cases where targeted testing provides clear value:
 ### 1. Complex Business Logic
 
 Algorithms with many edge cases (damage calculation, XP formulas) benefit from verification. But these should be:
+
 - Integration tests, not unit tests
 - Testing observable behavior, not internal state
 - Minimal and focused on actual edge cases
@@ -192,6 +209,7 @@ Algorithms with many edge cases (damage calculation, XP formulas) benefit from v
 ### 2. Security-Critical Code
 
 Authentication, authorization, and cryptographic functions warrant extra verification. But again:
+
 - Test the security properties, not implementation details
 - Use security audits and code review
 - Prefer battle-tested libraries over custom implementations
@@ -207,6 +225,7 @@ If compliance demands test coverage, meet the minimum requirement but don't let 
 ### "But Google/Amazon/Facebook use unit tests!"
 
 They also have:
+
 - Thousands of developers
 - Dedicated QA teams
 - Automated test infrastructure
@@ -226,6 +245,7 @@ We are not Google. We make different tradeoffs.
 If refactoring breaks the system, integration tests will catch it. If refactoring breaks unit tests but not the system, the tests were wrong.
 
 Safe refactoring comes from:
+
 - Small, incremental changes
 - Clear interfaces and contracts
 - Type safety
@@ -234,6 +254,7 @@ Safe refactoring comes from:
 ### "This is unprofessional!"
 
 Professionalism means making informed decisions about tradeoffs, not following dogma. We choose:
+
 - Fast iteration over comprehensive test coverage
 - Clear code over test-driven design
 - Integration testing over unit testing
@@ -268,6 +289,6 @@ Professionalism means making informed decisions about tradeoffs, not following d
 
 ## Revision History
 
-| Date | Change | Author |
-|------|--------|--------|
-| 2025-10-02 | Initial policy document | Development Team |
+| Date       | Change                  | Author           |
+| ---------- | ----------------------- | ---------------- |
+| 2025-10-02 | Initial policy document | Jason E. Robinson|

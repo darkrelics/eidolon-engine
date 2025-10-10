@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/utils/rpg_icons.dart';
+import 'package:fluttericon/rpg_awesome_icons.dart';
 
 /// Right panel displaying character inventory
 class InventoryPanel extends StatelessWidget {
@@ -83,7 +85,7 @@ class InventoryPanel extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.inventory,
+            Icons.inventory_2,
             size: 64,
             color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),
@@ -312,7 +314,7 @@ class _InventorySlot extends StatelessWidget {
               ),
             ),
             if (isEquipped)
-              Icon(Icons.check_circle, size: 16, color: colorScheme.primary),
+              Icon(RpgAwesome.doubled, size: 16, color: colorScheme.primary),
           ],
         ),
       ),
@@ -328,32 +330,7 @@ class _InventorySlot extends StatelessWidget {
   }
 
   IconData _getSlotIcon(String slot) {
-    switch (slot.toLowerCase()) {
-      case 'head':
-      case 'helmet':
-        return Icons.face;
-      case 'chest':
-      case 'armor':
-      case 'body':
-        return Icons.checkroom;
-      case 'weapon':
-      case 'main_hand':
-      case 'mainhand':
-        return Icons.sports_kabaddi;
-      case 'off_hand':
-      case 'offhand':
-      case 'shield':
-        return Icons.shield;
-      case 'ring':
-      case 'ring1':
-      case 'ring2':
-        return Icons.radio_button_unchecked;
-      case 'neck':
-      case 'amulet':
-        return Icons.circle;
-      default:
-        return Icons.category;
-    }
+    return RpgIcons.getEquipmentSlotIcon(slot);
   }
 
   Color _getRarityColor(String rarity) {
@@ -428,26 +405,7 @@ class _InventoryGridItem extends StatelessWidget {
   }
 
   IconData _getItemIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'weapon':
-        return Icons.sports_kabaddi;
-      case 'armor':
-        return Icons.shield;
-      case 'potion':
-        return Icons.local_drink;
-      case 'scroll':
-        return Icons.description;
-      case 'ring':
-        return Icons.radio_button_unchecked;
-      case 'amulet':
-        return Icons.circle;
-      case 'consumable':
-        return Icons.restaurant;
-      case 'material':
-        return Icons.category;
-      default:
-        return Icons.inventory_2;
-    }
+    return RpgIcons.getItemTypeIcon(type);
   }
 
   Color _getRarityColor(String rarity) {
