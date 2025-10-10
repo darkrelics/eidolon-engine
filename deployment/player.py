@@ -556,9 +556,7 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
 
             if settings_configured:
                 # Configure Lambda permissions and verify settings
-                trigger_configured = configure_lambda_permissions_and_verify(
-                    validation["user_pool_id"], lambda_arn, params.region
-                )
+                trigger_configured = configure_lambda_permissions_and_verify(validation["user_pool_id"], lambda_arn, params.region)
                 if not trigger_configured:
                     print("  [ERROR] Failed to configure permissions or verify trigger - new user registration may not work")
                     print("  [ERROR] Deployment continuing with errors")
