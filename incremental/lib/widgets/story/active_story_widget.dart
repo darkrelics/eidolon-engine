@@ -32,20 +32,6 @@ class ActiveStoryWidget extends StatefulWidget {
 }
 
 class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
-  late List<Map<String, dynamic>> _orderedHistory;
-
-  @override
-  void initState() {
-    super.initState();
-    _orderedHistory = _buildOrderedHistory(widget.segmentHistory);
-  }
-
-  @override
-  void didUpdateWidget(covariant ActiveStoryWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _orderedHistory = _buildOrderedHistory(widget.segmentHistory);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -88,17 +74,17 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
             const SizedBox(height: 20),
           ],
 
-          // Previous Segments (show in reverse order - newest first)
-          if (_orderedHistory.isNotEmpty) ...[
+          // Previous Segments (newest first)
+          if (widget.segmentHistory.isNotEmpty) ...[
             Text('Previous Segments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _orderedHistory.length,
+              itemCount: widget.segmentHistory.length,
               separatorBuilder: (context, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
-                final segment = _orderedHistory[index];
+                final segment = widget.segmentHistory[index];
                 return _SimpleSegmentCard(
                   segment: segment,
                   isActive: false,
@@ -111,11 +97,6 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
         ],
       ),
     );
-  }
-
-  List<Map<String, dynamic>> _buildOrderedHistory(List<Map<String, dynamic>> history) {
-    final copied = history.map((segment) => Map<String, dynamic>.from(segment)).toList();
-    return copied.reversed.toList(growable: false);
   }
 }
 

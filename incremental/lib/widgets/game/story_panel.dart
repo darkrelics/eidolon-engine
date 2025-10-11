@@ -237,15 +237,16 @@ class _StoryPanelState extends State<StoryPanel> {
 
     // Get story data and completed segments (prefer provided history from parent)
     final storyData = widget.character.storyState?['Story'] as Map<String, dynamic>?;
-    final completedSegmentsDynamic = widget.segmentHistory.isNotEmpty
+    final completedSegmentsSource = widget.segmentHistory.isNotEmpty
         ? widget.segmentHistory
         : (widget.character.storyState?['CompletedSegments'] as List<dynamic>? ?? const []);
 
-    final completedSegments = completedSegmentsDynamic.map((segment) => segment as Map<String, dynamic>).toList();
+    final completedSegments = completedSegmentsSource.map((segment) => segment as Map<String, dynamic>).toList();
+    final orderedSegments = _sortCompletedSegmentsDescending(completedSegments);
 
     if (completedSegments.isEmpty) {
       // Attempt to infer story information from history if available
-      final storyTitle = widget.segmentHistory.isNotEmpty ? widget.segmentHistory.last['StoryTitle'] as String? : null;
+      final storyTitle = widget.segmentHistory.isNotEmpty ? widget.segmentHistory.first['StoryTitle'] as String? : null;
       // Fallback to simple completion screen
       return Center(
         child: Column(
@@ -270,8 +271,8 @@ class _StoryPanelState extends State<StoryPanel> {
     }
 
     // Get the last segment to determine overall outcome
-    final lastSegment = completedSegments.last;
-    final lastOutcome = lastSegment['Outcome'] ?? 'normal';
+    final latestSegment = orderedSegments.isNotEmpty ? orderedSegments.first : completedSegments.last;
+    final lastOutcome = latestSegment['Outcome'] ?? 'normal';
 
     // Check if story ended in death or complete failure
     final storyFailed = lastOutcome == 'death' || lastOutcome == 'failure';
@@ -279,7 +280,7 @@ class _StoryPanelState extends State<StoryPanel> {
     // If the API no longer supplies story metadata, fall back to the last segment title
     Map<String, dynamic>? effectiveStoryData = storyData;
     if (effectiveStoryData == null) {
-      final inferredTitle = lastSegment['StoryTitle'];
+      final inferredTitle = latestSegment['StoryTitle'];
       if (inferredTitle is String && inferredTitle.isNotEmpty) {
         effectiveStoryData = {'Title': inferredTitle};
       }
@@ -324,12 +325,12 @@ class _StoryPanelState extends State<StoryPanel> {
             const SizedBox(height: 16),
           ],
 
-          // Segment History - Reverse order (newest first)
+          // Segment History (newest first)
           Text('Story Segments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
 
-          // Display segments in reverse order with full details
-          ...completedSegments.reversed.map((segmentMap) => _buildCompletedSegmentCard(segmentMap, theme)),
+          // Display segments with full details
+          ...orderedSegments.map((segmentMap) => _buildCompletedSegmentCard(segmentMap, theme)),
 
           const SizedBox(height: 24),
 
@@ -421,6 +422,80 @@ class _StoryPanelState extends State<StoryPanel> {
         ),
       ),
     );
+  }
+
+  List<Map<String, dynamic>> _sortCompletedSegmentsDescending(List<Map<String, dynamic>> segments) {
+    if (segments.isEmpty) {
+      return const [];
+    }
+
+    final sorted = segments.map((segment) => Map<String, dynamic>.from(segment)).toList();
+    sorted.sort((a, b) {
+      final aTime = _parseSegmentTimestamp(a);
+      final bTime = _parseSegmentTimestamp(b);
+
+      if (aTime == null && bTime == null) {
+        final aKey = (a['SegmentID'] ?? a['ActiveSegmentID'] ?? '').toString();
+        final bKey = (b['SegmentID'] ?? b['ActiveSegmentID'] ?? '').toString();
+        return aKey.compareTo(bKey);
+      }
+      if (aTime == null) {
+        return 1;
+      }
+      if (bTime == null) {
+        return -1;
+      }
+
+      final comparison = bTime.compareTo(aTime); // Newest first
+      if (comparison != 0) {
+        return comparison;
+      }
+
+      final aKey = (a['SegmentID'] ?? a['ActiveSegmentID'] ?? '').toString();
+      final bKey = (b['SegmentID'] ?? b['ActiveSegmentID'] ?? '').toString();
+      return aKey.compareTo(bKey);
+    });
+
+    return sorted;
+  }
+
+  DateTime? _parseSegmentTimestamp(Map<String, dynamic> segment) {
+    const fields = ['CompletedAt', 'ProcessedAt', 'EndTime', 'StartTime', 'CreatedAt'];
+    for (final field in fields) {
+      final value = segment[field];
+      final parsed = _parseTimestamp(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  DateTime? _parseTimestamp(Object? value) {
+    if (value == null) return null;
+    if (value is DateTime) return value.toUtc();
+    if (value is num) {
+      final numeric = value.toDouble();
+      if (numeric.isNaN) return null;
+      if (numeric > 1000000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(numeric.round(), isUtc: true);
+      }
+      return DateTime.fromMillisecondsSinceEpoch((numeric * 1000).round(), isUtc: true);
+    }
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) return null;
+      final numeric = double.tryParse(trimmed);
+      if (numeric != null) {
+        return _parseTimestamp(numeric);
+      }
+      try {
+        return DateTime.parse(trimmed).toUtc();
+      } catch (_) {
+        return null;
+      }
+    }
+    return null;
   }
 
   static bool _isProcessingPlaceholder(String? value) {
