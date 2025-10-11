@@ -135,12 +135,8 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 except Exception as err:
                     logger.error(f"Failed to apply combat rewards for {character_id} Error: {err}", exc_info=True)
 
-        # Story outcome effects are now applied immediately in ops_segment_process
-        # This is kept for backwards compatibility with existing segments that may have effects stored
-        story_effects = character_updates.get("StoryEffects", {})
-        if story_effects:
-            logger.info("Found legacy StoryEffects in CharacterUpdates (already applied by processor)")
-            # Effects should have already been applied by ops_segment_process
+        # Story outcome effects are applied immediately during segment processing
+        # They are stored in CharacterUpdates for client display purposes only
 
     # NOTE: Segment was already marked as completed at the start of this function (atomic claim)
     # This ensures idempotency - if we get here, we already own this segment
