@@ -22,6 +22,7 @@ class StoryPanel extends StatefulWidget {
   final VoidCallback? onAbandonStory;
   final VoidCallback? onReturnToStories;
   final bool isDecisionSubmitting;
+  final bool isStoryConfirmedComplete;
 
   const StoryPanel({
     super.key,
@@ -36,6 +37,7 @@ class StoryPanel extends StatefulWidget {
     this.onAbandonStory,
     this.onReturnToStories,
     this.isDecisionSubmitting = false,
+    this.isStoryConfirmedComplete = false,
   });
 
   @override
@@ -53,21 +55,36 @@ class _StoryPanelState extends State<StoryPanel> {
   }
 
   bool _isStoryComplete() {
-    final char = widget.character;
+    // CRITICAL FIX: Only show completion screen when explicitly confirmed by polling service
+    // This prevents premature completion detection during segment transitions
+    //
+    // Previous logic would mark story as complete whenever activeStoryID == null,
+    // but this can happen temporarily while the backend generates the next segment.
+    // This caused "Story Complete" to flash while the story was still running.
+    //
+    // Now we require explicit confirmation from the polling service's onStoryComplete callback,
+    // which only triggers when the backend sends a definitive terminal signal.
 
-    // If character has an active story, it's not complete
-    if (char.activeStoryID != null) {
+    final char = widget.character;
+    final confirmed = widget.isStoryConfirmedComplete;
+    final hasActiveStoryID = char.activeStoryID != null;
+
+    debugPrint('StoryPanel: Checking completion - confirmed=$confirmed, activeStoryID=$hasActiveStoryID (${char.activeStoryID}), segmentHistory=${widget.segmentHistory.length}');
+
+    if (!confirmed) {
+      debugPrint('StoryPanel: Story NOT confirmed complete by lifecycle state');
       return false;
     }
 
-    // Story is complete if:
-    // 1. No active story ID (cleared by server on completion)
-    // 2. AND we have either segment history or completed segments in story state
+    // If confirmed complete, verify we have segments to display
     final hasSegmentHistory = widget.segmentHistory.isNotEmpty;
     final stateSegments = char.storyState?['CompletedSegments'] as List<dynamic>?;
     final hasCompletedSegments = stateSegments != null && stateSegments.isNotEmpty;
+    final isComplete = hasSegmentHistory || hasCompletedSegments;
 
-    return hasSegmentHistory || hasCompletedSegments;
+    debugPrint('StoryPanel: Story confirmed complete - hasSegments=$hasSegmentHistory, hasStateSegments=$hasCompletedSegments, showing=$isComplete');
+
+    return isComplete;
   }
 
   @override

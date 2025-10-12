@@ -352,16 +352,34 @@ class _SimpleSegmentCard extends StatelessWidget {
       hasTimerExpired = true;
     }
 
-    // For active segments, only reveal results when the timer has expired.
-    // The backend sends ProcessingStatus="processed" with results early so the client has them ready,
-    // but the client waits for the timer before displaying them (proper UX pacing).
-    // For historical (non-active) segments, we can reveal immediately if processed or flagged complete.
-    final bool shouldRevealResults =
-        !isActive ||
-        isCompleteFlag ||
-        (!isActive && processingStatus == 'processed') ||
-        (isActive && hasTimerExpired);
+    // CRITICAL FIX: Proper gating to prevent showing both active and completed cards simultaneously
+    //
+    // Display rules (from third-party analysis):
+    // 1. Active segments: Show timer card UNTIL timer expires, even if ProcessingStatus="processed"
+    // 2. Only reveal results when: segment is processed AND timer has expired
+    // 3. Historical segments: Show completed card only if processed and NOT currently active
+    //
+    // This prevents the race condition where:
+    // - Backend sends ProcessingStatus="processed" at T=50s
+    // - Timer expires at T=60s
+    // - Both active (timer expired) and completed cards could briefly show
+    //
+    // Fix: For active segments, require BOTH processed status AND timer expiration
+    final bool shouldRevealResults;
+    if (isActive) {
+      // Active segment: Only reveal when timer has expired AND segment is processed
+      shouldRevealResults = hasTimerExpired && (processingStatus == 'processed' || isCompleteFlag);
+      debugPrint('ActiveStoryWidget: Active segment gating - timerExpired=$hasTimerExpired, processed=${processingStatus == 'processed'}, complete=$isCompleteFlag, reveal=$shouldRevealResults');
+    } else {
+      // Historical segment: Reveal if processed (and it's not the active segment anymore)
+      shouldRevealResults = processingStatus == 'processed' || isCompleteFlag;
+      debugPrint('ActiveStoryWidget: Historical segment - processed=${processingStatus == 'processed'}, complete=$isCompleteFlag, reveal=$shouldRevealResults');
+    }
+
     final bool waitingOnTimer = isActive && !shouldRevealResults;
+    if (waitingOnTimer) {
+      debugPrint('ActiveStoryWidget: Waiting on timer - showing processing indicator (timeRemaining=${timeRemaining ?? 'unknown'})');
+    }
 
     var processingIndicatorText = '';
     if (waitingOnTimer) {

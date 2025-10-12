@@ -32,6 +32,16 @@ class GameScreen extends StatefulWidget {
 
 enum CharacterLoadRateLimitStrategy { automated, humanDriven, immediate }
 
+/// Story lifecycle states to prevent premature completion detection
+enum StoryLifecycleState {
+  /// No active story
+  none,
+  /// Story is running with active segments
+  running,
+  /// Story completion confirmed by polling service
+  completed,
+}
+
 class _GameScreenState extends State<GameScreen> {
   late ApiService _apiService;
   late StoryPollingService _runtime;
@@ -43,6 +53,9 @@ class _GameScreenState extends State<GameScreen> {
   bool _isSubmittingDecision = false;
   bool _storyCompletionNotified = false;
   Future<void>? _activeCharacterLoad;
+
+  // Story lifecycle tracking to prevent premature completion
+  StoryLifecycleState _storyLifecycleState = StoryLifecycleState.none;
 
   // Character update timer (when not in active story)
   Timer? _characterUpdateTimer;
@@ -185,17 +198,38 @@ class _GameScreenState extends State<GameScreen> {
     _segmentHistory = <Map<String, dynamic>>[];
     _lastStoryDetails = null;
     _storyCompletionNotified = false;
+    _storyLifecycleState = StoryLifecycleState.none;
   }
 
+  /// Generate stable identity for segment tracking
+  ///
+  /// CRITICAL FIX: Use ActiveSegmentID as primary key for deduplication
+  /// This prevents duplicate cards and ensures proper segment tracking.
+  ///
+  /// Key hierarchy (from third-party analysis):
+  /// 1. ActiveSegmentID (preferred) - unique per segment execution
+  /// 2. SegmentID (fallback) - story definition ID, can repeat across executions
+  /// 3. Composite key (last resort) - for segments missing both IDs
   String _segmentIdentity(Map<String, dynamic> segment) {
-    final rawSegmentId = segment['SegmentID'] ?? segment['ActiveSegmentID'];
-    if (rawSegmentId != null) {
-      final idString = rawSegmentId.toString().trim();
+    // Primary key: ActiveSegmentID (unique execution identifier)
+    final activeSegmentId = segment['ActiveSegmentID'];
+    if (activeSegmentId != null) {
+      final idString = activeSegmentId.toString().trim();
       if (idString.isNotEmpty) {
-        return idString;
+        return 'active:$idString';
       }
     }
 
+    // Fallback: SegmentID (story definition identifier)
+    final segmentId = segment['SegmentID'];
+    if (segmentId != null) {
+      final idString = segmentId.toString().trim();
+      if (idString.isNotEmpty) {
+        return 'segment:$idString';
+      }
+    }
+
+    // Last resort: Composite key from available fields
     final storyInstanceId = segment['StoryInstanceID']?.toString().trim();
     final storyId = segment['StoryID']?.toString().trim();
     final completedAt = _segmentCompletionTimestamp(segment)?.millisecondsSinceEpoch;
@@ -213,10 +247,10 @@ class _GameScreenState extends State<GameScreen> {
     ];
 
     if (parts.isEmpty) {
-      return 'segment-${segment.hashCode}';
+      return 'fallback:${segment.hashCode}';
     }
 
-    return parts.join('|');
+    return 'composite:${parts.join('|')}';
   }
 
   DateTime? _segmentCompletionTimestamp(Map<String, dynamic> segment) {
@@ -505,6 +539,10 @@ class _GameScreenState extends State<GameScreen> {
         debugPrint('GameScreen: Added initial segment to history: ${_character!.activeSegmentID}');
 
         _isLoading = false;
+
+        // Set story lifecycle to running
+        _storyLifecycleState = StoryLifecycleState.running;
+        debugPrint('GameScreen: Story lifecycle state changed to RUNNING - story started: ${story.title}');
       });
 
       _startOrchestrationIfNeeded(force: true);
@@ -532,6 +570,14 @@ class _GameScreenState extends State<GameScreen> {
 
     if (segId == null) return; // No active story
 
+    // Set story lifecycle to running when orchestration starts
+    if (_storyLifecycleState != StoryLifecycleState.running) {
+      debugPrint('GameScreen: Story lifecycle state changed to RUNNING - orchestration started for segment: $segId');
+      setState(() {
+        _storyLifecycleState = StoryLifecycleState.running;
+      });
+    }
+
     _runtime.startPolling(
       characterId: _character!.id,
       onStatusUpdate: (status) {
@@ -541,6 +587,10 @@ class _GameScreenState extends State<GameScreen> {
         final segmentId = status['ActiveSegmentID']?.toString() ?? status['SegmentID']?.toString();
         final segmentKey = _segmentIdentity(status);
         final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
+        final processingStatus = status['ProcessingStatus'];
+        final timeRemaining = status['TimeRemaining'];
+
+        debugPrint('GameScreen: Segment update - ID: $segmentId, Status: $processingStatus, Time: ${timeRemaining}s, InHistory: $exists');
 
         if (!exists) {
           final segmentCopy = Map<String, dynamic>.from(status);
@@ -548,7 +598,7 @@ class _GameScreenState extends State<GameScreen> {
             segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
           }
           _segmentHistory = [..._segmentHistory, segmentCopy];
-          debugPrint('GameScreen: Added segment to history for tracking: ${segmentId ?? segmentKey}');
+          debugPrint('GameScreen: Added segment to history (total: ${_segmentHistory.length})');
         } else {
           // Update existing segment in history with latest data
           _segmentHistory = _segmentHistory.map((s) {
@@ -561,6 +611,7 @@ class _GameScreenState extends State<GameScreen> {
             }
             return s;
           }).toList();
+          debugPrint('GameScreen: Updated existing segment in history');
         }
 
         // Update character with new segment status
@@ -621,7 +672,17 @@ class _GameScreenState extends State<GameScreen> {
       onStoryComplete: () async {
         if (!mounted) return;
 
-        debugPrint('GameScreen: Story complete');
+        debugPrint('GameScreen: Story complete - confirmed by polling service');
+        debugPrint('GameScreen: Previous lifecycle state: $_storyLifecycleState');
+        debugPrint('GameScreen: Active story ID: ${_character?.activeStoryID}');
+        debugPrint('GameScreen: Active segment ID: ${_character?.activeSegmentID}');
+        debugPrint('GameScreen: Segment history count: ${_segmentHistory.length}');
+
+        // Mark story as completed (confirmed by polling service)
+        setState(() {
+          _storyLifecycleState = StoryLifecycleState.completed;
+        });
+        debugPrint('GameScreen: Story lifecycle state changed to COMPLETED');
 
         // Handle completion
         await _handleStoryCompletion(refreshCharacter: true, showMessage: true);
@@ -895,8 +956,17 @@ class _GameScreenState extends State<GameScreen> {
 
 
   Future<void> _handleStoryCompletion({bool refreshCharacter = true, bool showMessage = true, Map<String, dynamic>? finalActiveSegment}) async {
-    debugPrint('GameScreen: Handling story completion');
+    debugPrint('GameScreen: Handling story completion (refreshCharacter=$refreshCharacter, showMessage=$showMessage)');
+    debugPrint('GameScreen: Current lifecycle state: $_storyLifecycleState');
     _runtime.stopPolling();
+
+    // Ensure lifecycle state is set to completed
+    if (_storyLifecycleState != StoryLifecycleState.completed) {
+      debugPrint('GameScreen: Setting lifecycle state to COMPLETED (was $_storyLifecycleState)');
+      setState(() {
+        _storyLifecycleState = StoryLifecycleState.completed;
+      });
+    }
 
     // Capture the final segment BEFORE reloading character
     // This ensures we have the complete segment data even if backend clears it
@@ -968,12 +1038,15 @@ class _GameScreenState extends State<GameScreen> {
       final fallbackStoryTitle = _segmentHistory.isNotEmpty ? _segmentHistory.last['StoryTitle'] as String? : null;
       final storyTitle = storyData?['Title'] ?? fallbackStoryTitle ?? 'Story';
 
+      debugPrint('GameScreen: Showing completion notification for: $storyTitle');
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('$storyTitle complete'), duration: const Duration(seconds: 4)));
 
       _storyCompletionNotified = true;
     }
+
+    debugPrint('GameScreen: Story completion handling finished - lifecycle: $_storyLifecycleState, segments: ${_segmentHistory.length}');
   }
 
   Future<void> _handleStoryAbandonment() async {
@@ -1027,6 +1100,7 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   Future<void> _handleReturnToStories() async {
+    debugPrint('GameScreen: Returning to stories - previous lifecycle: $_storyLifecycleState');
     // Clear story state locally and reload to get available stories
     _runtime.stopPolling();
     if (mounted) {
@@ -1035,7 +1109,9 @@ class _GameScreenState extends State<GameScreen> {
           _character = _character!.copyWith(storyState: null, gameMode: 'None');
         }
         _lastStoryDetails = null;
+        _storyLifecycleState = StoryLifecycleState.none;
       });
+      debugPrint('GameScreen: Story lifecycle state changed to NONE');
     }
 
     // Reload character to get available stories
@@ -1275,12 +1351,25 @@ class _GameScreenState extends State<GameScreen> {
   List<Map<String, dynamic>> _getCompletedSegments() {
     final activeSegmentId = _character?.activeSegmentID;
     final completed = _segmentHistory.where((segment) {
-      final segmentId = segment['SegmentID']?.toString() ?? segment['ActiveSegmentID']?.toString();
+      // Check ActiveSegmentID first to match character.activeSegmentID (unique execution ID)
+      // SegmentID is the story definition ID and can repeat across multiple executions
+      final segmentActiveId = segment['ActiveSegmentID']?.toString() ?? segment['SegmentID']?.toString();
       // Only show as completed if it's NOT the current active segment
-      return segmentId != activeSegmentId && _isSegmentComplete(segment);
+      final isComplete = segmentActiveId != activeSegmentId && _isSegmentComplete(segment);
+
+      if (!isComplete && segmentActiveId == activeSegmentId) {
+        debugPrint('GameScreen: Filtering out active segment from completed list: $segmentActiveId');
+      }
+
+      return isComplete;
     }).toList();
 
     _sortSegmentsChronologically(completed, newestFirst: true);
+
+    if (completed.length != _segmentHistory.length) {
+      debugPrint('GameScreen: Completed segments: ${completed.length}/${_segmentHistory.length} (active: $activeSegmentId)');
+    }
+
     return completed;
   }
 
@@ -1291,12 +1380,14 @@ class _GameScreenState extends State<GameScreen> {
     void addSegments(Iterable<Map<String, dynamic>> segments) {
       for (final segment in segments) {
         final copy = Map<String, dynamic>.from(segment);
-        final segmentId =
-            copy['SegmentID']?.toString() ?? copy['ActiveSegmentID']?.toString();
+        // Check ActiveSegmentID first to match character.activeSegmentID (unique execution ID)
+        // SegmentID is the story definition ID and can repeat across multiple executions
+        final segmentActiveId =
+            copy['ActiveSegmentID']?.toString() ?? copy['SegmentID']?.toString();
         final key = _segmentIdentity(copy);
 
         // Only add if it's NOT the current active segment (completed mode only)
-        final isActiveSegment = activeSegmentId != null && segmentId == activeSegmentId;
+        final isActiveSegment = activeSegmentId != null && segmentActiveId == activeSegmentId;
         if (!isActiveSegment) {
           deduped[key] = copy;
         }
@@ -1375,6 +1466,7 @@ class _GameScreenState extends State<GameScreen> {
             onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
             onReturnToStories: _handleReturnToStories,
             isDecisionSubmitting: _isSubmittingDecision,
+            isStoryConfirmedComplete: _storyLifecycleState == StoryLifecycleState.completed,
           ),
         ),
         // Inventory Panel (Right)
@@ -1406,6 +1498,7 @@ class _GameScreenState extends State<GameScreen> {
             onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
             onReturnToStories: _handleReturnToStories,
             isDecisionSubmitting: _isSubmittingDecision,
+            isStoryConfirmedComplete: _storyLifecycleState == StoryLifecycleState.completed,
           ),
         ),
         // Inventory Panel (Collapsible)
@@ -1432,6 +1525,7 @@ class _GameScreenState extends State<GameScreen> {
           onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
           onReturnToStories: _handleReturnToStories,
           isDecisionSubmitting: _isSubmittingDecision,
+          isStoryConfirmedComplete: _storyLifecycleState == StoryLifecycleState.completed,
         );
       case 2:
         return InventoryPanel(character: _character!);
