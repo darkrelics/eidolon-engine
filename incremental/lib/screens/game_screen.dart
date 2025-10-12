@@ -757,7 +757,25 @@ class _GameScreenState extends State<GameScreen> {
 
     try {
       final historyResponse = await _apiService.getSegmentHistory(characterId: _character!.id);
-      final history = historyResponse.map((segment) => Map<String, dynamic>.from(segment)).where(_isSegmentComplete).toList();
+
+      // Trust backend completion markers, don't apply client-side timer checks to history
+      final history = historyResponse.map((segment) => Map<String, dynamic>.from(segment)).where((segment) {
+        final completedAt = segment['CompletedAt'];
+        if (completedAt is String && completedAt.isNotEmpty) {
+          return true;
+        }
+        if (completedAt is num && completedAt > 0) {
+          return true;
+        }
+
+        final status = segment['Status']?.toString().toLowerCase();
+        if (status == 'completed') {
+          return true;
+        }
+
+        return _isSegmentComplete(segment);
+      }).toList();
+
       _sortSegmentsChronologically(history);
       if (!mounted) return;
       setState(() {
