@@ -622,8 +622,14 @@ class _GameScreenState extends State<GameScreen> {
           _lastStoryDetails = Map<String, dynamic>.from(story);
         }
 
+        // Update activeSegmentID to match the new segment
+        final newActiveSegmentId = status['ActiveSegmentID']?.toString() ?? status['SegmentID']?.toString();
+
         setState(() {
-          _character = _character!.copyWith(storyState: storyState);
+          _character = _character!.copyWith(
+            activeSegmentId: newActiveSegmentId,
+            storyState: storyState,
+          );
           _error = null;
         });
       },
