@@ -184,7 +184,6 @@ def lambda_handler(event: dict, context: object) -> dict:
     # Call business logic
     try:
         response_data = start_story(character_id, story_id, player_id)
-        logger.info(f"Story started successfully for {character_id}")
         return lambda_response(200, response_data, event)
     except ValueError as err:
         error_msg = str(err)

@@ -68,11 +68,13 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
+    logger.info(f"Retrieving character list for player={player_id}")
+
     # Call business logic
     try:
         response_data: dict = list_characters(player_id)
         character_count = len(response_data.get("Characters", []))
-        logger.info(f"Listed {character_count} characters for player {player_id}")
+        logger.info(f"Listed {character_count} characters for player={player_id}")
         return lambda_response(200, response_data, event)
     except ValueError as err:
         logger.warning(f"Player not found for {player_id} Error: {err}")

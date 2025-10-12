@@ -112,6 +112,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     character_name = body.get("CharacterName")
     if not character_name:
+        logger.warning("Character creation request missing CharacterName")
         return lambda_response(400, {"Error": "CharacterName is required"}, event)
 
     archetype_name = body.get("ArchetypeName", "")

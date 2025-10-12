@@ -268,7 +268,15 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             logger.debug(f"Could not fetch story data: {err}")
             # Not critical, continue without story data
 
-    logger.debug(f"Segment status retrieved for {character_id}")
+    # Log successful status retrieval with key details for observability
+    active_segment_id = response.get("ActiveSegmentID")
+    status = response.get("Status")
+    processing_status = response.get("ProcessingStatus")
+    time_remaining = response.get("TimeRemaining")
+    logger.info(
+        f"Segment status for character={character_id}, segment={active_segment_id}: "
+        f"Status={status}, ProcessingStatus={processing_status}, TimeRemaining={time_remaining}s"
+    )
 
     return response
 
@@ -314,6 +322,8 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     if not validate_uuid(character_id):
         return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
+
+    logger.info(f"Checking segment status for character={character_id}")
 
     # Call business logic
     try:

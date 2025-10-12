@@ -155,7 +155,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         result: dict = get_character_logic(character_id, player_id)
 
         if result.get("success"):
-            character_name = result.get("data", {}).get("CharacterName", "unknown")
+            character_name = result.get("data", {}).get("Character", {}).get("CharacterName", "unknown")
             logger.info(f"Retrieved character '{character_name}' ({character_id}) for player {player_id}")
             return lambda_response(200, result.get("data", {}), event)
         else:
