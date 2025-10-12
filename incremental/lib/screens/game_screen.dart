@@ -635,10 +635,25 @@ class _GameScreenState extends State<GameScreen> {
           final updated = Character.fromJson(characterData);
 
           // Detect story completion immediately
+          // Check multiple indicators to ensure story is truly complete
           final wasRunning = _storyLifecycleState == StoryLifecycleState.running;
+          final hasActiveSegmentField = updated.activeSegmentID != null;
+          final hasActiveStoryField = updated.activeStoryID != null;
+          final hasActiveSegmentInState = updated.storyState?['ActiveSegment'] != null;
+          final hasActiveStoryInState = updated.storyState?['ActiveStory'] != null;
+
           final storyCompleted = wasRunning &&
-                                updated.activeSegmentID == null &&
-                                updated.activeStoryID == null;
+                                !hasActiveSegmentField &&
+                                !hasActiveStoryField &&
+                                !hasActiveSegmentInState &&
+                                !hasActiveStoryInState;
+
+          if (wasRunning && (hasActiveSegmentField || hasActiveStoryField || hasActiveSegmentInState || hasActiveStoryInState)) {
+            debugPrint('GameScreen: Story still active - activeSegmentID=${updated.activeSegmentID}, '
+                      'activeStoryID=${updated.activeStoryID}, '
+                      'hasActiveSegmentInState=$hasActiveSegmentInState, '
+                      'hasActiveStoryInState=$hasActiveStoryInState');
+          }
 
           // Add new segment to history if present
           // (Segments are tracked in history immediately when encountered)
