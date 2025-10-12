@@ -634,6 +634,12 @@ class _GameScreenState extends State<GameScreen> {
         try {
           final updated = Character.fromJson(characterData);
 
+          // Detect story completion immediately
+          final wasRunning = _storyLifecycleState == StoryLifecycleState.running;
+          final storyCompleted = wasRunning &&
+                                updated.activeSegmentID == null &&
+                                updated.activeStoryID == null;
+
           // Add new segment to history if present
           // (Segments are tracked in history immediately when encountered)
           final newActiveSegment = updated.storyState?['ActiveSegment'] as Map<String, dynamic>?;
@@ -659,6 +665,23 @@ class _GameScreenState extends State<GameScreen> {
           });
 
           debugPrint('GameScreen: Character reloaded at segment boundary');
+
+          // Trigger completion immediately if detected
+          if (storyCompleted) {
+            debugPrint('GameScreen: Story completion detected in character reload - triggering immediate completion');
+            _runtime.stopPolling();
+
+            // Set lifecycle state to completed
+            setState(() {
+              _storyLifecycleState = StoryLifecycleState.completed;
+            });
+            debugPrint('GameScreen: Story lifecycle state changed to COMPLETED');
+
+            // Handle completion
+            _handleStoryCompletion(refreshCharacter: false, showMessage: true).then((_) {
+              _manageCharacterUpdateTimer();
+            });
+          }
         } catch (e) {
           debugPrint('GameScreen: Error parsing character data: $e');
           setState(() {
@@ -674,6 +697,12 @@ class _GameScreenState extends State<GameScreen> {
         debugPrint('GameScreen: Active story ID: ${_character?.activeStoryID}');
         debugPrint('GameScreen: Active segment ID: ${_character?.activeSegmentID}');
         debugPrint('GameScreen: Segment history count: ${_segmentHistory.length}');
+
+        // Skip if already handled completion
+        if (_storyLifecycleState == StoryLifecycleState.completed) {
+          debugPrint('GameScreen: Story completion already handled, skipping');
+          return;
+        }
 
         // Mark story as completed (confirmed by polling service)
         setState(() {
