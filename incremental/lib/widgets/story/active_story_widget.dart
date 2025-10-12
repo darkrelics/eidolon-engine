@@ -352,19 +352,10 @@ class _SimpleSegmentCard extends StatelessWidget {
       hasTimerExpired = true;
     }
 
-    // CRITICAL FIX: Proper gating to prevent showing both active and completed cards simultaneously
-    //
-    // Display rules (from third-party analysis):
-    // 1. Active segments: Show timer card UNTIL timer expires, even if ProcessingStatus="processed"
+    // Display gating rules:
+    // 1. Active segments: Show timer card until timer expires, even if ProcessingStatus="processed"
     // 2. Only reveal results when: segment is processed AND timer has expired
     // 3. Historical segments: Show completed card only if processed and NOT currently active
-    //
-    // This prevents the race condition where:
-    // - Backend sends ProcessingStatus="processed" at T=50s
-    // - Timer expires at T=60s
-    // - Both active (timer expired) and completed cards could briefly show
-    //
-    // Fix: For active segments, require BOTH processed status AND timer expiration
     final bool shouldRevealResults;
     if (isActive) {
       // Active segment: Only reveal when timer has expired AND segment is processed

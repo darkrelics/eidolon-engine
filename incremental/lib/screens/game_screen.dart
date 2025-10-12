@@ -203,10 +203,7 @@ class _GameScreenState extends State<GameScreen> {
 
   /// Generate stable identity for segment tracking
   ///
-  /// CRITICAL FIX: Use ActiveSegmentID as primary key for deduplication
-  /// This prevents duplicate cards and ensures proper segment tracking.
-  ///
-  /// Key hierarchy (from third-party analysis):
+  /// Key hierarchy:
   /// 1. ActiveSegmentID (preferred) - unique per segment execution
   /// 2. SegmentID (fallback) - story definition ID, can repeat across executions
   /// 3. Composite key (last resort) - for segments missing both IDs
@@ -743,6 +740,10 @@ class _GameScreenState extends State<GameScreen> {
   }
 
   bool _isSegmentComplete(Map<String, dynamic> segment) {
+    // A segment is only complete when BOTH conditions are met:
+    // 1. ProcessingStatus == 'processed' (backend has generated results)
+    // 2. Timer has expired (EndTime has passed)
+
     final completedAt = segment['CompletedAt'];
     if (completedAt is String && completedAt.isNotEmpty) {
       return true;
@@ -756,9 +757,34 @@ class _GameScreenState extends State<GameScreen> {
       return true;
     }
 
+    // Check processing status AND timer expiration
     final processingStatus = segment['ProcessingStatus']?.toString().toLowerCase();
     if (processingStatus == 'processed') {
-      return true;
+      // Processed, but need to check if timer expired
+      final endTimeStr = segment['EndTime']?.toString();
+      if (endTimeStr != null && endTimeStr.isNotEmpty) {
+        try {
+          final endTime = DateTime.parse(endTimeStr).toUtc();
+          final now = DateTime.now().toUtc();
+          final timerExpired = now.isAfter(endTime) || now.isAtSameMomentAs(endTime);
+          debugPrint('GameScreen: _isSegmentComplete check - processed=true, timerExpired=$timerExpired (now=$now, end=$endTime)');
+          return timerExpired;
+        } catch (e) {
+          debugPrint('GameScreen: Error parsing EndTime: $e');
+        }
+      }
+
+      // If no EndTime or can't parse, check TimeRemaining
+      final timeRemaining = segment['TimeRemaining'];
+      if (timeRemaining is num) {
+        final expired = timeRemaining <= 0;
+        debugPrint('GameScreen: _isSegmentComplete check - processed=true, timeRemaining=$timeRemaining, expired=$expired');
+        return expired;
+      }
+
+      // Processed but can't determine timer status - assume not complete yet
+      debugPrint('GameScreen: _isSegmentComplete - processed=true but no timer info, assuming not complete');
+      return false;
     }
 
     // Check if this is the final segment of a completed story

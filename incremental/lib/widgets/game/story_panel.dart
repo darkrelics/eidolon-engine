@@ -55,16 +55,8 @@ class _StoryPanelState extends State<StoryPanel> {
   }
 
   bool _isStoryComplete() {
-    // CRITICAL FIX: Only show completion screen when explicitly confirmed by polling service
-    // This prevents premature completion detection during segment transitions
-    //
-    // Previous logic would mark story as complete whenever activeStoryID == null,
-    // but this can happen temporarily while the backend generates the next segment.
-    // This caused "Story Complete" to flash while the story was still running.
-    //
-    // Now we require explicit confirmation from the polling service's onStoryComplete callback,
-    // which only triggers when the backend sends a definitive terminal signal.
-
+    // Only show completion screen when explicitly confirmed by polling service.
+    // This prevents premature completion detection during segment transitions.
     final char = widget.character;
     final confirmed = widget.isStoryConfirmedComplete;
     final hasActiveStoryID = char.activeStoryID != null;
