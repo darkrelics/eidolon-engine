@@ -33,7 +33,7 @@ def poll_segments() -> None:
     segments_to_process = 0
     segments_marked_exceptional = 0
 
-    # 1. Handle segments approaching expiry (within 30 seconds)
+    # 1. Handle segments approaching expiry (within 60 seconds)
     try:
         expiring_segments = get_segments_approaching_expiry(MAX_SEGMENTS_PER_POLL)
 

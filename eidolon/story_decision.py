@@ -260,6 +260,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                 story_id,
                 next_segment_def,
                 story_instance_id,
+                active_segment.get("EndTime"),  # Start next segment at current segment's end time
             )
 
             update_character_active_segment(character_id, next_active_segment_id)

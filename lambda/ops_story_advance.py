@@ -195,6 +195,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
                 story_id,  # type: ignore
                 next_segment_def,
                 story_instance_id,  # Pass instance ID for history tracking
+                active_segment.get("EndTime"),  # Start next segment at current segment's end time
             )
 
             # Update character with new active segment

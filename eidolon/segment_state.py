@@ -134,7 +134,9 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         raise RuntimeError(f"Failed to update active segment outcome: {err}") from err
 
 
-def create_next_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id=None) -> str:
+def create_next_active_segment(
+    character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id=None, previous_end_time=None
+) -> str:
     """
     Create an active segment record for the next segment.
 
@@ -144,6 +146,8 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
         story_id: Story UUID
         segment: Segment data from Segments table
         story_instance_id: Story instance UUID for history tracking
+        previous_end_time: End time of previous segment (unix timestamp). If provided, new segment starts at this time.
+                          If None, segment starts at current time (for first segment of story).
 
     Returns:
         Active segment ID
@@ -152,8 +156,14 @@ def create_next_active_segment(character_id: str, player_id: str, story_id: str,
     segment_type = segment.get("SegmentType", "mechanical")
     duration = int(segment.get("SegmentDuration", 300))
 
-    start_time = now_unix()
-    end_time = future_unix(duration)
+    # Start at previous segment's end time if provided, otherwise start now
+    # Use max() to handle slack - if we're advancing late, start at current time
+    current_time = now_unix()
+    if previous_end_time is not None:
+        start_time = max(previous_end_time, current_time)
+    else:
+        start_time = current_time
+    end_time = start_time + duration
 
     active_segment_id = str(uuid7())
 
