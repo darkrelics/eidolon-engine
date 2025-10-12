@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/utils/api_parser.dart';
 import 'package:eidolon_incremental/utils/api_validation.dart';
 import 'base_api_service.dart';
@@ -48,6 +49,8 @@ class ApiService extends BaseApiService {
     required String name,
     required String archetype,
   }) async {
+    ApiMetrics.recordCall('POST /character', details: 'name=$name, archetype=$archetype');
+
     // Use base class post method for consistent error handling
     return post<Map<String, dynamic>>(
       '/character',
@@ -59,6 +62,8 @@ class ApiService extends BaseApiService {
   ///
   /// Permanently deletes the specified character and all associated data.
   Future<Map<String, dynamic>> deleteCharacter(String characterId) async {
+    ApiMetrics.recordCall('DELETE /character', details: 'id=$characterId');
+
     // Use base class delete method with query parameters
     return delete<Map<String, dynamic>>(
       '/character',
@@ -71,6 +76,8 @@ class ApiService extends BaseApiService {
   /// Fetches the complete character data including active story and segment.
   /// Returns null if the character doesn't exist.
   Future<Character?> getCharacterById(String characterId) async {
+    ApiMetrics.recordCall('GET /character', details: 'id=$characterId');
+
     try {
       final json = await get<Map<String, dynamic>>(
         '/character',
@@ -116,6 +123,8 @@ class ApiService extends BaseApiService {
   /// Returns a list of all characters owned by the authenticated player.
   /// Returns an empty list if no characters exist.
   Future<List<CharacterInfo>> listCharacters() async {
+    ApiMetrics.recordCall('GET /character/list');
+
     try {
       final json = await get<Map<String, dynamic>>('/character/list');
 
@@ -153,6 +162,8 @@ class ApiService extends BaseApiService {
     required String characterId,
     required String storyId,
   }) async {
+    ApiMetrics.recordCall('POST /story/start', details: 'story=$storyId');
+
     try {
       final json = await post<Map<String, dynamic>>(
         '/story/start',
@@ -181,6 +192,8 @@ class ApiService extends BaseApiService {
     required String characterId,
     required String decision,
   }) async {
+    ApiMetrics.recordCall('POST /segment/decision', details: 'choice=$decision');
+
     debugPrint(
       'ApiService: Submitting decision - characterId: $characterId, decision: $decision',
     );
@@ -219,6 +232,8 @@ class ApiService extends BaseApiService {
   /// Ends the current story run early, allowing the character
   /// to start a new story.
   Future<Map<String, dynamic>> abandonStory(String characterId) async {
+    ApiMetrics.recordCall('POST /story/abandon', details: 'id=$characterId');
+
     debugPrint('ApiService: Abandoning story for character: $characterId');
 
     final json = await post<Map<String, dynamic>>(
@@ -238,6 +253,8 @@ class ApiService extends BaseApiService {
   /// Fetches all archetypes available for character creation
   /// from the server's DynamoDB storage.
   Future<List<ArchetypeInfo>> getArchetypes() async {
+    ApiMetrics.recordCall('GET /archetype');
+
     debugPrint('ApiService: Getting archetypes...');
 
     final json = await get<Map<String, dynamic>>('/archetype');
@@ -257,6 +274,8 @@ class ApiService extends BaseApiService {
   Future<List<Map<String, dynamic>>> getSegmentHistory({
     required String characterId,
   }) async {
+    ApiMetrics.recordCall('GET /segment/history', details: 'id=$characterId');
+
     debugPrint(
       'ApiService: Getting segment history for character: $characterId',
     );
@@ -282,6 +301,8 @@ class ApiService extends BaseApiService {
   Future<Map<String, dynamic>> getSegmentStatus({
     required String characterId,
   }) async {
+    ApiMetrics.recordCall('GET /segment/status', details: 'id=$characterId');
+
     debugPrint(
       'ApiService: Getting segment status for character: $characterId',
     );

@@ -706,7 +706,7 @@
             {
               "Attribute": "Agility",
               "Skill": "Dodge",
-              "Difficulty": 4,
+              "Difficulty": 3,
               "Attempts": 2
             }
           ],
@@ -790,7 +790,7 @@
           "SegmentDuration": 180,
           "Combat": {
             "OpponentID": "51eadb06-e05c-4515-84a7-1e415d6b88e1",
-            "MaxRounds": 10,
+            "MaxRounds": 6,
             "Environment": {}
           },
           "Results": {

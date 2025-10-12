@@ -2,7 +2,7 @@
 
 **Date:** 2025-10-07 (In Progress)
 **Branch:** inc-26 (branched from develop)
-**Status:** 🟡 IN PROGRESS — R3-T7 complete, P0 blockers remain
+**Status:** 🟡 IN PROGRESS — R3-T7 complete, R3-T1 instrumentation complete
 **Previous Release:** R2 (inc-25 - Security hardening and production readiness)
 
 ---
@@ -19,7 +19,7 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ---
 
-## Current Progress (2025-10-07)
+## Current Progress (2025-10-12)
 
 **Branch:** `inc-26` | **Status:** 🟡 IN PROGRESS
 
@@ -40,10 +40,17 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 **GitHub Issues Created:**
 - #873: Add Multi-Factor Authentication (MFA) to Cognito User Pool (deferred to R4)
 
+**R3-T1: Fix Client Polling Cadence** — 🔄 **IN PROGRESS (Stage 1 of 5 complete)**
+- ✅ Stage 1: Instrumentation complete (Tasks 1-3)
+  - Created API metrics collection system (`api_metrics.dart`)
+  - Instrumented all API service methods with call tracking
+  - Added segment boundary tracking to GameScreen
+- 🔄 Stage 2: Baseline measurement in progress (Task 4)
+
 ### Remaining Work
 
 **P0 Blockers (Must Complete for Beta):**
-- ❌ R3-T1: Fix client polling cadence
+- 🔄 R3-T1: Fix client polling cadence (IN PROGRESS - instrumentation complete, baseline measurement next)
 
 **P1 Tasks (Should Complete for Beta):**
 - ❌ R3-T2: Performance baseline and load testing
@@ -124,9 +131,31 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ### R3-T1: Fix Client Polling Cadence
 
-**Status:** 🟡 HIGH - Performance and cost impact
+**Status:** 🟡 IN PROGRESS - Instrumentation complete, baseline measurement next
 **Priority:** P0 - Required for beta
 **Issues:** Create new issue "Fix incremental client polling cadence"
+
+#### Progress Update (2025-10-12)
+
+**Completed:**
+- ✅ **Task 1-3: Instrumentation Phase** (Stage 1 of 5)
+  - Created `incremental/lib/services/api_metrics.dart` - Temporary metrics collection class
+  - Instrumented all 10 API methods in `api_service.dart` with `ApiMetrics.recordCall()`
+  - Added segment tracking to `game_screen.dart` (`ApiMetrics.startSegment()` / `endSegment()`)
+  - Console logging infrastructure in place for measuring API call patterns
+
+**In Progress:**
+- 🔄 **Task 4: Baseline Measurement** - Ready to run test stories and document current API call patterns
+
+**Next Steps:**
+- Run instrumented app through test story to establish baseline (expecting 10-15+ calls per segment)
+- Document actual call patterns and breakdown by endpoint
+- Begin Stage 2: Fix core timing issues (remove 60s delay, use server TimeRemaining)
+
+**Files Modified:**
+- `incremental/lib/services/api_metrics.dart` - NEW (temporary instrumentation)
+- `incremental/lib/services/api_service.dart` - Added metrics recording to all API methods
+- `incremental/lib/screens/game_screen.dart` - Added segment boundary tracking
 
 #### Current State
 

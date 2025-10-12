@@ -7,6 +7,7 @@ import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/models/story.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/providers/character_provider.dart';
+import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:eidolon_incremental/services/notification_service.dart';
@@ -540,6 +541,9 @@ class _GameScreenState extends State<GameScreen> {
         // Set story lifecycle to running
         _storyLifecycleState = StoryLifecycleState.running;
         debugPrint('GameScreen: Story lifecycle state changed to RUNNING - story started: ${story.title}');
+
+        // Start API metrics tracking for this segment
+        ApiMetrics.startSegment();
       });
 
       _startOrchestrationIfNeeded(force: true);
@@ -1053,6 +1057,9 @@ class _GameScreenState extends State<GameScreen> {
     debugPrint('GameScreen: Handling story completion (refreshCharacter=$refreshCharacter, showMessage=$showMessage)');
     debugPrint('GameScreen: Current lifecycle state: $_storyLifecycleState');
     _runtime.stopPolling();
+
+    // End API metrics tracking and print segment summary
+    ApiMetrics.endSegment();
 
     // Ensure lifecycle state is set to completed
     if (_storyLifecycleState != StoryLifecycleState.completed) {
