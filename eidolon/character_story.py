@@ -370,19 +370,10 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
         RuntimeError: If database operations fail
     """
     try:
-        update_expressions = []
-        expression_attribute_names = {}
-        expression_attribute_values = {}
-
-        # Handle room change
-        if "Room" in outcome_effects:
-            update_expressions.append("#room = :room")
-            expression_attribute_names["#room"] = "RoomID"
-            expression_attribute_values[":room"] = outcome_effects["Room"]
+        character_updates = {}
 
         # Handle wounds from story outcomes
         if "Wounds" in outcome_effects:
-
             # Add heal times to wounds
             wounds_with_heal_times = []
             for wound in outcome_effects["Wounds"]:
@@ -394,26 +385,15 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
                     damage_type = wound.get("DamageType", "lethal")
                     wound_data = {"DamageType": damage_type, "HealAt": wound.get("HealAt", calculate_heal_time(damage_type))}
                 wounds_with_heal_times.append(wound_data)
+            character_updates["Wounds"] = wounds_with_heal_times
 
-            # Apply wounds through character updates
-            try:
-                apply_character_updates(character_id, {"Wounds": wounds_with_heal_times})
-                logger.info(f"Applied story outcome wounds for {character_id}")
-            except Exception as err:
-                logger.error(f"Failed to apply story wounds for {character_id} Error: {err}", exc_info=True)
-                raise RuntimeError(f"Failed to apply story wounds: {err}") from err
+        # Handle room change
+        if "Room" in outcome_effects:
+            character_updates["Room"] = outcome_effects["Room"]
 
-        if update_expressions:
-            update_expression: str = "SET " + ", ".join(update_expressions)
-
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression=update_expression,
-                ExpressionAttributeNames=expression_attribute_names,
-                ExpressionAttributeValues=expression_attribute_values,
-            )
-
+        # Apply all updates in a single atomic operation
+        if character_updates:
+            apply_character_updates(character_id, character_updates)
             logger.info(f"Applied story outcome effects for {character_id}")
 
     except ClientError as err:

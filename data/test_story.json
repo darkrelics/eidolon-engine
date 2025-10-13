@@ -33,7 +33,7 @@
             {
               "Attribute": "Perception",
               "Skill": "Investigation",
-              "Difficulty": 7,
+              "Difficulty": 4,
               "Attempts": 3
             }
           ],
@@ -143,7 +143,7 @@
             {
               "Attribute": "Agility",
               "Skill": "Stealth",
-              "Difficulty": 8,
+              "Difficulty": 4,
               "Attempts": 2
             }
           ],
@@ -229,7 +229,7 @@
             {
               "Attribute": "Strength",
               "Skill": "Climbing",
-              "Difficulty": 6,
+              "Difficulty": 4,
               "Attempts": 3
             }
           ],
@@ -503,13 +503,13 @@
             {
               "Attribute": "Endurance",
               "Skill": "Climbing",
-              "Difficulty": 6,
+              "Difficulty": 4,
               "Attempts": 3
             },
             {
               "Attribute": "Intelligence",
               "Skill": "Foraging",
-              "Difficulty": 7,
+              "Difficulty": 4,
               "Attempts": 2
             }
           ],
@@ -622,7 +622,7 @@
             {
               "Attribute": "Perception",
               "Skill": "Investigation",
-              "Difficulty": 5,
+              "Difficulty": 3,
               "Attempts": 2
             }
           ],

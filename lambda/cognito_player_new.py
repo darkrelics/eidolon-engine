@@ -53,9 +53,8 @@ def lambda_handler(event: dict, context: object) -> dict:
         create_player(user_uuid, email)
 
     except ValueError as err:
-        logger.error(
-            f"Invalid User Data: {event.get('request')} Error: {err}",
-        )
+        # INFO level - this is expected when Cognito retries the trigger
+        logger.info(f"Player creation skipped (already exists or invalid data): {err}")
 
     except RuntimeError as err:
         logger.error(

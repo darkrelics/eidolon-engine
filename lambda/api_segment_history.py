@@ -78,7 +78,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
             except ClientError:
                 logger.warning(f"Could not fetch story title for {story_id}")
     else:
-        logger.info(f"No active segment found for {character_id}, loading latest story history")
+        logger.info(f"No active segment found for character={character_id}, loading latest story history")
 
         try:
             character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
@@ -110,7 +110,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
                 story_histories = dynamo.query(TableName.STORY_HISTORY, **history_kwargs)
 
             if not story_histories:
-                logger.info(f"No story history entries found for {character_id}")
+                logger.info(f"No story history entries found for character={character_id}, returning empty history")
                 return {"CharacterID": character_id, "StoryID": None, "Segments": []}
 
             latest_story = story_histories[0]
@@ -122,7 +122,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
             raise RuntimeError(f"Failed to query story history: {err}") from err
 
     if not story_id and not story_instance_id:
-        logger.info(f"No story context available for {character_id}")
+        logger.info(f"No story context available for character={character_id}, returning empty history")
         return {"CharacterID": character_id, "StoryID": None, "Segments": []}
 
     # Query completed segments from SegmentHistory table, favouring StoryInstanceID when available
@@ -215,7 +215,14 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
 
     response = {"CharacterID": character_id, "StoryID": story_id, "Segments": formatted_segments}
 
-    logger.debug(f"Segment history retrieved for {character_id}")
+    # Log successful history retrieval with key details for observability
+    segment_count = len(formatted_segments)
+    source = "active_segment" if active_segment else "story_history"
+    logger.info(
+        f"Segment history for character={character_id}: "
+        f"StoryID={story_id}, StoryInstanceID={story_instance_id}, "
+        f"SegmentCount={segment_count}, Source={source}"
+    )
 
     return response
 
@@ -261,6 +268,8 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     if not validate_uuid(character_id):
         return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
+
+    logger.info(f"Retrieving segment history for character={character_id}")
 
     # Call business logic
     try:

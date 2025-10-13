@@ -148,8 +148,8 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     xp_accumulator = {}
 
     logger.info(
-        f"Combat start: {character.get('CharacterName')} using {char_off_action}({char_off_rating})/"
-        f"{char_def_action}({char_def_rating}) vs {opponent.get('Name')} using "
+        f"Combat start: {character.get('CharacterName')} using {char_off_action}+{char_off_attr}({char_off_rating})/"
+        f"{char_def_action}+{char_def_attr}({char_def_rating}) vs {opponent.get('Name')} using "
         f"{opp_off_action}({opp_off_rating})/{opp_def_action}({opp_def_rating})"
     )
 

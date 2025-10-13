@@ -171,10 +171,10 @@ def get_active_decision_segment(character_id: str, player_id: str) -> dict:
     # No need to check PlayerID again - already filtered in query
     active_segment = items[0]
     logger.info(
-        f"Retrieved active decision segment for {character_id}: "
+        f"Retrieved active decision segment for character={character_id}: "
+        f"StoryID={active_segment.get('StoryID')}, SegmentID={active_segment.get('SegmentID')}, "
         f"ActiveSegmentID={active_segment.get('ActiveSegmentID')}, "
-        f"Decision={active_segment.get('Decision')}, "
-        f"Status={active_segment.get('Status')}"
+        f"Decision={active_segment.get('Decision')}, Status={active_segment.get('Status')}"
     )
     return active_segment
 

@@ -190,19 +190,23 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     if not verify_character_ownership(character_id, player_id):
         raise ValueError("Character not owned by player")
 
-    logger.info(f"Submitting decision for {character_id}")
-
     active_segment = get_active_decision_segment(character_id, player_id)
     active_segment_id = active_segment.get("ActiveSegmentID")
+    story_id = active_segment.get("StoryID")
+    segment_id = active_segment.get("SegmentID")
+
     if not active_segment_id:
         raise ValueError("Active segment ID not found")
 
+    logger.info(
+        f"Submitting decision for character={character_id}: "
+        f"StoryID={story_id}, SegmentID={segment_id}, ActiveSegmentID={active_segment_id}, Decision={decision_id}"
+    )
+
     validate_decision_option(active_segment, decision_id)
 
-    logger.info(f"Attempting to update decision for {active_segment_id} with decision={decision_id}")
     update_segment_decision(active_segment_id, decision_id)
 
-    story_id = active_segment.get("StoryID")
     if not story_id:
         raise ValueError("Story ID not found in active segment")
 
@@ -256,6 +260,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                 story_id,
                 next_segment_def,
                 story_instance_id,
+                active_segment.get("EndTime"),  # Start next segment at current segment's end time
             )
 
             update_character_active_segment(character_id, next_active_segment_id)
@@ -308,8 +313,15 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
             raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         complete_story(character_id, story_id, story_instance_id, "normal")
-        logger.info(f"Story completed after decision for {character_id}")
+        logger.info(f"Story completed after final decision for character={character_id}, StoryID={story_id}")
+        return response_data
 
-    logger.info(f"Decision submitted and story advanced for {active_segment_id}")
+    # Log final success with new segment context
+    next_active_segment_id = response_data.get("NextSegment", {}).get("ActiveSegmentID")
+    next_segment_id = response_data.get("NextSegment", {}).get("SegmentID")
+    logger.info(
+        f"Decision submitted and story advanced for character={character_id}: "
+        f"Decision={decision_id}, NextActiveSegmentID={next_active_segment_id}, NextSegmentID={next_segment_id}"
+    )
 
     return response_data

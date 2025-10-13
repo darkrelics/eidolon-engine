@@ -180,6 +180,8 @@ class Character {
       'InventoryDetails': inventoryDetails,
       'Progress': progress,
       'StoryState': storyState,
+      'ActiveStoryID': activeStoryID,
+      'ActiveSegmentID': activeSegmentID,
       'GameMode': gameMode,
       'UpdatedAt': lastUpdated.toIso8601String(),
       'AvailableStories': availableStories,

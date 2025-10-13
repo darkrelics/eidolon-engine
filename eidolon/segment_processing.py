@@ -259,7 +259,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         if character_id:
             try:
                 apply_story_outcome_effects(character_id, story_effects)
-                logger.info(f"Applied story outcome effects for {character_id}")
                 # Store effects in results for CharacterUpdates (for client display)
                 results["StoryEffects"] = story_effects
             except Exception as err:
