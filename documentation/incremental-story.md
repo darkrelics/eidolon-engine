@@ -291,7 +291,7 @@ stateDiagram-v2
 
 #### Decision Segments
 
-Decision segments are **purely narrative** - they contain no skill checks, combat, or mechanical calculations. All game mechanics belong in mechanical segments.
+Decision segments present player choices and contain no skill checks, combat, or mechanical calculations. All game mechanics belong in mechanical segments.
 
 - Present story choices to the player
 - Created with ProcessingStatus="processed" and default decision pre-applied
@@ -299,7 +299,7 @@ Decision segments are **purely narrative** - they contain no skill checks, comba
 - NextSegmentID is always set (either default or player's choice)
 - Timer expiry uses whatever Decision is currently set
 - Generate ClientEvents with narrative text to enrich segment history
-- **No Difficulty ratings** - decision segments are about story, not mechanics
+- **No Difficulty ratings** - decision segments are for player choice, not mechanics
 
 #### Wound Healing
 

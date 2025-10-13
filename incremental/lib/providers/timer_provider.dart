@@ -21,17 +21,39 @@ import 'package:flutter/foundation.dart';
 /// Global timer provider that manages a single timer for all segment timers
 /// to prevent performance issues from multiple simultaneous setState calls
 class TimerProvider extends ChangeNotifier {
+  // 1 second interval ensures smooth countdown timers without choppy jumps
   static const Duration _updateInterval = Duration(seconds: 1);
 
   Timer? _timer;
   DateTime _lastUpdate = DateTime.now();
   bool _isActive = false;
+  int _listenerCount = 0;
 
   /// The current time that all timers should use for calculations
   DateTime get currentTime => _lastUpdate;
 
   /// Whether the global timer is currently running
   bool get isActive => _isActive;
+
+  @override
+  void addListener(VoidCallback listener) {
+    super.addListener(listener);
+    _listenerCount++;
+    // Auto-start timer when first listener is added
+    if (_listenerCount == 1) {
+      startTimer();
+    }
+  }
+
+  @override
+  void removeListener(VoidCallback listener) {
+    super.removeListener(listener);
+    _listenerCount--;
+    // Auto-stop timer when last listener is removed
+    if (_listenerCount == 0) {
+      stopTimer();
+    }
+  }
 
   /// Starts the global timer if not already running
   void startTimer() {

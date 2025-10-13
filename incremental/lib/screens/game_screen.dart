@@ -76,6 +76,14 @@ class _GameScreenState extends State<GameScreen> {
   late Debouncer _decisionDebouncer;
   late Debouncer _refreshDebouncer;
 
+  // Performance optimization: Cache expensive computations
+  List<Map<String, dynamic>>? _cachedCompletedSegments;
+  String? _completedSegmentsCacheKey;
+  List<Map<String, dynamic>>? _cachedStoryHistory;
+  String? _storyHistoryCacheKey;
+  final Map<String, DateTime> _timestampCache = {};
+  Timer? _statusUpdateDebounce;
+
   @override
   void initState() {
     super.initState();
@@ -188,6 +196,7 @@ class _GameScreenState extends State<GameScreen> {
     _refreshDebouncer.dispose();
     _characterUpdateTimer?.cancel();
     _characterUpdateTimerCount = 0;
+    _statusUpdateDebounce?.cancel();
     super.dispose();
   }
 
@@ -200,6 +209,15 @@ class _GameScreenState extends State<GameScreen> {
     _lastStoryDetails = null;
     _storyCompletionNotified = false;
     _storyLifecycleState = StoryLifecycleState.none;
+    _invalidateCache();
+  }
+
+  void _invalidateCache() {
+    _cachedCompletedSegments = null;
+    _completedSegmentsCacheKey = null;
+    _cachedStoryHistory = null;
+    _storyHistoryCacheKey = null;
+    _timestampCache.clear();
   }
 
   /// Generate stable identity for segment tracking
@@ -279,12 +297,20 @@ class _GameScreenState extends State<GameScreen> {
     if (value is String) {
       final trimmed = value.trim();
       if (trimmed.isEmpty) return null;
+
+      // Check cache first for string timestamps
+      if (_timestampCache.containsKey(trimmed)) {
+        return _timestampCache[trimmed];
+      }
+
       final numeric = double.tryParse(trimmed);
       if (numeric != null) {
         return _parseSegmentDate(numeric);
       }
       try {
-        return DateTime.parse(trimmed).toUtc();
+        final parsed = DateTime.parse(trimmed).toUtc();
+        _timestampCache[trimmed] = parsed;
+        return parsed;
       } catch (_) {
         return null;
       }
@@ -593,6 +619,12 @@ class _GameScreenState extends State<GameScreen> {
 
         debugPrint('GameScreen: Segment update - ID: $segmentId, Status: $processingStatus, Time: ${timeRemaining}s, InHistory: $exists');
 
+        // Check if this is a meaningful update before triggering setState
+        final currentActiveSegmentId = _character!.activeSegmentID;
+        final newActiveSegmentId = status['ActiveSegmentID']?.toString() ?? status['SegmentID']?.toString();
+        final segmentChanged = currentActiveSegmentId != newActiveSegmentId;
+        final statusChanged = processingStatus != _character!.storyState?['ActiveSegment']?['ProcessingStatus'];
+
         if (!exists) {
           final segmentCopy = Map<String, dynamic>.from(status);
           if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
@@ -626,16 +658,32 @@ class _GameScreenState extends State<GameScreen> {
           _lastStoryDetails = Map<String, dynamic>.from(story);
         }
 
-        // Update activeSegmentID to match the new segment
-        final newActiveSegmentId = status['ActiveSegmentID']?.toString() ?? status['SegmentID']?.toString();
-
-        setState(() {
-          _character = _character!.copyWith(
-            activeSegmentId: newActiveSegmentId,
-            storyState: storyState,
-          );
-          _error = null;
-        });
+        // Debounce only major changes; always call setState to maintain consistency
+        if (segmentChanged || statusChanged || !exists) {
+          // Major change - debounce to prevent rapid rebuilds
+          _statusUpdateDebounce?.cancel();
+          _statusUpdateDebounce = Timer(const Duration(milliseconds: 200), () {
+            if (!mounted) return;
+            setState(() {
+              _character = _character!.copyWith(
+                activeSegmentId: newActiveSegmentId,
+                storyState: storyState,
+              );
+              _error = null;
+              _invalidateCache();
+            });
+          });
+        } else {
+          // Minor update - immediate setState without debounce to prevent state drift
+          if (mounted) {
+            setState(() {
+              _character = _character!.copyWith(
+                activeSegmentId: newActiveSegmentId,
+                storyState: storyState,
+              );
+            });
+          }
+        }
       },
       onCharacterReload: (characterData) {
         if (!mounted) return;
@@ -1450,7 +1498,15 @@ class _GameScreenState extends State<GameScreen> {
   /// Segments are tracked in history immediately, but only displayed as "completed"
   /// when they're no longer the active segment
   List<Map<String, dynamic>> _getCompletedSegments() {
+    // Cache key based on active segment and history length
     final activeSegmentId = _character?.activeSegmentID;
+    final cacheKey = '${activeSegmentId ?? 'none'}_${_segmentHistory.length}_${_segmentHistory.hashCode}';
+
+    // Return cached result if still valid
+    if (_completedSegmentsCacheKey == cacheKey && _cachedCompletedSegments != null) {
+      return _cachedCompletedSegments!;
+    }
+
     final completed = _segmentHistory.where((segment) {
       // Check ActiveSegmentID first to match character.activeSegmentID (unique execution ID)
       // SegmentID is the story definition ID and can repeat across multiple executions
@@ -1471,12 +1527,25 @@ class _GameScreenState extends State<GameScreen> {
       debugPrint('GameScreen: Completed segments: ${completed.length}/${_segmentHistory.length} (active: $activeSegmentId)');
     }
 
+    // Cache the result
+    _completedSegmentsCacheKey = cacheKey;
+    _cachedCompletedSegments = completed;
+
     return completed;
   }
 
   List<Map<String, dynamic>> _buildStoryHistoryArchive() {
-    final Map<String, Map<String, dynamic>> deduped = {};
+    // Cache key based on active segment and history
     final activeSegmentId = _character?.activeSegmentID;
+    final stateSegmentsHash = _character?.storyState?['CompletedSegments']?.hashCode ?? 0;
+    final cacheKey = '${activeSegmentId ?? 'none'}_${_segmentHistory.length}_${_segmentHistory.hashCode}_$stateSegmentsHash';
+
+    // Return cached result if still valid
+    if (_storyHistoryCacheKey == cacheKey && _cachedStoryHistory != null) {
+      return _cachedStoryHistory!;
+    }
+
+    final Map<String, Map<String, dynamic>> deduped = {};
 
     void addSegments(Iterable<Map<String, dynamic>> segments) {
       for (final segment in segments) {
@@ -1519,18 +1588,18 @@ class _GameScreenState extends State<GameScreen> {
       final aCompleted = a['CompletedAt'];
       final bCompleted = b['CompletedAt'];
 
-      // Parse timestamps
+      // Parse timestamps using cached parser
       DateTime? aTime;
       DateTime? bTime;
 
       if (aCompleted is String && aCompleted.isNotEmpty) {
-        aTime = DateTime.tryParse(aCompleted);
+        aTime = _parseSegmentDate(aCompleted);
       } else if (aCompleted is num) {
         aTime = DateTime.fromMillisecondsSinceEpoch((aCompleted * 1000).toInt());
       }
 
       if (bCompleted is String && bCompleted.isNotEmpty) {
-        bTime = DateTime.tryParse(bCompleted);
+        bTime = _parseSegmentDate(bCompleted);
       } else if (bCompleted is num) {
         bTime = DateTime.fromMillisecondsSinceEpoch((bCompleted * 1000).toInt());
       }
@@ -1542,6 +1611,10 @@ class _GameScreenState extends State<GameScreen> {
       return aTime.compareTo(bTime);
     });
 
+    // Cache the result
+    _storyHistoryCacheKey = cacheKey;
+    _cachedStoryHistory = segments;
+
     return segments;
   }
 
@@ -1551,11 +1624,16 @@ class _GameScreenState extends State<GameScreen> {
         // Character Panel (Left)
         SizedBox(
           width: 320,
-          child: CharacterPanel(character: _character!, onRefresh: _refreshCharacterImmediate),
+          child: CharacterPanel(
+            key: ValueKey('character_panel_${_character!.id}'),
+            character: _character!,
+            onRefresh: _refreshCharacterImmediate,
+          ),
         ),
         // Story Panel (Center)
         Expanded(
           child: StoryPanel(
+            key: ValueKey('story_panel_${_character!.id}_${_character!.activeSegmentID ?? "none"}'),
             character: _character!,
             segmentHistory: _getCompletedSegments(),
             storyHistoryArchive: _buildStoryHistoryArchive(),
@@ -1571,7 +1649,13 @@ class _GameScreenState extends State<GameScreen> {
           ),
         ),
         // Inventory Panel (Right)
-        SizedBox(width: 320, child: InventoryPanel(character: _character!)),
+        SizedBox(
+          width: 320,
+          child: InventoryPanel(
+            key: ValueKey('inventory_panel_${_character!.id}'),
+            character: _character!,
+          ),
+        ),
       ],
     );
   }
@@ -1583,11 +1667,16 @@ class _GameScreenState extends State<GameScreen> {
         if (_selectedPanelIndex == 0)
           SizedBox(
             width: 280,
-            child: CharacterPanel(character: _character!, onRefresh: _refreshCharacterImmediate),
+            child: CharacterPanel(
+              key: ValueKey('character_panel_${_character!.id}'),
+              character: _character!,
+              onRefresh: _refreshCharacterImmediate,
+            ),
           ),
         // Story Panel (Center - Always visible)
         Expanded(
           child: StoryPanel(
+            key: ValueKey('story_panel_${_character!.id}_${_character!.activeSegmentID ?? "none"}'),
             character: _character!,
             segmentHistory: _getCompletedSegments(),
             storyHistoryArchive: _buildStoryHistoryArchive(),
@@ -1603,7 +1692,14 @@ class _GameScreenState extends State<GameScreen> {
           ),
         ),
         // Inventory Panel (Collapsible)
-        if (_selectedPanelIndex == 2) SizedBox(width: 280, child: InventoryPanel(character: _character!)),
+        if (_selectedPanelIndex == 2)
+          SizedBox(
+            width: 280,
+            child: InventoryPanel(
+              key: ValueKey('inventory_panel_${_character!.id}'),
+              character: _character!,
+            ),
+          ),
       ],
     );
   }
@@ -1612,9 +1708,14 @@ class _GameScreenState extends State<GameScreen> {
     // Show only the selected panel
     switch (_selectedPanelIndex) {
       case 0:
-        return CharacterPanel(character: _character!, onRefresh: _refreshCharacterImmediate);
+        return CharacterPanel(
+          key: ValueKey('character_panel_${_character!.id}'),
+          character: _character!,
+          onRefresh: _refreshCharacterImmediate,
+        );
       case 1:
         return StoryPanel(
+          key: ValueKey('story_panel_${_character!.id}_${_character!.activeSegmentID ?? "none"}'),
           character: _character!,
           segmentHistory: _getCompletedSegments(),
           storyHistoryArchive: _buildStoryHistoryArchive(),
@@ -1629,7 +1730,10 @@ class _GameScreenState extends State<GameScreen> {
           isStoryConfirmedComplete: _storyLifecycleState == StoryLifecycleState.completed,
         );
       case 2:
-        return InventoryPanel(character: _character!);
+        return InventoryPanel(
+          key: ValueKey('inventory_panel_${_character!.id}'),
+          character: _character!,
+        );
       default:
         return const SizedBox();
     }

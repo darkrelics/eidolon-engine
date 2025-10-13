@@ -78,21 +78,36 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
           if (widget.segmentHistory.isNotEmpty) ...[
             Text('Previous Segments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: widget.segmentHistory.length,
-              separatorBuilder: (context, _) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final segment = widget.segmentHistory[index];
-                return _SimpleSegmentCard(
+            // Use ListView.builder for large lists (>20 items) to enable virtualization
+            // Use direct mapping for small lists (<= 20 items) for better performance
+            if (widget.segmentHistory.length > 20)
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: widget.segmentHistory.length,
+                itemBuilder: (context, index) {
+                  final segment = widget.segmentHistory[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _SimpleSegmentCard(
+                      segment: segment,
+                      isActive: false,
+                      characterName: widget.character.name,
+                      isDecisionSubmitting: false,
+                    ),
+                  );
+                },
+              )
+            else
+              ...widget.segmentHistory.map((segment) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _SimpleSegmentCard(
                   segment: segment,
                   isActive: false,
                   characterName: widget.character.name,
                   isDecisionSubmitting: false,
-                );
-              },
-            ),
+                ),
+              )),
           ],
         ],
       ),

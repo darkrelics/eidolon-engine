@@ -137,20 +137,47 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 #### Progress Update (2025-10-12)
 
+**5-Stage Implementation Plan:**
+
+1. ✅ **Instrumentation** (Tasks 1-3) - COMPLETE
+   - Created metrics collection infrastructure
+   - Instrumented all API methods
+   - Added segment boundary tracking
+
+2. 🔄 **Baseline Measurement** (Task 4) - IN PROGRESS
+   - Run test stories to document current API call patterns
+   - Measure actual calls per segment (expecting 10-15+)
+   - Document breakdown by endpoint
+
+3. ⏸️ **Fix Core Timing Issues** (Tasks 5-7)
+   - Remove client-side 60s delay
+   - Use server-provided TimeRemaining
+   - Implement server-authoritative polling pattern
+
+4. ⏸️ **Remove Competing Systems** (Tasks 8-9)
+   - Consolidate to single polling service
+   - Remove duplicate timers and polling logic
+   - Clean up provider-level polling
+
+5. ⏸️ **Validation & Testing** (Task 10)
+   - Verify 2 API calls per segment achieved
+   - Test all scenarios (happy path, network interruption, etc.)
+   - Measure battery usage improvement
+
 **Completed:**
-- ✅ **Task 1-3: Instrumentation Phase** (Stage 1 of 5)
+- ✅ **Stage 1: Instrumentation Phase** (Tasks 1-3)
   - Created `incremental/lib/services/api_metrics.dart` - Temporary metrics collection class
   - Instrumented all 10 API methods in `api_service.dart` with `ApiMetrics.recordCall()`
   - Added segment tracking to `game_screen.dart` (`ApiMetrics.startSegment()` / `endSegment()`)
   - Console logging infrastructure in place for measuring API call patterns
 
 **In Progress:**
-- 🔄 **Task 4: Baseline Measurement** - Ready to run test stories and document current API call patterns
+- 🔄 **Stage 2: Baseline Measurement** (Task 4) - Ready to run test stories and document current API call patterns
 
 **Next Steps:**
 - Run instrumented app through test story to establish baseline (expecting 10-15+ calls per segment)
 - Document actual call patterns and breakdown by endpoint
-- Begin Stage 2: Fix core timing issues (remove 60s delay, use server TimeRemaining)
+- Begin Stage 3: Fix core timing issues (remove 60s delay, use server TimeRemaining)
 
 **Files Modified:**
 - `incremental/lib/services/api_metrics.dart` - NEW (temporary instrumentation)
@@ -1195,7 +1222,7 @@ python database/data_loader.py --story data/your-story.json --dry-run
 
 Create 3 copy-paste templates in the doc:
 
-1. **Linear 3-segment story** (narrative only)
+1. **Linear 3-segment story** (mechanical segments without mechanics)
 2. **Branching story with 2 decision points**
 3. **Combat story with skill challenge prereq**
 
@@ -1283,7 +1310,7 @@ Have a non-developer (or simulated non-dev using ONLY the Quick-Start) attempt t
 
 #### Implementation Requirements
 
-**Story 1: "The Mysterious Package" (Linear, Narrative)**
+**Story 1: "The Mysterious Package" (Linear, Decision-Driven)**
 
 **Type:** Linear progression, decision-only
 **Duration:** 5-10 minutes total
@@ -1292,9 +1319,9 @@ Have a non-developer (or simulated non-dev using ONLY the Quick-Start) attempt t
 
 **Structure:**
 
-1. **Opening** - Character receives mysterious package
+1. **Opening** - Character receives mysterious package (mechanical segment without mechanics)
 2. **Decision** - Open immediately or investigate sender?
-3. **Investigation** - Follow clues (narrative only)
+3. **Investigation** - Follow clues (mechanical segment without mechanics)
 4. **Resolution** - Reveal contents and consequences
 
 **Rewards:**
@@ -1492,7 +1519,7 @@ Create `data/stories/README.md`:
 
 ### The Mysterious Package
 
-- **Type:** Linear, narrative-focused
+- **Type:** Linear, decision-driven
 - **Duration:** 5-10 minutes
 - **Prerequisites:** None
 - **Difficulty:** Easy
@@ -2849,24 +2876,16 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
 
 ### Code Functionality
 
-- [ ] **R3-T1: Currency Application**
-
-  - Currency persists to DynamoDB when story completes
-  - Atomic ADD operation used (no race conditions)
-  - Unit tests pass
-  - Integration test proves single application on retry
-  - At least one test story includes currency reward
-  - GET /character API returns currency balance
-
-- [ ] **R3-T2: Client Polling**
+- [ ] **R3-T1: Client Polling Cadence**
 
   - Measured API call reduction from baseline to ≤3 per segment
   - Single polling service implementation
   - All competing polling code removed
   - Test scenarios pass (happy path, network interruption, multi-character, background/resume)
   - No race conditions or state conflicts
+  - Battery usage reduced (measured via Flutter DevTools or manual observation)
 
-- [ ] **R3-T3: Performance Baseline**
+- [ ] **R3-T2: Performance Baseline**
 
   - Load tests completed (10-user and 50-user)
   - Performance baseline documented
@@ -2874,7 +2893,7 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
   - If PC deployed: cost/benefit analysis approved
   - P95 API latency meets targets (< 2000ms cold start, < 200ms warm)
 
-- [ ] **R3-T4: Integration Tests**
+- [ ] **R3-T3: Integration Tests**
 
   - All 5 critical scenarios automated
   - Tests pass consistently (no flaky tests)
@@ -2882,14 +2901,14 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
   - Tests clean up their own data
   - Test documentation complete
 
-- [ ] **R3-T5: Author Documentation**
+- [ ] **R3-T4: Author Documentation**
 
   - Quick-Start guide created
   - 3 copy-paste templates included and validated
   - Non-developer can complete end-to-end workflow
   - README.md updated with link
 
-- [ ] **R3-T6: Beta Content**
+- [ ] **R3-T5: Beta Content**
 
   - 3 stories created, validated, and loaded
   - All stories playtested 2+ times
@@ -2897,7 +2916,7 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
   - Balance adjustments applied
   - Story catalog created
 
-- [✅] **R3-T7: Security** (✅ **COMPLETE** - 2025-10-07)
+- [✅] **R3-T6: Security** (✅ **COMPLETE** - 2025-10-07)
   - [✓] Security checklist 100% complete (10/10 categories complete)
   - [✓] Automated scans configured in CI/CD (Checkov, Bandit, Pip-audit)
   - [✓] Checkov CDK scanning added (`.github/workflows/cdk-analysis.yml`, `.checkov.yaml`)
@@ -2943,20 +2962,19 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
 
 ### Internal Dependencies
 
-- **R3-T1 → R3-T6**: Beta stories need working currency rewards
-- **R3-T2**: Client polling fix should complete early (impacts all testing)
-- **R3-T3 → R3-T4**: Load testing informs integration test scenarios
-- **R3-T5 → R3-T6**: Author docs enable content creation
+- **R3-T1**: Client polling fix should complete early (impacts all testing)
+- **R3-T2 → R3-T3**: Load testing informs integration test scenarios
+- **R3-T4 → R3-T5**: Author docs enable content creation
+- **R3-T5**: Beta content creation requires stable backend (T1 complete)
 
 **Recommended Order:**
 
-1. Start R3-T1 (currency fix) immediately - critical and fast
-2. Start R3-T2 (client polling) in parallel - high impact
-3. R3-T5 (docs) can proceed independently
-4. R3-T3 (perf testing) once T1 and T2 stable
-5. R3-T4 (integration tests) builds on T1/T3 learnings
-6. R3-T6 (content) uses T5 docs, needs T1 working
-7. R3-T7 (security) can run in parallel throughout
+1. Start R3-T1 (client polling) immediately - critical and high impact
+2. R3-T4 (author docs) can proceed independently
+3. R3-T2 (perf testing) once T1 stable
+4. R3-T3 (integration tests) builds on T1/T2 learnings
+5. R3-T5 (beta content) uses T4 docs, needs T1 working
+6. R3-T6 (security) can run in parallel throughout - ✅ COMPLETE
 
 ### External Dependencies
 
@@ -3011,7 +3029,7 @@ After R3 ships, clean up these items:
 - [ ] Close #645 (S3 vs DynamoDB) - Already implemented as DynamoDB-only
 - [ ] Merge #619 into #729 - Duplicate documentation issues
 - [ ] Create new issue for client polling fix (if doesn't exist)
-- [ ] Update #726 status to reflect currency fix and integration tests
+- [ ] Update #726 status to reflect integration tests
 - [ ] Update #728 and #613 with performance baseline results
 - [ ] File new issues for Medium/Low security findings (deferred to R4/R5)
 
@@ -3020,12 +3038,13 @@ After R3 ships, clean up these items:
 - [ ] Update README.md with R3 achievements
 - [ ] Archive planning documents that are now complete
 - [ ] Update incremental-design.md client polling section (mark as fixed)
+- [ ] Update release-three-report.md revision history with corrections made 2025-10-12
 
 ### Technical Debt
 
 - [ ] Review code for TODO comments added during R3
 - [ ] Document any architectural decisions made
-- [ ] Update schema.md if currency field added
+- [ ] Remove temporary api_metrics.dart instrumentation after baseline measurement
 
 ---
 
@@ -3087,10 +3106,11 @@ After R3 ships, clean up these items:
 
 ---
 
-**Document Version:** 1.1
-**Last Updated:** 2025-10-07
+**Document Version:** 1.2
+**Last Updated:** 2025-10-12
 **Next Review:** Upon R3 completion
 
 **Revision History:**
+- v1.2 (2025-10-12): Corrected exit criteria and dependencies after task renumbering, added explicit 5-stage plan for R3-T1
 - v1.1 (2025-10-07): Moved R3-T1 (Currency Rewards) to R4-T1, renumbered remaining tasks
 - v1.0 (2025-10-06): Initial release plan

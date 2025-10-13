@@ -337,7 +337,7 @@ Each option in the DecisionOptions map contains:
 - `Narrative` (STRING): Story text shown when this choice is made (enriches segment history)
 - `NextSegmentID` (STRING): UUID of the segment to transition to when this option is chosen
 
-**Note:** Decision segments are purely narrative. They contain NO Difficulty ratings, skill checks, or mechanical calculations. All game mechanics belong in mechanical segments.
+**Note:** Decision segments present player choices without mechanics. They contain NO Difficulty ratings, skill checks, or mechanical calculations. All game mechanics belong in mechanical segments.
 
 **Combat Structure:**
 The Combat map contains:
