@@ -1,17 +1,17 @@
 #Required
 PyYAML==6.0.3
 aws-cdk-lib==2.219.0
-boto3==1.40.45
+boto3==1.40.50
 constructs==10.4.2
 uuid-extension==0.2.0
 
 #Dependancies
-attrs==25.3.0
+attrs==25.4.0
 # aws-cdk.asset-awscli-v1
 # aws-cdk.asset-node-proxy-agent-v6
 # aws-cdk.cloud-assembly-schema
-botocore==1.40.45
-cattrs==25.2.0
+botocore==1.40.50
+cattrs==25.3.0
 importlib_resources==6.5.2
 jmespath==1.0.1
 jsii==1.115.0
