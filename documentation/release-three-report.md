@@ -66,11 +66,11 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ### Critical Path (Bug Fixes) — 1 Task
 
-- R3-T1: Fix client polling cadence (10× API waste) — *Previously R3-T2*
+- R3-T1: Fix client polling cadence (10× API waste) — *Previously R3-T2* — [COMPLETE] **COMPLETE**
 
 ### Performance Baseline — 1 Task
 
-- R3-T2: Load testing and provisioned concurrency decision — *Previously R3-T3*
+- ~~R3-T2: Load testing and provisioned concurrency decision~~ — *Deferred to post-revenue*
 
 ### Quality Assurance — 1 Task
 
@@ -78,18 +78,20 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ### Enablement — 2 Tasks
 
-- R3-T4: Author Quick-Start documentation — *Previously R3-T5*
+- ~~R3-T4: Author Quick-Start documentation~~ — *Deferred to R4*
 - R3-T5: Create real beta story content — *Previously R3-T6*
 
 ### Security — 1 Task
 
 - R3-T6: Scoped security sanity pass — *Previously R3-T7* — [COMPLETE] **COMPLETE**
 
-### Deferred to Release 4
+### Deferred to Post-Revenue
 
 - ~~R3-T1: Fix currency reward application~~ → **R4-T1** (Economy & Inventory focus)
+- ~~R3-T2: Performance baseline and provisioned concurrency~~ → **Post-Revenue** (Optimization after PMF)
+- ~~R3-T4: Author Quick-Start documentation~~ → **R4-T6** (Document complete system including economy)
 
-**Total:** 6 tasks (5 remaining for beta, 1 complete)
+**Total:** 6 tasks (3 remaining for beta, 2 complete, 3 deferred)
 
 ---
 
@@ -382,11 +384,36 @@ AFTER (Target):
 
 ---
 
-### R3-T2: Performance Baseline and Provisioned Concurrency Decision
+### ~~R3-T2: Performance Baseline and Provisioned Concurrency Decision~~ → Deferred to Post-Revenue
 
-**Status:** [IN PROGRESS] IMPORTANT - Evidence-based optimization
-**Priority:** P1 - Should complete before beta launch
+**Status:** [DEFERRED] - Moved to post-revenue optimization phase
+**Priority:** P3 - Optimize after proving product-market fit
 **Issues:** #728 (optimize Lambda performance), #613 (provisioned concurrency)
+
+**Decision:** This task has been **deferred to post-revenue** to focus R3 on shipping beta faster.
+
+**Rationale:**
+- Performance optimization is premature before proving product-market fit
+- Current Lambda configuration (128MB, 30s timeout) is adequate for beta scale
+- Provisioned concurrency costs ~$15/month per unit without revenue to justify it
+- Cold starts are acceptable for beta users (P95 < 2000ms is tolerable)
+- Can measure real production usage patterns before optimizing
+- Time better spent on content creation and user-facing features
+
+**Post-Revenue Trigger:**
+- Revisit after generating revenue or reaching 100+ DAU
+- Re-evaluate if user complaints about performance emerge
+- Consider PC only for proven high-traffic endpoints
+
+**What to measure in production instead:**
+- Real user latency (P50, P95, P99)
+- Actual cold start frequency
+- User retention correlated with API performance
+- Cost per user before optimizing infrastructure spend
+
+---
+
+**Original R3-T2 specification preserved below for future reference:**
 
 #### Current State
 
@@ -996,11 +1023,26 @@ jobs:
 
 ---
 
-### R3-T4: Author Quick-Start Documentation
+### ~~R3-T4: Author Quick-Start Documentation~~ → Deferred to R4-T6
 
-**Status:** [OK] STRAIGHTFORWARD - Documentation task
-**Priority:** P1 - Required for beta content creation
+**Status:** [DEFERRED] - Moved to Release 4
+**Priority:** P2 - Better after economy system complete
 **Issues:** #729 (documentation suite), #619 (author handbook - merge duplicate)
+
+**Decision:** This task has been **deferred to Release 4** to document the complete system including economy features.
+
+**Rationale:**
+- R3 should focus on core functionality (tests, minimal content) to ship beta faster
+- Author documentation more valuable after R4 economy system is complete
+- Authors will need to document currency rewards, item drops, store items in R4
+- R3-T5 (Create Beta Content) can proceed without comprehensive quick-start guide
+- Better to write documentation once for complete system than update iteratively
+
+**Moved to:** R4-T6 in `documentation/release-four-report.md`
+
+---
+
+**Original R3-T4 specification preserved below for reference:**
 
 #### Current State
 
@@ -2865,13 +2907,11 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
   - No race conditions or state conflicts
   - Battery usage reduced (measured via Flutter DevTools or manual observation)
 
-- [ ] **R3-T2: Performance Baseline**
-
-  - Load tests completed (10-user and 50-user)
-  - Performance baseline documented
-  - Provisioned concurrency decision made with evidence
-  - If PC deployed: cost/benefit analysis approved
-  - P95 API latency meets targets (< 2000ms cold start, < 200ms warm)
+- [[DEFERRED]] **R3-T2: Performance Baseline** → Deferred to post-revenue
+  - [DEFERRED] Load testing and provisioned concurrency optimization
+  - [RATIONALE] Performance optimization premature before proving PMF
+  - [RATIONALE] Current Lambda config adequate for beta scale
+  - [DECISION] Measure real production usage before optimizing
 
 - [ ] **R3-T3: Integration Tests**
 
@@ -2881,12 +2921,10 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
   - Tests clean up their own data
   - Test documentation complete
 
-- [ ] **R3-T4: Author Documentation**
-
-  - Quick-Start guide created
-  - 3 copy-paste templates included and validated
-  - Non-developer can complete end-to-end workflow
-  - README.md updated with link
+- [[DEFERRED]] **R3-T4: Author Documentation** → Deferred to R4-T6
+  - [DEFERRED] Quick-Start guide creation
+  - [RATIONALE] Better to document complete system after R4 economy features
+  - [DECISION] R3-T5 (content creation) can proceed without formal quick-start
 
 - [ ] **R3-T5: Beta Content**
 

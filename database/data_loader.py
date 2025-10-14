@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 from botocore.exceptions import ClientError
 
@@ -433,45 +434,83 @@ def store_story(story_data):
     """
     Stores story and segments data into DynamoDB tables.
 
-    Expects format with "Stories" array containing story objects.
+    Expects format: {"Story": {...}, "Segments": [...]}
 
     Args:
-        story_data (dict): The story data containing multiple stories and their segments.
+        story_data (dict): The story data containing story and segments.
     """
     try:
-        # Process each story in the Stories array
-        stories = story_data.get("Stories", [])
-        if not stories:
-            logging.warning("No stories found in the data")
-            return
+        story = story_data.get("Story")
+        segments = story_data.get("Segments", [])
 
-        total_stories = 0
-        total_segments = 0
+        if not story:
+            logging.error("Story data missing 'Story' field")
+            raise ValueError("Invalid story format: missing 'Story' field")
 
-        for story_obj in stories:
-            story = story_obj.get("Story", {})
-            segments = story_obj.get("Segments", [])
+        # Store the main story
+        story_item = {
+            "StoryID": story["StoryID"],
+            "Title": story["Title"],
+            "Description": story["Description"],
+            "NarrativeText": story["NarrativeText"],
+            "StoryType": story["StoryType"],
+            "EstimatedDuration": story["EstimatedDuration"],
+            "Prerequisites": story.get("Prerequisites", {}),
+            "DifficultyMap": story.get("DifficultyMap", {}),
+            "RewardTiers": story.get("RewardTiers", {}),
+            "BaseXPMultiplier": story.get("BaseXPMultiplier", 0.5),
+            "FirstSegmentID": story["FirstSegmentID"],
+            "CreatedAt": story["CreatedAt"],
+            "Version": story.get("Version", 1),
+        }
 
-            if not story:
-                logging.warning("Story object missing 'Story' field, skipping")
-                continue
+        # Build update expression with attribute names
+        update_expression = "SET "
+        expression_attribute_values = {}
+        expression_attribute_names = {}
+        expression_parts = []
 
-            # Store the main story
-            story_item = {
-                "StoryID": story["StoryID"],
-                "Title": story["Title"],
-                "Description": story["Description"],
-                "NarrativeText": story["NarrativeText"],
-                "StoryType": story["StoryType"],
-                "EstimatedDuration": story["EstimatedDuration"],
-                "Prerequisites": story.get("Prerequisites", {}),
-                "DifficultyMap": story.get("DifficultyMap", {}),
-                "RewardTiers": story.get("RewardTiers", {}),
-                "BaseXPMultiplier": story.get("BaseXPMultiplier", 0.5),
-                "FirstSegmentID": story["FirstSegmentID"],
-                "CreatedAt": story["CreatedAt"],
-                "Version": story.get("Version", 1),
+        for key, value in story_item.items():
+            if key != "StoryID":
+                name_placeholder = f"#{key}"
+                value_placeholder = f":{key.lower()}"
+                expression_parts.append(f"{name_placeholder} = {value_placeholder}")
+                expression_attribute_names[name_placeholder] = key
+                expression_attribute_values[value_placeholder] = value
+
+        update_expression += ", ".join(expression_parts)
+
+        dynamo.update_item(
+            TableName.STORY,
+            Key={"StoryID": story["StoryID"]},
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values,
+        )
+        logging.info(f"Successfully stored story '{story['Title']}' (ID: {story['StoryID']}) in DynamoDB")
+
+        # Store all segments for this story
+        for segment in segments:
+            segment_item = {
+                "StoryID": segment["StoryID"],
+                "SegmentID": segment["SegmentID"],
+                "SegmentType": segment["SegmentType"],
+                "SegmentActivity": segment["SegmentActivity"],
+                "SegmentTitle": segment.get("SegmentTitle", ""),
+                "SegmentDuration": segment["SegmentDuration"],
             }
+
+            # Add optional fields based on segment type
+            if segment["SegmentType"] == "decision":
+                segment_item["DecisionText"] = segment.get("DecisionText", "")
+                segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
+                segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
+            elif segment["SegmentType"] == "mechanical":
+                segment_item["Challenges"] = segment.get("Challenges", [])
+                segment_item["Combat"] = segment.get("Combat", {})
+                segment_item["Results"] = segment.get("Results", {})
+            else:
+                logging.warning(f"Unknown segment type: {segment['SegmentType']}")
 
             # Build update expression with attribute names
             update_expression = "SET "
@@ -479,8 +518,8 @@ def store_story(story_data):
             expression_attribute_names = {}
             expression_parts = []
 
-            for key, value in story_item.items():
-                if key != "StoryID":  # Skip the key
+            for key, value in segment_item.items():
+                if key not in ["StoryID", "SegmentID"]:
                     name_placeholder = f"#{key}"
                     value_placeholder = f":{key.lower()}"
                     expression_parts.append(f"{name_placeholder} = {value_placeholder}")
@@ -490,66 +529,14 @@ def store_story(story_data):
             update_expression += ", ".join(expression_parts)
 
             dynamo.update_item(
-                TableName.STORY,
-                Key={"StoryID": story["StoryID"]},
+                TableName.SEGMENTS,
+                Key={"StoryID": segment["StoryID"], "SegmentID": segment["SegmentID"]},
                 UpdateExpression=update_expression,
                 ExpressionAttributeNames=expression_attribute_names,
                 ExpressionAttributeValues=expression_attribute_values,
             )
-            logging.info(f"Successfully stored story '{story['Title']}' (ID: {story['StoryID']}) in DynamoDB")
-            total_stories += 1
 
-            # Store all segments for this story
-            for segment in segments:
-                segment_item = {
-                    "StoryID": segment["StoryID"],
-                    "SegmentID": segment["SegmentID"],
-                    "SegmentType": segment["SegmentType"],
-                    "SegmentActivity": segment["SegmentActivity"],
-                    "SegmentTitle": segment.get("SegmentTitle", ""),
-                    "SegmentDuration": segment["SegmentDuration"],
-                }
-
-                # Add optional fields based on segment type
-                if segment["SegmentType"] == "decision":
-                    segment_item["DecisionText"] = segment.get("DecisionText", "")
-                    segment_item["DecisionOptions"] = segment.get("DecisionOptions", {})
-                    segment_item["DefaultDecision"] = segment.get("DefaultDecision", "")
-                elif segment["SegmentType"] == "mechanical":
-                    # NextSegmentID is now handled per-result in Results
-                    segment_item["Challenges"] = segment.get("Challenges", [])
-                    segment_item["Combat"] = segment.get("Combat", {})
-                    segment_item["Results"] = segment.get("Results", {})
-                else:
-                    print(f"Unknown segment type: {segment['SegmentType']}")
-
-                # Build update expression with attribute names
-                update_expression = "SET "
-                expression_attribute_values = {}
-                expression_attribute_names = {}
-                expression_parts = []
-
-                for key, value in segment_item.items():
-                    if key not in ["StoryID", "SegmentID"]:  # Skip the keys
-                        name_placeholder = f"#{key}"
-                        value_placeholder = f":{key.lower()}"
-                        expression_parts.append(f"{name_placeholder} = {value_placeholder}")
-                        expression_attribute_names[name_placeholder] = key
-                        expression_attribute_values[value_placeholder] = value
-
-                update_expression += ", ".join(expression_parts)
-
-                dynamo.update_item(
-                    TableName.SEGMENTS,
-                    Key={"StoryID": segment["StoryID"], "SegmentID": segment["SegmentID"]},
-                    UpdateExpression=update_expression,
-                    ExpressionAttributeNames=expression_attribute_names,
-                    ExpressionAttributeValues=expression_attribute_values,
-                )
-
-            total_segments += len(segments)
-
-        logging.info(f"Successfully stored {total_stories} stories with {total_segments} total segments in DynamoDB")
+        logging.info(f"Successfully stored story '{story['Title']}' with {len(segments)} segments in DynamoDB")
 
     except ClientError as err:
         logging.error(f"Failed to store story in DynamoDB: {err}")
@@ -850,8 +837,8 @@ def main():
     parser.add_argument(
         "-s",
         "--story",
-        default="../data/test_story.json",
-        help="Path to the Story JSON file (default: ../data/test_story.json)",
+        default="../data/story/",
+        help="Path to the Story directory containing JSON files (default: ../data/story/)",
     )
     parser.add_argument(
         "-o",
@@ -909,14 +896,28 @@ def main():
     except Exception as err:
         logging.error(f"Failed to load/store prototypes: {err}")
 
-    # Load and store story
+    # Load and store stories
     try:
-        story_data = load_json(args.story)
-        store_story(story_data)
+        story_path = Path(args.story)
+        if not story_path.is_dir():
+            logging.error(f"Story path must be a directory: {args.story}")
+            raise ValueError(f"Story path must be a directory: {args.story}")
+
+        story_files = sorted(story_path.glob("*.json"))
+        if not story_files:
+            logging.warning(f"No story files found in directory: {args.story}")
+        else:
+            logging.info(f"Found {len(story_files)} story files in {args.story}")
+            for story_file in story_files:
+                logging.info(f"Loading story from {story_file.name}")
+                story_data = load_json(str(story_file))
+                store_story(story_data)
     except FileNotFoundError:
-        logging.warning(f"Story file not found: {args.story}")
+        logging.error(f"Story directory not found: {args.story}")
+        raise
     except Exception as err:
-        logging.error(f"Failed to load/store story: {err}")
+        logging.error(f"Failed to load/store stories: {err}")
+        raise
 
     # Load and store opponents
     try:

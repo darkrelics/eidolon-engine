@@ -6,7 +6,7 @@ Provides functions for processing different segment types.
 
 from botocore.exceptions import ClientError
 
-from eidolon.branching import select_next_branch, select_weighted_branch
+from eidolon.branching import select_weighted_branch
 from eidolon.character_data import apply_character_updates
 from eidolon.character_story import apply_story_outcome_effects
 from eidolon.constants import ATTRIBUTE_XP_RATIO
@@ -362,7 +362,7 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         return "", {"SelectionMethod": "no_decision"}
 
     elif segment_type == "mechanical":
-        # Mechanical segments: outcome-based branching (Death, Failure, Minimal, Normal, Exceptional)
+        # Mechanical segments: direct outcome-based next segment (Death, Failure, Minimal, Normal, Exceptional)
         outcome_key = map_outcome_to_key(outcome or "normal")
 
         # Get results dict
@@ -381,14 +381,12 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
             logger.warning(f"Outcome result for '{outcome_key}' is not a dict in {segment_id} - story ends")
             return "", {"SelectionMethod": "invalid_outcome_result"}
 
-        # Use weighted branching system for mechanical outcomes
-        branch_result = select_next_branch(outcome_result, character)
-
-        next_segment_id = branch_result["NextSegmentID"]
-        branch_metadata = branch_result["BranchMetadata"]
+        # Direct NextSegmentID lookup for mechanical outcomes
+        next_segment_id = outcome_result.get("NextSegmentID", "")
+        branch_metadata = {"SelectionMethod": "outcome_based", "Outcome": outcome_key}
 
         if next_segment_id:
-            logger.info(f"Mechanical outcome branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
+            logger.info(f"Mechanical outcome for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
         else:
             logger.info(f"No next segment for outcome '{outcome_key}' in {segment_id} - story ends")
 

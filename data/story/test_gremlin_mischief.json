@@ -1,0 +1,189 @@
+{
+  "Story": {
+    "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
+    "Title": "Gremlin Mischief",
+    "Description": "A simple encounter with a mischievous gremlin causing trouble near the forest entrance.",
+    "NarrativeText": "Reports of small items going missing and strange noises at night have the villagers worried. A small, impish creature has been spotted near the forest entrance. Someone needs to deal with this pest before it causes real problems.",
+    "StoryType": "repeatable",
+    "EstimatedDuration": 600,
+    "Prerequisites": {
+      "MinSkills": {},
+      "RequiredItems": [],
+      "RequiredRooms": []
+    },
+    "RewardTiers": {
+      "Death": "The gremlin's mischief proves fatal",
+      "Failure": "You retreat, unable to handle even a gremlin",
+      "Minimal": "You survive the encounter with minor injuries",
+      "Normal": "You successfully deal with the gremlin threat",
+      "Exceptional": "You masterfully handle the situation"
+    },
+    "FirstSegmentID": "d9857bfc-50ba-4954-a38c-f64c30882ba8",
+    "CreatedAt": "2025-01-23T10:00:00Z"
+  },
+  "Segments": [
+    {
+      "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
+      "SegmentID": "d9857bfc-50ba-4954-a38c-f64c30882ba8",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 180,
+      "Challenges": [
+        {
+          "Attribute": "Perception",
+          "Skill": "Investigation",
+          "Difficulty": 3,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "While searching for the gremlin, you fall into a hidden pit trap it had set. The fall is fatal.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "You cannot find any trace of the elusive creature. Frustrated and embarrassed, you give up the search.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "After much searching, you catch a glimpse of the creature darting behind some bushes. The chase is on!",
+          "Effects": {
+            "Room": 2
+          },
+          "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
+        },
+        "Normal": {
+          "Narrative": "Your keen eyes spot tiny footprints and disturbed leaves. You follow the trail carefully toward the gremlin's location.",
+          "Effects": {
+            "Room": 2
+          },
+          "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
+        },
+        "Exceptional": {
+          "Narrative": "Your exceptional tracking skills lead you directly to the gremlin's hiding spot. It seems surprised to be found so quickly!",
+          "Effects": {
+            "Room": 2
+          },
+          "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
+        }
+      },
+      "SegmentActivity": "Tracking the gremlin",
+      "SegmentTitle": "You are searching for signs of the troublesome gremlin"
+    },
+    {
+      "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
+      "SegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 180,
+      "Challenges": [
+        {
+          "Attribute": "Agility",
+          "Skill": "Dodge",
+          "Difficulty": 3,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "The gremlin throws a rock that hits you square in the temple. You fall backward, striking your head on a stone. Everything goes dark.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "The nimble gremlin escapes through a tiny gap in the undergrowth. You've lost it completely.",
+          "Effects": {
+            "Wounds": ["bashing"],
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "You dodge most of the debris the gremlin throws at you, though a few rocks leave bruises. You've got it cornered now!",
+          "Effects": {
+            "Wounds": ["bashing"],
+            "Room": 3
+          },
+          "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
+        },
+        "Normal": {
+          "Narrative": "You skillfully avoid the gremlin's thrown objects and manage to back it into a corner. It chatters angrily at you.",
+          "Effects": {
+            "Room": 3
+          },
+          "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
+        },
+        "Exceptional": {
+          "Narrative": "With acrobatic grace, you dodge everything the gremlin throws while herding it exactly where you want it. It realizes it's trapped!",
+          "Effects": {
+            "Room": 3
+          },
+          "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
+        }
+      },
+      "SegmentActivity": "Cornering the gremlin",
+      "SegmentTitle": "You attempt to corner the elusive gremlin"
+    },
+    {
+      "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
+      "SegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 180,
+      "Combat": {
+        "OpponentID": "51eadb06-e05c-4515-84a7-1e415d6b88e1",
+        "MaxRounds": 6,
+        "Environment": {}
+      },
+      "Results": {
+        "Death": {
+          "Narrative": "The gremlin's wild flailing catches you off guard. You trip and fall, hitting your head. The last thing you hear is its cackling laughter.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "The gremlin proves too tough to handle. It escapes while you nurse your bruises, chattering mockingly as it disappears into the forest.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "After a clumsy scuffle, you manage to drive the gremlin away. It flees into the forest, hopefully never to return. You're left with several painful bruises.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Normal": {
+          "Narrative": "You successfully subdue the gremlin with minimal injury. It scampers away defeated, dropping a small shiny trinket in its haste to escape.",
+          "Effects": {
+            "Room": 1,
+            "Items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483"]
+          },
+          "NextSegmentID": null
+        },
+        "Exceptional": {
+          "Narrative": "You dispatch the gremlin with impressive efficiency! It surrenders completely, offering you its collected 'treasures' before fleeing. The village is safe once more!",
+          "Effects": {
+            "Room": 1,
+            "Items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "d47ac10b-58cc-4372-a567-0e02b2c3d481"]
+          },
+          "NextSegmentID": null
+        }
+      },
+      "SegmentActivity": "Fighting the gremlin",
+      "SegmentTitle": "You are in combat with the cornered gremlin"
+    }
+  ]
+}
