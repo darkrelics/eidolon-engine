@@ -29,7 +29,7 @@ packaging==25.0
 pathspec==0.12.1
 pip-api==0.0.34
 pip-requirements-parser==32.0.1
-platformdirs==4.4.0
+platformdirs==4.5.0
 py-serializable==2.1.0
 pycodestyle==2.14.0
 pygments==2.19.2

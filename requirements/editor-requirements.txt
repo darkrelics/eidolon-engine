@@ -70,7 +70,7 @@ packaging==25.0
 pandocfilters==1.5.1
 parso==0.8.5
 pillow==11.3.0
-platformdirs==4.4.0
+platformdirs==4.5.0
 prometheus-client==0.23.1
 prompt-toolkit==3.0.52
 psutil==7.1.0
