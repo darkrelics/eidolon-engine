@@ -6,7 +6,7 @@ constructs==10.4.2
 uuid-extension==0.2.0
 
 #Dependancies
-attrs==25.3.0
+attrs==25.4.0
 # aws-cdk.asset-awscli-v1
 # aws-cdk.asset-node-proxy-agent-v6
 # aws-cdk.cloud-assembly-schema

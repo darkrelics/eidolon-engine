@@ -10,7 +10,7 @@ from uuid_extension import uuid7
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.segment_core import extract_character_updates_from_results, validate_segment_outcome_results
-from eidolon.time_utils import future_unix, now_unix
+from eidolon.time_utils import now_unix
 
 
 def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def=None) -> None:
