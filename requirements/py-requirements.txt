@@ -1,14 +1,14 @@
 # Directly called packages.
 bandit==1.8.6
 pip-audit==2.9.0
-pylint==3.3.9
+pylint==4.0.0
 ruff==0.13.3
 vulture==2.14
 
 # Supporting Libraries
 CacheControl==0.14.3
 PyYAML==6.0.3
-astroid==3.3.11
+astroid==4.0.1
 boolean.py==5.0
 certifi==2025.10.5
 charset-normalizer==3.4.3
