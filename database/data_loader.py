@@ -375,7 +375,7 @@ def store_opponents(opponents_data):
                     "Skills": opponent["Skills"],
                     "Level": opponent.get("Level", 1),
                     "XPReward": opponent.get("XPReward", 10),
-                    "LootTable": opponent.get("LootTable", []),
+                    "Items": opponent.get("Items", []),
                     "Tags": opponent.get("Tags", []),
                     "CreatedAt": opponent.get("CreatedAt", ""),
                 }
@@ -393,7 +393,7 @@ def store_opponents(opponents_data):
                     "Health": opponent["Health"],
                     "WeaponType": opponent.get("WeaponType", "bashing"),
                     "WeaponDamage": opponent["WeaponDamage"],
-                    "LootTable": opponent.get("LootTable", []),
+                    "Items": opponent.get("Items", []),
                     "Tags": opponent.get("Tags", []),
                     "CreatedAt": opponent.get("CreatedAt", ""),
                 }
@@ -727,15 +727,15 @@ def display_opponents(opponents_data):
             print(f"  Weapon Type: {opponent.get('WeaponType', 'Unknown')}")
             print(f"  Weapon Damage: {opponent.get('WeaponDamage', 0)}")
 
-        loot_table = opponent.get("LootTable", [])
-        if loot_table:
-            print("  Loot Table:")
-            for loot in loot_table:
-                if isinstance(loot, dict):
-                    print(f"    Item: {loot.get('ItemID', 'Unknown')} (chance: {loot.get('Chance', 0)})")
+        items = opponent.get("Items", [])
+        if items:
+            print("  Items:")
+            for item in items:
+                if isinstance(item, dict):
+                    print(f"    Item: {item.get('ItemID', 'Unknown')} (chance: {item.get('Chance', 0)})")
                 else:
                     # Simple string format
-                    print(f"    {loot}")
+                    print(f"    {item}")
 
         tags = opponent.get("Tags", [])
         if tags:

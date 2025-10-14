@@ -354,7 +354,7 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
   - `State` (STRING, optional): Character state change (e.g., "dead")
   - `Room` (NUMBER, optional): Room ID to move character to
   - `Wounds` (LIST, optional): List of damage type strings (e.g., ["bashing", "lethal"])
-  - `Items` (LIST, optional): List of item prototype IDs to grant
+  - `Items` (LIST, optional): Item rewards using the same format as Opponents Items field (see Items Structure above)
 - `NextSegmentID` (STRING, nullable): UUID of the next segment, or null to end the story
 
 ## ActiveSegments Table
@@ -513,21 +513,63 @@ Records the complete history of each segment played by a character. This table s
 | `Health`        | `NUMBER` |          | Maximum health levels.                            |
 | `WeaponType`    | `STRING` |          | Type of damage dealt (bashing/lethal/aggravated). |
 | `WeaponDamage`  | `NUMBER` |          | Bonus damage from weapon.                         |
-| `LootTable`     | `LIST`   |          | List of loot drop objects (see structure below).  |
+| `Items`         | `LIST`   |          | List of item rewards (see structure below).       |
 | `Tags`          | `LIST`   |          | Categories for filtering and searching.           |
 | `CreatedAt`     | `STRING` |          | ISO timestamp of creation.                        |
 
 **Primary Key:** OpponentID (HASH)
 
-**LootTable Structure:**
-Each item in the LootTable list is a map with the following fields:
-
-- `ItemID` (STRING): UUID of the item prototype that can drop
-- `Chance` (NUMBER): Drop probability (0.0 to 1.0)
+**Note:** The Items field uses the common Items Structure defined in the Data Structure Definitions section below, supporting both simple (guaranteed) and probabilistic reward formats.
 
 ---
 
 ## Data Structure Definitions
+
+### Items Structure
+
+The Items field is used in both Opponents and Segment Results to define item rewards. It supports two formats:
+
+**1. Simple Format (guaranteed rewards):**
+List of item prototype IDs as strings. All listed items are granted with 100% probability.
+
+```json
+["item-uuid-1", "item-uuid-2", "item-uuid-3"]
+```
+
+**2. Probabilistic Format:**
+List of maps with ItemID and Chance fields. Each item has an independent probability of being granted.
+
+```json
+[
+  {"ItemID": "item-uuid-1", "Chance": 0.3},
+  {"ItemID": "item-uuid-2", "Chance": 0.5},
+  {"ItemID": "item-uuid-3", "Chance": 0.2}
+]
+```
+
+**Probability Calculation Algorithm:**
+
+When using probabilistic format, items are processed using cumulative probability distribution:
+
+1. Sort items by Chance in ascending order (smallest to highest)
+2. Accumulate probabilities cumulatively
+3. If cumulative sum exceeds 1.0, clip the current item's chance to `1.0 - previous_cumulative`
+4. Roll independently for each item against its final (possibly clipped) probability
+
+**Probability Examples:**
+
+| Configuration | Probabilities | Result |
+|--------------|---------------|--------|
+| `0.3, 0.5` | 30%, 50% | 80% total chance (20% chance of no reward) |
+| `0.4, 0.6` | 40%, 60% | 100% total chance (both items can drop) |
+| `0.5, 0.6` | 50%, 50% | 100% total chance (second clipped from 0.6 to 0.5) |
+| `0.2, 0.3, 0.7` | 20%, 30%, 50% | 100% total chance (third clipped from 0.7 to 0.5) |
+
+This algorithm ensures:
+- Lower-probability items always get their full chance
+- Higher-probability items are clipped if needed
+- Total probability never exceeds 100%
+- Items are independent (both can drop if both succeed)
 
 ### Wound Object Structure
 

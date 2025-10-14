@@ -37,7 +37,7 @@
       ],
       "Results": {
         "Death": {
-          "Narrative": "While searching for the gremlin, you fall into a hidden pit trap it had set. The fall is fatal.",
+          "Narrative": "As you search for the gremlin near the glade entrance, distracted by the birdsong and dappled shadows cast through the canopy, you fail to watch your footing. You fall into a hidden pit trap the clever creature had concealed beneath the soft moss. The last thing you hear is its cackling laughter echoing above as the fall proves fatal.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -45,36 +45,36 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "You cannot find any trace of the elusive creature. Frustrated and embarrassed, you give up the search.",
+          "Narrative": "Despite the glade entrance's beauty - sunlight filtering through the canopy, birds singing overhead, the sweet scent of flowers - you cannot find any trace of the elusive creature. You search the soft moss beneath your feet, examine the tall trees, but find nothing. Frustrated and embarrassed by your failure, you remain at the glade entrance and give up the search.",
           "Effects": {
             "Room": 1
           },
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "After much searching, you catch a glimpse of the creature darting behind some bushes. The chase is on!",
+          "Narrative": "After much searching around the glade entrance in the dappled shadows, you catch a glimpse of the creature darting away. You follow as it flees down the well-trodden path where trees form a green tunnel overhead. In the cool, damp air carrying the scent of earth and decaying leaves, the chase begins! You hear a distant woodpecker call as you pursue.",
           "Effects": {
             "Room": 2
           },
           "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
         },
         "Normal": {
-          "Narrative": "Your keen eyes spot tiny footprints and disturbed leaves. You follow the trail carefully toward the gremlin's location.",
+          "Narrative": "Your keen eyes spot signs in the soft moss at the glade entrance - tiny footprints and disturbed leaves leading away from the sunlit clearing. You follow the trail carefully down the forest path where trees form a green tunnel overhead. The cool, damp atmosphere and scent of earth guide you toward the gremlin's location, leaves rustling overhead as you advance.",
           "Effects": {
             "Room": 2
           },
           "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
         },
         "Exceptional": {
-          "Narrative": "Your exceptional tracking skills lead you directly to the gremlin's hiding spot. It seems surprised to be found so quickly!",
+          "Narrative": "Your exceptional tracking skills immediately identify the gremlin's trail from the glade entrance! Fresh disturbances in the soft moss, broken flowers, and tiny scratches on tree bark tell a clear story. You follow the path into the green tunnel of trees, and in the cool, damp air with leaves rustling overhead and a woodpecker calling, you spot the gremlin ahead. It seems genuinely surprised to be found so quickly!",
           "Effects": {
             "Room": 2
           },
           "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
         }
       },
-      "SegmentActivity": "Tracking the gremlin",
-      "SegmentTitle": "You are searching for signs of the troublesome gremlin"
+      "SegmentActivity": "You are searching for signs of the troublesome gremlin",
+      "SegmentTitle": "Tracking the gremlin"
     },
     {
       "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
@@ -91,7 +91,7 @@
       ],
       "Results": {
         "Death": {
-          "Narrative": "The gremlin throws a rock that hits you square in the temple. You fall backward, striking your head on a stone. Everything goes dark.",
+          "Narrative": "As you pursue the gremlin along the well-trodden forest path beneath the green tunnel of trees, it suddenly hurls a rock. The projectile hits you square in the temple. You fall backward through the cool, damp air, your head striking a stone hidden in the earth and decaying leaves. The last sound you hear is the rustling leaves overhead as everything goes dark.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -99,7 +99,7 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "The nimble gremlin escapes through a tiny gap in the undergrowth. You've lost it completely.",
+          "Narrative": "The nimble gremlin proves too quick on the forest path! It darts through the undergrowth as you chase it beneath the green tunnel of trees, then escapes through a tiny gap you can't follow. The cool, damp air carries the scent of earth and your frustration. You've lost it completely and must retreat back to the glade entrance, nursing your bruises from thrown debris.",
           "Effects": {
             "Wounds": ["bashing"],
             "Room": 1
@@ -107,7 +107,7 @@
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "You dodge most of the debris the gremlin throws at you, though a few rocks leave bruises. You've got it cornered now!",
+          "Narrative": "Along the forest path beneath the green tunnel of trees, you dodge most of the debris the gremlin throws - rocks and sticks pulled from the earth and decaying leaves. A few rocks leave painful bruises, but your persistence pays off. You drive it off the main path and into a small clearing where wildflowers add pops of color. You've got it cornered now! The buzz of insects fills the air as it realizes its predicament.",
           "Effects": {
             "Wounds": ["bashing"],
             "Room": 3
@@ -115,22 +115,22 @@
           "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
         },
         "Normal": {
-          "Narrative": "You skillfully avoid the gremlin's thrown objects and manage to back it into a corner. It chatters angrily at you.",
+          "Narrative": "You skillfully avoid the gremlin's thrown objects as you chase it along the forest path. The cool, damp air and scent of earth don't slow you down. You herd it away from the green tunnel of trees toward a small clearing where wildflowers bloom. There, with a fallen log blocking one escape route, you manage to back it into a corner. It chatters angrily at you as insects buzz around the clearing.",
           "Effects": {
             "Room": 3
           },
           "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
         },
         "Exceptional": {
-          "Narrative": "With acrobatic grace, you dodge everything the gremlin throws while herding it exactly where you want it. It realizes it's trapped!",
+          "Narrative": "With acrobatic grace, you dodge everything the gremlin throws while expertly herding it along the forest path! The cool, damp atmosphere beneath the green tunnel of trees works to your advantage. You drive it into a small clearing where wildflowers bloom and a fallen log provides a natural barrier. The break from the closeness of the trees gives you the space you need - it realizes it's trapped as the buzz of insects surrounds you both!",
           "Effects": {
             "Room": 3
           },
           "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
         }
       },
-      "SegmentActivity": "Cornering the gremlin",
-      "SegmentTitle": "You attempt to corner the elusive gremlin"
+      "SegmentActivity": "You attempt to corner the elusive gremlin",
+      "SegmentTitle": "Cornering the gremlin"
     },
     {
       "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
@@ -144,7 +144,7 @@
       },
       "Results": {
         "Death": {
-          "Narrative": "The gremlin's wild flailing catches you off guard. You trip and fall, hitting your head. The last thing you hear is its cackling laughter.",
+          "Narrative": "In the small clearing, the gremlin's wild flailing catches you off guard. You trip over the fallen log and fall, hitting your head on the ground. The wildflowers blur, the buzz of insects fades, and the last thing you hear above the chaos is its cackling laughter echoing through the break from the closeness of the trees.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -152,38 +152,43 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "The gremlin proves too tough to handle. It escapes while you nurse your bruises, chattering mockingly as it disappears into the forest.",
+          "Narrative": "The gremlin proves too tough to handle in the small clearing! Despite the open space providing room to maneuver, its wild energy overwhelms you. While you nurse your bruises, it chatters mockingly and escapes back through the wildflowers into the forest. You limp back to the glade entrance, defeated. The sunlight filtering through the canopy and birdsong offer little comfort.",
           "Effects": {
             "Room": 1
           },
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "After a clumsy scuffle, you manage to drive the gremlin away. It flees into the forest, hopefully never to return. You're left with several painful bruises.",
+          "Narrative": "After a clumsy scuffle among the wildflowers in the small clearing, you manage to drive the gremlin away. The fallen log proves both obstacle and weapon as you chase it around the clearing, insects buzzing frantically. It finally flees back into the forest, hopefully never to return. You return to the glade entrance with several painful bruises, collapsing on the soft moss to recover.",
           "Effects": {
             "Room": 1
           },
           "NextSegmentID": null
         },
         "Normal": {
-          "Narrative": "You successfully subdue the gremlin with minimal injury. It scampers away defeated, dropping a small shiny trinket in its haste to escape.",
+          "Narrative": "You successfully subdue the gremlin with minimal injury in the small clearing! The open space and wildflowers give you room to maneuver around the fallen log. It scampers away defeated, dropping a small shiny trinket among the flowers in its haste to escape. You return victorious to the glade entrance, where birds sing overhead and the scent of flowers celebrates your success.",
           "Effects": {
             "Room": 1,
-            "Items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483"]
+            "Items": [
+              {"ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "Chance": 0.7}
+            ]
           },
           "NextSegmentID": null
         },
         "Exceptional": {
-          "Narrative": "You dispatch the gremlin with impressive efficiency! It surrenders completely, offering you its collected 'treasures' before fleeing. The village is safe once more!",
+          "Narrative": "You dispatch the gremlin with impressive efficiency in the small clearing! The open space allows you to use the natural terrain - the fallen log, the wildflowers, even the buzz of insects - to your advantage. It surrenders completely, offering you its collected 'treasures' before fleeing through the pops of color back into the forest. You return triumphant to the glade entrance, where sunlight filters through the canopy onto your victory. The village is safe once more!",
           "Effects": {
             "Room": 1,
-            "Items": ["b47ac10b-58cc-4372-a567-0e02b2c3d483", "d47ac10b-58cc-4372-a567-0e02b2c3d481"]
+            "Items": [
+              {"ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "Chance": 0.9},
+              {"ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481", "Chance": 0.6}
+            ]
           },
           "NextSegmentID": null
         }
       },
-      "SegmentActivity": "Fighting the gremlin",
-      "SegmentTitle": "You are in combat with the cornered gremlin"
+      "SegmentActivity": "You are in combat with the cornered gremlin",
+      "SegmentTitle": "Fighting the gremlin"
     }
   ]
 }

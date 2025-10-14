@@ -11,7 +11,7 @@ from eidolon.character_data import apply_character_updates
 from eidolon.character_story import apply_story_outcome_effects
 from eidolon.constants import ATTRIBUTE_XP_RATIO
 from eidolon.dynamo import TableName, dynamo
-from eidolon.items import add_items_to_inventory
+from eidolon.items import add_items_to_inventory, process_items_with_probability
 from eidolon.logger import logger
 from eidolon.segment_challenges import process_skill_challenges
 from eidolon.segment_combat import process_combat_segment
@@ -266,9 +266,12 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
             reward_items = story_effects.get("Items")
             if reward_items:
-                granted_items = add_items_to_inventory(character_id, reward_items)
-                if granted_items:
-                    results["GrantedItemIDs"] = granted_items
+                # Process probability for items (handles both simple and probabilistic formats)
+                prototype_ids = process_items_with_probability(reward_items)
+                if prototype_ids:
+                    granted_items = add_items_to_inventory(character_id, prototype_ids)
+                    if granted_items:
+                        results["GrantedItemIDs"] = granted_items
 
     return overall_outcome, results
 

@@ -105,6 +105,67 @@ def find_next_available_slot(inventory: dict) -> str:
         index += 1
 
 
+def process_items_with_probability(items_data: list) -> list[str]:
+    """
+    Process Items field and determine which items to grant based on probability.
+
+    Supports two formats:
+    1. Simple: ["uuid-1", "uuid-2"] - all items granted
+    2. Probabilistic: [{"ItemID": "uuid-1", "Chance": 0.3}, ...] - rolled independently
+
+    Args:
+        items_data: Items list in either format
+
+    Returns:
+        List of prototype IDs to grant
+    """
+    if not items_data:
+        return []
+
+    import random
+
+    granted_items = []
+
+    # Check format by examining first element
+    first_item = items_data[0]
+
+    if isinstance(first_item, str):
+        # Simple format - grant all items
+        return items_data
+
+    elif isinstance(first_item, dict):
+        # Probabilistic format - process with cumulative probability
+        # Sort by Chance ascending (smallest to highest)
+        sorted_items = sorted(items_data, key=lambda x: x.get("Chance", 0))
+
+        # Process with cumulative clipping
+        cumulative = 0.0
+        for item_def in sorted_items:
+            item_id = item_def.get("ItemID")
+            chance = item_def.get("Chance", 0)
+
+            if not item_id or chance <= 0:
+                continue
+
+            # Clip if cumulative exceeds 1.0
+            effective_chance = min(chance, 1.0 - cumulative)
+            cumulative += effective_chance
+
+            # Roll for this item
+            if random.random() < effective_chance:
+                granted_items.append(item_id)
+
+            # Stop if we've reached 100% cumulative
+            if cumulative >= 1.0:
+                break
+
+        return granted_items
+
+    else:
+        logger.warning(f"Unexpected Items format: {type(first_item)}")
+        return []
+
+
 def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[str]:
     """Create items from prototypes and append them to a character's inventory."""
 

@@ -75,7 +75,7 @@ def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
 
     Args:
         character_id: Character UUID
-        opponent_data: Opponent data including XPReward and LootTable
+        opponent_data: Opponent data including XPReward and Items
 
     Raises:
         RuntimeError: If database operations fail
@@ -83,10 +83,10 @@ def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
     try:
         # Segment processing already applied skill/attribute XP.
         # Additional combat rewards must come from segment/story data; none are applied here.
-        loot_table = opponent_data.get("LootTable", [])
-        if loot_table:
+        items = opponent_data.get("Items", [])
+        if items:
             logger.info(
-                "Loot rewards are defined on the opponent but segment/story data must trigger distribution; skipping Dynamo writes"
+                "Item rewards are defined on the opponent but segment/story data must trigger distribution; skipping Dynamo writes"
             )
 
         logger.info(f"No additional combat rewards applied for {character_id}")

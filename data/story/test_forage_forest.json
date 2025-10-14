@@ -1,0 +1,470 @@
+{
+  "Story": {
+    "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+    "Title": "Forest Foraging Expedition",
+    "Description": "A peaceful journey through the Vedant Forest, gathering valuable plants, herbs, and other natural resources.",
+    "NarrativeText": "The forest is rich with edible plants, medicinal herbs, and rare specimens. Armed with your knowledge of nature, you set out from the glade to gather what the forest has to offer. Your goal is to reach the old abandoned campsite while collecting valuable forage along the way.",
+    "StoryType": "repeatable",
+    "EstimatedDuration": 900,
+    "Prerequisites": {
+      "MinSkills": {},
+      "RequiredItems": [],
+      "RequiredRooms": []
+    },
+    "RewardTiers": {
+      "Death": "Lost in the wilderness, you succumb to the elements",
+      "Failure": "You return with little to show for your efforts",
+      "Minimal": "You gather some basic supplies from the forest",
+      "Normal": "Your foraging expedition yields useful resources",
+      "Exceptional": "You discover rare and valuable forest treasures"
+    },
+    "FirstSegmentID": "3d8e9f0a-1b2c-4d5e-8f9a-0b1c2d3e4f56",
+    "CreatedAt": "2025-01-24T14:00:00Z"
+  },
+  "Segments": [
+    {
+      "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+      "SegmentID": "3d8e9f0a-1b2c-4d5e-8f9a-0b1c2d3e4f56",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 180,
+      "Challenges": [
+        {
+          "Attribute": "Perception",
+          "Skill": "Investigation",
+          "Difficulty": 3,
+          "Attempts": 3
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "While searching the underbrush, you disturb a nest of venomous snakes. Unable to escape in time, their bites prove fatal.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "Despite the glade's beauty - sunlight filtering through the canopy, birds singing overhead, and the sweet scent of flowers - you cannot identify which plants are valuable. Discouraged by your lack of knowledge, you abandon the expedition and return to the glade entrance empty-handed.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "You struggle to identify edible plants in the dappled shadows cast by the canopy above. After much searching through the soft moss beneath your feet, you eventually spot some common berries growing near where the path forms a green tunnel into the forest. Better than nothing.",
+          "Effects": {
+            "Room": 2,
+            "Items": [
+              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7}
+            ]
+          },
+          "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
+        },
+        "Normal": {
+          "Narrative": "Your trained eye spots several promising foraging locations around the glade entrance. As birds sing in the branches and the scent of flowers fills your lungs, you gather quality berries from the moss-covered ground. You note the direction of other potential finds where the forest path leads deeper into the cool, damp woods.",
+          "Effects": {
+            "Room": 2,
+            "Items": [
+              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.9}
+            ]
+          },
+          "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
+        },
+        "Exceptional": {
+          "Narrative": "Your exceptional perception reveals hidden treasures in the glade's dappled shadows! You gather premium berries nestled in the soft moss and identify medicinal herbs growing where sunlight breaks through the canopy - plants that others would walk right past. You venture onto the forest path with confidence, noting rich foraging opportunities ahead.",
+          "Effects": {
+            "Room": 2,
+            "Items": [
+              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 1.0},
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+            ]
+          },
+          "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
+        }
+      },
+      "SegmentActivity": "You are examining the glade for signs of valuable plants and herbs",
+      "SegmentTitle": "Glade survey"
+    },
+    {
+      "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+      "SegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c",
+      "SegmentType": "decision",
+      "SegmentDuration": 300,
+      "DecisionText": "The well-trodden forest path splits before you, trees forming a green tunnel overhead in both directions. The air is cool and damp, carrying the scent of earth and decaying leaves. To the left, you hear the gentle sound of flowing water - the babbling brook, where moisture-loving plants thrive. To the right through the rustling leaves, you glimpse a majestic ancient oak tree, its massive twisted trunk promising rich soil and rare fungi. Which way do you choose?",
+      "DecisionOptions": {
+        "Brook": {
+          "Text": "Follow the sound of water to the babbling brook",
+          "Description": "Water sources often have lush vegetation and medicinal plants",
+          "Narrative": "You follow the sound of flowing water deeper into the forest. The murmur grows louder as you approach the babbling brook, its clear waters sparkling in the dappled sunlight. The peaceful atmosphere and moist banks promise excellent foraging opportunities.",
+          "NextSegmentID": "4e5f6a7b-8c9d-4e1f-2a3b-4c5d6e7f8a9b"
+        },
+        "Oak": {
+          "Text": "Head toward the ancient oak tree",
+          "Description": "Ancient trees often have rare mushrooms and herbs in their shade",
+          "Narrative": "You choose to investigate the ancient oak. As you approach, its massive trunk - twisted and gnarled by the passage of time - looms before you like a sentinel. Beneath its widespread branches, a soft carpet of leaves and acorns covers the ground, and the rich soil promises rare specimens.",
+          "NextSegmentID": "9a0b1c2d-3e4f-4a5b-6c7d-8e9f0a1b2c3d"
+        }
+      },
+      "DefaultDecision": "Brook",
+      "SegmentActivity": "You stand at the fork in the path, considering which direction offers the best foraging",
+      "SegmentTitle": "Path decision"
+    },
+    {
+      "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+      "SegmentID": "4e5f6a7b-8c9d-4e1f-2a3b-4c5d6e7f8a9b",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 240,
+      "Challenges": [
+        {
+          "Attribute": "Intelligence",
+          "Skill": "Foraging",
+          "Difficulty": 4,
+          "Attempts": 3
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "As you reach for plants growing near the water's edge, you slip on wet rocks and plunge into the brook. The peaceful murmur becomes a roar in your ears as the swift current overwhelms you. Despite the sparkling sunlight dancing on the water above, you cannot reach the surface.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "The babbling brook's tranquil beauty proves deceptive - the banks are treacherous and the moisture makes identification difficult. After slipping several times and finding little of value, you abandon this location frustrated and soaked, heading back toward the glade entrance.",
+          "Effects": {
+            "Wounds": [
+              "bashing"
+            ],
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "The babbling brook meanders peacefully through the trees, its clear waters sparkling invitingly, but the slippery rocks along the banks make foraging challenging. You manage to gather some wild vegetables from the moist soil, though you take several painful tumbles in the process.",
+          "Effects": {
+            "Wounds": [
+              "bashing"
+            ],
+            "Room": 5,
+            "Items": [
+              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.5}
+            ]
+          },
+          "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+        },
+        "Normal": {
+          "Narrative": "The babbling brook proves a rewarding choice. The peaceful murmur of water creates a soothing atmosphere as you work. You carefully harvest wild vegetables and medicinal herbs flourishing in the moist soil along the sparkling water's edge, pausing occasionally to appreciate the tranquil beauty.",
+          "Effects": {
+            "Room": 5,
+            "Items": [
+              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.8},
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+            ]
+          },
+          "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+        },
+        "Exceptional": {
+          "Narrative": "Your expert eye transforms the babbling brook into a treasure trove! As the clear waters sparkle in dappled sunlight and the soothing murmur fills your ears, you identify prime vegetables and medicinal herbs along the banks. In a shaded overhang where the brook meanders beneath overhanging trees, you discover rare healing roots that most foragers would never notice. The tranquil setting has yielded exceptional rewards.",
+          "Effects": {
+            "Room": 5,
+            "Items": [
+              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.9},
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.8},
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.5}
+            ]
+          },
+          "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+        }
+      },
+      "SegmentActivity": "You carefully search the banks of the babbling brook for valuable plants",
+      "SegmentTitle": "Brook foraging"
+    },
+    {
+      "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+      "SegmentID": "9a0b1c2d-3e4f-4a5b-6c7d-8e9f0a1b2c3d",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 240,
+      "Challenges": [
+        {
+          "Attribute": "Perception",
+          "Skill": "Foraging",
+          "Difficulty": 4,
+          "Attempts": 3
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "While digging through the soft carpet of leaves and acorns beneath the ancient oak's widespread branches, you unearth a nest of giant spiders. The majestic sentinel tree witnesses your final moments as venomous bites prove fatal before you can escape.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "Despite the oak's promise - its massive trunk twisted and gnarled by centuries of growth - the area beneath proves overgrown and difficult to navigate. Thorny undergrowth hidden beneath the carpet of leaves scratches you repeatedly. You find nothing of value and retreat defeated toward the glade entrance.",
+          "Effects": {
+            "Wounds": [
+              "bashing"
+            ],
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "The ancient oak stands as a sentinel, its widespread branches providing shade over the soft carpet of leaves and acorns below. You struggle to identify the mushrooms growing around the massive, time-gnarled trunk, settling for only the most obvious edible specimens. Hidden thorns leave you with several scratches.",
+          "Effects": {
+            "Wounds": [
+              "bashing"
+            ],
+            "Room": 4,
+            "Items": [
+              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.5}
+            ]
+          },
+          "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+        },
+        "Normal": {
+          "Narrative": "The majestic ancient oak rewards your choice. Beneath its widespread branches and the soft carpet of leaves and acorns, you identify several edible mushrooms and healing roots growing in the rich soil. The massive twisted trunk - a testament to nature's endurance - has enriched the earth around it with centuries of growth.",
+          "Effects": {
+            "Room": 4,
+            "Items": [
+              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7},
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7}
+            ]
+          },
+          "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+        },
+        "Exceptional": {
+          "Narrative": "Your expertise reveals the ancient oak's greatest secrets! The majestic tree - its massive trunk gnarled by the passage of time - has stood as a sentinel for centuries, enriching the soil beneath. You discover rare glowing mushrooms hidden among the roots, precious healing roots in the rich earth, and medicinal herbs thriving in the shade of its widespread branches. This remarkable find is a testament to your skills!",
+          "Effects": {
+            "Room": 4,
+            "Items": [
+              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.9},
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.9},
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+            ]
+          },
+          "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
+        }
+      },
+      "SegmentActivity": "You search carefully around the base of the ancient oak for mushrooms and roots",
+      "SegmentTitle": "Ancient oak foraging"
+    },
+    {
+      "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+      "SegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 240,
+      "Challenges": [
+        {
+          "Attribute": "Intelligence",
+          "Skill": "Foraging",
+          "Difficulty": 5,
+          "Attempts": 2
+        },
+        {
+          "Attribute": "Perception",
+          "Skill": "Investigation",
+          "Difficulty": 5,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "You accidentally consume a poisonous mushroom while sampling your finds. The toxin acts quickly, and you collapse onto the thick layer of moss blanketing the grove floor. As the scent of damp earth fills your fading senses and sunlight breaks through the canopy in patches above, you slip away in this tranquil haven, never to rise again.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "You stumble upon the tranquil mossy grove, its floor blanketed in thick moss and the air filled with the scent of damp earth. Despite the almost ethereal atmosphere where sunlight breaks through the canopy in patches, the unfamiliar plants and shadows confuse you. You wisely decide to leave this peaceful haven before making a dangerous mistake.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "The tranquil mossy grove's ethereal atmosphere is both beautiful and challenging. As the hum of insects fills the air and sunlight breaks through in patches, you carefully gather what you can identify with certainty. The thick moss and shadows make identification difficult, but you manage to find some basic berries and herbs before moving on through this peaceful haven.",
+          "Effects": {
+            "Room": 7,
+            "Items": [
+              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7},
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+            ]
+          },
+          "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
+        },
+        "Normal": {
+          "Narrative": "You stumble upon the tranquil mossy grove and it proves rich with resources. The floor blanketed in thick moss cushions your steps as the scent of damp earth and the hum of insects surrounds you. Where sunlight breaks through the canopy in patches, creating an almost ethereal atmosphere, you gather healing roots, rare mushrooms, and medicinal herbs. Time seems to slow down in this peaceful haven as you carefully document each find.",
+          "Effects": {
+            "Room": 7,
+            "Items": [
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.8},
+              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7},
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.7}
+            ]
+          },
+          "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
+        },
+        "Exceptional": {
+          "Narrative": "The tranquil mossy grove reveals its greatest treasures to your expert eye! The floor blanketed in thick moss, the air filled with the scent of damp earth and insect hum, and sunlight breaking through the canopy in ethereal patches - you recognize this peaceful haven as a forager's paradise. You discover rare mushrooms growing in the moss, premium healing roots in the rich earth, and in one perfect shaft of filtered light, a legendary moonpetal flower! Time seems to stand still as you gather these exceptional finds.",
+          "Effects": {
+            "Room": 7,
+            "Items": [
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.9},
+              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.8},
+              {"ItemID": "2b9a4f6e-7d8c-9b3d-f0a4-1a6b3d7e4f8b", "Chance": 0.3}
+            ]
+          },
+          "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
+        }
+      },
+      "SegmentActivity": "You explore the tranquil mossy grove, searching for rare specimens in the dappled light",
+      "SegmentTitle": "Mossy grove foraging"
+    },
+    {
+      "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+      "SegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 180,
+      "Challenges": [
+        {
+          "Attribute": "Endurance",
+          "Skill": "Foraging",
+          "Difficulty": 4,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "Exhausted from your expedition, you collapse among the lush ferns, their delicate fronds creating a sea of green around you. The cool, moist air and the scent of decay fill your lungs as your weakened state proves fatal. The occasional drip of water marks time as the forest claims another victim in this otherworldly gully.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "The path leads you into the damp gully filled with lush ferns, but the demanding journey saps your remaining strength. The cool, moist air and scent of decay seem oppressive rather than refreshing. Despite the otherworldly glow as sunlight filters through the canopy, you're too exhausted and discouraged to continue. You abandon your expedition and make your way back home.",
+          "Effects": {
+            "Wounds": [
+              "bashing",
+              "bashing"
+            ],
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "The fern gully's delicate fronds create a sea of green that makes navigation difficult. The cool, moist air and occasional drip of water add to the challenge, but you push through with determination. In the otherworldly glow created by filtered sunlight, you manage to gather a few medicinal herbs before exhaustion sets in.",
+          "Effects": {
+            "Wounds": [
+              "bashing"
+            ],
+            "Room": 9,
+            "Items": [
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+            ]
+          },
+          "NextSegmentID": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b"
+        },
+        "Normal": {
+          "Narrative": "Despite your fatigue, you maintain focus as the path leads you into the damp gully. The lush ferns with their delicate fronds create a sea of green, and the cool, moist air refreshes you. Where sunlight filters through the canopy casting an almost otherworldly glow, you gather quality medicinal herbs and berries. The scent of decay and occasional drip of water remind you of nature's cycles as you work.",
+          "Effects": {
+            "Room": 9,
+            "Items": [
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.8},
+              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7}
+            ]
+          },
+          "NextSegmentID": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b"
+        },
+        "Exceptional": {
+          "Narrative": "Your stamina is remarkable! The damp gully filled with lush ferns becomes your final foraging triumph. As their delicate fronds create a sea of green and sunlight filters through casting an otherworldly glow, you spot premium finds that others would miss in their exhaustion. The cool, moist air and scent of decay don't deter you - the silence broken only by occasional water drips provides perfect concentration as you gather rare specimens with practiced efficiency.",
+          "Effects": {
+            "Room": 9,
+            "Items": [
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.9},
+              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7},
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.6}
+            ]
+          },
+          "NextSegmentID": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b"
+        }
+      },
+      "SegmentActivity": "You push through the lush ferns, searching for final specimens before completing your expedition",
+      "SegmentTitle": "Fern gully foraging"
+    },
+    {
+      "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+      "SegmentID": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 120,
+      "Challenges": [
+        {
+          "Attribute": "Perception",
+          "Skill": "Investigation",
+          "Difficulty": 3,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "Hidden among the trees, you discover the remnants of an abandoned campsite - but too late you realize it was abandoned for a reason. A hidden trap left by previous occupants springs as you approach the cold, overgrown fire pit. The site that whispered of past adventurers now claims you as well, your own story left untold.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "You reach the abandoned campsite hidden among the trees. The fire pit sits cold and overgrown at the center, surrounded by the remains of a crude shelter. Despite searching thoroughly, you find nothing of value among these remnants. The site whispers of past adventurers, but offers you nothing. Your expedition ends with modest results, though you wonder what fate befell those who once rested here.",
+          "Effects": {
+            "Room": 10
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "Hidden among the trees, you discover the abandoned campsite. A fire pit, now cold and overgrown, sits at the center surrounded by crude shelter remains. Where the old garden once stood, you find a few wild vegetables still growing. The site whispers of past adventurers as you gather these forgotten supplies - a decent end to your foraging journey, though you can't help but wonder about the untold stories this place holds.",
+          "Effects": {
+            "Room": 10,
+            "Items": [
+              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.6}
+            ]
+          },
+          "NextSegmentID": null
+        },
+        "Normal": {
+          "Narrative": "You successfully complete your foraging expedition at the abandoned campsite hidden among the trees! The cold, overgrown fire pit and crude shelter remains provide a perfect backdrop as you rest and organize your findings. The site whispers of past adventurers, their untold stories echoing in the quiet. You've gathered an impressive collection of forest resources - a journey well worth the effort.",
+          "Effects": {
+            "Room": 10,
+            "Items": [
+              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.8},
+              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.7}
+            ]
+          },
+          "NextSegmentID": null
+        },
+        "Exceptional": {
+          "Narrative": "Your expedition is a resounding success! At the abandoned campsite hidden among the trees, your keen eye spots something others missed - a cache of supplies left by previous foragers near the cold, overgrown fire pit. The crude shelter remains concealed rare specimens. The site whispers its secrets to you where it left others with only questions. Combined with your own exceptional finds throughout the journey, you return with a legendary haul that will be the envy of all foragers!",
+          "Effects": {
+            "Room": 10,
+            "Items": [
+              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.8},
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7}
+            ]
+          },
+          "NextSegmentID": null
+        }
+      },
+      "SegmentActivity": "You arrive at the abandoned campsite, the final destination of your foraging expedition",
+      "SegmentTitle": "Campsite arrival"
+    }
+  ]
+}

@@ -66,7 +66,7 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ### Critical Path (Bug Fixes) — 1 Task
 
-- R3-T1: Fix client polling cadence (10× API waste) — *Previously R3-T2* — [COMPLETE] **COMPLETE**
+- R3-T1: Fix client polling cadence (10× API waste) — [COMPLETE]
 
 ### Performance Baseline — 1 Task
 
@@ -74,24 +74,18 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ### Quality Assurance — 1 Task
 
-- R3-T3: Automated idempotency and integration tests — *Previously R3-T4*
+- R3-T3: Automated idempotency and integration tests
 
 ### Enablement — 2 Tasks
 
 - ~~R3-T4: Author Quick-Start documentation~~ — *Deferred to R4*
-- R3-T5: Create real beta story content — *Previously R3-T6*
+- R3-T5: Create real beta story content
 
 ### Security — 1 Task
 
-- R3-T6: Scoped security sanity pass — *Previously R3-T7* — [COMPLETE] **COMPLETE**
+- R3-T6: Scoped security sanity pass — [COMPLETE]
 
-### Deferred to Post-Revenue
-
-- ~~R3-T1: Fix currency reward application~~ → **R4-T1** (Economy & Inventory focus)
-- ~~R3-T2: Performance baseline and provisioned concurrency~~ → **Post-Revenue** (Optimization after PMF)
-- ~~R3-T4: Author Quick-Start documentation~~ → **R4-T6** (Document complete system including economy)
-
-**Total:** 6 tasks (3 remaining for beta, 2 complete, 3 deferred)
+**Total:** 6 tasks (3 remaining for beta, 2 complete, 3 deferred to R4/post-revenue)
 
 ---
 
@@ -146,24 +140,9 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
    - Test all scenarios (happy path, network interruption, etc.)
    - Measure battery usage improvement
 
-**Completed:**
-- [COMPLETE] **Stage 1: Instrumentation Phase** (Tasks 1-3)
-  - Created `incremental/lib/services/api_metrics.dart` - Temporary metrics collection class
-  - Instrumented all 10 API methods in `api_service.dart` with `ApiMetrics.recordCall()`
-  - Added segment tracking to `game_screen.dart` (`ApiMetrics.startSegment()` / `endSegment()`)
-  - Console logging infrastructure in place for measuring API call patterns
-
-**In Progress:**
-- [IN PROGRESS] **Stage 2: Baseline Measurement** (Task 4) - Ready to run test stories and document current API call patterns
-
-**Next Steps:**
-- Run instrumented app through test story to establish baseline (expecting 10-15+ calls per segment)
-- Document actual call patterns and breakdown by endpoint
-- Begin Stage 3: Fix core timing issues (remove 60s delay, use server TimeRemaining)
-
-**Files Modified:**
+**Files Modified (Stage 1):**
 - `incremental/lib/services/api_metrics.dart` - NEW (temporary instrumentation)
-- `incremental/lib/services/api_service.dart` - Added metrics recording to all API methods
+- `incremental/lib/services/api_service.dart` - Added metrics recording
 - `incremental/lib/screens/game_screen.dart` - Added segment boundary tracking
 
 #### Current State
@@ -224,56 +203,13 @@ From `documentation/incremental-design.md:686-695`:
 
 #### Implementation Requirements
 
-**Design Pattern (from documentation):**
+**Design Pattern:**
 
-From `documentation/incremental-design.md:606-654`:
-
-```dart
-class ServerAuthoritativePolling {
-  bool _isPolling = false;
-
-  /// Simple polling loop that follows server cadence exactly
-  Future<void> startStoryPolling(String characterId) async {
-    if (_isPolling) return;
-    _isPolling = true;
-
-    while (_isPolling) {
-      try {
-        // Single API call - GET /segment/status includes all needed data:
-        // - TimeRemaining (server-calculated)
-        // - ActiveSegmentID (for completion check)
-        // - ProcessingStatus, narrative, outcomes
-        final segmentStatus = await apiService.getSegmentStatus(
-          characterId: characterId
-        );
-
-        // Update UI with segment status
-        updateUIWithServerState(segmentStatus);
-
-        // Check if story is complete (ActiveSegmentID will be null)
-        if (segmentStatus.activeSegmentID == null) {
-          break; // Story finished - stop polling
-        }
-
-        // Wait exactly the time server specifies
-        final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
-        if (timeRemaining > 0) {
-          await Future.delayed(Duration(seconds: timeRemaining));
-        } else {
-          // Segment complete, brief delay before next check
-          await Future.delayed(const Duration(seconds: 2));
-        }
-
-      } catch (e) {
-        // 30-second retry delay for all errors
-        await Future.delayed(const Duration(seconds: 30));
-      }
-    }
-
-    _isPolling = false;
-  }
-}
-```text
+See `documentation/incremental-design.md:606-654` for the server-authoritative polling pattern. Key principles:
+- Single API call per segment (GET /segment/status)
+- Use server-provided TimeRemaining value
+- Fixed 30-second retry on errors
+- Stop when ActiveSegmentID is null
 
 **Implementation Steps:**
 
@@ -413,258 +349,25 @@ AFTER (Target):
 
 ---
 
-**Original R3-T2 specification preserved below for future reference:**
+**Deferred Scope Summary:**
 
-#### Current State
+When revisited post-revenue, this task will include:
+- Load test harness creation (`scripts_python/load_test_incremental.py`)
+- CloudWatch metrics collection and analysis
+- Decision matrix for provisioned concurrency
+- Performance baseline documentation
 
-**What Exists:**
+**Key Deliverables (Deferred):**
+- Load test script and harness
+- Performance baseline report (`documentation/performance-baseline-r3.md`)
+- Provisioned concurrency decision matrix with cost analysis
+- CloudWatch metrics collection and analysis
 
-- 16 Lambda functions deployed with standard configuration:
-  - Runtime: Python 3.12
-  - Memory: 128MB
-  - Timeout: 30 seconds
-  - Concurrency: Default (unreserved)
-
-**What's Unknown:**
-
-- Actual cold start latencies under realistic load
-- Warm invocation performance
-- Poller throughput capacity
-- Which functions are truly latency-sensitive vs. background
-
-**Provisioned Concurrency Status:**
-
-- NOT currently configured in `deployment/lambda_functions.py`
-- Issue #613 proposes specific allocations but without measurement evidence
-
-#### Implementation Requirements
-
-**Phase 1: Create Load Test Harness**
-
-Create `scripts_python/load_test_incremental.py`:
-
-```python
-"""
-Load test harness for incremental game API.
-
-Simulates N concurrent users performing story workflows.
-"""
-
-import asyncio
-import time
-from dataclasses import dataclass
-from typing import List
-
-@dataclass
-class TestResults:
-    """Load test results."""
-    function_name: str
-    invocations: int
-    p50_latency_ms: float
-    p95_latency_ms: float
-    p99_latency_ms: float
-    cold_starts: int
-    errors: int
-
-async def simulate_user_session(user_id: int, api_base_url: str, auth_token: str) -> List[float]:
-    """
-    Simulate one user's complete story workflow.
-
-    Returns list of API latencies in milliseconds.
-    """
-    latencies = []
-
-    # 1. GET /character (includes available stories)
-    start = time.time()
-    # ... API call
-    latencies.append((time.time() - start) * 1000)
-
-    # 2. POST /story/start
-    start = time.time()
-    # ... API call
-    latencies.append((time.time() - start) * 1000)
-
-    # 3. GET /segment/status (polling)
-    # ... repeat based on segment duration
-
-    # 4. POST /segment/decision (if decision segment)
-
-    # 5. GET /character (completion check)
-
-    return latencies
-
-async def run_load_test(concurrent_users: int, duration_minutes: int):
-    """Run load test with N concurrent users."""
-    tasks = []
-    for user_id in range(concurrent_users):
-        task = asyncio.create_task(simulate_user_session(user_id, ...))
-        tasks.append(task)
-
-    results = await asyncio.gather(*tasks)
-    # Aggregate and analyze
-    return results
-```text
-
-**Phase 2: Execute Load Tests**
-
-Test Scenarios:
-
-1. **Cold Start Baseline**
-
-   - Invoke each Lambda function after 5+ minutes idle
-   - Measure initialization time
-   - Repeat 10 times, take P95
-
-2. **Concurrent Load**
-
-   - 10 users: Light load (beta minimum)
-   - 50 users: Target beta capacity
-   - Measure throughput and latencies
-
-3. **Poller Stress Test**
-   - Create 100 segments with EndTime in next 1 minute
-   - Verify poller processes all within 2 minutes
-   - Check for throttling or timeouts
-
-**Phase 3: Collect CloudWatch Metrics**
-
-For each Lambda function, gather:
-
-- `Duration` - P50, P95, P99
-- `ConcurrentExecutions` - Max
-- `Errors` - Count
-- `Throttles` - Count
-- Cold start indicators (first invocation after idle)
-
-Query using AWS CLI:
-
-```bash
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/Lambda \
-  --metric-name Duration \
-  --dimensions Name=FunctionName,Value=eidolon-api-story-start \
-  --statistics Average,Maximum \
-  --start-time 2025-10-06T00:00:00Z \
-  --end-time 2025-10-06T23:59:59Z \
-  --period 3600
-```text
-
-**Phase 4: Analyze and Decide**
-
-Create decision matrix:
-
-| Function            | Cold Start P95 | Warm P95 | User-Facing?    | PC Recommended? | PC Allocation |
-| ------------------- | -------------- | -------- | --------------- | --------------- | ------------- |
-| api-story-start     | ??? ms         | ??? ms   | Yes             | TBD             | TBD           |
-| api-segment-status  | ??? ms         | ??? ms   | Yes             | TBD             | TBD           |
-| api-character-get   | ??? ms         | ??? ms   | Yes             | TBD             | TBD           |
-| ops-segment-poller  | ??? ms         | ??? ms   | No (background) | TBD             | TBD           |
-| ops-segment-process | ??? ms         | ??? ms   | No (async)      | TBD             | TBD           |
-| ops-story-advance   | ??? ms         | ??? ms   | No (async)      | TBD             | TBD           |
-
-**Decision Criteria:**
-
-- **Cold start P95 > 1000ms** AND **user-facing** → Strong candidate for PC
-- **Cold start P95 > 500ms** AND **high frequency** → Candidate for PC
-- **Background/async functions** → Generally do NOT need PC
-- **Cost consideration:** PC costs ~$15/month per allocated unit
-
-**Phase 5: Implement PC if Justified**
-
-If decision is YES for any functions:
-
-```python
-# deployment/lambda_functions.py
-
-# Example for api-story-start
-lambda_function = _lambda.Function(
-    self,
-    "ApiStoryStart",
-    function_name="eidolon-api-story-start",
-    runtime=_lambda.Runtime.PYTHON_3_12,
-    handler="api_story_start.lambda_handler",
-    code=_lambda.Code.from_asset("lambda"),
-    layers=[eidolon_layer],
-    role=lambda_execution_role,
-    memory_size=128,
-    timeout=Duration.seconds(30),
-    environment=environment,
-    reserved_concurrent_executions=10,  # Limit max concurrency
-)
-
-# Add provisioned concurrency with auto-scaling
-version = lambda_function.current_version
-alias = _lambda.Alias(
-    self,
-    "ApiStoryStartAlias",
-    alias_name="live",
-    version=version,
-)
-
-# Provisioned concurrency target
-target = appscaling.ScalableTarget(
-    self,
-    "ApiStoryStartScaling",
-    service_namespace=appscaling.ServiceNamespace.LAMBDA,
-    max_capacity=20,
-    min_capacity=5,
-    resource_id=f"function:{lambda_function.function_name}:live",
-    scalable_dimension="lambda:function:ProvisionedConcurrentExecutions",
-)
-
-# Scaling policy
-target.scale_on_utilization(
-    utilization=0.70,  # Scale when 70% utilized
-)
-```text
-
-#### Deliverables
-
-1. **Load Test Script**
-
-   - `scripts_python/load_test_incremental.py`
-   - README with usage instructions
-
-2. **Performance Baseline Report**
-
-   - `documentation/performance-baseline-r3.md`
-   - Includes all metrics, graphs, and analysis
-
-3. **Provisioned Concurrency Decision Memo**
-   - Section in performance baseline report
-   - Rationale for YES/NO decisions per function
-   - Cost/benefit analysis
-   - Implementation if recommended
-
-#### Acceptance Criteria
-
-- [ ] Load test harness executes successfully
-- [ ] 10-user and 50-user concurrent tests completed
-- [ ] CloudWatch metrics collected for all 16 Lambda functions
-- [ ] Decision matrix completed with evidence
-- [ ] Performance baseline documented
-- [ ] Provisioned concurrency configured if justified (or explicit NO decision documented)
-- [ ] Cost impact calculated and approved
-
-#### Definition of Done
-
-**Required Documentation:**
-
-Create `documentation/performance-baseline-r3.md` with:
-
-1. Test Methodology
-2. Results Tables (metrics per function)
-3. Decision Matrix
-4. Provisioned Concurrency Recommendations
-5. Cost Analysis
-6. Implementation Notes (if PC deployed)
-
-**Minimum Acceptable Performance:**
-
+**Target Acceptance Criteria (when revisited):**
 - P95 API latency < 2000ms (including cold starts)
 - P95 warm invocation < 200ms
-- Zero throttles or errors during 50-user test
-- Poller processes 100 segments < 2 minutes
+- Zero throttles/errors during 50-user test
+- Provisioned concurrency justified or explicitly rejected with data
 
 ---
 
@@ -717,231 +420,16 @@ tests/
 
 **Test Scenarios (Critical Path):**
 
-1. **Double Story Start**
+1. **test_double_story_start_idempotent**: Verify simultaneous story starts result in exactly one ActiveSegment, one GameMode transition, and appropriate 409 response for second request
+2. **test_double_decision_submit_idempotent**: Verify decision recorded only once when submitted multiple times
+3. **test_segment_processing_retry_no_double_rewards**: Verify SQS replay doesn't grant XP, items, currency, or wounds multiple times
+4. **test_story_advancement_retry_idempotent**: Verify SQS replay doesn't create duplicate segments or apply completion rewards twice
+5. **test_story_abandon_complete_flow**: Verify story abandon correctly updates AbandonedStories, clears active fields, resets GameMode, and allows story restart
 
-   ```python
-   async def test_double_story_start_idempotent():
-       """
-       Verify that attempting to start the same story twice results in:
-       - First request succeeds (200)
-       - Second request fails with 409 Conflict
-       - Only one ActiveSegment record created
-       - GameMode set exactly once
-       """
-       character_id = create_test_character()
-       story_id = create_test_story()
-
-       # Attempt simultaneous starts
-       results = await asyncio.gather(
-           invoke_lambda("api-story-start", {"CharacterID": character_id, "StoryID": story_id}),
-           invoke_lambda("api-story-start", {"CharacterID": character_id, "StoryID": story_id}),
-           return_exceptions=True
-       )
-
-       # Verify exactly one succeeded
-       success_count = sum(1 for r in results if r.get("statusCode") == 200)
-       assert success_count == 1
-
-       # Verify database state
-       character = get_character(character_id)
-       assert character["GameMode"] == "Incremental"
-
-       segments = query_active_segments(character_id)
-       assert len(segments) == 1
-```text
-
-2. **Double Decision Submission**
-
-   ```python
-   async def test_double_decision_submit_idempotent():
-       """
-       Verify that submitting decision twice results in:
-       - First submission accepted
-       - Second submission rejected (already decided)
-       - Decision field set exactly once
-       """
-       character_id, segment_id = setup_decision_segment()
-
-       # Submit same decision twice
-       results = await asyncio.gather(
-           invoke_lambda("api-segment-decision", {
-               "CharacterID": character_id,
-               "Decision": "choice1"
-           }),
-           invoke_lambda("api-segment-decision", {
-               "CharacterID": character_id,
-               "Decision": "choice1"
-           }),
-           return_exceptions=True
-       )
-
-       # Verify behavior
-       segment = get_active_segment(segment_id)
-       assert segment["Decision"] == "choice1"
-       # Should only be recorded once
-```text
-
-3. **Segment Processing Retry (SQS Replay)**
-
-   ```python
-   def test_segment_processing_retry_no_double_rewards():
-       """
-       Verify that replaying segment processing (SQS retry) does not:
-       - Grant XP twice
-       - Grant items twice
-       - Grant currency twice
-       - Apply wounds twice
-       """
-       character_id, segment_id = setup_mechanical_segment()
-
-       # Process segment
-       result1 = invoke_lambda("ops-segment-process", {
-           "Records": [{
-               "body": json.dumps({"ActiveSegmentID": segment_id})
-           }]
-       })
-
-       character_after_first = get_character(character_id)
-       xp_after_first = character_after_first["Skills"]["combat"]
-       currency_after_first = character_after_first.get("Currency", 0)
-
-       # Replay processing (simulate SQS retry)
-       result2 = invoke_lambda("ops-segment-process", {
-           "Records": [{
-               "body": json.dumps({"ActiveSegmentID": segment_id})
-           }]
-       })
-
-       character_after_second = get_character(character_id)
-       xp_after_second = character_after_second["Skills"]["combat"]
-       currency_after_second = character_after_second.get("Currency", 0)
-
-       # Verify no double-grant
-       assert xp_after_first == xp_after_second
-       assert currency_after_first == currency_after_second
-```text
-
-4. **Story Advancement Retry**
-
-   ```python
-   def test_story_advancement_retry_idempotent():
-       """
-       Verify that replaying story advancement (SQS retry) does not:
-       - Create duplicate segments
-       - Apply completion rewards twice
-       - Transition GameMode multiple times
-       """
-       character_id, segment_id = setup_completed_segment()
-
-       # First advancement
-       invoke_lambda("ops-story-advance", {
-           "Records": [{
-               "body": json.dumps({"ActiveSegmentID": segment_id})
-           }]
-       })
-
-       segments_after_first = query_segment_history(character_id)
-       character_after_first = get_character(character_id)
-
-       # Retry advancement
-       invoke_lambda("ops-story-advance", {
-           "Records": [{
-               "body": json.dumps({"ActiveSegmentID": segment_id})
-           }]
-       })
-
-       segments_after_second = query_segment_history(character_id)
-       character_after_second = get_character(character_id)
-
-       # Verify no duplication
-       assert len(segments_after_first) == len(segments_after_second)
-       assert character_after_first == character_after_second
-```text
-
-5. **Story Abandon Flow**
-
-   ```python
-   def test_story_abandon_complete_flow():
-       """
-       Verify story abandon correctly:
-       - Moves story to AbandonedStories
-       - Clears ActiveStoryID and ActiveSegmentID
-       - Resets GameMode to None
-       - Creates StoryHistory entry with AbandonedAt
-       - Deletes ActiveSegment record
-       - Allows restart of same story
-       """
-       character_id, story_id = setup_active_story()
-
-       # Abandon story
-       result = invoke_lambda("api-story-abandon", {
-           "CharacterID": character_id
-       })
-       assert result["statusCode"] == 200
-
-       # Verify state
-       character = get_character(character_id)
-       assert character["GameMode"] == "None"
-       assert character.get("ActiveStoryID") is None
-       assert character.get("ActiveSegmentID") is None
-       assert story_id in character.get("AbandonedStories", [])
-
-       # Verify can restart
-       restart_result = invoke_lambda("api-story-start", {
-           "CharacterID": character_id,
-           "StoryID": story_id
-       })
-       assert restart_result["statusCode"] == 200
-```text
-
-**Test Helpers:**
-
-```python
-# tests/helpers/dynamo_helpers.py
-
-def create_test_character(**overrides):
-    """Create test character with defaults."""
-    character = {
-        "CharacterID": str(uuid.uuid4()),
-        "PlayerID": str(uuid.uuid4()),
-        "CharacterName": f"TestChar{random.randint(1000, 9999)}",
-        "GameMode": "None",
-        "Currency": 0,
-        "Skills": {"combat": 5.0, "stealth": 3.0},
-        # ... other required fields
-        **overrides
-    }
-    dynamo.put_item(TableName.CHARACTERS, Item=character)
-    return character["CharacterID"]
-
-def create_test_story(**overrides):
-    """Create test story with defaults."""
-    story = {
-        "StoryID": str(uuid.uuid4()),
-        "Title": "Test Story",
-        "FirstSegmentID": str(uuid.uuid4()),
-        # ... other required fields
-        **overrides
-    }
-    dynamo.put_item(TableName.STORY, Item=story)
-    return story["StoryID"]
-
-def query_active_segments(character_id):
-    """Get all active segments for character."""
-    return dynamo.query(
-        TableName.ACTIVE_SEGMENTS,
-        IndexName="CharacterID-index",
-        KeyConditionExpression="CharacterID = :cid",
-        ExpressionAttributeValues={":cid": character_id}
-    ).get("Items", [])
-
-def cleanup_test_data(character_id):
-    """Clean up test character and related data."""
-    # Delete character
-    # Delete active segments
-    # Delete history entries
-    pass
-```text
+**Test Infrastructure Required:**
+- Test fixtures in `tests/integration/fixtures/`
+- Helper functions in `tests/helpers/dynamo_helpers.py` (create_test_character, create_test_story, query_active_segments, cleanup_test_data)
+- Lambda invocation helpers in `tests/helpers/lambda_helpers.py`
 
 **CI Integration:**
 
@@ -1039,275 +527,6 @@ jobs:
 - Better to write documentation once for complete system than update iteratively
 
 **Moved to:** R4-T6 in `documentation/release-four-report.md`
-
----
-
-**Original R3-T4 specification preserved below for reference:**
-
-#### Current State
-
-**What Exists:**
-
-- `documentation/incremental-design.md` (896 lines) - Technical architecture
-- `documentation/schema.md` (38,185 lines) - Complete DynamoDB schema
-- `scripts_python/validate_story_content.py` - Content validator
-- `scripts_python/validate_branching.py` - Branching validator
-- `database/data_loader.py` - Story loader implementation
-- `.github/workflows/story-validation.yml` - CI validation workflow
-
-**What's Missing:**
-
-- **Pragmatic, non-developer-friendly** guide to create stories
-- Copy-paste examples for common patterns
-- Clear workflow: create → validate → load → test
-
-**NOT Required:**
-
-- Comprehensive author handbook (deferred to R4/R5)
-- Story design theory or creative writing guidance
-- Advanced balancing formulas
-
-#### Implementation Requirements
-
-**Create: `documentation/story-author-quickstart.md`**
-
-**Target Audience:** Non-developers who can edit JSON and run command-line tools.
-
-**Structure:**
-
-````markdown
-# Story Author Quick-Start Guide
-
-## Prerequisites
-
-- Text editor (VS Code, Sublime, or any JSON editor)
-- Python 3.12+ installed
-- Access to repository on local machine
-- AWS CLI configured (for loading to DynamoDB)
-
-## Story Creation Workflow
-
-### 1. Create Your Story JSON
-
-Stories are defined in JSON format with two main sections:
-
-- **Story metadata** - Title, description, prerequisites
-- **Segments** - Individual story beats with challenges and outcomes
-
-#### Minimal Story Template
-
-[Copy-paste template for linear story]
-
-#### Story Fields Explained
-
-- `StoryID` (UUID) - Unique identifier (generate at https://www.uuidgenerator.net/)
-- `Title` (string) - Story name shown to players
-- `Description` (string) - Brief summary
-- `FirstSegmentID` (UUID) - Points to starting segment
-- `Prerequisites` (object) - Requirements to unlock story
-- `RewardTiers` (object) - Currency/items awarded on completion
-
-### 2. Create Your Segments
-
-Each segment represents one story beat. Types:
-
-- **Mechanical** - Skill challenges and/or combat
-- **Decision** - Player choice with branching paths
-
-#### Mechanical Segment Template
-
-[Copy-paste template with challenge]
-
-#### Decision Segment Template
-
-[Copy-paste template with 2-3 choices]
-
-#### Segment Fields Explained
-
-[Brief field reference with examples]
-
-### 3. Validate Your Story
-
-Before loading, always validate:
-
-```bash
-cd multi-user-dungeon
-python scripts_python/validate_story_content.py data/your-story.json
-python scripts_python/validate_branching.py data/your-story.json
-```text
-````
-
-**Common Validation Errors:**
-
-- "Segment X not found" → Check SegmentID references
-- "Missing outcome Death" → All mechanical segments need Death outcome
-- "Orphaned segment" → Every segment must be reachable
-
-### 4. Load Story to DynamoDB
-
-```bash
-python database/data_loader.py --story data/your-story.json
-```text
-
-**Dry-run first:**
-
-```bash
-python database/data_loader.py --story data/your-story.json --dry-run
-```text
-
-### 5. Test Your Story
-
-1. Launch the incremental web app
-2. Create a character meeting prerequisites
-3. Start your story
-4. Play through all paths
-5. Verify outcomes and rewards
-
-**Testing Checklist:**
-
-- [ ] Story appears in available list (if prereqs met)
-- [ ] All segments display correct narrative
-- [ ] Decision choices work
-- [ ] Mechanical segments process correctly
-- [ ] Rewards apply on completion
-- [ ] Story can be replayed if repeatable
-
-## Common Patterns
-
-### Linear Story (No Branching)
-
-[Example: 3-segment linear story]
-
-### Branching Story (Player Choices)
-
-[Example: Story with 2 decision points]
-
-### Combat Story
-
-[Example: Story with opponent fight]
-
-## Story Balance Guidelines
-
-**Segment Durations:**
-
-- Early game: 1-5 minutes (quick engagement)
-- Mid game: 5-15 minutes (progression)
-- Late game: 15-60 minutes (idle mechanics)
-
-**Difficulty Tiers:**
-
-- Tier 1: Skills 0-3, simple challenges
-- Tier 2: Skills 3-6, moderate challenges
-- Tier 3: Skills 6-10, complex challenges
-
-**Currency Rewards:**
-
-- Tier 1: 10-50 currency
-- Tier 2: 50-200 currency
-- Tier 3: 200-1000 currency
-
-## Troubleshooting
-
-**Problem:** "Story not appearing for my character"
-
-- Check Prerequisites (skills, items)
-- Verify character doesn't have story in CompletedStories
-- Check cooldown if repeatable
-
-**Problem:** "Validation fails with unknown error"
-
-- Ensure JSON is valid (use jsonlint.com)
-- Check all UUIDs are properly formatted
-- Verify all references exist
-
-**Problem:** "Story loaded but crashes on start"
-
-- Check FirstSegmentID points to valid segment
-- Verify all NextSegmentID references exist
-- Ensure mechanical segments have all outcomes
-
-## Next Steps
-
-- Read full Schema Reference: [schema.md](schema.md)
-- Study example stories: `data/test_story.json`, `data/test_story_branching.json`
-- Join story author discussions: [GitHub Discussions]
-
-## Getting Help
-
-- Questions: Open GitHub Discussion
-- Bugs: File GitHub Issue
-- Content review: Submit PR to `data/stories/` directory
-
-````
-
-**Required Examples:**
-
-Create 3 copy-paste templates in the doc:
-
-1. **Linear 3-segment story** (mechanical segments without mechanics)
-2. **Branching story with 2 decision points**
-3. **Combat story with skill challenge prereq**
-
-Each example should be:
-- Complete and valid (passes validation)
-- ~50-100 lines (readable)
-- Commented to explain key fields
-
-#### Additional Documentation Updates
-
-**Update `README.md`:**
-
-Add link to Quick-Start in "Documentation" section:
-
-```markdown
-## Documentation
-
-- [Story Author Quick-Start](documentation/story-author-quickstart.md) - Create your first story
-- [Deployment Guide](documentation/deployment.md) - Infrastructure setup
-- [Architecture Overview](documentation/architecture.md) - System design
-````
-
-**Update `.github/workflows/story-validation.yml`:**
-
-Add comment explaining validation for contributors:
-
-```yaml
-# This workflow validates story content on every PR
-# Ensures stories meet structural requirements before merge
-# See documentation/story-author-quickstart.md for authoring guide
-```text
-
-#### Acceptance Criteria
-
-- [ ] Quick-Start document created with all sections
-- [ ] 3 copy-paste templates included and validated
-- [ ] README.md updated with link
-- [ ] CI workflow commented
-- [ ] Non-developer can follow guide end-to-end without additional help
-- [ ] All examples pass validation when copy-pasted
-
-#### Definition of Done
-
-**Validation Test:**
-
-Have a non-developer (or simulated non-dev using ONLY the Quick-Start) attempt to:
-
-1. Create a simple 2-segment story
-2. Validate it
-3. Load it to dev environment
-4. Play it in the incremental app
-
-**Success criteria:**
-
-- Completes workflow efficiently
-- Encounters no undocumented errors
-- Story works correctly in app
-
-**Documentation Quality:**
-
-- No assumed knowledge beyond "can edit JSON"
-- Every error message explained
-- Clear progression from simple to complex
 
 ---
 
@@ -1663,638 +882,37 @@ See [Story Author Quick-Start](../../documentation/story-author-quickstart.md)
 - Advanced threat modeling (R5+)
 - Compliance certifications (SOC2, etc.) - not needed for game
 
-#### Implementation Requirements
-
-**Security Checklist:**
-
-The complete security sanity pass checklist follows, with **actual IAM review findings** from deployment/ directory analysis.
-
-**Documentation Instructions:**
-
-- Mark checklist items with `✓` as you complete them
-- Document all CRITICAL and HIGH findings in the "IAM Security Review - Actual Findings" section below
-- Use sequential finding IDs: R3-SEC-001, R3-SEC-002, etc. (R3-IAM-001 through R3-IAM-005 already used)
-- Update this document inline - do not create separate files
-
-````markdown
-# R3 Security Sanity Pass Checklist
-
-## 1. IAM Least Privilege Review
-
-### Lambda Execution Role
-
-**Check:** `deployment/stacks/lambda_stack.py` - Lambda execution role
-
-- [✓] Review `eidolon-lambda-execution-role` permissions
-- [✓] Verify no `"*"` resources in DynamoDB policy
-- [✓] Verify no `"*"` actions (should be specific: dynamodb:GetItem, PutItem, etc.)
-- [✓] Confirm SQS permissions limited to specific queue ARNs
-- [✓] Verify SSM permissions limited to `/eidolon/*` parameter path
-- [ ] Check CloudWatch Logs permissions are scoped to function log groups
-
-**Expected Policy Structure:**
-
-```json
-{
-  "Effect": "Allow",
-  "Action": ["dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:UpdateItem", "dynamodb:Query"],
-  "Resource": ["arn:aws:dynamodb:REGION:ACCOUNT:table/characters", "arn:aws:dynamodb:REGION:ACCOUNT:table/characters/index/*"]
-}
-```text
-````
-
-**Tool:** Use `aws iam get-role-policy` to review
-
-**Findings:**
-
-[COMPLETE] **DynamoDB Policy (deployment/stacks/dynamodb_stack.py:69-91)** - GOOD
-
-- Uses specific table ARNs from `self.table_arns + self.index_arns`
-- No wildcard resources
-- Specific actions only (no `dynamodb:*`)
-- Properly includes GSI ARNs
-
-[COMPLETE] **SQS Permissions (deployment/stacks/story_stack.py:144-154)** - GOOD
-
-- Scoped to specific queue ARNs: `processing_queue.queue_arn` and `advancement_queue.queue_arn`
-- No wildcards
-
-[COMPLETE] **SSM Permissions (deployment/stacks/story_stack.py:138-142)** - GOOD
-
-- Scoped to `/eidolon/story/*` parameter path
-- No wildcards beyond intended prefix
-
-⚠️ **CloudWatch Logs Policy (deployment/stacks/lambda_stack.py:86-91)** - CRITICAL ISSUE
-
-- **CONFIRMED R3-IAM-001**: Uses wildcard `*:*` in resources
-- Line 90: `resources=[f"arn:aws:logs:{self.region_name}:*:*"]`
-- Allows access to ANY log group in the region
-- MUST FIX before beta
-
----
-
-### Lambda Function Separation
-
-**Check:** Should read-only functions have write permissions?
-
-- [✓] `api-character-get` - Should ONLY have DynamoDB read (GetItem, Query)
-- [✓] `api-character-list` - Should ONLY have DynamoDB read
-- [✓] `api-archetype-list` - Should ONLY have DynamoDB read
-- [✓] Verify write functions have necessary permissions but read-only don't
-
-**Findings:**
-
-⚠️ **All Lambda functions share the same execution role** - CONFIRMED R3-IAM-002
-
-**Read-Only Functions (need only GetItem, Query, DescribeTable):**
-
-- `api-archetype-list`
-- `api-character-get`
-- `api-character-list`
-- `api-segment-history`
-- `api-segment-status`
-- `api-story-history`
-
-**Read-Write Functions (need PutItem, UpdateItem, DeleteItem):**
-
-- `api-character-add`
-- `api-character-delete`
-- `api-segment-decision`
-- `api-story-abandon`
-- `api-story-start`
-- All `ops-*` functions
-
-**Current State:**
-
-- All functions use shared role `eidolon-lambda-execution-role` (deployment/stacks/lambda_stack.py:66-102)
-- DynamoDB policy grants: `PutItem`, `UpdateItem`, `DeleteItem`, `BatchWriteItem` to ALL functions
-- Read-only functions have unnecessary write permissions
-
-**Recommendation:** Create separate IAM policies for read-only vs read-write functions (DEFER TO R4 - acceptable for beta with Cognito auth + input validation)
-
----
-
-## 2. API Gateway Authorization [COMPLETE] **COMPLETE**
-
-**Check:** All endpoints enforce Cognito authorizer
-
-Tool: Review `deployment/stacks/api_stack.py`
-
-- [✓] Verify EVERY resource has `authorizer` parameter set
-- [✓] Check that authorizer type is `COGNITO_USER_POOLS`
-- [✓] Confirm no `authorizationType: NONE` endpoints (except OPTIONS for CORS)
-
-**Code Review Results (2025-10-07):**
-
-All 11 endpoints verified in `deployment/stacks/api_stack.py:182-234`:
-
-- [COMPLETE] `/archetype` (GET) - Line 187
-- [COMPLETE] `/character` (POST, GET, DELETE) - Lines 193, 196, 199
-- [COMPLETE] `/character/list` (GET) - Line 203
-- [COMPLETE] `/story/start` (POST) - Line 211
-- [COMPLETE] `/story/abandon` (POST) - Line 215
-- [COMPLETE] `/story/history` (GET) - Line 219
-- [COMPLETE] `/segment/decision` (POST) - Line 226
-- [COMPLETE] `/segment/status` (GET) - Line 230
-- [COMPLETE] `/segment/history` (GET) - Line 234
-
-**Configuration Verified:**
-- Authorizer created: Lines 159-169 (`CognitoUserPoolsAuthorizer`)
-- All endpoints use: `authorizer=authorizer, authorization_type=apigateway.AuthorizationType.COGNITO` (Lines 252-253)
-- OPTIONS methods handled automatically by CORS preflight
-
-**Manual Test:**
-
-```bash
-# Attempt to call API without Authorization header
-curl -X GET https://api.darkrelics.net/character?CharacterID=test
-# Expected: 401 Unauthorized
-```text
-
-**Status:** Manual testing optional - code review confirms all endpoints protected.
-
-**Findings:** None - All endpoints properly protected with Cognito authorizer.
-
----
-
-## 3. Input Validation
-
-**Check:** Lambda functions validate ALL inputs before processing
-
-### Required Validations
-
-For each Lambda function in `lambda/api_*.py`:
-
-**Query Parameters:**
-
-- [ ] Validate UUIDs using `validate_uuid()` from eidolon.validation
-- [ ] Reject requests with missing required parameters (return 400)
-- [ ] Check parameter types (no integer overflow, string length limits)
-
-**Request Bodies:**
-
-- [ ] Parse JSON safely (handle parse errors)
-- [ ] Validate all required fields present
-- [ ] Check string length limits (CharacterName, StoryID, etc.)
-- [ ] Validate enum values (GameMode, SegmentType, etc.)
-
-**Example Checks:**
-
-`api_character_add.py`:
-
-```python
-def lambda_handler(event, context):
-    # Check body parsing
-    body = parse_event_body(event)  # ✓ Handles parse errors
-
-    # Check required fields
-    character_name = body.get("CharacterName")
-    if not character_name:  # ✓ Validates presence
-        return lambda_response(400, {"Error": "Missing CharacterName"}, event)
-
-    # Check string length
-    if len(character_name) > 50:  # ✓ Prevents abuse
-        return lambda_response(400, {"Error": "CharacterName too long"}, event)
-
-    # Check Bloom filter
-    if name_is_prohibited(character_name):  # ✓ Content filtering
-        return lambda_response(400, {"Error": "Name not allowed"}, event)
-
-    # UUID validation
-    archetype_id = body.get("ArchetypeID")
-    if not validate_uuid(archetype_id):  # ✓ Type safety
-        return lambda_response(400, {"Error": "Invalid ArchetypeID format"}, event)
-```text
-
-**Audit Each Function:**
-
-- [ ] `api_character_add.py` - Name validation, archetype validation
-- [ ] `api_character_get.py` - CharacterID validation
-- [ ] `api_character_delete.py` - CharacterID validation, ownership check
-- [ ] `api_story_start.py` - CharacterID, StoryID validation
-- [ ] `api_segment_decision.py` - CharacterID, Decision validation
-- [ ] All other API functions
-
-**Common Vulnerabilities to Check:**
-
-- SQL injection (N/A - using DynamoDB)
-- NoSQL injection - Check that inputs aren't used directly in expressions
-- Command injection - Check that no inputs passed to shell commands
-- Path traversal - Check that no file paths constructed from input
-- XSS - Check that responses don't reflect unescaped input (API only, not applicable)
-
-**Findings:** [List functions with weak/missing validation]
-
----
-
-## 4. Secrets Management [COMPLETE] **COMPLETE**
-
-**Check:** No secrets in environment variables or code
-
-### Environment Variables Review (2025-10-07)
-
-Reviewed all stack files: `lambda_stack.py`, `character_stack.py`, `story_stack.py`, `player_stack.py`, `client_stack.py`, `codebuild_stack.py`
-
-- [✓] No API keys in environment variables
-- [✓] No passwords in environment variables
-- [✓] No secret tokens in environment variables
-- [✓] All configuration is non-sensitive
-
-**Verified Environment Variables:**
-
-```python
-# character_stack.py:136-161, story_stack.py:250-283
-environment = {
-    "APPLICATION_NAME": "eidolon-engine",  # ✓ Not secret
-    "LOG_LEVEL": "INFO",  # ✓ Not secret
-    "ALLOWED_ORIGINS": f"https://{client_host}.{domain}",  # ✓ Not secret
-    "CORS_ALLOW_CREDENTIALS": "true",  # ✓ Not secret
-    "players_table": "players",  # ✓ Not secret
-    "characters_table": "characters",  # ✓ Not secret
-    "SEGMENT_QUEUE_URL": queue.queue_url,  # ✓ Not secret (queue URL)
-    # ... all table names and non-sensitive config
-}
-```text
-
-### Code Review
-
-```bash
-# Search performed on deployment/stacks/*.py
-grep -r "api_key\|apikey\|password\|secret\|token" deployment/stacks/
-```text
-
-- [✓] No hardcoded API keys
-- [✓] No hardcoded passwords
-- [✓] No hardcoded tokens
-- [✓] No commented-out secrets
-- [✓] Only legitimate config references found (`password_policy`, `access_token_validity`, `generate_secret=False`)
-
-**Findings:** None - All environment variables and code contain only non-sensitive configuration.
-
----
-
-## 5. Data Protection [COMPLETE] **COMPLETE**
-
-**Check:** Encryption at rest and in transit
-
-**Data Classification (2025-10-07):**
-- **PII (Sensitive):** Player emails, passwords → Stored in **Cognito** (AWS-managed encryption)
-- **Game Data (Non-Sensitive):** Characters, skills, inventory, story progress → **DynamoDB**
-- **Build Artifacts (Reproducible):** Lambda code, web builds, Lua scripts → **S3**
-
-### DynamoDB Encryption - Verified
-
-- [✓] All 14 tables encrypted at rest (AWS owned keys - verified via AWS CLI)
-- [✓] Encryption type: AWS owned keys (default for tables created Sept 2025)
-
-**Verification Results:**
-
-```bash
-# Checked: characters, players, story, segments, active_segments
-aws dynamodb describe-table --table-name <table> --query 'Table.SSEDescription'
-# Result: null (indicates AWS owned keys - default encryption)
-```text
-
-**Assessment:** AWS owned keys provide encryption at rest with zero performance impact and zero cost. Acceptable for game data (non-sensitive).
-
-### S3 Encryption - Verified
-
-- [✓] All 3 buckets encrypted at rest (SSE-S3/AES256 - verified via AWS CLI)
-- [✓] All buckets block public access (`BlockPublicAccess.BLOCK_ALL`)
-- [✓] SSL/TLS enforced via CloudFront and API Gateway
-
-**Verification Results:**
-
-```bash
-# Checked: darkrelics-scripts, darkrelics-portal, eidolon-engine-lambda-*
-aws s3api get-bucket-encryption --bucket <bucket>
-# Result: SSEAlgorithm: AES256 (S3-managed encryption)
-```text
-
-**Assessment:** SSE-S3 encryption adequate for reproducible build artifacts. All data can be rebuilt from git.
-
-### API Gateway TLS
-
-- [✓] TLS 1.2 minimum enforced (`api_stack.py:323`: `security_policy=apigateway.SecurityPolicy.TLS_1_2`)
-- [✓] ACM certificate with DNS validation (lines 309-314)
-- [✓] REGIONAL endpoint type (line 322)
-- [✓] No HTTP endpoints exposed (HTTPS only)
-
-**CloudFront:**
-- [✓] `viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS` (`client_stack.py:158`)
-
-**Findings:** None - All data encrypted at rest (PII in Cognito, game data uses AWS defaults), all transit over TLS 1.2+.
-
----
-
-## 6. Logging and Monitoring (No PII) [COMPLETE] **COMPLETE**
-
-**Check:** Logs don't contain sensitive data
-
-Review Lambda functions for logging statements:
-
-```bash
-grep -r "logger\." lambda/ eidolon/ | grep -i "password\|token\|secret\|email"
-```text
-
-**What to Look For:**
-
-- [✓] No passwords logged
-- [✓] No authentication tokens logged
-- [✓] No credit card numbers (N/A for this app)
-- [✓] No SSN or real names (N/A for this app)
-
-**Acceptable Logging:**
-
-- Character IDs (UUIDs)
-- Player IDs (UUIDs)
-- Story/Segment IDs
-- Skill values, game state
-- Error messages (without sensitive context)
-- Email addresses at debug/error level for operational support
-
-**Current Logging Patterns:**
-
-```python
-logger.info(f"Character {character_id} started story {story_id}")  # ✓ OK
-logger.debug(f"Created new player record. PlayerID: {uuid}, Email: {email}")  # ✓ ACCEPTABLE
-logger.error(f"Failed to authenticate: {err}")  # ✓ OK - err is error message, not token
-```text
-
-**Findings:**
-
-**Email Logging (ACCEPTABLE for operational debugging):**
-- `eidolon/player.py:63` - Debug log includes email on player creation
-- `eidolon/player.py:66` - Error log includes email on creation failure
-- **Status:** Acceptable for beta operations - email used for troubleshooting account issues
-
-**PII Summary:**
-- Only PII is email addresses
-- Stored in: Cognito (primary) + DynamoDB Players table
-- NOT exposed via any API endpoints
-- Logged at debug/error level for operational support
-- No passwords, tokens, credit cards, SSN, or real names in system
-
----
-
-## 7. Cognito Configuration [COMPLETE] **COMPLETE**
-
-**Check:** Cognito User Pool security settings
-
-Review `deployment/stacks/player_stack.py:150-178`:
-
-- [✓] Password policy enforced (minimum length 8, complexity required)
-- [ ] MFA available (**NOT CONFIGURED** - optional for beta, recommended for production)
-- [✓] Email verification required (`auto_verify=cognito.AutoVerifiedAttrs(email=True)`)
-- [✓] Account recovery options configured (`account_recovery=cognito.AccountRecovery.EMAIL_ONLY`)
-- [✓] No user enumeration vulnerabilities (`prevent_user_existence_errors=True` line 174)
-
-**Verified Configuration:**
-
-```python
-# player_stack.py:156-178
-auto_verify=cognito.AutoVerifiedAttrs(email=True),  # ✓ Email verification required
-password_policy=cognito.PasswordPolicy(
-    min_length=8,  # ✓ Minimum 8 characters
-    require_lowercase=True,  # ✓ Complexity required
-    require_uppercase=True,
-    require_digits=True,
-    require_symbols=True,
-),
-account_recovery=cognito.AccountRecovery.EMAIL_ONLY,  # ✓ Email recovery only
-prevent_user_existence_errors=True,  # ✓ Prevents user enumeration
-access_token_validity=Duration.hours(1),  # ✓ 1 hour access tokens
-id_token_validity=Duration.hours(1),  # ✓ 1 hour ID tokens
-refresh_token_validity=Duration.days(30),  # ✓ 30 day refresh tokens
-```text
-
-**Recent Fix (2025-10-07):**
-- Deployed user pool had `AutoVerifiedAttributes: null` (email verification disabled)
-- Fixed via AWS CLI: `aws cognito-idp update-user-pool --auto-verified-attributes email`
-- Deployment code updated to ensure this is applied on future deployments
-
-**Findings:** MFA not configured - acceptable for beta, recommend enabling for production launch.
-
----
-
-## 8. CORS Configuration [COMPLETE] **COMPLETE**
-
-**Check:** CORS allows only intended origins
-
-Review `deployment/stacks/api_stack.py:143-156, 259-297`:
-
-- [✓] ALLOWED_ORIGINS is explicit list, not "*"
-- [✓] CORS_ALLOW_CREDENTIALS is true (required for Cognito)
-- [✓] CORS_ALLOW_METHODS is minimal (only needed methods)
-- [✓] CORS_MAX_AGE is reasonable (86400 = 24 hours)
-
-**Verified Configuration:**
-
-```python
-# api_stack.py:143, 152-156
-client_origin = f"https://{self.client_host}.{self.domain}"  # ✓ Specific origin (portal.darkrelics.net)
-
-default_cors_preflight_options=apigateway.CorsOptions(
-    allow_origins=[client_origin],  # ✓ Explicit list, not "*"
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],  # ✓ Minimal methods
-    allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
-    allow_credentials=True,  # ✓ Required for Cognito
-)
-
-# api_stack.py:262-297 - CORS headers on error responses
-cors_headers = {
-    "gatewayresponse.header.Access-Control-Allow-Origin": f"'{client_origin}'",  # ✓ Specific origin
-    "gatewayresponse.header.Access-Control-Allow-Credentials": "'true'",  # ✓ Credentials enabled
-}
-```text
-
-**Assessment:** CORS correctly configured - specific origin, credentials enabled, minimal methods. Error responses include CORS headers (prevents CORS issues on 4xx/5xx).
-
-**Findings:** None - CORS configuration secure and appropriate for Cognito authentication.
-
----
-
-## Tools to Use
-
-### Automated Scanning
-
-**1. Prowler (AWS Security Best Practices)**
-
-```bash
-pip install prowler
-prowler aws --profile your-profile --severity critical high
-```text
-
-Run checks:
-
-- IAM policies
-- S3 bucket permissions
-- DynamoDB encryption
-- API Gateway configuration
-- CloudWatch logging
-
-**Results:** Document any CRITICAL or HIGH findings in the "IAM Security Review - Actual Findings" section below, using the next available finding ID (R3-SEC-001, R3-SEC-002, etc.)
-
-**2. Checkov (Infrastructure as Code Scanning)** [COMPLETE] **AUTOMATED IN CI/CD**
-
-**Status:** Implemented in `.github/workflows/cdk-analysis.yml` on 2025-10-07
-
-**Configuration:**
-- Config file: `.checkov.yaml` (skips non-critical checks for game data)
-- Runs on every PR/push to `develop`, `qa`, `prod` affecting `deployment/**/*.py`
-- Blocks merge if security issues found
-
-**Local Testing:**
-
-```bash
-# Run with config (security-critical checks only)
-checkov -d deployment/ --framework cloudformation --config-file .checkov.yaml --skip-download
-
-# Run full scan (all checks)
-checkov -d deployment/ --framework cloudformation --compact --skip-download
-```text
-
-**Known Issue - Resolved:**
-- Checkov requires `--skip-download` flag to avoid SSL/API errors when filtering by severity
-- Severity filtering (`--check HIGH`) requires Prisma Cloud API key
-- Solution: Use `.checkov.yaml` config file to skip non-critical checks instead
-
-**Current Results:**
-- [COMPLETE] Passed checks: 165
-- [COMPLETE] Failed checks: 0
-- [COMPLETE] No critical security issues found
-
-**Skipped Checks (Non-Critical for Game Data):**
-- Lambda VPC/DLQ/concurrency (operational, not security)
-- Lambda env var encryption (no secrets - verified manually)
-- SQS encryption (game data, non-sensitive)
-- API Gateway caching/logging/X-Ray (performance/observability)
-- WAF log4j protection (Python 3.12, not Java)
-- CloudFront access logging (analytics)
-
-**3. Bandit (Python Code Security)** [COMPLETE] **AUTOMATED IN CI/CD**
-
-**Status:** Already running in `.github/workflows/python-analysis.yml`
-
-**Configuration:**
-- Critical scan: `--confidence-level high --severity-level high` (blocking)
-- Full scan: `--confidence-level medium --severity-level low` (informational)
-- Runs on every PR/push affecting Python code
-
-**Local Testing:**
-
-```bash
-# Critical issues only (same as CI blocking check)
-bandit -q --confidence-level high --severity-level high -r .
-
-# Full scan
-bandit -q --confidence-level medium --severity-level low --exit-zero -r .
-```text
-
-**Results:** No CRITICAL or HIGH findings. Already automated and enforced via CI/CD since R2.
-
-### Manual Verification
-
-**Test Authentication Bypass:**
-
-```bash
-# Attempt API calls without token
-for endpoint in /character /story/start /segment/decision; do
-  echo "Testing $endpoint"
-  curl -X GET "https://api.yourdomain.com$endpoint" -w "\nStatus: %{http_code}\n\n"
-done
-# All should return 401 Unauthorized
-```text
-
-**Results:** If any endpoint returns non-401 status, document as CRITICAL finding in "IAM Security Review - Actual Findings" section.
-
-**Test Input Validation:**
-
-```bash
-# Attempt SQL injection patterns (even though using DynamoDB)
-curl -X POST https://api.yourdomain.com/character \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"CharacterName": "'; DROP TABLE characters; --"}'
-# Should return 400 Bad Request (name validation)
-
-# Attempt XSS patterns
-curl -X POST https://api.yourdomain.com/character \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"CharacterName": "<script>alert(1)</script>"}'
-# Should return 400 Bad Request (name validation)
-```text
-
-**Results:** If any test succeeds (returns 200) or causes unexpected behavior, document as HIGH finding in "IAM Security Review - Actual Findings" section.
-
----
-
-## Severity Classification
-
-**Critical:** Requires immediate fix before beta
-
-- Unprotected API endpoints
-- Hardcoded secrets
-- No encryption at rest/transit
-- Severe input validation gaps (injection vulnerabilities)
-
-**High:** Should fix before beta, can be mitigated
-
-- Overly-broad IAM permissions
-- Weak Cognito settings
-- PII in logs
-- CORS misconfigurations
-
-**Medium:** Fix in R4 or document as known issue
-
-- Missing MFA enforcement
-- Suboptimal password policies
-- Non-critical logging improvements
-
-**Low:** Document and defer to post-launch
-
-- Code quality issues
-- Non-security tech debt
-
----
-
-## Findings Template
-
-**Where to document:** Add new findings to the "IAM Security Review - Actual Findings" section below (starting at line 2015).
-
-**Format for each finding:**
-
-**Finding ID:** R3-SEC-001
-**Severity:** [Critical/High/Medium/Low]
-**Category:** [IAM/Input/Auth/Secrets/Data/Logging/Cognito/CORS]
-**Description:** [What was found]
-**Location:** [File/line or AWS resource]
-**Risk:** [What could happen if exploited]
-**Recommendation:** [How to fix]
-**Status:** [Open/Fixed/Mitigated/Accepted Risk]
-
-**Note:** R3-IAM-001 through R3-IAM-005 are already documented. Use R3-SEC-001, R3-SEC-002, etc. for additional findings.
-
----
-
-## Exit Criteria
-
-**Updated: 2025-10-07**
-
-- [✓] All checklist items reviewed (8/10 categories complete)
-- [✓] Automated tools run (Checkov, Bandit) - **Now automated in CI/CD**
-- [ ] Prowler manual run (OPTIONAL - manual verification redundant with code review)
-- [ ] Manual authentication bypass tests (OPTIONAL - code review confirms protection)
-- [ ] Input validation audit (13 Lambda functions)
-- [ ] Logging PII review (grep audit)
-- [✓] Findings documented with severity
-- [✓] Critical and High findings fixed or mitigated (3 IAM fixes deployed)
-- [✓] Remaining LOW findings documented (R3-IAM-002, R3-IAM-004, R3-IAM-005) - deferred to R4
-
-**Completion Status:** 8/10 categories complete (80%)
-
-**Remaining Work:** Input validation + logging review
-
-````
+#### Security Review Summary
+
+**Status:** [COMPLETE] All security categories reviewed and verified (2025-10-07)
+
+**Approach:** Focused security sanity pass covering critical areas for beta readiness. Full penetration testing and third-party audits deferred to post-launch.
+
+**Security Checklist Results:**
+
+| Category | Status | Key Findings | Remediation |
+|----------|--------|--------------|-------------|
+| **IAM Permissions** | [COMPLETE] | 3 HIGH issues (CloudWatch Logs wildcards) | Fixed R3-IAM-001, R3-IAM-003, R3-IAM-006 |
+| **API Authorization** | [COMPLETE] | All 11 endpoints protected | Cognito authorizer verified |
+| **Input Validation** | [COMPLETE] | 1 LOW issue (UUID validation) | Fixed R3-SEC-001 (5 endpoints) |
+| **Secrets Management** | [COMPLETE] | No issues | No hardcoded secrets found |
+| **Data Protection** | [COMPLETE] | No issues | Cognito + DynamoDB + S3 encrypted |
+| **Logging/Monitoring** | [COMPLETE] | No issues | Email logging acceptable for beta |
+| **Cognito Config** | [COMPLETE] | MFA not configured | Acceptable for beta, defer to R4 |
+| **CORS Config** | [COMPLETE] | No issues | Specific origin, credentials enabled |
+
+**Automated Scanning (CI/CD):**
+- Checkov: 165 checks passing, 0 failures
+- Bandit: No HIGH/CRITICAL findings
+- Pip-audit: Dependency scanning active
+
+**Findings Summary:**
+- **CRITICAL**: 0 open (3 fixed)
+- **HIGH**: 0 open (3 fixed, 3 deferred to R4 with rationale)
+- **MEDIUM**: 0
+- **LOW**: 2 (R3-IAM-004, R3-IAM-005 - deferred to R4)
+
+**Beta Readiness Assessment:** [OK] Safe for limited beta launch with documented constraints
 
 ---
 
@@ -2533,152 +1151,11 @@ grep -r "\.scan(" lambda/ eidolon/
 
 ---
 
-#### R3 Remediation Required (Before Beta)
+#### Applied Remediations [COMPLETE]
 
-**CRITICAL FIX 1: Lambda CloudWatch Logs Policy (R3-IAM-001 + R3-IAM-003)**
-
-**File:** `deployment/stacks/lambda_stack.py`
-
-**Lines to change:** 80-94
-
-**Current code:**
-
-```python
-# Create and attach CloudWatch Logs policy
-logs_policy = iam.ManagedPolicy(
-    self,
-    "LambdaLogsPolicy",
-    managed_policy_name="eidolon-lambda-logs-policy",
-    description="CloudWatch Logs permissions for Lambda functions",
-    statements=[
-        iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-            resources=[f"arn:aws:logs:{self.region_name}:*:*"],
-        )
-    ],
-)
-role.add_managed_policy(logs_policy)
-```text
-
-**Replace with:**
-
-```python
-# Create and attach CloudWatch Logs policy
-logs_policy = iam.ManagedPolicy(
-    self,
-    "LambdaLogsPolicy",
-    managed_policy_name="eidolon-lambda-logs-policy",
-    description="CloudWatch Logs permissions for Lambda functions",
-    statements=[
-        # CreateLogGroup needs log-group ARN without :*
-        iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=["logs:CreateLogGroup"],
-            resources=[f"arn:aws:logs:{self.region_name}:{self.account}:log-group:/aws/lambda/*"],
-        ),
-        # CreateLogStream and PutLogEvents need log-group ARN with :*
-        iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=["logs:CreateLogStream", "logs:PutLogEvents"],
-            resources=[f"arn:aws:logs:{self.region_name}:{self.account}:log-group:/aws/lambda/*:*"],
-        ),
-    ],
-)
-role.add_managed_policy(logs_policy)
-```text
-
-**Testing Steps:**
-
-1. Deploy updated Lambda stack:
-
-   ```bash
-   cd deployment
-   cdk deploy EidolonLambdaStack --profile dev
-```text
-
-2. Invoke any Lambda function:
-
-   ```bash
-   aws lambda invoke --function-name api-character-list --profile dev response.json
-```text
-
-3. Verify logs appear in CloudWatch:
-
-   ```bash
-   aws logs describe-log-groups --log-group-name-prefix /aws/lambda/api-character --profile dev
-```text
-
-4. Run Prowler IAM checks:
-   ```bash
-   prowler aws --profile dev --check iam_policy_no_full_access_to_cloudwatch_logs
-```text
-
----
-
-**CRITICAL FIX 2: CodeBuild CloudWatch Logs Policy (R3-IAM-006)**
-
-**File:** `deployment/stacks/codebuild_stack.py`
-
-**Lines to change:** 77-89
-
-**Current code:**
-
-```python
-# Create custom managed policy for CloudWatch Logs
-logs_policy = iam.ManagedPolicy(
-    self,
-    "CodeBuildLogsPolicy",
-    managed_policy_name="eidolon-codebuild-logs-policy",
-    description="Policy for CodeBuild to write logs to CloudWatch",
-    statements=[
-        iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-            resources=[f"arn:aws:logs:{self.region_name}:*:log-group:/aws/codebuild/*"],
-        )
-    ],
-)
-```text
-
-**Replace with:**
-
-```python
-# Create custom managed policy for CloudWatch Logs
-logs_policy = iam.ManagedPolicy(
-    self,
-    "CodeBuildLogsPolicy",
-    managed_policy_name="eidolon-codebuild-logs-policy",
-    description="Policy for CodeBuild to write logs to CloudWatch",
-    statements=[
-        iam.PolicyStatement(
-            effect=iam.Effect.ALLOW,
-            actions=["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
-            resources=[f"arn:aws:logs:{self.region_name}:{self.account}:log-group:/aws/codebuild/*"],
-        )
-    ],
-)
-```text
-
-**Testing Steps:**
-
-1. Deploy updated CodeBuild stack:
-
-   ```bash
-   cd deployment
-   cdk deploy EidolonCodeBuildStack --profile dev
-```text
-
-2. Trigger a CodeBuild build:
-
-   ```bash
-   aws codebuild start-build --project-name eidolon-lambda-layer-build --profile dev
-```text
-
-3. Verify logs appear in CloudWatch:
-   ```bash
-   aws logs describe-log-groups --log-group-name-prefix /aws/codebuild/ --profile dev
-```text
+**CRITICAL FIX 1 & 2: CloudWatch Logs Policies** - [COMPLETE]
+- R3-IAM-001: Lambda CloudWatch Logs policy scoped to `/aws/lambda/*` (See Finding R3-IAM-001 above for details)
+- R3-IAM-006: CodeBuild CloudWatch Logs policy account ID wildcard fixed (See Finding R3-IAM-006 above for details)
 
 ---
 
@@ -2907,11 +1384,7 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
   - No race conditions or state conflicts
   - Battery usage reduced (measured via Flutter DevTools or manual observation)
 
-- [[DEFERRED]] **R3-T2: Performance Baseline** → Deferred to post-revenue
-  - [DEFERRED] Load testing and provisioned concurrency optimization
-  - [RATIONALE] Performance optimization premature before proving PMF
-  - [RATIONALE] Current Lambda config adequate for beta scale
-  - [DECISION] Measure real production usage before optimizing
+- [[DEFERRED]] **R3-T2: Performance Baseline** → Deferred to post-revenue (see task section for rationale)
 
 - [ ] **R3-T3: Integration Tests**
 
@@ -2921,10 +1394,7 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
   - Tests clean up their own data
   - Test documentation complete
 
-- [[DEFERRED]] **R3-T4: Author Documentation** → Deferred to R4-T6
-  - [DEFERRED] Quick-Start guide creation
-  - [RATIONALE] Better to document complete system after R4 economy features
-  - [DECISION] R3-T5 (content creation) can proceed without formal quick-start
+- [[DEFERRED]] **R3-T4: Author Documentation** → Deferred to R4-T6 (see task section for rationale)
 
 - [ ] **R3-T5: Beta Content**
 
@@ -2934,7 +1404,7 @@ Before declaring R3 complete and shipping to beta, ALL of the following must be 
   - Balance adjustments applied
   - Story catalog created
 
-- [[COMPLETE]] **R3-T6: Security** ([COMPLETE] **COMPLETE** - 2025-10-07)
+- [[COMPLETE]] **R3-T6: Security** (2025-10-07)
   - [✓] Security checklist 100% complete (10/10 categories complete)
   - [✓] Automated scans configured in CI/CD (Checkov, Bandit, Pip-audit)
   - [✓] Checkov CDK scanning added (`.github/workflows/cdk-analysis.yml`, `.checkov.yaml`)
@@ -3124,11 +1594,124 @@ After R3 ships, clean up these items:
 
 ---
 
-**Document Version:** 1.2
-**Last Updated:** 2025-10-12
+## Appendix C: Story Content Improvements (2025-10-14)
+
+### Overview
+
+Enhanced all existing test stories with probabilistic item rewards, immersive environmental descriptions, and proper segment metadata formatting. This work improves the quality of existing content while the planned beta stories (R3-T5) remain in planning.
+
+### Stories Updated
+
+**Files Modified:**
+- `data/story/test_forage_forest.json` (7 segments)
+- `data/story/test_goblins_ambush.json` (8 segments)
+- `data/story/test_gremlin_mischief.json` (3 segments)
+
+### Improvements Applied
+
+#### 1. Probabilistic Item Rewards
+
+**What Changed:**
+Converted all item rewards from guaranteed (simple list of IDs) to probabilistic format using the unified Items structure. Each item now has an independent drop chance.
+
+**Design Rationale:**
+- Common items (berries, vegetables): 50-90% drop chance
+- Rare items (mushrooms, healing roots): 60-80% drop chance
+- Legendary items (moonpetal flower): 30% drop chance
+- Higher chances for better outcomes (Minimal < Normal < Exceptional)
+- Makes rewards feel more natural and engaging while maintaining balance
+
+**Implementation:**
+Uses cumulative probability distribution algorithm. See `eidolon/items.py:108-167` for the `process_items_with_probability()` function that handles both simple and probabilistic formats.
+
+#### 2. Environmental Narrative Enhancement
+
+**What Changed:**
+Integrated rich room descriptions from `data/test_rooms.json` into all segment narratives to create immersive, atmospheric storytelling. Each of the 10 forest locations (Glade Entrance, Forest Path, Small Clearing, Ancient Oak, Babbling Brook, Tangled Thicket, Mossy Grove, Whispering Pines, Fern Gully, Abandoned Campsite) now has environmental details woven throughout segment narratives.
+
+**Room Descriptions Source:**
+See `data/test_rooms.json` (Rooms 1-10) for the complete atmospheric descriptions that were incorporated, including sensory details like:
+- Visual elements (dappled shadows, sparkling water, wildflowers)
+- Auditory details (birdsong, rustling leaves, water sounds)
+- Olfactory elements (flower scents, earth and decay, damp moss)
+- Tactile sensations (soft moss, cool air, thorny bushes)
+
+**Impact:**
+- Each location now has distinct personality and atmosphere
+- Sensory details (visual, auditory, olfactory) create immersion
+- Environmental features integrated into mechanics (fallen log as tactical element, brook murmur masking approach)
+- Room details adapt based on success/failure (tranquil beauty for success, oppressive atmosphere for failure)
+- Players can better visualize their character's journey through the forest
+
+#### 3. Segment Metadata Standardization
+
+**What Changed:**
+Corrected SegmentActivity and SegmentTitle fields across all 18 segments (7 in test_forage_forest.json, 8 in test_goblins_ambush.json, 3 in test_gremlin_mischief.json) to follow proper usage patterns.
+
+**Correct Format:**
+- **SegmentActivity** (shown only while segment is active): Longer, descriptive, present-tense description of what's happening NOW
+- **SegmentTitle** (shown while active AND after completion): Shorter, neutral summary that works in both states
+
+**Examples:**
+- Activity: "You are searching for signs of the troublesome gremlin" | Title: "Tracking the gremlin"
+- Activity: "You carefully search the banks of the babbling brook for valuable plants" | Title: "Brook foraging"
+- Activity: "You are locked in combat with the goblin scout" | Title: "Scout combat"
+
+**Rationale:**
+- Activity field uses present-tense descriptions that only make sense while the segment is in progress
+- Title field uses neutral summaries that work as historical records after completion
+- Previous format had these reversed or used present-tense text in titles that didn't work after completion
+
+See the three story files for complete updated metadata on all segments.
+
+### Quality Improvements
+
+**Before:**
+- Guaranteed item drops felt predictable and mechanical
+- Narratives were functional but not immersive
+- Generic descriptions didn't leverage rich room data
+- Segment titles used present-tense text that didn't work after completion
+
+**After:**
+- Probabilistic drops create anticipation and replay value
+- Rich environmental storytelling creates atmosphere
+- Each location feels unique and memorable
+- Proper metadata supports both active and historical display
+- Room features integrated into gameplay (tactical elements, acoustic cover, natural barriers)
+
+### Documentation References
+
+- Item probability system: `documentation/schema.md:528-573`
+- Item processing implementation: `eidolon/items.py:108-167`
+- Room descriptions: `data/test_rooms.json`
+- Schema definition: `documentation/schema.md`
+
+### Testing Recommendations
+
+**Suggested Playtesting:**
+1. Test each story path to verify probabilistic items work correctly
+2. Verify narrative coherence with room descriptions
+3. Check segment titles make sense in both active and completed states
+4. Confirm environmental details enhance rather than distract from gameplay
+5. Validate item drop rates feel balanced across outcome tiers
+
+### Future Considerations
+
+**For Planned Beta Stories (R3-T5):**
+- Apply these same standards from the beginning
+- Use probabilistic items as default approach
+- Leverage room descriptions during initial narrative writing
+- Ensure SegmentActivity/SegmentTitle follow established patterns
+- Consider creating room descriptions before writing segment narratives
+
+---
+
+**Document Version:** 1.3
+**Last Updated:** 2025-10-14
 **Next Review:** Upon R3 completion
 
 **Revision History:**
+- v1.3 (2025-10-14): Added Appendix C documenting story content improvements (probabilistic items, environmental narratives, segment metadata)
 - v1.2 (2025-10-12): Corrected exit criteria and dependencies after task renumbering, added explicit 5-stage plan for R3-T1
 - v1.1 (2025-10-07): Moved R3-T1 (Currency Rewards) to R4-T1, renumbered remaining tasks
 - v1.0 (2025-10-06): Initial release plan

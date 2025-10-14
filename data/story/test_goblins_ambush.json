@@ -37,7 +37,7 @@
       ],
       "Results": {
         "Death": {
-          "Narrative": "Lost in the deepening gloom, you stumble into a ravine. Your cries echo unheard as darkness claims you.",
+          "Narrative": "As you venture from the glade entrance into the dense forest, you become disoriented. The green tunnel overhead blocks out the light, and the rustling leaves drown out your sense of direction. Lost in the deepening gloom, you stumble into a hidden ravine. Your cries echo unheard through the cool, damp air as darkness claims you.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -45,7 +45,7 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "The forest proves too dense and disorienting. You retreat to your camp, your investigation incomplete.",
+          "Narrative": "You leave the sunlit glade entrance and push into the forest, but the well-trodden path quickly becomes confusing. The trees forming a green tunnel overhead make navigation difficult, and the scent of earth and decaying leaves is overwhelming. The dense forest proves too disorienting. Scratched by undergrowth, you retreat back to the glade entrance, your investigation incomplete.",
           "Effects": {
             "Wounds": [
               "bashing"
@@ -55,7 +55,7 @@
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "You push through the undergrowth with difficulty, finding only vague traces of recent activity.",
+          "Narrative": "Leaving behind the dappled shadows and birdsong of the glade entrance, you push through the undergrowth with difficulty. The well-trodden path leads you deeper where trees form a green tunnel overhead. In the cool, damp air heavy with the scent of earth and decaying leaves, you find only vague traces of recent activity - a few broken branches rustling in the wind. You press on despite your scratches.",
           "Effects": {
             "Wounds": [
               "bashing"
@@ -65,46 +65,46 @@
           "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
         },
         "Normal": {
-          "Narrative": "Your sharp eyes catch important details - broken branches and faint footprints guide you deeper into the forest.",
+          "Narrative": "Your sharp eyes catch important details as you move from the flower-scented glade entrance into the deeper forest. Following the well-trodden path beneath the green tunnel of trees, you spot broken branches and faint footprints in the soft earth. The distant call of a woodpecker punctuates your discovery as the cool, damp air carries the scent of recent passage. The trail guides you deeper into the forest.",
           "Effects": {
             "Room": 2
           },
           "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
         },
         "Exceptional": {
-          "Narrative": "Your exceptional perception reveals a hidden trail! Fresh goblin tracks and discarded equipment tell a clear story.",
+          "Narrative": "Your exceptional perception reveals secrets the forest tries to hide! Leaving the sunlit glade with its singing birds, you follow the well-trodden path into the green tunnel of trees. In the cool, damp atmosphere where leaves rustle and a woodpecker calls, you discover a hidden trail - fresh goblin tracks pressed into the moss, discarded equipment hidden beneath decaying leaves. Every detail tells a clear story of recent goblin activity. You move forward with certainty.",
           "Effects": {
             "Room": 2
           },
           "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
         }
       },
-      "SegmentActivity": "Entering the forest",
-      "SegmentTitle": "You are making your way through the dense forest undergrowth"
+      "SegmentActivity": "You are making your way through the dense forest undergrowth",
+      "SegmentTitle": "Forest entrance"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
       "SegmentType": "decision",
       "SegmentDuration": 600,
-      "DecisionText": "The forest path splits into two directions. To the left, you can hear the sound of running water - likely the babbling brook. To the right, the path seems to lead toward denser vegetation. Which way do you go?",
+      "DecisionText": "The well-trodden path splits into two directions beneath the green tunnel of trees. The air is cool and damp, carrying the scent of earth and decaying leaves. To the left, you hear the sound of flowing water growing louder - the babbling brook, where goblins might water their troops. To the right, the path becomes narrower and more overgrown, leading toward a tangled thicket that could conceal an ambush. Leaves rustle overhead as you consider your options. Which way do you go?",
       "DecisionOptions": {
         "Left": {
           "Text": "Follow the sound of water",
           "Description": "Head toward the babbling brook through the underbrush",
-          "Narrative": "You decide to follow the sound of running water, carefully making your way through the underbrush toward the babbling brook. The path is narrow and overgrown, but the gentle burbling grows louder as you approach.",
+          "Narrative": "You decide to follow the sound of flowing water, carefully making your way through the undergrowth. The murmur grows louder as you approach, and soon the babbling brook comes into view, its clear waters sparkling in dappled sunlight as it meanders through the trees. The peaceful atmosphere belies potential danger.",
           "NextSegmentID": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f"
         },
         "Right": {
           "Text": "Push through the thicket",
           "Description": "Take the path toward the dense vegetation",
-          "Narrative": "You choose the path through the dense thicket, pushing forward through the tangled vegetation. Thorns catch at your clothing as you forge ahead into the shadows.",
+          "Narrative": "You choose the path through the tangled thicket. The way becomes narrower and more overgrown as you push forward. Thorny bushes and tangled vines catch at your clothing, a reminder of nature's wildness. The air grows still and heavy, and the buzzing of insects becomes more insistent as you forge into the shadows.",
           "NextSegmentID": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a"
         }
       },
       "DefaultDecision": "Right",
-      "SegmentActivity": "Choosing your path",
-      "SegmentTitle": "You stand at the fork in the path, considering your options"
+      "SegmentActivity": "You stand at the fork in the path, considering your options",
+      "SegmentTitle": "Path choice"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -121,7 +121,7 @@
       ],
       "Results": {
         "Death": {
-          "Narrative": "A misstep sends you tumbling into the rushing brook. The current sweeps you away before you can cry out.",
+          "Narrative": "As you creep along the babbling brook, trying to use the peaceful murmur to mask your approach, a misstep sends you tumbling into the water. The deceptively calm brook turns deadly as the current - stronger than it appeared from the sparkling surface - sweeps you away. Your cries are drowned by the rushing water before you can escape.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -129,7 +129,7 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "Your clumsy movements alert every creature within earshot. You hear goblin war cries approaching rapidly.",
+          "Narrative": "Despite the brook's peaceful murmur providing cover, your clumsy movements along the water's edge alert every creature within earshot. Rocks tumble, water splashes, and branches snap. The tranquil scene shatters as goblin war cries echo through the trees. You brace for combat, wounded by your hasty scramble.",
           "Effects": {
             "Wounds": [
               "lethal"
@@ -139,7 +139,7 @@
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "You move quietly enough to avoid immediate danger, though twigs snap underfoot at crucial moments.",
+          "Narrative": "You move along the babbling brook, using the peaceful murmur of the water to mask your approach. The clear waters sparkle in dappled sunlight as you creep forward, though twigs snap underfoot at crucial moments. You're quiet enough to avoid immediate danger, but the goblins know someone is near. You suffer minor injuries navigating the rocky bank.",
           "Effects": {
             "Wounds": [
               "bashing"
@@ -149,22 +149,22 @@
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         },
         "Normal": {
-          "Narrative": "Your stealthy approach pays off. You spot the goblin encampment ahead without being detected.",
+          "Narrative": "Your stealthy approach pays off as you follow the babbling brook deeper into the forest. The soothing murmur of the water masks your careful footsteps perfectly. Where the brook meanders through the trees, its clear waters sparkling in sunlight, you spot the goblin encampment ahead without being detected. The peaceful scene belies the danger lurking just beyond.",
           "Effects": {
             "Room": 5
           },
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         },
         "Exceptional": {
-          "Narrative": "Like a shadow, you glide through the forest. You're close enough to overhear the goblins' plans!",
+          "Narrative": "Like a shadow, you glide along the babbling brook. The peaceful murmur of the clear, sparkling waters provides perfect acoustic cover as you advance. You move silently past where the brook meanders through trees, using the dappled sunlight and tranquil sounds to your advantage. You're close enough to overhear the goblins' plans whispered near the water's edge!",
           "Effects": {
             "Room": 5
           },
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         }
       },
-      "SegmentActivity": "Following the brook",
-      "SegmentTitle": "You carefully follow the sound of water through the underbrush"
+      "SegmentActivity": "You carefully follow the sound of water through the underbrush",
+      "SegmentTitle": "Brook stealth"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -181,7 +181,7 @@
       ],
       "Results": {
         "Death": {
-          "Narrative": "The thorns prove too much. Poisonous barbs pierce your skin, and fever takes you within moments.",
+          "Narrative": "As the path becomes narrower and more overgrown, the thorny bushes prove too much. Poisonous barbs hidden among the tangled vines pierce your skin. The still, heavy air makes breathing difficult as fever takes hold. The insistent buzzing of insects grows overwhelming, and you collapse among nature's wild defenses within moments.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -189,7 +189,7 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "Bloodied by thorns and exhausted, you're forced to turn back and find another route.",
+          "Narrative": "The path grows narrower and more overgrown with each step. Thorny bushes tear at you while tangled vines obstruct every move. The air becomes still and oppressively heavy, and the buzzing of insects grows maddening. Bloodied by thorns and exhausted by the wildness of nature, you're forced to retreat and find another route.",
           "Effects": {
             "Wounds": [
               "lethal",
@@ -200,7 +200,7 @@
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "You force your way through, clothes torn and skin scratched, but you emerge on the other side.",
+          "Narrative": "The path becomes increasingly narrow and overgrown as you push deeper. Thorny bushes catch your clothes and tangled vines obstruct your progress - a painful reminder of nature's wildness. The still, heavy air makes the journey exhausting, and the insistent buzzing of insects frays your nerves. You force your way through, bloodied and torn, finally emerging on the other side.",
           "Effects": {
             "Wounds": [
               "bashing",
@@ -211,25 +211,25 @@
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         },
         "Normal": {
-          "Narrative": "With determined effort, you push through the thicket, finding a game trail that eases your passage.",
+          "Narrative": "With determined effort, you navigate the narrowing path as it grows more overgrown. Though thorny bushes and tangled vines obstruct your way and the air is still and heavy, you discover a game trail that eases your passage. The insistent buzzing of insects follows you, but you emerge relatively unscathed, having conquered nature's wild defenses.",
           "Effects": {
             "Room": 6
           },
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         },
         "Exceptional": {
-          "Narrative": "Your strength makes short work of the obstacles. You even find an old adventurer's pack tangled in the vines!",
+          "Narrative": "Your strength makes short work of the obstacles! As the path narrows and becomes overgrown, you power through thorny bushes and tangled vines with impressive efficiency. The still, heavy air and insistent buzzing of insects don't deter you. Your eyes catch something others would miss - an old adventurer's pack tangled in the vines, a reminder that nature's wildness has claimed others before you.",
           "Effects": {
             "Room": 6,
             "Items": [
-              "a47ac10b-58cc-4372-a567-0e02b2c3d484"
+              {"ItemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484", "Chance": 0.8}
             ]
           },
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         }
       },
-      "SegmentActivity": "Pushing through the thicket",
-      "SegmentTitle": "You struggle against the dense vegetation, thorns catching at your clothing"
+      "SegmentActivity": "You struggle against the dense vegetation, thorns catching at your clothing",
+      "SegmentTitle": "Thicket passage"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -243,7 +243,7 @@
       },
       "Results": {
         "Death": {
-          "Narrative": "The goblin's blade finds its mark. As your vision fades, you hear its victorious cackling.",
+          "Narrative": "The goblin scout's blade finds its mark in the tangled undergrowth. You fall among the thorny bushes and vines, the still, heavy air making each breath harder. As your vision fades and the buzzing of insects grows distant, you hear the goblin's victorious cackling echo through nature's wild domain.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -251,63 +251,63 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "Overwhelmed by the goblin's ferocity, you flee deeper into the forest, wounded and disoriented.",
+          "Narrative": "Overwhelmed by the goblin's ferocity in the confined, overgrown space, you flee deeper into the forest. Thorns tear at you as you stumble away wounded and disoriented, eventually collapsing into a tranquil mossy grove. The peaceful haven offers refuge, but the scent of damp earth and ethereal atmosphere do little to ease your defeat.",
           "Effects": {
             "Room": 7
           },
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "You manage to drive off the goblin scout, though not without taking several painful wounds.",
+          "Narrative": "The battle rages through the tangled thicket. Thorny bushes and vines obstruct your movements while the still, heavy air makes breathing difficult. You manage to drive off the goblin scout, though not without taking several painful wounds from both blade and thorn. The insistent buzzing of insects fills the silence after the goblin retreats.",
           "Effects": {
             "Room": 6
           },
           "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
         },
         "Normal": {
-          "Narrative": "After a fierce battle, you defeat the goblin scout. It flees, dropping a small pouch in its haste.",
+          "Narrative": "After a fierce battle among the overgrown path's thorny bushes and tangled vines, you defeat the goblin scout. The confined space and nature's wildness actually work to your advantage. As it flees through the narrow path, it drops a small pouch in its haste. The still air and insistent insect buzzing return as you catch your breath.",
           "Effects": {
             "Room": 6,
             "Items": [
-              "a47ac10b-58cc-4372-a567-0e02b2c3d484"
+              {"ItemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484", "Chance": 0.7}
             ]
           },
           "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
         },
         "Exceptional": {
-          "Narrative": "You dispatch the goblin with masterful combat prowess! It surrenders, revealing the location of its camp.",
+          "Narrative": "You dispatch the goblin with masterful combat prowess! Despite the narrow, overgrown path and the thorny bushes obstructing movement, you use nature's wildness to your advantage. The tangled vines trap the goblin's retreat, forcing its surrender. In the still, heavy air filled with insect buzzing, it reveals the location of its camp before fleeing.",
           "Effects": {
             "Room": 6
           },
           "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
         }
       },
-      "SegmentActivity": "Fighting the goblin scout",
-      "SegmentTitle": "You are locked in combat with the goblin scout"
+      "SegmentActivity": "You are locked in combat with the goblin scout",
+      "SegmentTitle": "Scout combat"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
       "SegmentType": "decision",
       "SegmentDuration": 600,
-      "DecisionText": "After the encounter with the goblin, you notice tracks leading deeper into the forest. You could follow them to investigate further, or you could take a safer path around through the fern gully. What do you do?",
+      "DecisionText": "After the encounter with the goblin, you catch your breath in the tangled thicket. The still, heavy air is oppressive, and the buzzing of insects is relentless. You notice tracks leading deeper into the shadowed forest through more overgrown terrain. Alternatively, you could take a safer path around through the fern gully - you can hear the occasional drip of water from that direction. What do you do?",
       "DecisionOptions": {
         "Follow": {
           "Text": "Follow the tracks deeper into the forest",
           "Description": "A direct but dangerous approach to find the goblin camp",
-          "Narrative": "You steel your nerves and follow the goblin tracks deeper into the forest. The trail is clear but ominous, leading you into increasingly shadowed territory where danger surely lurks.",
+          "Narrative": "You steel your nerves and follow the goblin tracks deeper into the forest, pushing through more thorny bushes and tangled vines. The trail is clear but ominous, the path narrowing further as you venture into increasingly shadowed territory where danger surely lurks. The wildness of nature seems to warn you back.",
           "NextSegmentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d"
         },
         "Around": {
           "Text": "Take the safer path through the fern gully",
           "Description": "A longer route that avoids the goblin patrols",
-          "Narrative": "Caution prevails. You decide to take the longer route through the fern gully, avoiding the obvious goblin trails. The journey will take more time, but discretion seems the wiser choice here.",
+          "Narrative": "Caution prevails. You leave the oppressive thicket behind and take the longer route. The path leads you into a damp gully filled with lush ferns, their delicate fronds creating a sea of green. The cool, moist air is refreshing after the heavy stillness, and sunlight filters through casting an otherworldly glow. The journey will take more time, but discretion seems the wiser choice.",
           "NextSegmentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e"
         }
       },
       "DefaultDecision": "Around",
-      "SegmentActivity": "Following the goblin's trail",
-      "SegmentTitle": "You study the tracks in the dirt, weighing your options"
+      "SegmentActivity": "You study the tracks in the dirt, weighing your options",
+      "SegmentTitle": "Trail decision"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -320,7 +320,7 @@
       },
       "Results": {
         "Death": {
-          "Narrative": "The goblin warrior's axe cleaves through your defenses. The last thing you see is its cruel grin.",
+          "Narrative": "The goblin warrior's axe cleaves through your defenses in the dim light and treacherous footing. You fall, and the last thing you see through fading vision is its cruel grin. The sounds of the forest - wind through branches, chattering squirrels - fade as darkness claims you.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -328,39 +328,39 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "Battered and bleeding, you barely escape the warrior's fury. The forest offers refuge as you limp away.",
+          "Narrative": "Battered and bleeding in the dim light with treacherous footing working against you, you barely escape the warrior's fury. You stumble away and the forest mercifully offers refuge. You collapse into a tranquil mossy grove, the floor blanketed in thick moss cushioning your fall. The scent of damp earth and ethereal patches of sunlight surround you as time seems to slow in this peaceful haven.",
           "Effects": {
             "Room": 7
           },
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "You survive the encounter, though the warrior's skill leaves you badly wounded. It retreats, honor satisfied.",
+          "Narrative": "You survive the brutal encounter despite the dim light and treacherous footing. The warrior's skill leaves you badly wounded, but it retreats with honor satisfied. You stumble into a grove of tall, slender pines where the wind whispers through branches. The soft cushion of pine needles offers comfort as squirrels dart overhead, their chattering calls a gentle reminder that you survived.",
           "Effects": {
             "Room": 8
           },
           "NextSegmentID": null
         },
         "Normal": {
-          "Narrative": "Through skill and determination, you best the goblin warrior. It yields, tossing down its weapon in defeat.",
+          "Narrative": "Through skill and determination, you best the goblin warrior even in the dim light with treacherous footing beneath you. It yields, tossing down its weapon in defeat. The trees give way to a grove of tall, slender pines. As you catch your breath, the wind whispers through the branches in gentle susurrus, and squirrels resume their chattering calls - the forest's symphony acknowledging your victory.",
           "Effects": {
             "Room": 8
           },
           "NextSegmentID": null
         },
         "Exceptional": {
-          "Narrative": "Your legendary combat display defeats the warrior utterly! You claim its enchanted armor as your prize.",
+          "Narrative": "Your legendary combat display defeats the warrior utterly, even turning the dim light and treacherous footing to your advantage! The trees give way to a grove of tall, slender pines as the warrior falls. You claim its enchanted armor as your prize. Standing among the tall pines with wind whispering through branches and squirrels chattering overhead, you rest on the soft cushion of pine needles - a champion victorious.",
           "Effects": {
             "Room": 8,
             "Items": [
-              "c47ac10b-58cc-4372-a567-0e02b2c3d482"
+              {"ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482", "Chance": 0.85}
             ]
           },
           "NextSegmentID": null
         }
       },
-      "SegmentActivity": "Fighting the goblin warrior in the dark",
-      "SegmentTitle": "You battle the armored goblin warrior in the dim light and treacherous footing"
+      "SegmentActivity": "You battle the armored goblin warrior in the dim light and treacherous footing",
+      "SegmentTitle": "Warrior combat"
     },
     {
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
@@ -383,7 +383,7 @@
       ],
       "Results": {
         "Death": {
-          "Narrative": "Exhausted and lost, you collapse in the fern gully. The forest creatures find you before help arrives.",
+          "Narrative": "Exhausted and lost in the damp gully, you collapse among the lush ferns. Their delicate fronds create a sea of green around you as the cool, moist air grows cold against your skin. The scent of decay fills your lungs, and sunlight filtering through the canopy casts an otherworldly glow on your final moments. The occasional drip of water marks time until the forest creatures find you.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -391,7 +391,7 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "The detour proves too challenging. Tired and hungry, you abandon your quest and return to civilization.",
+          "Narrative": "The detour through the damp fern gully proves too challenging. The lush ferns with their delicate fronds obscure the path, creating a disorienting sea of green. The cool, moist air and lingering scent of decay sap your strength. Despite the otherworldly glow from filtered sunlight, you're too tired and hungry to continue. You abandon your quest and painfully make your way back to the glade entrance, where flowers and birdsong welcome your retreat to civilization.",
           "Effects": {
             "Wounds": [
               "bashing",
@@ -402,7 +402,7 @@
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "You navigate the gully successfully, though the journey leaves you weary and your supplies depleted.",
+          "Narrative": "You navigate the damp gully filled with lush ferns successfully, though the journey leaves you weary and supplies depleted. The delicate fronds creating a sea of green made navigation difficult, and the cool, moist air with its scent of decay was exhausting. The silence broken only by occasional water drips accompanied your struggle. You emerge wounded but alive.",
           "Effects": {
             "Wounds": [
               "bashing"
@@ -412,26 +412,26 @@
           "NextSegmentID": null
         },
         "Normal": {
-          "Narrative": "Your wilderness skills serve you well. You find edible berries and a safe path through the gully.",
+          "Narrative": "Your wilderness skills serve you well in the damp fern gully. Where lush ferns create a sea of green with their delicate fronds, you find edible berries and a safe path. The cool, moist air is refreshing, and you navigate through the otherworldly glow created by sunlight filtering through the canopy. The occasional drip of water guides your way through the peaceful silence.",
           "Effects": {
             "Room": 9
           },
           "NextSegmentID": null
         },
         "Exceptional": {
-          "Narrative": "Your masterful woodcraft reveals hidden treasures! You discover a cache of supplies left by previous adventurers.",
+          "Narrative": "Your masterful woodcraft reveals hidden treasures in the fern gully! The damp environment with its lush ferns creating a sea of green conceals secrets others miss. In the cool, moist air where the scent of decay lingers and sunlight casts an otherworldly glow, you discover a cache of supplies left by previous adventurers. The silence broken only by water drips makes the discovery feel almost magical.",
           "Effects": {
             "Items": [
-              "947ac10b-58cc-4372-a567-0e02b2c3d485",
-              "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+              {"ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485", "Chance": 0.8},
+              {"ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479", "Chance": 0.65}
             ],
             "Room": 9
           },
           "NextSegmentID": null
         }
       },
-      "SegmentActivity": "Taking the long way around",
-      "SegmentTitle": "You navigate carefully through the fern gully, avoiding the goblin patrols"
+      "SegmentActivity": "You navigate carefully through the fern gully, avoiding the goblin patrols",
+      "SegmentTitle": "Fern gully detour"
     }
   ]
 }
