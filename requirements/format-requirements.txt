@@ -17,7 +17,7 @@ cyclonedx-python-lib==9.1.0
 defusedxml==0.7.1
 filelock==3.19.1
 html5lib==1.1
-idna==3.10
+idna==3.11
 importlib-metadata==8.7.0
 license-expression==30.4.4
 markdown-it-py==3.0.0
