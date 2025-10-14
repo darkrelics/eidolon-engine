@@ -181,8 +181,12 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                         outcome_key = map_outcome_to_key(outcome or "normal")
                         if outcome_key and isinstance(results.get(outcome_key), dict):
                             outcome_block = results.get(outcome_key, {})
-                            if isinstance(outcome_block, dict) and "NextSegmentID" in outcome_block:
-                                next_segment_id = outcome_block.get("NextSegmentID")
+                            # NextSegmentID is in the Branches array
+                            branches = outcome_block.get("Branches", [])
+                            if branches and isinstance(branches, list) and len(branches) > 0:
+                                first_branch = branches[0]
+                                if isinstance(first_branch, dict):
+                                    next_segment_id = first_branch.get("NextSegmentID")
 
                     response["NextSegmentID"] = next_segment_id
 
@@ -193,9 +197,14 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                     response["Narrative"] = ""
                     response["Effects"] = {}
 
-                # Add StoryComplete flag
+                # Add StoryComplete flag - only valid when segment is processed
+                # Story is complete if segment is processed AND NextSegmentID is None
                 next_segment_id = response.get("NextSegmentID")
-                response["StoryComplete"] = next_segment_id is None
+                if processing_status == "processed":
+                    response["StoryComplete"] = next_segment_id is None
+                else:
+                    # Segment not processed yet - can't determine if story complete
+                    response["StoryComplete"] = False
 
                 # Add NextSegmentPreview if there's a next segment
                 if next_segment_id and (processing_status == "processed" or active_segment.get("Status") == "completed"):
@@ -268,7 +277,15 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             logger.debug(f"Could not fetch story data: {err}")
             # Not critical, continue without story data
 
-    logger.debug(f"Segment status retrieved for {character_id}")
+    # Log successful status retrieval with key details for observability
+    active_segment_id = response.get("ActiveSegmentID")
+    status = response.get("Status")
+    processing_status = response.get("ProcessingStatus")
+    time_remaining = response.get("TimeRemaining")
+    logger.info(
+        f"Segment status for character={character_id}, segment={active_segment_id}: "
+        f"Status={status}, ProcessingStatus={processing_status}, TimeRemaining={time_remaining}s"
+    )
 
     return response
 
@@ -314,6 +331,8 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     if not validate_uuid(character_id):
         return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
+
+    logger.info(f"Checking segment status for character={character_id}")
 
     # Call business logic
     try:

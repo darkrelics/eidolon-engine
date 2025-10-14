@@ -32,20 +32,6 @@ class ActiveStoryWidget extends StatefulWidget {
 }
 
 class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
-  late List<Map<String, dynamic>> _orderedHistory;
-
-  @override
-  void initState() {
-    super.initState();
-    _orderedHistory = _buildOrderedHistory(widget.segmentHistory);
-  }
-
-  @override
-  void didUpdateWidget(covariant ActiveStoryWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _orderedHistory = _buildOrderedHistory(widget.segmentHistory);
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -88,17 +74,17 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
             const SizedBox(height: 20),
           ],
 
-          // Previous Segments (show in reverse order - newest first)
-          if (_orderedHistory.isNotEmpty) ...[
+          // Previous Segments (newest first)
+          if (widget.segmentHistory.isNotEmpty) ...[
             Text('Previous Segments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _orderedHistory.length,
+              itemCount: widget.segmentHistory.length,
               separatorBuilder: (context, _) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
-                final segment = _orderedHistory[index];
+                final segment = widget.segmentHistory[index];
                 return _SimpleSegmentCard(
                   segment: segment,
                   isActive: false,
@@ -111,11 +97,6 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
         ],
       ),
     );
-  }
-
-  List<Map<String, dynamic>> _buildOrderedHistory(List<Map<String, dynamic>> history) {
-    final copied = history.map((segment) => Map<String, dynamic>.from(segment)).toList();
-    return copied.reversed.toList(growable: false);
   }
 }
 
@@ -371,16 +352,25 @@ class _SimpleSegmentCard extends StatelessWidget {
       hasTimerExpired = true;
     }
 
-    // For active segments, only reveal results when the timer has expired.
-    // The backend sends ProcessingStatus="processed" with results early so the client has them ready,
-    // but the client waits for the timer before displaying them (proper UX pacing).
-    // For historical (non-active) segments, we can reveal immediately if processed or flagged complete.
-    final bool shouldRevealResults =
-        !isActive ||
-        isCompleteFlag ||
-        (!isActive && processingStatus == 'processed') ||
-        (isActive && hasTimerExpired);
+    // Display gating rules:
+    // 1. Active segments: Show timer card until timer expires, even if ProcessingStatus="processed"
+    // 2. Only reveal results when: segment is processed AND timer has expired
+    // 3. Historical segments: Show completed card only if processed and NOT currently active
+    final bool shouldRevealResults;
+    if (isActive) {
+      // Active segment: Only reveal when timer has expired AND segment is processed
+      shouldRevealResults = hasTimerExpired && (processingStatus == 'processed' || isCompleteFlag);
+      debugPrint('ActiveStoryWidget: Active segment gating - timerExpired=$hasTimerExpired, processed=${processingStatus == 'processed'}, complete=$isCompleteFlag, reveal=$shouldRevealResults');
+    } else {
+      // Historical segment: Reveal if processed (and it's not the active segment anymore)
+      shouldRevealResults = processingStatus == 'processed' || isCompleteFlag;
+      debugPrint('ActiveStoryWidget: Historical segment - processed=${processingStatus == 'processed'}, complete=$isCompleteFlag, reveal=$shouldRevealResults');
+    }
+
     final bool waitingOnTimer = isActive && !shouldRevealResults;
+    if (waitingOnTimer) {
+      debugPrint('ActiveStoryWidget: Waiting on timer - showing processing indicator (timeRemaining=${timeRemaining ?? 'unknown'})');
+    }
 
     var processingIndicatorText = '';
     if (waitingOnTimer) {

@@ -14,7 +14,7 @@ from eidolon.time_utils import now_unix
 
 def get_segments_approaching_expiry(max_segments: int) -> list:
     """
-    Get ALL segments that will expire before next poll (90 seconds from now).
+    Get ALL segments that will expire within 60 seconds.
     These need advancement (if processed) or recovery (if not processed).
 
     Args:
@@ -24,7 +24,7 @@ def get_segments_approaching_expiry(max_segments: int) -> list:
         List of segment records approaching expiry
     """
     current_time = now_unix()
-    next_poll_buffer = current_time + 90  # 60 seconds to next poll + 30 second buffer
+    next_poll_buffer = current_time + 60
 
     try:
         segments: list = dynamo.query(
@@ -53,7 +53,7 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
 
     Criteria:
     - StartTime > 5 minutes ago (stuck)
-    - EndTime > 90 seconds from now (enough time to process)
+    - EndTime > 60 seconds from now (enough time to process)
     - ProcessingStatus in (pending, processing)
     - SegmentType = mechanical
 
@@ -65,7 +65,7 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
     """
     current_time = now_unix()
     five_minutes_ago = current_time - 300
-    ninety_seconds_future = current_time + 90
+    sixty_seconds_future = current_time + 60
 
     try:
         # Use scan since we need to filter on StartTime which isn't indexed
@@ -83,7 +83,7 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
                 ":status": "active",
                 ":mechanical": "mechanical",
                 ":old_time": five_minutes_ago,
-                ":min_time": ninety_seconds_future,
+                ":min_time": sixty_seconds_future,
                 ":pending": "pending",
                 ":processing": "processing",
             },

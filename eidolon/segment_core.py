@@ -100,15 +100,15 @@ def get_segment_definition(story_id: str, segment_id: str) -> dict:
         if not segment_def:
             raise ValueError(f"Segment definition not found: {segment_id}")
         results = segment_def.get("Results", {})
-        logger.info(f"Segment {segment_id} normalized Results keys: {list(results.keys())}")
+        logger.debug(f"Segment {segment_id} normalized Results keys: {list(results.keys())}")
         # Log the structure of one result to debug
         if results and "Normal" in results:
             normal_result = results["Normal"]
-            logger.info(
+            logger.debug(
                 f"  'Normal' result keys: {list(normal_result.keys()) if isinstance(normal_result, dict) else 'not a dict'}"
             )
             if isinstance(normal_result, dict) and "NextSegmentID" in normal_result:
-                logger.info(f"  'Normal' NextSegmentID: {normal_result['NextSegmentID']}")
+                logger.debug(f"  'Normal' NextSegmentID: {normal_result['NextSegmentID']}")
         return segment_def
     except ClientError as err:
         logger.error(f"Failed to get segment definition for {segment_id} Error: {err}", exc_info=True)

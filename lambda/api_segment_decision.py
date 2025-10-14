@@ -82,6 +82,8 @@ def lambda_handler(event: dict, context: object) -> dict:
     except Exception as err:
         return lambda_error(event, err)
 
+    logger.info(f"Processing decision submission for character={character_id}, Decision={decision_id}")
+
     # Call business logic
     try:
         response_data = submit_decision_business_logic(character_id, decision_id, player_id)
