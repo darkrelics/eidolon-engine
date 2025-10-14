@@ -17,7 +17,7 @@ cyclonedx-python-lib==9.1.0
 defusedxml==0.7.1
 dill==0.4.0
 filelock==3.19.1
-idna==3.10
+idna==3.11
 isort==6.1.0
 license-expression==30.4.4
 markdown-it-py==3.0.0
