@@ -65,6 +65,7 @@ class _GameScreenState extends State<GameScreen> {
   // Segment history (completion view only)
   List<Map<String, dynamic>> _segmentHistory = const [];
   Map<String, dynamic>? _lastStoryDetails;
+  int _segmentCounter = 0;
 
   // Panel visibility for mobile/tablet
   int _selectedPanelIndex = 1; // 0: Character, 1: Story, 2: Inventory
@@ -81,7 +82,6 @@ class _GameScreenState extends State<GameScreen> {
   String? _completedSegmentsCacheKey;
   List<Map<String, dynamic>>? _cachedStoryHistory;
   String? _storyHistoryCacheKey;
-  final Map<String, DateTime> _timestampCache = {};
   Timer? _statusUpdateDebounce;
 
   @override
@@ -120,7 +120,13 @@ class _GameScreenState extends State<GameScreen> {
           if (completedSegments != null) {
             _segmentHistory = completedSegments
                 .whereType<Map<String, dynamic>>()
-                .map((segment) => Map<String, dynamic>.from(segment))
+                .map((segment) {
+                  final copy = Map<String, dynamic>.from(segment);
+                  if (!copy.containsKey('_index')) {
+                    copy['_index'] = _segmentCounter++;
+                  }
+                  return copy;
+                })
                 .where(_isSegmentComplete)
                 .toList();
           }
@@ -206,6 +212,7 @@ class _GameScreenState extends State<GameScreen> {
     _characterUpdateTimerCount = 0;
     _orchestratedSegmentId = null;
     _segmentHistory = <Map<String, dynamic>>[];
+    _segmentCounter = 0;
     _lastStoryDetails = null;
     _storyCompletionNotified = false;
     _storyLifecycleState = StoryLifecycleState.none;
@@ -217,7 +224,6 @@ class _GameScreenState extends State<GameScreen> {
     _completedSegmentsCacheKey = null;
     _cachedStoryHistory = null;
     _storyHistoryCacheKey = null;
-    _timestampCache.clear();
   }
 
   /// Generate stable identity for segment tracking
@@ -248,7 +254,6 @@ class _GameScreenState extends State<GameScreen> {
     // Last resort: Composite key from available fields
     final storyInstanceId = segment['StoryInstanceID']?.toString().trim();
     final storyId = segment['StoryID']?.toString().trim();
-    final completedAt = _segmentCompletionTimestamp(segment)?.millisecondsSinceEpoch;
     final segmentActivity = segment['SegmentActivity']?.toString().trim();
     final segmentTitle = segment['SegmentTitle']?.toString().trim();
     final prompt = segment['Prompt']?.toString().trim();
@@ -256,7 +261,6 @@ class _GameScreenState extends State<GameScreen> {
     final parts = <String>[
       if (storyInstanceId != null && storyInstanceId.isNotEmpty) storyInstanceId,
       if (storyId != null && storyId.isNotEmpty) storyId,
-      if (completedAt != null) completedAt.toString(),
       if (segmentActivity != null && segmentActivity.isNotEmpty) segmentActivity,
       if (segmentTitle != null && segmentTitle.isNotEmpty) segmentTitle,
       if (prompt != null && prompt.isNotEmpty) prompt,
@@ -269,78 +273,21 @@ class _GameScreenState extends State<GameScreen> {
     return 'composite:${parts.join('|')}';
   }
 
-  DateTime? _segmentCompletionTimestamp(Map<String, dynamic> segment) {
-    const timestampFields = ['CompletedAt', 'ProcessedAt', 'EndTime', 'UpdatedAt', 'StartTime', 'CreatedAt'];
-    for (final field in timestampFields) {
-      final value = segment[field];
-      final parsed = _parseSegmentDate(value);
-      if (parsed != null) {
-        return parsed;
-      }
-    }
-    return null;
-  }
-
-  DateTime? _parseSegmentDate(Object? value) {
-    if (value == null) return null;
-    if (value is DateTime) {
-      return value.toUtc();
-    }
-    if (value is num) {
-      final numeric = value.toDouble();
-      if (numeric.isNaN) return null;
-      if (numeric > 1000000000000) {
-        return DateTime.fromMillisecondsSinceEpoch(numeric.round(), isUtc: true);
-      }
-      return DateTime.fromMillisecondsSinceEpoch((numeric * 1000).round(), isUtc: true);
-    }
-    if (value is String) {
-      final trimmed = value.trim();
-      if (trimmed.isEmpty) return null;
-
-      // Check cache first for string timestamps
-      if (_timestampCache.containsKey(trimmed)) {
-        return _timestampCache[trimmed];
-      }
-
-      final numeric = double.tryParse(trimmed);
-      if (numeric != null) {
-        return _parseSegmentDate(numeric);
-      }
-      try {
-        final parsed = DateTime.parse(trimmed).toUtc();
-        _timestampCache[trimmed] = parsed;
-        return parsed;
-      } catch (_) {
-        return null;
-      }
-    }
-    return null;
-  }
-
   void _sortSegmentsChronologically(List<Map<String, dynamic>> segments, {bool newestFirst = false}) {
     segments.sort((a, b) {
-      final aTime = _segmentCompletionTimestamp(a);
-      final bTime = _segmentCompletionTimestamp(b);
+      final aIndex = a['_index'] as int?;
+      final bIndex = b['_index'] as int?;
 
-      if (aTime == null && bTime == null) {
-        final compareKeys = _segmentIdentity(a).compareTo(_segmentIdentity(b));
-        return newestFirst ? -compareKeys : compareKeys;
-      }
-      if (aTime == null) {
-        return 1;
-      }
-      if (bTime == null) {
-        return -1;
+      if (aIndex != null && bIndex != null) {
+        return newestFirst ? bIndex.compareTo(aIndex) : aIndex.compareTo(bIndex);
       }
 
-      final comparison = aTime.compareTo(bTime);
-      if (comparison != 0) {
-        return newestFirst ? -comparison : comparison;
-      }
+      // If indices are missing (shouldn't happen in active play), keep original order
+      if (aIndex == null && bIndex == null) return 0;
+      if (aIndex == null) return 1;
+      if (bIndex == null) return -1;
 
-      final compareKeys = _segmentIdentity(a).compareTo(_segmentIdentity(b));
-      return newestFirst ? -compareKeys : compareKeys;
+      return 0;
     });
   }
 
@@ -559,6 +506,7 @@ class _GameScreenState extends State<GameScreen> {
         // Add initial segment to history for tracking
         final initialSegmentCopy = Map<String, dynamic>.from(initialSegment);
         initialSegmentCopy['StoryTitle'] = story.title;
+        initialSegmentCopy['_index'] = _segmentCounter++;
         _segmentHistory = [initialSegmentCopy];
         debugPrint('GameScreen: Added initial segment to history: ${_character!.activeSegmentID}');
 
@@ -630,6 +578,7 @@ class _GameScreenState extends State<GameScreen> {
           if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
             segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
           }
+          segmentCopy['_index'] = _segmentCounter++;
           _segmentHistory = [..._segmentHistory, segmentCopy];
           debugPrint('GameScreen: Added segment to history (total: ${_segmentHistory.length})');
         } else {
@@ -727,6 +676,7 @@ class _GameScreenState extends State<GameScreen> {
               if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
                 segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
               }
+              segmentCopy['_index'] = _segmentCounter++;
               _segmentHistory = [..._segmentHistory, segmentCopy];
               debugPrint('GameScreen: Added new segment to history from character reload: ${newActiveSegmentId ?? segmentKey}');
             }
@@ -834,22 +784,45 @@ class _GameScreenState extends State<GameScreen> {
         return _isSegmentComplete(segment);
       }).toList();
 
-      _sortSegmentsChronologically(history);
+      // Assign indices to all segments (backend or otherwise) to maintain consistent ordering
+
       if (!mounted) return;
       setState(() {
         if (mergeWithExisting) {
           final mergedByKey = <String, Map<String, dynamic>>{};
+
+          // First add existing segments (with their indices)
           for (final existing in _segmentHistory) {
             mergedByKey[_segmentIdentity(existing)] = Map<String, dynamic>.from(existing);
           }
+
+          // Then merge in backend segments, preserving local indices
           for (final segment in history) {
-            mergedByKey[_segmentIdentity(segment)] = Map<String, dynamic>.from(segment);
+            final key = _segmentIdentity(segment);
+            final existingSegment = mergedByKey[key];
+            final merged = Map<String, dynamic>.from(segment);
+
+            // Preserve the local index if it exists, otherwise assign new one
+            if (existingSegment != null && existingSegment.containsKey('_index')) {
+              merged['_index'] = existingSegment['_index'];
+            } else {
+              merged['_index'] = _segmentCounter++;
+            }
+
+            mergedByKey[key] = merged;
           }
+
           final mergedSegments = mergedByKey.values.toList();
           _sortSegmentsChronologically(mergedSegments);
           _segmentHistory = mergedSegments;
         } else {
-          _segmentHistory = history.map((segment) => Map<String, dynamic>.from(segment)).toList();
+          _segmentHistory = history.map((segment) {
+            final copy = Map<String, dynamic>.from(segment);
+            if (!copy.containsKey('_index')) {
+              copy['_index'] = _segmentCounter++;
+            }
+            return copy;
+          }).toList();
         }
         _synchronizeStoryCompletionState();
       });
@@ -1001,6 +974,7 @@ class _GameScreenState extends State<GameScreen> {
           final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
 
           if (!exists) {
+            segmentCopy['_index'] = _segmentCounter++;
             _segmentHistory = [..._segmentHistory, segmentCopy];
             debugPrint('GameScreen: Added completed decision segment to history with narrative: ${segmentCopy['SegmentID'] ?? segmentCopy['ActiveSegmentID'] ?? segmentKey}');
           } else {
@@ -1018,6 +992,7 @@ class _GameScreenState extends State<GameScreen> {
         final nextExists = _segmentHistory.any((s) => _segmentIdentity(s) == nextKey);
 
         if (!nextExists) {
+          nextSegmentCopy['_index'] = _segmentCounter++;
           _segmentHistory = [..._segmentHistory, nextSegmentCopy];
           debugPrint('GameScreen: Added next segment to history after decision: ${nextSegmentCopy['SegmentID'] ?? nextSegmentCopy['ActiveSegmentID'] ?? nextKey}');
         } else {
@@ -1134,6 +1109,7 @@ class _GameScreenState extends State<GameScreen> {
         final segmentKey = _segmentIdentity(copy);
         final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
         if (!exists) {
+          copy['_index'] = _segmentCounter++;
           _segmentHistory = [..._segmentHistory, copy];
           debugPrint('GameScreen: Added final segment to local history before reload');
         } else {
@@ -1149,9 +1125,7 @@ class _GameScreenState extends State<GameScreen> {
         );
       }
 
-      // Fetch backend history and merge with our local history
-      // The updated _loadSegmentHistory allows this even during transition
-      await _loadSegmentHistory(mergeWithExisting: true);
+      // Don't load backend history - we already have complete history from active play tracking
     } catch (e) {
       debugPrint('GameScreen: Error updating state after story completion: $e');
     }
@@ -1583,33 +1557,8 @@ class _GameScreenState extends State<GameScreen> {
 
     final segments = deduped.values.toList();
 
-    // Sort by CompletedAt timestamp to ensure correct order
-    segments.sort((a, b) {
-      final aCompleted = a['CompletedAt'];
-      final bCompleted = b['CompletedAt'];
-
-      // Parse timestamps using cached parser
-      DateTime? aTime;
-      DateTime? bTime;
-
-      if (aCompleted is String && aCompleted.isNotEmpty) {
-        aTime = _parseSegmentDate(aCompleted);
-      } else if (aCompleted is num) {
-        aTime = DateTime.fromMillisecondsSinceEpoch((aCompleted * 1000).toInt());
-      }
-
-      if (bCompleted is String && bCompleted.isNotEmpty) {
-        bTime = _parseSegmentDate(bCompleted);
-      } else if (bCompleted is num) {
-        bTime = DateTime.fromMillisecondsSinceEpoch((bCompleted * 1000).toInt());
-      }
-
-      if (aTime == null && bTime == null) return 0;
-      if (aTime == null) return 1;
-      if (bTime == null) return -1;
-
-      return aTime.compareTo(bTime);
-    });
+    // Sort by index (insertion order)
+    _sortSegmentsChronologically(segments);
 
     // Cache the result
     _storyHistoryCacheKey = cacheKey;
