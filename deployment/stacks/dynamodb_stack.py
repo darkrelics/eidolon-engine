@@ -39,12 +39,12 @@ class DynamoDBStack(Stack):
         for config in TABLE_CONFIGS:
             table_name = config.get("name", "")
 
-            # Check if we should use an existing table from context
+            # Check if we should import an existing table from context
             if table_name in self.existing_tables:
                 existing_table_name = self.existing_tables.get(table_name, "")
                 if existing_table_name:
                     print(f"  Using existing DynamoDB table from context: {existing_table_name}")
-                    # Use fixed logical ID based on table name
+                    # Use fixed logical ID with "Imported" suffix to avoid conflicts
                     logical_id = self._get_table_logical_id(table_name) + "Imported"
                     table = dynamodb.Table.from_table_name(self, logical_id, existing_table_name)
                 else:
@@ -57,15 +57,22 @@ class DynamoDBStack(Stack):
                 table = self.create_table(config)
 
             self.tables[table_name] = table
-            self.table_arns.append(table.table_arn)
-            self.table_outputs[config.get("name", "")] = table.table_name
+
+            # Construct ARN explicitly using fixed table name and pseudo-parameters
+            # This avoids CloudFormation dependencies on table resources
+            physical_table_name = config.get("name", "")
+            table_arn = f"arn:aws:dynamodb:{self.region}:{self.account}:table/{physical_table_name}"
+            self.table_arns.append(table_arn)
+            self.table_outputs[table_name] = physical_table_name
 
             # Collect GSI ARNs if present
             if "gsi" in config:
                 for gsi in config.get("gsi", []):
-                    self.index_arns.append(f"{table.table_arn}/index/{gsi.get('name', '')}")
+                    gsi_name = gsi.get("name", "")
+                    self.index_arns.append(f"{table_arn}/index/{gsi_name}")
 
         # Create single IAM managed policy for DynamoDB access
+        # Uses explicit ARNs (not !GetAtt) so it doesn't depend on table resources
         self.policy = iam.ManagedPolicy(
             self,
             "DynamoDBAccessPolicy",
@@ -103,7 +110,6 @@ class DynamoDBStack(Stack):
             "table_name": config.get("name", ""),
             "billing_mode": dynamodb.BillingMode.PAY_PER_REQUEST,
             "removal_policy": RemovalPolicy.RETAIN,
-            "point_in_time_recovery": False,  # Can be enabled if needed
         }
 
         # Add partition key

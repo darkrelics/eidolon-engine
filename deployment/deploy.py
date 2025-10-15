@@ -278,10 +278,10 @@ def update_lambdas_only():
         success = update_lambda_functions_directly(params, region, s3_bucket)
 
         if success:
-            print("\n✓ Lambda functions updated successfully")
+            print("\nLambda functions updated successfully")
             return 0
         else:
-            print("\n✗ Lambda function update failed")
+            print("\nLambda function update failed")
             return 1
 
     except Exception as err:

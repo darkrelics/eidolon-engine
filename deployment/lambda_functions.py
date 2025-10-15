@@ -143,6 +143,70 @@ def attach_story_policy_to_lambda_role(params, state: CDKState) -> bool:
         return False
 
 
+def ensure_dynamodb_policy_attached(params, state: CDKState) -> bool:
+    """Ensure DynamoDB policy is attached to Lambda execution role.
+
+    This checks if the DynamoDB policy exists and is attached to the Lambda role.
+    If not attached, it attaches the policy using boto3.
+
+    Args:
+        params: Deployment parameters with region and account_id
+        state: CDK state containing role information
+
+    Returns:
+        bool: True if policy is attached, False otherwise
+    """
+    print("\nEnsuring DynamoDB policy is attached to Lambda execution role...")
+
+    # Get the Lambda role ARN from state
+    if not hasattr(state, "infrastructure") or not state.infrastructure:
+        print("  [ERROR] State infrastructure not initialized")
+        return False
+
+    lambda_role_arn = state.infrastructure.get("lambda_role_arn", "")
+    if not lambda_role_arn:
+        print("  [ERROR] Lambda role ARN not found in state")
+        return False
+
+    # Extract role name from ARN
+    role_name = lambda_role_arn.split("/")[-1]
+
+    try:
+        iam_client = boto3.client("iam", region_name=params.region)
+
+        # Check if DynamoDB policy exists
+        dynamodb_policy_arn = f"arn:aws:iam::{params.account_id}:policy/eidolon-dynamodb-policy"
+        try:
+            iam_client.get_policy(PolicyArn=dynamodb_policy_arn)
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code", "")
+            if error_code == "NoSuchEntity":
+                print("  [INFO] DynamoDB policy not yet created, skipping attachment")
+                return True
+            raise
+
+        # Get current attached policies
+        response = iam_client.list_attached_role_policies(RoleName=role_name)
+        attached_policies = [p["PolicyArn"] for p in response.get("AttachedManagedPolicies", [])]
+
+        if dynamodb_policy_arn in attached_policies:
+            print(f"  [OK] DynamoDB policy already attached to {role_name}")
+            return True
+
+        # Attach the DynamoDB policy to the role
+        iam_client.attach_role_policy(RoleName=role_name, PolicyArn=dynamodb_policy_arn)
+        print(f"  [OK] Attached eidolon-dynamodb-policy to {role_name}")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        print(f"  [ERROR] Failed to attach policy: {error_code} - {err}")
+        return False
+    except Exception as err:
+        print(f"  [ERROR] Unexpected error: {err}")
+        return False
+
+
 def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, state_path: Path) -> bool:
     """Deploy and verify Lambda stack."""
     phase = get_stack_phase_number("lambda", params.deployment_mode)
@@ -160,7 +224,7 @@ def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, 
         artifacts_exist = False
         try:
             s3.head_object(Bucket=params.s3_bucket, Key="lambda-layer/lambda-layer.zip")
-            print("✓ Lambda layer artifact found")
+            print("Lambda layer artifact found")
             artifacts_exist = True
         except ClientError:
             print("Lambda layer artifact missing")
@@ -176,7 +240,7 @@ def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, 
             # Verify artifact was created
             try:
                 s3.head_object(Bucket=params.s3_bucket, Key="lambda-layer/lambda-layer.zip")
-                print("✓ Lambda layer artifact created")
+                print("Lambda layer artifact created")
             except ClientError:
                 print("\nError: Build succeeded but layer artifact still missing")
                 return False
@@ -212,7 +276,10 @@ def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, 
         print("\nWarning: Lambda deployment completed with issues")
         return False
 
-    print("\n✓ Lambda Stack deployed successfully")
+    # Ensure DynamoDB policy is attached (in case it was detached)
+    ensure_dynamodb_policy_attached(params, state)
+
+    print("\nLambda Stack deployed successfully")
     return True
 
 
@@ -393,5 +460,5 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
             print(f"    - {func}")
         return False
 
-    print("\n✓ Lambda function updates completed successfully")
+    print("\nLambda function updates completed successfully")
     return True

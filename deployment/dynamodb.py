@@ -39,11 +39,93 @@ def check_existing_tables(region: str) -> dict:
     return existing_tables
 
 
+def remove_orphaned_stack_resources(region: str) -> bool:
+    """Remove CloudFormation tracking for tables that no longer exist physically.
+
+    When tables are manually deleted but CloudFormation still tracks them,
+    this removes them from CloudFormation's state without deleting the stack.
+
+    Returns True if orphaned resources were found and handled, False otherwise.
+    """
+    import boto3
+    from botocore.exceptions import ClientError
+
+    cfn = boto3.client("cloudformation", region_name=region)
+    dynamodb_client = boto3.client("dynamodb", region_name=region)
+
+    try:
+        # Get stack status
+        stack_response = cfn.describe_stacks(StackName="dynamodb")
+        stacks = stack_response.get("Stacks", [])
+        if not stacks:
+            return False
+
+        stack_status = stacks[0].get("StackStatus", "")
+
+        # Get all resources in the DynamoDB stack
+        response = cfn.describe_stack_resources(StackName="dynamodb")
+        orphaned_resources = []
+
+        for resource in response.get("StackResources", []):
+            if resource.get("ResourceType") == "AWS::DynamoDB::Table":
+                physical_id = resource.get("PhysicalResourceId", "")
+                logical_id = resource.get("LogicalResourceId", "")
+
+                if physical_id:
+                    # Check if the physical table actually exists
+                    try:
+                        dynamodb_client.describe_table(TableName=physical_id)
+                    except dynamodb_client.exceptions.ResourceNotFoundException:
+                        print(f"  Found orphaned CloudFormation resource: {logical_id} -> {physical_id} (table doesn't exist)")
+                        orphaned_resources.append(logical_id)
+                    except ClientError:
+                        pass  # Ignore check errors
+
+        if not orphaned_resources:
+            return False
+
+        print(f"\nFound {len(orphaned_resources)} orphaned table resources")
+        print("Removing orphaned resources from CloudFormation tracking...")
+
+        # If stack is in UPDATE_ROLLBACK_FAILED or similar, we may need to continue rollback first
+        if "ROLLBACK" in stack_status and "COMPLETE" not in stack_status:
+            print(f"  Stack is in {stack_status} state, continuing rollback and skipping orphaned resources...")
+            cfn.continue_update_rollback(StackName="dynamodb", ResourcesToSkip=orphaned_resources)
+            print("  Waiting for rollback to complete...")
+            waiter = cfn.get_waiter("stack_update_rollback_complete")
+            waiter.wait(StackName="dynamodb")
+            print("  Rollback complete, orphaned resources removed from tracking\n")
+            return True
+
+        # For other states, delete and recreate the stack cleanly
+        print("  Deleting CloudFormation stack to remove orphaned resource tracking...")
+        print("  Note: Physical tables will be preserved (RemovalPolicy.RETAIN)")
+
+        cfn.delete_stack(StackName="dynamodb")
+        print("  Waiting for stack deletion...")
+        waiter = cfn.get_waiter("stack_delete_complete")
+        waiter.wait(StackName="dynamodb")
+        print("  Stack deleted, orphaned resources removed from tracking\n")
+        return True
+
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code == "ValidationError":
+            if "does not exist" in str(err):
+                # Stack doesn't exist, that's fine
+                return False
+        print(f"  Error handling orphaned resources: {err}")
+        return False
+
+
 def deploy_dynamodb_stack(params) -> dict:
     """Deploy the DynamoDB stack using CDK."""
 
     print("\nChecking for existing DynamoDB tables...")
     existing_tables = check_existing_tables(params.region)
+
+    # Remove any orphaned CloudFormation resources
+    remove_orphaned_stack_resources(params.region)
 
     # Pass parameters through context
     context_args = ["-c", f"region={params.region}"]
