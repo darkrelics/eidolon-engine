@@ -49,8 +49,7 @@ def generate_combat_round_narrative(round_data: dict) -> str:
     elif char_hit:
         # Only character hit
         return (
-            f"Your {char_action} strikes true, dealing {char_damage} wound(s). "
-            f"Your {def_action} deflects their {opp_action}!"
+            f"Your {char_action} strikes true, dealing {char_damage} wound(s). " f"Your {def_action} deflects their {opp_action}!"
         )
     elif opp_hit:
         # Only opponent hit
