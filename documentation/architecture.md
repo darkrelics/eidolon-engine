@@ -16,7 +16,7 @@ graph TB
 
     subgraph "AWS Cloud"
         APIGW[API Gateway<br/>api.domain]
-        Lambda[Lambda Functions<br/>16 Functions]
+        Lambda[Lambda Functions<br/>15 Deployed]
         DynamoDB[(DynamoDB<br/>14 Tables)]
         EventBridge[EventBridge<br/>1 min Poller]
         ProcessQ[SQS Queue<br/>Processing]
@@ -44,7 +44,7 @@ graph TB
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **16 Lambda Functions**: API handlers and operational functions
+- **16 Lambda Functions Total**: 15 deployed (cognito_player_delete excluded), API handlers and operational functions
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **2 SQS Queues**: Processing and advancement queues
 - **1 EventBridge Rule**: 1-minute polling for segment completion
@@ -162,22 +162,30 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 
 **Function Categories:**
 
-**API Layer (8 functions):**
+**API Layer (11 functions):**
 
-- `api-character-list`: List player's characters
-- `api-character-get`: Retrieve character details with GameMode cleanup
+- `api-archetype-list`: List available archetypes
 - `api-character-add`: Create new character with name validation
-- `api-story-start`: Initiate story and enable polling
+- `api-character-delete`: Delete character
+- `api-character-get`: Retrieve character details with GameMode cleanup
+- `api-character-list`: List player's characters
 - `api-segment-decision`: Record player choice in decision segment
+- `api-segment-history`: Get segment history
+- `api-segment-status`: Get current segment status
 - `api-story-abandon`: Mark story as abandoned and reset GameMode
-- `api-player-get`: Retrieve player account data
-- `cognito-player-new`: PostConfirmation trigger for new accounts
+- `api-story-history`: Get story history
+- `api-story-start`: Initiate story and enable polling
 
-**Operational Layer (8 functions):**
+**Operational Layer (3 functions):**
 
 - `ops-segment-poller`: EventBridge-triggered poller (1-minute schedule)
 - `ops-segment-process`: Process mechanical segments via SQS
 - `ops-story-advance`: Advance story and create next segment via SQS
+
+**Cognito Functions (2 functions):**
+
+- `cognito-player-new`: PostConfirmation trigger for new accounts (deployed)
+- `cognito-player-delete`: Player deletion handler (NOT DEPLOYED)
 
 **Lambda Configuration:**
 
@@ -594,7 +602,7 @@ graph LR
 
 1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
 2. **DynamoDB Stack**: 14 tables with managed IAM policy
-3. **Lambda Stack**: Layer, 16 functions, shared execution role
+3. **Lambda Stack**: Layer, 15 functions deployed (16 total, cognito_player_delete excluded), shared execution role
 4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
 5. **Character Stack**: Character-related Lambda resources
 6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge

@@ -34,7 +34,7 @@ This section is the canonical infrastructure overview referenced by other docume
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **15 Lambda Functions**: API handlers and operational functions
+- **16 Lambda Functions Total**: 15 deployed (cognito_player_delete excluded), API handlers and operational functions
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **Fixed Logical IDs**: Preventing resource recreation on updates
 - **Post-Deploy Updates**: Lambda functions automatically updated from S3
@@ -82,7 +82,7 @@ Stacks deploy in a specific order based on dependencies:
 
 1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
 2. **DynamoDB Stack**: 14 tables with managed IAM policy
-3. **Lambda Stack**: Layer, 15 functions, shared execution role
+3. **Lambda Stack**: Layer, 15 functions deployed (16 total, cognito_player_delete excluded), shared execution role
 4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
 5. **Character Stack**: Character-related Lambda resources
 6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
@@ -292,7 +292,7 @@ Tracks deployed resources and outputs (gitignored).
 ## Resource Naming
 
 - **DynamoDB Tables** (14): `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`, `story`, `segments`, `active_segments`, `story_history`, `segment_history`, `opponents`
-- **Lambda Functions** (15): `api-*` and `ops-*` prefixed names
+- **Lambda Functions** (15 deployed, 16 total): `api-*` and `ops-*` prefixed names (cognito_player_delete excluded from deployment)
 - **S3 Buckets**: `eidolon-engine-lambda-{account}`, `eidolon-scripts-{account}`, portal bucket
 - **Cognito Pool**: `eidolon-users`
 - **CloudWatch**: `/eidolon/server` log group
@@ -376,7 +376,7 @@ if current_trigger == lambda_arn:
 ### Deployment Statistics
 
 - **Total Stacks**: 10 independent CDK stacks
-- **Lambda Functions**: 15 with shared execution role
+- **Lambda Functions**: 15 deployed (16 total, cognito_player_delete excluded) with shared execution role
 - **DynamoDB Tables**: 14 with RemovalPolicy.RETAIN
 - **Module Size**: 94% under 300 lines, 100% under 1000 lines
 - **Deployment Time**: Full deployment in under 15 minutes
