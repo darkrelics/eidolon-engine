@@ -168,6 +168,14 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # Determine next segment with weighted branching
     next_segment_id, branch_metadata = determine_next_segment(segment_def, active_segment, outcome, character)
 
+    # If story is complete, clear character state IMMEDIATELY
+    # This ensures clients see the cleared state before advancement finishes processing
+    if next_segment_id is None:
+        from eidolon.story_completion import complete_story_for_character
+
+        complete_story_for_character(character_id)  # type: ignore
+        logger.info(f"Story complete - cleared character state immediately for {character_id}")
+
     # Store branch metadata in current segment history before advancing
     if branch_metadata:
         try:
