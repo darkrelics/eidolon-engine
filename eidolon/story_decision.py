@@ -16,6 +16,7 @@ from eidolon.player import verify_character_ownership
 from eidolon.segment_core import get_segment_definition
 from eidolon.segment_history import record_segment_history
 from eidolon.segment_polling import delete_active_segment
+from eidolon.segment_processing import process_decision_segment
 from eidolon.segment_state import create_next_active_segment
 from eidolon.sqs import send_message
 from eidolon.story_active import get_active_decision_segment
@@ -222,8 +223,6 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     segment_def = get_segment_definition(str(story_id), str(segment_id))
 
     # Generate ClientEvents for the decision to enrich history
-    from eidolon.segment_processing import process_decision_segment
-
     process_decision_segment(active_segment, segment_def)
 
     record_segment_history(character_id, story_id, active_segment_id, active_segment)

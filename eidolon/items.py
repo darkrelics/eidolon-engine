@@ -1,5 +1,6 @@
 """Item management functions for the Eidolon Engine."""
 
+import random
 import uuid
 from datetime import datetime, timezone
 from functools import cache
@@ -121,8 +122,6 @@ def process_items_with_probability(items_data: list) -> list[str]:
     """
     if not items_data:
         return []
-
-    import random
 
     granted_items = []
 

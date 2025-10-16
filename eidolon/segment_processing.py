@@ -13,6 +13,7 @@ from eidolon.constants import ATTRIBUTE_XP_RATIO
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import add_items_to_inventory, process_items_with_probability
 from eidolon.logger import logger
+from eidolon.mechanics import calculate_skill_increase
 from eidolon.segment_challenges import process_skill_challenges
 from eidolon.segment_combat import process_combat_segment
 from eidolon.segment_core import map_outcome_to_key
@@ -144,8 +145,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 difficulty = best_attempt.get("Difficulty", 0)
 
                 # Calculate skill increase directly using same formula as combat
-                from eidolon.mechanics import calculate_skill_increase
-
                 # Get current skill and attribute values from character
                 current_skill = float(character.get("Skills", {}).get(skill, 0))
                 current_attribute = float(character.get("Attributes", {}).get(attribute, 0))

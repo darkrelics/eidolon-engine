@@ -47,9 +47,6 @@ def remove_orphaned_stack_resources(region: str) -> bool:
 
     Returns True if orphaned resources were found and handled, False otherwise.
     """
-    import boto3
-    from botocore.exceptions import ClientError
-
     cfn = boto3.client("cloudformation", region_name=region)
     dynamodb_client = boto3.client("dynamodb", region_name=region)
 
