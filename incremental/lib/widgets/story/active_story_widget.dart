@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/providers/timer_provider.dart';
-import 'package:eidolon_incremental/utils/combat_narrative.dart';
 import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 /// Widget displaying the active story with segments
@@ -510,21 +509,13 @@ class _SimpleSegmentCard extends StatelessWidget {
                   String displayText = '';
                   if (shouldRevealResults) {
                     if (clientEvents != null && clientEvents.isNotEmpty) {
-                      // Get opponent name from combat state if available
-                      final combatState = segment['CombatState'] as Map<String, dynamic>?;
-                      final opponentName = combatState?['OpponentName'] as String?;
-
-                      // Process each event, generating combat narratives where applicable
+                      // Process each event, using server-generated Description field
                       displayText = clientEvents
                           .map((event) {
-                            if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
-                              return CombatNarrative.generateEventNarrative(
-                                event,
-                                characterName: characterName ?? 'You',
-                                opponentName: opponentName,
-                              );
+                            if (event is Map<String, dynamic>) {
+                              return event['Description']?.toString() ?? '';
                             }
-                            return event['Description']?.toString() ?? '';
+                            return '';
                           })
                           .where((desc) => desc.isNotEmpty)
                           .join('\n\n');

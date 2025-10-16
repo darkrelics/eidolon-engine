@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/models/story.dart';
-import 'package:eidolon_incremental/utils/combat_narrative.dart';
 import 'package:eidolon_incremental/utils/outcome_colors.dart';
 import 'package:eidolon_incremental/widgets/story/active_story_widget.dart';
 import 'package:eidolon_incremental/widgets/story/available_stories_widget.dart';
@@ -578,25 +577,13 @@ class _StoryPanelState extends State<StoryPanel> {
   String _extractSegmentNarrative(Map<String, dynamic> segment) {
     final clientEvents = segment['ClientEvents'] as List<dynamic>?;
     if (clientEvents != null && clientEvents.isNotEmpty) {
-      final characterName = widget.character.name;
-      final opponentName = _extractOpponentName(segment);
-
       final descriptions = clientEvents
           .map((event) {
             if (event is! Map<String, dynamic>) {
               return event.toString();
             }
 
-            // Check if this is a combat event and use combat narrative
-            if (CombatNarrative.isCombatEvent(event)) {
-              return CombatNarrative.generateEventNarrative(
-                event,
-                characterName: characterName,
-                opponentName: opponentName,
-              );
-            }
-
-            // Otherwise use the standard description
+            // Use the server-generated description
             return event['Description']?.toString() ?? '';
           })
           .where((text) => text.trim().isNotEmpty)
@@ -618,36 +605,6 @@ class _StoryPanelState extends State<StoryPanel> {
     }
 
     return '';
-  }
-
-  String _extractOpponentName(Map<String, dynamic> segment) {
-    // Try to extract opponent name from segment data
-    final opponentData = segment['Opponent'] as Map<String, dynamic>?;
-    if (opponentData != null) {
-      final name = opponentData['Name'] ?? opponentData['OpponentName'];
-      if (name is String && name.isNotEmpty) {
-        return name;
-      }
-    }
-
-    // Check ClientEvents for opponent information
-    final clientEvents = segment['ClientEvents'] as List<dynamic>?;
-    if (clientEvents != null) {
-      for (final event in clientEvents) {
-        if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
-          final data = event['Data'] as Map<String, dynamic>?;
-          final oppOffensive = data?['OpponentOffensive'] as Map<String, dynamic>?;
-          if (oppOffensive != null) {
-            final name = oppOffensive['Name'];
-            if (name is String && name.isNotEmpty) {
-              return name;
-            }
-          }
-        }
-      }
-    }
-
-    return 'the opponent';
   }
 
   String _outcomeToString(dynamic outcome) {

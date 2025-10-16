@@ -5,7 +5,7 @@
     "Description": "A peaceful journey through the Vedant Forest, gathering valuable plants, herbs, and other natural resources.",
     "NarrativeText": "The forest is rich with edible plants, medicinal herbs, and rare specimens. Armed with your knowledge of nature, you set out from the glade to gather what the forest has to offer. Your goal is to reach the old abandoned campsite while collecting valuable forage along the way.",
     "StoryType": "repeatable",
-    "EstimatedDuration": 900,
+    "EstimatedDuration": 1260,
     "Prerequisites": {
       "MinSkills": {},
       "RequiredItems": [],
@@ -45,11 +45,11 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "Despite the glade's beauty - sunlight filtering through the canopy, birds singing overhead, and the sweet scent of flowers - you cannot identify which plants are valuable. Discouraged by your lack of knowledge, you abandon the expedition and return to the glade entrance empty-handed.",
+          "Narrative": "Despite the glade's beauty - sunlight filtering through the canopy, birds singing overhead, and the sweet scent of flowers - you cannot identify which plants are valuable. You take a moment to rest at the glade entrance, then prepare to investigate more carefully. Perhaps a second look will reveal what you missed.",
           "Effects": {
             "Room": 1
           },
-          "NextSegmentID": null
+          "NextSegmentID": "3d8e9f0a-1b2c-4d5e-8f9a-0b1c2d3e4f56"
         },
         "Minimal": {
           "Narrative": "You struggle to identify edible plants in the dappled shadows cast by the canopy above. After much searching through the soft moss beneath your feet, you eventually spot some common berries growing near where the path forms a green tunnel into the forest. Better than nothing.",
@@ -133,14 +133,14 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "The babbling brook's tranquil beauty proves deceptive - the banks are treacherous and the moisture makes identification difficult. After slipping several times and finding little of value, you abandon this location frustrated and soaked, heading back toward the glade entrance.",
+          "Narrative": "The babbling brook's tranquil beauty proves deceptive - the banks are treacherous and the moisture makes identification difficult. After slipping several times and finding little of value, you carefully retreat back to the path decision. Perhaps the ancient oak would be a better choice, or you could try the brook again more carefully.",
           "Effects": {
             "Wounds": [
               "bashing"
             ],
-            "Room": 1
+            "Room": 2
           },
-          "NextSegmentID": null
+          "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
         },
         "Minimal": {
           "Narrative": "The babbling brook meanders peacefully through the trees, its clear waters sparkling invitingly, but the slippery rocks along the banks make foraging challenging. You manage to gather some wild vegetables from the moist soil, though you take several painful tumbles in the process.",
@@ -205,14 +205,14 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "Despite the oak's promise - its massive trunk twisted and gnarled by centuries of growth - the area beneath proves overgrown and difficult to navigate. Thorny undergrowth hidden beneath the carpet of leaves scratches you repeatedly. You find nothing of value and retreat defeated toward the glade entrance.",
+          "Narrative": "Despite the oak's promise - its massive trunk twisted and gnarled by centuries of growth - the area beneath proves overgrown and difficult to navigate. Thorny undergrowth hidden beneath the carpet of leaves scratches you repeatedly. You find nothing of value and retreat back to the path decision. Perhaps the babbling brook would be better, or you could try the oak area again with more care.",
           "Effects": {
             "Wounds": [
               "bashing"
             ],
-            "Room": 1
+            "Room": 2
           },
-          "NextSegmentID": null
+          "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
         },
         "Minimal": {
           "Narrative": "The ancient oak stands as a sentinel, its widespread branches providing shade over the soft carpet of leaves and acorns below. You struggle to identify the mushrooms growing around the massive, time-gnarled trunk, settling for only the most obvious edible specimens. Hidden thorns leave you with several scratches.",
@@ -258,17 +258,11 @@
       "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
       "SegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
       "SegmentType": "mechanical",
-      "SegmentDuration": 240,
+      "SegmentDuration": 120,
       "Challenges": [
         {
           "Attribute": "Intelligence",
           "Skill": "Foraging",
-          "Difficulty": 5,
-          "Attempts": 2
-        },
-        {
-          "Attribute": "Perception",
-          "Skill": "Investigation",
           "Difficulty": 5,
           "Attempts": 2
         }
@@ -283,29 +277,92 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "You stumble upon the tranquil mossy grove, its floor blanketed in thick moss and the air filled with the scent of damp earth. Despite the almost ethereal atmosphere where sunlight breaks through the canopy in patches, the unfamiliar plants and shadows confuse you. You wisely decide to leave this peaceful haven before making a dangerous mistake.",
+          "Narrative": "You stumble upon the tranquil mossy grove, its floor blanketed in thick moss and the air filled with the scent of damp earth. Despite the almost ethereal atmosphere where sunlight breaks through the canopy in patches, the unfamiliar plants and shadows confuse you. You wisely decide to leave this peaceful haven before making a dangerous mistake, moving on to search for the hidden treasures you sense are here.",
           "Effects": {
-            "Room": 1
+            "Room": 7
           },
-          "NextSegmentID": null
+          "NextSegmentID": "3e4f5a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b"
         },
         "Minimal": {
-          "Narrative": "The tranquil mossy grove's ethereal atmosphere is both beautiful and challenging. As the hum of insects fills the air and sunlight breaks through in patches, you carefully gather what you can identify with certainty. The thick moss and shadows make identification difficult, but you manage to find some basic berries and herbs before moving on through this peaceful haven.",
+          "Narrative": "The tranquil mossy grove's ethereal atmosphere is both beautiful and challenging. As the hum of insects fills the air and sunlight breaks through in patches, you carefully gather what you can identify with certainty. The thick moss and shadows make identification difficult, but you manage to find some basic berries and herbs before searching for other treasures hidden here.",
           "Effects": {
             "Room": 7,
             "Items": [
-              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7},
+              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7}
+            ]
+          },
+          "NextSegmentID": "3e4f5a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b"
+        },
+        "Normal": {
+          "Narrative": "You stumble upon the tranquil mossy grove and it proves rich with resources. The floor blanketed in thick moss cushions your steps as the scent of damp earth and the hum of insects surrounds you. Where sunlight breaks through the canopy in patches, creating an almost ethereal atmosphere, you gather healing roots and medicinal herbs. Time seems to slow down in this peaceful haven as you prepare to search for other treasures.",
+          "Effects": {
+            "Room": 7,
+            "Items": [
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7},
+              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+            ]
+          },
+          "NextSegmentID": "3e4f5a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b"
+        },
+        "Exceptional": {
+          "Narrative": "The tranquil mossy grove reveals its foraging treasures to your expert eye! The floor blanketed in thick moss, the air filled with the scent of damp earth and insect hum, and sunlight breaking through the canopy in ethereal patches - you recognize this peaceful haven as a forager's paradise. You discover rare mushrooms growing in the moss and premium healing roots in the rich earth. Time seems to stand still as you prepare to investigate what other secrets this grove holds.",
+          "Effects": {
+            "Room": 7,
+            "Items": [
+              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.8},
+              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.8}
+            ]
+          },
+          "NextSegmentID": "3e4f5a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b"
+        }
+      },
+      "SegmentActivity": "You gather edible plants and fungi from the tranquil mossy grove",
+      "SegmentTitle": "Mossy grove foraging"
+    },
+    {
+      "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+      "SegmentID": "3e4f5a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 120,
+      "Challenges": [
+        {
+          "Attribute": "Perception",
+          "Skill": "Investigation",
+          "Difficulty": 5,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "While investigating a particularly interesting patch of luminescent moss, you trigger a hidden sinkhole in the grove floor. The thick moss conceals the danger until too late. You plunge into darkness, the ethereal atmosphere and insect hum fading as the tranquil grove claims you.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "Despite your best efforts to search the tranquil grove thoroughly, the ethereal atmosphere and dappled shadows make it difficult to spot hidden treasures. The thick moss, scent of damp earth, and patches of sunlight breaking through the canopy are beautiful but revealing nothing new. You move on, satisfied with what you've already gathered.",
+          "Effects": {
+            "Room": 7
+          },
+          "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
+        },
+        "Minimal": {
+          "Narrative": "You carefully investigate the mossy grove, and your persistence pays off slightly. The thick moss blanketing the floor conceals a few missed berries, and the scent of damp earth leads you to one additional medicinal herb growing in a shadowed corner. The peaceful haven yields a bit more before you continue your journey.",
+          "Effects": {
+            "Room": 7,
+            "Items": [
               {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
             ]
           },
           "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
         },
         "Normal": {
-          "Narrative": "You stumble upon the tranquil mossy grove and it proves rich with resources. The floor blanketed in thick moss cushions your steps as the scent of damp earth and the hum of insects surrounds you. Where sunlight breaks through the canopy in patches, creating an almost ethereal atmosphere, you gather healing roots, rare mushrooms, and medicinal herbs. Time seems to slow down in this peaceful haven as you carefully document each find.",
+          "Narrative": "Your investigative skills reveal hidden treasures in the tranquil grove! Where sunlight breaks through the canopy in ethereal patches, you discover rare mushrooms concealed beneath the thick moss. The almost magical atmosphere of this peaceful haven has one more gift - a cluster of premium medicinal herbs growing in the rich, damp earth. Time seems to stand still as you carefully gather these finds.",
           "Effects": {
             "Room": 7,
             "Items": [
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.8},
               {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7},
               {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.7}
             ]
@@ -313,20 +370,18 @@
           "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
         },
         "Exceptional": {
-          "Narrative": "The tranquil mossy grove reveals its greatest treasures to your expert eye! The floor blanketed in thick moss, the air filled with the scent of damp earth and insect hum, and sunlight breaking through the canopy in ethereal patches - you recognize this peaceful haven as a forager's paradise. You discover rare mushrooms growing in the moss, premium healing roots in the rich earth, and in one perfect shaft of filtered light, a legendary moonpetal flower! Time seems to stand still as you gather these exceptional finds.",
+          "Narrative": "Your exceptional investigation uncovers the grove's greatest secret! In one perfect shaft of light breaking through the canopy, casting an ethereal glow on the thick moss, you discover a legendary moonpetal flower - a treasure most foragers will never see in their lifetime! The tranquil atmosphere, the hum of insects, and the scent of damp earth all seem to celebrate this remarkable find. This peaceful haven has revealed its ultimate gift to you.",
           "Effects": {
             "Room": 7,
             "Items": [
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.9},
-              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.8},
-              {"ItemID": "2b9a4f6e-7d8c-9b3d-f0a4-1a6b3d7e4f8b", "Chance": 0.3}
+              {"ItemID": "2b9a4f6e-7d8c-9b3d-f0a4-1a6b3d7e4f8b", "Chance": 0.4}
             ]
           },
           "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
         }
       },
-      "SegmentActivity": "You explore the tranquil mossy grove, searching for rare specimens in the dappled light",
-      "SegmentTitle": "Mossy grove foraging"
+      "SegmentActivity": "You investigate the grove carefully, searching for hidden treasures in the dappled light",
+      "SegmentTitle": "Mossy grove investigation"
     },
     {
       "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",

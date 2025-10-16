@@ -283,7 +283,8 @@ stateDiagram-v2
 
 #### Mechanical Segments
 
-- Contain skill challenges and/or combat
+- Contain exactly **one** mechanical challenge: either a single non-combat challenge OR a combat challenge
+- **IMPORTANT**: Do not combine multiple challenges in one segment (no combat + skill check, no multiple skill checks)
 - Queued IMMEDIATELY at creation to SEGMENT_QUEUE_URL
 - Processed by ops-segment-process via SQS
 - XP and wounds applied during processing
@@ -300,6 +301,59 @@ Decision segments present player choices and contain no skill checks, combat, or
 - Timer expiry uses whatever Decision is currently set
 - Generate ClientEvents with narrative text to enrich segment history
 - **No Difficulty ratings** - decision segments are for player choice, not mechanics
+
+#### Challenge Outcome Design
+
+Non-combat challenges should generally result in segment repetition on failure, allowing players to retry until they succeed or choose to abandon the story. However, certain challenge types warrant different outcomes based on narrative context:
+
+**Repeatable Challenges** (default pattern):
+
+- **Investigation challenges**: Failed investigation attempts should loop back to the same segment, allowing the player to retry
+- **Puzzle challenges**: Failed puzzle attempts typically repeat the segment
+- **Social challenges**: Failed persuasion or negotiation attempts generally allow retry
+- **Skill checks without consequences**: Any challenge where failure doesn't change the physical situation
+
+Example branching for investigation challenge:
+```json
+"Results": {
+  "Failure": {
+    "Narrative": "You search the room but find nothing useful...",
+    "NextSegmentID": "same-segment-id"  // Repeat this segment
+  },
+  "Normal": {
+    "Narrative": "You discover a hidden compartment...",
+    "NextSegmentID": "next-segment-id"  // Progress forward
+  }
+}
+```
+
+**Progressive Challenges** (contextual branching):
+
+- **Physical consequences**: Challenges where failure changes the situation should progress the story
+- **Environmental hazards**: Failed navigation or tumbling challenges that result in falling or injury
+- **Time-sensitive challenges**: Challenges where failure represents time passing or opportunity lost
+- **Irreversible actions**: Attempts that cannot be undone once initiated
+
+Example branching for tumbling while climbing:
+```json
+"Results": {
+  "Failure": {
+    "Narrative": "You lose your grip and tumble down through the branches...",
+    "NextSegmentID": "forest-floor-segment"  // Earlier in story, different location
+  },
+  "Normal": {
+    "Narrative": "You navigate the treetops successfully...",
+    "NextSegmentID": "canopy-destination-segment"  // Continue upward
+  }
+}
+```
+
+**Design Principles**:
+
+1. **Default to repetition**: Unless there's a narrative reason for progression, failed non-combat challenges should repeat
+2. **Consider context**: Physical challenges with consequences (falling, injury, detection) should progress the story
+3. **Provide alternatives**: If a segment doesn't repeat on failure, ensure the new path is interesting and not purely punitive
+4. **Avoid dead ends**: Progressive failures should lead to viable story paths, not immediate death or story termination
 
 #### Wound Healing
 

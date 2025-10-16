@@ -5,7 +5,7 @@
     "Description": "A simple encounter with a mischievous gremlin causing trouble near the forest entrance.",
     "NarrativeText": "Reports of small items going missing and strange noises at night have the villagers worried. A small, impish creature has been spotted near the forest entrance. Someone needs to deal with this pest before it causes real problems.",
     "StoryType": "repeatable",
-    "EstimatedDuration": 600,
+    "EstimatedDuration": 720,
     "Prerequisites": {
       "MinSkills": {},
       "RequiredItems": [],
@@ -30,14 +30,14 @@
       "Challenges": [
         {
           "Attribute": "Perception",
-          "Skill": "Investigation",
+          "Skill": "Notice",
           "Difficulty": 3,
           "Attempts": 2
         }
       ],
       "Results": {
         "Death": {
-          "Narrative": "As you search for the gremlin near the glade entrance, distracted by the birdsong and dappled shadows cast through the canopy, you fail to watch your footing. You fall into a hidden pit trap the clever creature had concealed beneath the soft moss. The last thing you hear is its cackling laughter echoing above as the fall proves fatal.",
+          "Narrative": "As you scan the glade entrance for signs of the gremlin, distracted by the birdsong and dappled shadows cast through the canopy, you fail to watch your footing. You fall into a hidden pit trap the clever creature had concealed beneath the soft moss. The last thing you hear is its cackling laughter echoing above as the fall proves fatal.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -45,35 +45,89 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "Despite the glade entrance's beauty - sunlight filtering through the canopy, birds singing overhead, the sweet scent of flowers - you cannot find any trace of the elusive creature. You search the soft moss beneath your feet, examine the tall trees, but find nothing. Frustrated and embarrassed by your failure, you remain at the glade entrance and give up the search.",
+          "Narrative": "You look around the glade entrance - sunlight filtering through the canopy, birds singing overhead, the sweet scent of flowers - but fail to notice any obvious signs of the creature. The soft moss beneath your feet shows no clear tracks, the tall trees reveal no movement. You'll need to search more carefully.",
           "Effects": {
             "Room": 1
           },
-          "NextSegmentID": null
+          "NextSegmentID": "e4f5a6b7-8c9d-4e5f-a1b2-3c4d5e6f7a8b"
         },
         "Minimal": {
-          "Narrative": "After much searching around the glade entrance in the dappled shadows, you catch a glimpse of the creature darting away. You follow as it flees down the well-trodden path where trees form a green tunnel overhead. In the cool, damp air carrying the scent of earth and decaying leaves, the chase begins! You hear a distant woodpecker call as you pursue.",
+          "Narrative": "You notice some small disturbances around the glade entrance - a few broken flowers, some disturbed moss. The signs are faint in the dappled shadows, but they're there. You'll need to investigate more thoroughly to find the actual trail.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": "e4f5a6b7-8c9d-4e5f-a1b2-3c4d5e6f7a8b"
+        },
+        "Normal": {
+          "Narrative": "Your observant eyes catch several clear signs at the glade entrance - tiny footprints in the soft moss, scratched bark on nearby trees, and a scatter of stolen trinkets partially hidden beneath leaves. The sunlit clearing holds definite evidence of the gremlin's presence. Time to investigate these clues.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": "e4f5a6b7-8c9d-4e5f-a1b2-3c4d5e6f7a8b"
+        },
+        "Exceptional": {
+          "Narrative": "Your exceptional perception immediately spots the gremlin itself! In the dappled shadows at the glade entrance, you catch sight of the small creature trying to hide behind a tree. It freezes, realizing it's been spotted, then bolts down the forest path. You're right on its heels - no investigation needed, you've got visual contact! The chase leads you into a small clearing where wildflowers bloom.",
+          "Effects": {
+            "Room": 3
+          },
+          "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
+        }
+      },
+      "SegmentActivity": "You are looking for signs of the troublesome gremlin",
+      "SegmentTitle": "Spotting the gremlin"
+    },
+    {
+      "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
+      "SegmentID": "e4f5a6b7-8c9d-4e5f-a1b2-3c4d5e6f7a8b",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 180,
+      "Challenges": [
+        {
+          "Attribute": "Intelligence",
+          "Skill": "Investigation",
+          "Difficulty": 3,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "As you investigate the signs at the glade entrance, crouching to examine the soft moss more closely, you trigger another hidden trap. A sharpened branch swings down from the trees above, striking you fatally. The gremlin's cackling echoes through the forest as darkness takes you.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "Despite your best efforts to piece together the clues at the glade entrance - examining the broken flowers, the disturbed moss, the scattered trinkets beneath the tall trees - you can't determine which direction the gremlin went. The trail goes cold. You remain at the glade entrance, determined to look more carefully for signs you might have missed.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": "e4f5a6b7-8c9d-4e5f-a1b2-3c4d5e6f7a8b"
+        },
+        "Minimal": {
+          "Narrative": "After careful investigation at the glade entrance, you piece together a rough trail from the clues - tiny footprints in the soft moss leading away from the sunlit clearing, broken twigs pointing down the path. You follow cautiously down the forest path where trees form a green tunnel overhead. In the cool, damp air, you catch a glimpse of movement ahead!",
           "Effects": {
             "Room": 2
           },
           "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
         },
         "Normal": {
-          "Narrative": "Your keen eyes spot signs in the soft moss at the glade entrance - tiny footprints and disturbed leaves leading away from the sunlit clearing. You follow the trail carefully down the forest path where trees form a green tunnel overhead. The cool, damp atmosphere and scent of earth guide you toward the gremlin's location, leaves rustling overhead as you advance.",
+          "Narrative": "Your methodical investigation reveals a clear trail from the glade entrance - fresh footprints in the soft moss, disturbed leaves, and tiny scratches on bark all pointing the same direction. You follow the signs down the forest path where trees form a green tunnel overhead. The cool, damp atmosphere carries the scent of earth as leaves rustle, and you spot the gremlin darting between trees ahead!",
           "Effects": {
             "Room": 2
           },
           "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
         },
         "Exceptional": {
-          "Narrative": "Your exceptional tracking skills immediately identify the gremlin's trail from the glade entrance! Fresh disturbances in the soft moss, broken flowers, and tiny scratches on tree bark tell a clear story. You follow the path into the green tunnel of trees, and in the cool, damp air with leaves rustling overhead and a woodpecker calling, you spot the gremlin ahead. It seems genuinely surprised to be found so quickly!",
+          "Narrative": "Your brilliant investigative work reveals not just where the gremlin went, but where it's going! The pattern of disturbances at the glade entrance, the direction of the tiny footprints in the soft moss, and the types of trinkets stolen all point to a den in a nearby clearing. You take a shortcut through the forest, and emerge in a small clearing where wildflowers bloom - and there it is, completely surprised by your arrival! The fallen log it uses as a den is right behind it. You've got it cornered!",
           "Effects": {
-            "Room": 2
+            "Room": 3
           },
-          "NextSegmentID": "b509102e-c211-452a-aaaa-c9c07b6d68af"
+          "NextSegmentID": "91ec24e0-9a55-4058-92c2-faf8b03f5037"
         }
       },
-      "SegmentActivity": "You are searching for signs of the troublesome gremlin",
+      "SegmentActivity": "You are investigating the gremlin's trail",
       "SegmentTitle": "Tracking the gremlin"
     },
     {
@@ -130,7 +184,7 @@
         }
       },
       "SegmentActivity": "You attempt to corner the elusive gremlin",
-      "SegmentTitle": "Cornering the gremlin"
+      "SegmentTitle": "Chasing the gremlin"
     },
     {
       "StoryID": "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",

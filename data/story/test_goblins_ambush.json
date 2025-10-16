@@ -5,7 +5,7 @@
     "Description": "A mysterious path through the Vedant Forest leads to an unexpected encounter.",
     "NarrativeText": "You've heard rumors of strange happenings in the Vedant Forest. Local villagers speak of missing travelers and eerie sounds at night. Armed with courage and curiosity, you decide to investigate the old forest path that leads to an abandoned campsite deep in the woods.",
     "StoryType": "repeatable",
-    "EstimatedDuration": 600,
+    "EstimatedDuration": 1170,
     "Prerequisites": {
       "MinSkills": {},
       "RequiredItems": [],
@@ -45,14 +45,14 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "You leave the sunlit glade entrance and push into the forest, but the well-trodden path quickly becomes confusing. The trees forming a green tunnel overhead make navigation difficult, and the scent of earth and decaying leaves is overwhelming. The dense forest proves too disorienting. Scratched by undergrowth, you retreat back to the glade entrance, your investigation incomplete.",
+          "Narrative": "You leave the sunlit glade entrance and push into the forest, but the well-trodden path quickly becomes confusing. The trees forming a green tunnel overhead make navigation difficult, and the scent of earth and decaying leaves is overwhelming. The dense forest proves too disorienting. You retreat back to the glade entrance to catch your breath and reconsider your approach. Perhaps a more careful investigation will reveal the path.",
           "Effects": {
             "Wounds": [
               "bashing"
             ],
             "Room": 1
           },
-          "NextSegmentID": null
+          "NextSegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
         },
         "Minimal": {
           "Narrative": "Leaving behind the dappled shadows and birdsong of the glade entrance, you push through the undergrowth with difficulty. The well-trodden path leads you deeper where trees form a green tunnel overhead. In the cool, damp air heavy with the scent of earth and decaying leaves, you find only vague traces of recent activity - a few broken branches rustling in the wind. You press on despite your scratches.",
@@ -129,12 +129,12 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "Despite the brook's peaceful murmur providing cover, your clumsy movements along the water's edge alert every creature within earshot. Rocks tumble, water splashes, and branches snap. The tranquil scene shatters as goblin war cries echo through the trees. You brace for combat, wounded by your hasty scramble.",
+          "Narrative": "Despite the brook's peaceful murmur providing cover, your clumsy movements along the water's edge alert every creature within earshot. Rocks tumble, water splashes, and branches snap. The tranquil scene shatters as goblin war cries echo through the trees. Wounded by your hasty scramble and outnumbered, you flee back to the glade entrance in defeat, nursing your injuries in the sunlight and birdsong.",
           "Effects": {
             "Wounds": [
               "lethal"
             ],
-            "Room": 5
+            "Room": 1
           },
           "NextSegmentID": null
         },
@@ -189,13 +189,13 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "The path grows narrower and more overgrown with each step. Thorny bushes tear at you while tangled vines obstruct every move. The air becomes still and oppressively heavy, and the buzzing of insects grows maddening. Bloodied by thorns and exhausted by the wildness of nature, you're forced to retreat and find another route.",
+          "Narrative": "The path grows narrower and more overgrown with each step. Thorny bushes tear at you while tangled vines obstruct every move. The air becomes still and oppressively heavy, and the buzzing of insects grows maddening. Bloodied by thorns and exhausted by the wildness of nature, you're forced to retreat back to the glade entrance, your quest abandoned.",
           "Effects": {
             "Wounds": [
               "lethal",
               "bashing"
             ],
-            "Room": 5
+            "Room": 1
           },
           "NextSegmentID": null
         },
@@ -373,17 +373,11 @@
           "Skill": "Climbing",
           "Difficulty": 4,
           "Attempts": 3
-        },
-        {
-          "Attribute": "Intelligence",
-          "Skill": "Foraging",
-          "Difficulty": 4,
-          "Attempts": 2
         }
       ],
       "Results": {
         "Death": {
-          "Narrative": "Exhausted and lost in the damp gully, you collapse among the lush ferns. Their delicate fronds create a sea of green around you as the cool, moist air grows cold against your skin. The scent of decay fills your lungs, and sunlight filtering through the canopy casts an otherworldly glow on your final moments. The occasional drip of water marks time until the forest creatures find you.",
+          "Narrative": "Exhausted and lost in the damp gully, you collapse among the lush ferns. Their delicate fronds create a sea of green around you as the cool, moist air grows cold against your skin. The scent of decay fills your lungs, and sunlight filtering through the canopy casts an otherworldly glow on your final moments. The occasional drip of water marks time until the forest claims you.",
           "Effects": {
             "State": "dead",
             "Room": 0
@@ -391,7 +385,7 @@
           "NextSegmentID": null
         },
         "Failure": {
-          "Narrative": "The detour through the damp fern gully proves too challenging. The lush ferns with their delicate fronds obscure the path, creating a disorienting sea of green. The cool, moist air and lingering scent of decay sap your strength. Despite the otherworldly glow from filtered sunlight, you're too tired and hungry to continue. You abandon your quest and painfully make your way back to the glade entrance, where flowers and birdsong welcome your retreat to civilization.",
+          "Narrative": "The detour through the damp fern gully proves too challenging. The lush ferns with their delicate fronds obscure the path, creating a disorienting sea of green. The cool, moist air and lingering scent of decay sap your strength. Despite the otherworldly glow from filtered sunlight, you're too exhausted to continue. You abandon your quest and painfully make your way back to the glade entrance, where flowers and birdsong welcome your retreat.",
           "Effects": {
             "Wounds": [
               "bashing",
@@ -402,24 +396,78 @@
           "NextSegmentID": null
         },
         "Minimal": {
-          "Narrative": "You navigate the damp gully filled with lush ferns successfully, though the journey leaves you weary and supplies depleted. The delicate fronds creating a sea of green made navigation difficult, and the cool, moist air with its scent of decay was exhausting. The silence broken only by occasional water drips accompanied your struggle. You emerge wounded but alive.",
+          "Narrative": "You navigate the difficult terrain of the damp gully, clambering over slippery rocks and fallen logs. The lush ferns with their delicate fronds creating a sea of green make the journey exhausting. The cool, moist air with its scent of decay weighs on you, and the silence broken only by occasional water drips accompanies your struggle. You emerge weary but alive, ready to search for sustenance.",
           "Effects": {
             "Wounds": [
               "bashing"
             ],
             "Room": 9
           },
+          "NextSegmentID": "c9d0e1f2-3a4b-5c6d-7e8f-9a0b1c2d3e4f"
+        },
+        "Normal": {
+          "Narrative": "Your endurance serves you well as you navigate the damp fern gully. Where lush ferns create a sea of green with their delicate fronds, you find secure footing and navigate safely. The cool, moist air is refreshing, and you move through the otherworldly glow created by sunlight filtering through the canopy. The occasional drip of water guides your way through the terrain. You're ready to forage for supplies.",
+          "Effects": {
+            "Room": 9
+          },
+          "NextSegmentID": "c9d0e1f2-3a4b-5c6d-7e8f-9a0b1c2d3e4f"
+        },
+        "Exceptional": {
+          "Narrative": "Your exceptional strength and endurance make the difficult gully terrain seem easy! The damp environment with its lush ferns creating a sea of green poses no challenge. In the cool, moist air where sunlight casts an otherworldly glow, you navigate the slippery rocks and steep slopes with athletic grace. The silence broken only by water drips becomes a peaceful companion as you move forward to search for resources.",
+          "Effects": {
+            "Room": 9
+          },
+          "NextSegmentID": "c9d0e1f2-3a4b-5c6d-7e8f-9a0b1c2d3e4f"
+        }
+      },
+      "SegmentActivity": "You navigate carefully through the difficult terrain of the fern gully",
+      "SegmentTitle": "Gully navigation"
+    },
+    {
+      "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+      "SegmentID": "c9d0e1f2-3a4b-5c6d-7e8f-9a0b1c2d3e4f",
+      "SegmentType": "mechanical",
+      "SegmentDuration": 180,
+      "Challenges": [
+        {
+          "Attribute": "Intelligence",
+          "Skill": "Foraging",
+          "Difficulty": 4,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "Desperate for sustenance, you consume what you believe are edible berries found among the lush ferns. The delicate fronds creating a sea of green concealed the danger - they were poisonous. The cool, moist air grows cold against your feverish skin. The scent of decay becomes overwhelming, and sunlight filtering through the canopy casts an otherworldly glow on your final moments as the poison takes hold.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "You search among the damp gully's lush ferns for food and useful resources, but find nothing safe to consume. The delicate fronds creating a sea of green hide only poisonous plants and spoiled remnants. The cool, moist air and scent of decay seem to mock your efforts. Weakened by hunger and exhaustion, you abandon your quest and retreat to the glade entrance, where at least the flowers and birdsong offer some comfort.",
+          "Effects": {
+            "Room": 1
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "You manage to find a few edible berries and roots in the damp gully, though your supplies remain depleted. The lush ferns with their delicate fronds made foraging difficult, creating a disorienting sea of green. The cool, moist air where the scent of decay lingers required careful inspection to avoid poisonous plants. The silence broken only by water drips accompanied your cautious gathering.",
+          "Effects": {
+            "Room": 9
+          },
           "NextSegmentID": null
         },
         "Normal": {
-          "Narrative": "Your wilderness skills serve you well in the damp fern gully. Where lush ferns create a sea of green with their delicate fronds, you find edible berries and a safe path. The cool, moist air is refreshing, and you navigate through the otherworldly glow created by sunlight filtering through the canopy. The occasional drip of water guides your way through the peaceful silence.",
+          "Narrative": "Your foraging skills serve you well in the damp fern gully. Where lush ferns create a sea of green with their delicate fronds, you find edible berries, medicinal herbs, and fresh water. The cool, moist air is refreshing, and you gather resources efficiently in the otherworldly glow created by sunlight filtering through the canopy. The occasional drip of water guides you to the best foraging spots in the peaceful silence.",
           "Effects": {
             "Room": 9
           },
           "NextSegmentID": null
         },
         "Exceptional": {
-          "Narrative": "Your masterful woodcraft reveals hidden treasures in the fern gully! The damp environment with its lush ferns creating a sea of green conceals secrets others miss. In the cool, moist air where the scent of decay lingers and sunlight casts an otherworldly glow, you discover a cache of supplies left by previous adventurers. The silence broken only by water drips makes the discovery feel almost magical.",
+          "Narrative": "Your masterful foraging reveals hidden treasures in the fern gully! The damp environment with its lush ferns creating a sea of green conceals secrets others miss. In the cool, moist air where the scent of decay lingers and sunlight casts an otherworldly glow, you discover not only excellent forage but also a cache of supplies left by previous adventurers. The silence broken only by water drips makes the discovery feel almost magical.",
           "Effects": {
             "Items": [
               {"ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485", "Chance": 0.8},
@@ -430,8 +478,8 @@
           "NextSegmentID": null
         }
       },
-      "SegmentActivity": "You navigate carefully through the fern gully, avoiding the goblin patrols",
-      "SegmentTitle": "Fern gully detour"
+      "SegmentActivity": "You search for edible plants and useful resources",
+      "SegmentTitle": "Foraging for supplies"
     }
   ]
 }
