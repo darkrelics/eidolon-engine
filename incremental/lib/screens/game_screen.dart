@@ -589,6 +589,10 @@ class _GameScreenState extends State<GameScreen> {
               if (!updated.containsKey('StoryTitle') && _lastStoryDetails != null) {
                 updated['StoryTitle'] = _lastStoryDetails!['Title'];
               }
+              // Preserve the _index from the original segment to maintain chronological ordering
+              if (s.containsKey('_index')) {
+                updated['_index'] = s['_index'];
+              }
               return updated;
             }
             return s;
@@ -978,7 +982,16 @@ class _GameScreenState extends State<GameScreen> {
             _segmentHistory = [..._segmentHistory, segmentCopy];
             debugPrint('GameScreen: Added completed decision segment to history with narrative: ${segmentCopy['SegmentID'] ?? segmentCopy['ActiveSegmentID'] ?? segmentKey}');
           } else {
-            _segmentHistory = _segmentHistory.map((s) => _segmentIdentity(s) == segmentKey ? segmentCopy : s).toList();
+            _segmentHistory = _segmentHistory.map((s) {
+              if (_segmentIdentity(s) == segmentKey) {
+                // Preserve the _index from the original segment
+                if (s.containsKey('_index')) {
+                  segmentCopy['_index'] = s['_index'];
+                }
+                return segmentCopy;
+              }
+              return s;
+            }).toList();
           }
         }
 
@@ -996,8 +1009,16 @@ class _GameScreenState extends State<GameScreen> {
           _segmentHistory = [..._segmentHistory, nextSegmentCopy];
           debugPrint('GameScreen: Added next segment to history after decision: ${nextSegmentCopy['SegmentID'] ?? nextSegmentCopy['ActiveSegmentID'] ?? nextKey}');
         } else {
-          _segmentHistory =
-              _segmentHistory.map((s) => _segmentIdentity(s) == nextKey ? nextSegmentCopy : s).toList();
+          _segmentHistory = _segmentHistory.map((s) {
+            if (_segmentIdentity(s) == nextKey) {
+              // Preserve the _index from the original segment
+              if (s.containsKey('_index')) {
+                nextSegmentCopy['_index'] = s['_index'];
+              }
+              return nextSegmentCopy;
+            }
+            return s;
+          }).toList();
         }
 
         if (mounted) {
@@ -1113,7 +1134,16 @@ class _GameScreenState extends State<GameScreen> {
           _segmentHistory = [..._segmentHistory, copy];
           debugPrint('GameScreen: Added final segment to local history before reload');
         } else {
-          _segmentHistory = _segmentHistory.map((s) => _segmentIdentity(s) == segmentKey ? copy : s).toList();
+          _segmentHistory = _segmentHistory.map((s) {
+            if (_segmentIdentity(s) == segmentKey) {
+              // Preserve the _index from the original segment
+              if (s.containsKey('_index')) {
+                copy['_index'] = s['_index'];
+              }
+              return copy;
+            }
+            return s;
+          }).toList();
         }
       }
 
