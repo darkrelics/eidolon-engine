@@ -232,6 +232,30 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             else:
                 results["XPUpdates"] = combat_xp
 
+        # Process opponent items if defeated
+        opponent_defeated = combat_state.get("OpponentDefeated", False)
+        if opponent_defeated:
+            opponent_id = combat_state.get("OpponentID")
+            if opponent_id:
+                try:
+                    opponent_data = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+                    if opponent_data:
+                        opponent_items = opponent_data.get("Items", [])
+                        if opponent_items:
+                            character_id = character.get("CharacterID")
+                            if character_id:
+                                # Process opponent items with probability
+                                prototype_ids = process_items_with_probability(opponent_items)
+                                if prototype_ids:
+                                    granted_items = add_items_to_inventory(character_id, prototype_ids)
+                                    if granted_items:
+                                        # Merge with any items from story effects
+                                        existing_items = results.get("GrantedItemIDs", [])
+                                        results["GrantedItemIDs"] = existing_items + granted_items
+                                        logger.info(f"Granted {len(granted_items)} items from defeated opponent {opponent_id}")
+                except Exception as err:
+                    logger.error(f"Failed to process opponent items for {opponent_id} Error: {err}", exc_info=True)
+
     # Determine overall outcome
     if not outcomes:
         logger.warning(f"Mechanical segment has no challenges or combat for {segment_def.get('SegmentID')}")

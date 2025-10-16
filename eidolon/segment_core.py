@@ -260,6 +260,11 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
         if outcome_effects:
             updates["StoryEffects"] = outcome_effects
 
+    # Include granted items from both segment outcomes and defeated opponents
+    granted_item_ids = results.get("GrantedItemIDs")
+    if granted_item_ids:
+        updates["GrantedItemIDs"] = granted_item_ids
+
     return updates
 
 

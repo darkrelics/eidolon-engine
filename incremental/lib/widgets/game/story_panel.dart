@@ -414,6 +414,8 @@ class _StoryPanelState extends State<StoryPanel> {
                 const SizedBox(height: 12),
                 Text(narrative, style: theme.textTheme.bodyMedium, textAlign: TextAlign.justify),
               ],
+              // Display received items between narrative and outcome
+              ..._buildReceivedItemsSection(segment, theme, cardColor),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -635,5 +637,84 @@ class _StoryPanelState extends State<StoryPanel> {
       default:
         return RpgAwesome.trophy;
     }
+  }
+
+  List<Widget> _buildReceivedItemsSection(Map<String, dynamic> segment, ThemeData theme, Color cardColor) {
+    final characterUpdates = segment['CharacterUpdates'] as Map<String, dynamic>?;
+    if (characterUpdates == null) {
+      return [];
+    }
+
+    final grantedItemIDs = characterUpdates['GrantedItemIDs'] as List<dynamic>?;
+    if (grantedItemIDs == null || grantedItemIDs.isEmpty) {
+      return [];
+    }
+
+    return [
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cardColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: cardColor.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.category_outlined, size: 16, color: cardColor),
+                const SizedBox(width: 6),
+                Text(
+                  'Items Received',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: cardColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: grantedItemIDs.map((itemId) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: cardColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.category_outlined, size: 14, color: cardColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatItemId(itemId.toString()),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  String _formatItemId(String itemId) {
+    // Format item ID to be more readable (show last 8 characters)
+    if (itemId.length > 8) {
+      return 'Item ${itemId.substring(itemId.length - 8)}';
+    }
+    return 'Item $itemId';
   }
 }

@@ -237,6 +237,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
                           _buildEventSummary(event as Map<String, dynamic>),
                     ),
                   ],
+                  ..._buildItemsList(segment, theme),
                 ],
               ),
             ),
@@ -367,5 +368,66 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
     } else {
       return 'Just now';
     }
+  }
+
+  List<Widget> _buildItemsList(Map<String, dynamic> segment, ThemeData theme) {
+    final characterUpdates = segment['CharacterUpdates'] as Map<String, dynamic>?;
+    if (characterUpdates == null) {
+      return [];
+    }
+
+    final grantedItemIDs = characterUpdates['GrantedItemIDs'] as List<dynamic>?;
+    if (grantedItemIDs == null || grantedItemIDs.isEmpty) {
+      return [];
+    }
+
+    return [
+      const SizedBox(height: 12),
+      Text(
+        'Items Received',
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: grantedItemIDs.map((itemId) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.category_outlined,
+                  size: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _formatItemId(itemId.toString()),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    ];
+  }
+
+  String _formatItemId(String itemId) {
+    if (itemId.length > 8) {
+      return 'Item ${itemId.substring(itemId.length - 8)}';
+    }
+    return 'Item $itemId';
   }
 }
