@@ -160,7 +160,7 @@ class StoryPollingService {
           if (!_isPolling || _characterId != characterId) return;
 
           try {
-            if (pendingSegmentId != null && _lastReloadedSegmentId == pendingSegmentId) {
+            if (_lastReloadedSegmentId == pendingSegmentId) {
               debugPrint('StoryPollingService: Skipping character reload for segment $pendingSegmentId - already synchronized');
             } else {
               // Reload character to get updated state (wounds, XP, attributes)
@@ -210,7 +210,7 @@ class StoryPollingService {
 
         final segmentIdForReload = activeSegmentId;
 
-        if (segmentIdForReload != null && _lastReloadedSegmentId == segmentIdForReload) {
+        if (_lastReloadedSegmentId == segmentIdForReload) {
           debugPrint('StoryPollingService: Skipping character reload for segment $segmentIdForReload - already synchronized');
         } else {
           try {
