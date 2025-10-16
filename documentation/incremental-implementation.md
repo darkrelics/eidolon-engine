@@ -87,7 +87,7 @@ Mechanical segments can contain both skill challenges and combat encounters. Thi
   "SegmentType": "mechanical",
   "SegmentActivity": "Fighting the goblin scout",
   "SegmentTitle": "Engaged in combat",
-  "SegmentDuration": 120,
+  "SegmentDuration": 180,
   "NextSegmentID": "seg-forest-004",
   "Combat": {
     "OpponentID": "a7b8c9d0-1e2f-3a4b-5c6d-7e8f9a0b1c2d",

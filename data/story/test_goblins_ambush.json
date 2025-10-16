@@ -86,7 +86,7 @@
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
       "SegmentType": "decision",
-      "SegmentDuration": 600,
+      "SegmentDuration": 300,
       "DecisionText": "The well-trodden path splits into two directions beneath the green tunnel of trees. The air is cool and damp, carrying the scent of earth and decaying leaves. To the left, you hear the sound of flowing water growing louder - the babbling brook, where goblins might water their troops. To the right, the path becomes narrower and more overgrown, leading toward a tangled thicket that could conceal an ambush. Leaves rustle overhead as you consider your options. Which way do you go?",
       "DecisionOptions": {
         "Left": {
@@ -289,7 +289,7 @@
       "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
       "SegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c",
       "SegmentType": "decision",
-      "SegmentDuration": 600,
+      "SegmentDuration": 300,
       "DecisionText": "After the encounter with the goblin, you catch your breath in the tangled thicket. The still, heavy air is oppressive, and the buzzing of insects is relentless. You notice tracks leading deeper into the shadowed forest through more overgrown terrain. Alternatively, you could take a safer path around through the fern gully - you can hear the occasional drip of water from that direction. What do you do?",
       "DecisionOptions": {
         "Follow": {
