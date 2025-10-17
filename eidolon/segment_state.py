@@ -13,6 +13,55 @@ from eidolon.segment_core import extract_character_updates_from_results, validat
 from eidolon.time_utils import now_unix
 
 
+def generate_combat_round_narrative(round_data: dict) -> str:
+    """
+    Generate narrative description from combat round data.
+
+    Args:
+        round_data: Combat round data containing offensive/defensive actions and damage
+
+    Returns:
+        Narrative description of the combat round
+    """
+    char_off = round_data.get("CharacterOffensive", {})
+    char_def = round_data.get("CharacterDefensive", {})
+    opp_off = round_data.get("OpponentOffensive", {})
+    damage = round_data.get("Damage", {})
+
+    # Extract action results
+    char_hit = char_off.get("Success", False)
+    char_action = char_off.get("Action", "Attack")
+    char_damage = damage.get("OpponentTook", 0)
+
+    opp_hit = opp_off.get("Success", False)
+    opp_action = opp_off.get("Action", "Attack")
+    player_damage = damage.get("CharacterTook", 0)
+
+    def_action = char_def.get("Action", "Defense")
+
+    # Build narrative based on what happened
+    if char_hit and opp_hit:
+        # Both landed hits - exchange of blows
+        return (
+            f"You strike your opponent with {char_action} dealing {char_damage} wound(s), "
+            f"but they counter with {opp_action} landing {player_damage} wound(s) on you!"
+        )
+    elif char_hit:
+        # Only character hit
+        return (
+            f"Your {char_action} strikes true, dealing {char_damage} wound(s). " f"Your {def_action} deflects their {opp_action}!"
+        )
+    elif opp_hit:
+        # Only opponent hit
+        return (
+            f"Your {char_action} misses, and their {opp_action} breaks through your {def_action}, "
+            f"dealing {player_damage} wound(s)!"
+        )
+    else:
+        # Neither landed a hit
+        return f"You exchange blows - your {char_action} vs their {opp_action} - but neither lands a solid hit."
+
+
 def update_active_segment_outcome(active_segment_id: str, outcome: str, results: dict, segment_def=None) -> None:
     """
     Update active segment with outcome but keep status as active until timer expires.
@@ -94,7 +143,7 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
                 {
                     "EventType": "combat",
                     "Title": f"Round {round_data.get('Round', 0)}",
-                    "Description": "Combat round",
+                    "Description": generate_combat_round_narrative(round_data),
                     "Data": round_data,
                 }
             )

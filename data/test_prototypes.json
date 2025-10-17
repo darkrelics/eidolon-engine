@@ -231,6 +231,170 @@
         "BurnTime": "1 hour",
         "LightRadius": "30 feet"
       }
+    },
+    {
+      "PrototypeID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c",
+      "PrototypeName": "Wild Berries",
+      "Description": "A handful of plump, juicy berries gathered from forest bushes. They look safe to eat.",
+      "Mass": 0.2,
+      "Value": 3,
+      "Stackable": true,
+      "MaxStack": 10,
+      "Quantity": 1,
+      "Wearable": false,
+      "WornOn": [],
+      "Verbs": {
+        "Use": "You pop the sweet berries into your mouth, savoring their natural flavor.",
+        "Examine": "The berries are deep purple with a slight sheen, indicating ripeness."
+      },
+      "Overrides": {
+        "Eat": "use"
+      },
+      "TraitMods": {},
+      "Container": false,
+      "Contents": [],
+      "IsWorn": false,
+      "CanPickUp": true,
+      "Metadata": {
+        "FoodType": "fruit",
+        "Nutritional": "low"
+      }
+    },
+    {
+      "PrototypeID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d",
+      "PrototypeName": "Medicinal Herbs",
+      "Description": "A bundle of fresh herbs with healing properties, carefully harvested from the forest floor.",
+      "Mass": 0.1,
+      "Value": 15,
+      "Stackable": true,
+      "MaxStack": 10,
+      "Quantity": 1,
+      "Wearable": false,
+      "WornOn": [],
+      "Verbs": {
+        "Use": "You chew the bitter herbs, feeling their medicinal effects take hold.",
+        "Examine": "The leaves are bright green with a distinctive aromatic scent."
+      },
+      "Overrides": {
+        "Apply": "use"
+      },
+      "TraitMods": {},
+      "Container": false,
+      "Contents": [],
+      "IsWorn": false,
+      "CanPickUp": true,
+      "Metadata": {
+        "HerbType": "medicinal",
+        "Potency": "moderate"
+      }
+    },
+    {
+      "PrototypeID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e",
+      "PrototypeName": "Rare Mushrooms",
+      "Description": "A cluster of unusual mushrooms with bioluminescent caps. These are quite valuable to alchemists.",
+      "Mass": 0.3,
+      "Value": 35,
+      "Stackable": true,
+      "MaxStack": 5,
+      "Quantity": 1,
+      "Wearable": false,
+      "WornOn": [],
+      "Verbs": {
+        "Use": "You carefully store the mushrooms for later use or sale.",
+        "Examine": "The mushrooms glow with a faint blue light, their caps dotted with silver specks."
+      },
+      "Overrides": {},
+      "TraitMods": {},
+      "Container": false,
+      "Contents": [],
+      "IsWorn": false,
+      "CanPickUp": true,
+      "Metadata": {
+        "MushroomType": "luminescent",
+        "Rarity": "rare"
+      }
+    },
+    {
+      "PrototypeID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f",
+      "PrototypeName": "Wild Vegetables",
+      "Description": "A collection of edible roots and tubers dug from the forest soil. Hearty and nutritious.",
+      "Mass": 0.5,
+      "Value": 5,
+      "Stackable": true,
+      "MaxStack": 10,
+      "Quantity": 1,
+      "Wearable": false,
+      "WornOn": [],
+      "Verbs": {
+        "Use": "You brush off the dirt and eat the raw vegetables, feeling satisfied.",
+        "Examine": "The vegetables are firm and fresh, still covered in bits of earth."
+      },
+      "Overrides": {
+        "Eat": "use"
+      },
+      "TraitMods": {},
+      "Container": false,
+      "Contents": [],
+      "IsWorn": false,
+      "CanPickUp": true,
+      "Metadata": {
+        "FoodType": "vegetable",
+        "Nutritional": "high"
+      }
+    },
+    {
+      "PrototypeID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a",
+      "PrototypeName": "Healing Roots",
+      "Description": "Thick, gnarled roots known for their powerful restorative properties when properly prepared.",
+      "Mass": 0.4,
+      "Value": 20,
+      "Stackable": true,
+      "MaxStack": 5,
+      "Quantity": 1,
+      "Wearable": false,
+      "WornOn": [],
+      "Verbs": {
+        "Use": "You chew on the bitter root, feeling its healing energy spread through your body.",
+        "Examine": "The root is twisted and covered in rough bark, with a pungent medicinal smell."
+      },
+      "Overrides": {
+        "Apply": "use"
+      },
+      "TraitMods": {},
+      "Container": false,
+      "Contents": [],
+      "IsWorn": false,
+      "CanPickUp": true,
+      "Metadata": {
+        "RootType": "healing",
+        "Potency": "strong"
+      }
+    },
+    {
+      "PrototypeID": "2b9a4f6e-7d8c-9b3d-f0a4-1a6b3d7e4f8b",
+      "PrototypeName": "Moonpetal Flower",
+      "Description": "An exceptionally rare silver flower that blooms only in ancient forests. Highly prized by collectors.",
+      "Mass": 0.05,
+      "Value": 100,
+      "Stackable": false,
+      "MaxStack": 1,
+      "Quantity": 1,
+      "Wearable": false,
+      "WornOn": [],
+      "Verbs": {
+        "Use": "You carefully preserve the delicate flower for safekeeping.",
+        "Examine": "The petals shimmer with an ethereal silver glow, as if touched by moonlight itself."
+      },
+      "Overrides": {},
+      "TraitMods": {},
+      "Container": false,
+      "Contents": [],
+      "IsWorn": false,
+      "CanPickUp": true,
+      "Metadata": {
+        "FlowerType": "moonpetal",
+        "Rarity": "legendary"
+      }
     }
   ]
 }

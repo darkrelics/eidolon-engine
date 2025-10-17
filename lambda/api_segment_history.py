@@ -209,9 +209,9 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
 
         formatted_segments.append(formatted_segment_dict)
 
-    # Sort by start time, ascending (first to last) for chronological order
+    # Sort by completion time, descending (most recent first)
     # Use current time as default for missing timestamps to avoid mixed type comparison
-    formatted_segments.sort(key=lambda x: x.get("StartTime") or now_iso(), reverse=False)
+    formatted_segments.sort(key=lambda x: x.get("CompletedAt") or now_iso(), reverse=True)
 
     response = {"CharacterID": character_id, "StoryID": story_id, "Segments": formatted_segments}
 

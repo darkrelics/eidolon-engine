@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/models/story.dart';
-import 'package:eidolon_incremental/utils/combat_narrative.dart';
 import 'package:eidolon_incremental/utils/outcome_colors.dart';
 import 'package:eidolon_incremental/widgets/story/active_story_widget.dart';
 import 'package:eidolon_incremental/widgets/story/available_stories_widget.dart';
@@ -415,6 +414,8 @@ class _StoryPanelState extends State<StoryPanel> {
                 const SizedBox(height: 12),
                 Text(narrative, style: theme.textTheme.bodyMedium, textAlign: TextAlign.justify),
               ],
+              // Display received items between narrative and outcome
+              ..._buildReceivedItemsSection(segment, theme, cardColor),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -578,25 +579,13 @@ class _StoryPanelState extends State<StoryPanel> {
   String _extractSegmentNarrative(Map<String, dynamic> segment) {
     final clientEvents = segment['ClientEvents'] as List<dynamic>?;
     if (clientEvents != null && clientEvents.isNotEmpty) {
-      final characterName = widget.character.name;
-      final opponentName = _extractOpponentName(segment);
-
       final descriptions = clientEvents
           .map((event) {
             if (event is! Map<String, dynamic>) {
               return event.toString();
             }
 
-            // Check if this is a combat event and use combat narrative
-            if (CombatNarrative.isCombatEvent(event)) {
-              return CombatNarrative.generateEventNarrative(
-                event,
-                characterName: characterName,
-                opponentName: opponentName,
-              );
-            }
-
-            // Otherwise use the standard description
+            // Use the server-generated description
             return event['Description']?.toString() ?? '';
           })
           .where((text) => text.trim().isNotEmpty)
@@ -618,36 +607,6 @@ class _StoryPanelState extends State<StoryPanel> {
     }
 
     return '';
-  }
-
-  String _extractOpponentName(Map<String, dynamic> segment) {
-    // Try to extract opponent name from segment data
-    final opponentData = segment['Opponent'] as Map<String, dynamic>?;
-    if (opponentData != null) {
-      final name = opponentData['Name'] ?? opponentData['OpponentName'];
-      if (name is String && name.isNotEmpty) {
-        return name;
-      }
-    }
-
-    // Check ClientEvents for opponent information
-    final clientEvents = segment['ClientEvents'] as List<dynamic>?;
-    if (clientEvents != null) {
-      for (final event in clientEvents) {
-        if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
-          final data = event['Data'] as Map<String, dynamic>?;
-          final oppOffensive = data?['OpponentOffensive'] as Map<String, dynamic>?;
-          if (oppOffensive != null) {
-            final name = oppOffensive['Name'];
-            if (name is String && name.isNotEmpty) {
-              return name;
-            }
-          }
-        }
-      }
-    }
-
-    return 'the opponent';
   }
 
   String _outcomeToString(dynamic outcome) {
@@ -678,5 +637,84 @@ class _StoryPanelState extends State<StoryPanel> {
       default:
         return RpgAwesome.trophy;
     }
+  }
+
+  List<Widget> _buildReceivedItemsSection(Map<String, dynamic> segment, ThemeData theme, Color cardColor) {
+    final characterUpdates = segment['CharacterUpdates'] as Map<String, dynamic>?;
+    if (characterUpdates == null) {
+      return [];
+    }
+
+    final grantedItemIDs = characterUpdates['GrantedItemIDs'] as List<dynamic>?;
+    if (grantedItemIDs == null || grantedItemIDs.isEmpty) {
+      return [];
+    }
+
+    return [
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cardColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: cardColor.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.category_outlined, size: 16, color: cardColor),
+                const SizedBox(width: 6),
+                Text(
+                  'Items Received',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: cardColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: grantedItemIDs.map((itemId) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surface,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: cardColor.withValues(alpha: 0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.category_outlined, size: 14, color: cardColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatItemId(itemId.toString()),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurface,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
+  String _formatItemId(String itemId) {
+    // Format item ID to be more readable (show last 8 characters)
+    if (itemId.length > 8) {
+      return 'Item ${itemId.substring(itemId.length - 8)}';
+    }
+    return 'Item $itemId';
   }
 }

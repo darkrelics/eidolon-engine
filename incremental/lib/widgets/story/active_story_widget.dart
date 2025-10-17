@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/providers/timer_provider.dart';
-import 'package:eidolon_incremental/utils/combat_narrative.dart';
 import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 /// Widget displaying the active story with segments
@@ -78,21 +77,36 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
           if (widget.segmentHistory.isNotEmpty) ...[
             Text('Previous Segments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: widget.segmentHistory.length,
-              separatorBuilder: (context, _) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final segment = widget.segmentHistory[index];
-                return _SimpleSegmentCard(
+            // Use ListView.builder for large lists (>20 items) to enable virtualization
+            // Use direct mapping for small lists (<= 20 items) for better performance
+            if (widget.segmentHistory.length > 20)
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: widget.segmentHistory.length,
+                itemBuilder: (context, index) {
+                  final segment = widget.segmentHistory[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _SimpleSegmentCard(
+                      segment: segment,
+                      isActive: false,
+                      characterName: widget.character.name,
+                      isDecisionSubmitting: false,
+                    ),
+                  );
+                },
+              )
+            else
+              ...widget.segmentHistory.map((segment) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _SimpleSegmentCard(
                   segment: segment,
                   isActive: false,
                   characterName: widget.character.name,
                   isDecisionSubmitting: false,
-                );
-              },
-            ),
+                ),
+              )),
           ],
         ],
       ),
@@ -495,21 +509,13 @@ class _SimpleSegmentCard extends StatelessWidget {
                   String displayText = '';
                   if (shouldRevealResults) {
                     if (clientEvents != null && clientEvents.isNotEmpty) {
-                      // Get opponent name from combat state if available
-                      final combatState = segment['CombatState'] as Map<String, dynamic>?;
-                      final opponentName = combatState?['OpponentName'] as String?;
-
-                      // Process each event, generating combat narratives where applicable
+                      // Process each event, using server-generated Description field
                       displayText = clientEvents
                           .map((event) {
-                            if (event is Map<String, dynamic> && CombatNarrative.isCombatEvent(event)) {
-                              return CombatNarrative.generateEventNarrative(
-                                event,
-                                characterName: characterName ?? 'You',
-                                opponentName: opponentName,
-                              );
+                            if (event is Map<String, dynamic>) {
+                              return event['Description']?.toString() ?? '';
                             }
-                            return event['Description']?.toString() ?? '';
+                            return '';
                           })
                           .where((desc) => desc.isNotEmpty)
                           .join('\n\n');

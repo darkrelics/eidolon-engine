@@ -9,6 +9,7 @@ Triggered by SQS to apply character updates and progress stories.
 
 from eidolon.character_data import get_character
 from eidolon.character_segment import update_character_active_segment
+from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.mechanics import apply_death_or_unconscious_outcome
@@ -19,7 +20,7 @@ from eidolon.segment_polling import check_active_segments_exist, delete_active_s
 from eidolon.segment_processing import determine_next_segment, process_decision_segment
 from eidolon.segment_state import create_next_active_segment, mark_segment_as_completed, update_segment_processing_status
 from eidolon.sqs import send_message
-from eidolon.story_completion import complete_story
+from eidolon.story_completion import complete_story, complete_story_for_character
 from eidolon.story_history import add_segment_to_history, update_story_history_xp
 from eidolon.story_rewards import apply_combat_rewards
 from eidolon.validation import validate_uuid
@@ -168,11 +169,15 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # Determine next segment with weighted branching
     next_segment_id, branch_metadata = determine_next_segment(segment_def, active_segment, outcome, character)
 
+    # If story is complete, clear character state IMMEDIATELY
+    # This ensures clients see the cleared state before advancement finishes processing
+    if next_segment_id is None:
+        complete_story_for_character(character_id)  # type: ignore
+        logger.info(f"Story complete - cleared character state immediately for {character_id}")
+
     # Store branch metadata in current segment history before advancing
     if branch_metadata:
         try:
-            from eidolon.dynamo import TableName, dynamo
-
             dynamo.update_item(
                 TableName.ACTIVE_SEGMENTS,
                 Key={"ActiveSegmentID": active_segment_id},

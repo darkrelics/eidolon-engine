@@ -5,7 +5,17 @@ from datetime import datetime, timedelta, timezone
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import get_character
-from eidolon.constants import AGGRAVATED_HEAL_TIME, BASHING_HEAL_TIME, DEFAULT_DEATH_ROOM_ID, LETHAL_HEAL_TIME, CharState
+from eidolon.constants import (
+    AGGRAVATED_HEAL_TIME,
+    ATTRIBUTE_XP_RATIO,
+    BASE_XP,
+    BASHING_HEAL_TIME,
+    DEFAULT_DEATH_ROOM_ID,
+    FAILURE_XP_PENALTY,
+    LETHAL_HEAL_TIME,
+    MAX_SKILL_LEVEL,
+    CharState,
+)
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import DEFAULT_HEALTH
 from eidolon.logger import logger
@@ -192,10 +202,6 @@ def calculate_skill_increase(effective_score: float, difficulty: float, current_
     Returns:
         Amount to increase skill by
     """
-    import math
-
-    from eidolon.constants import BASE_XP, FAILURE_XP_PENALTY, MAX_SKILL_LEVEL
-
     # Calculate variance modifier using effective scores (quadratic scaling based on ratio)
     # Matches MUD: ratio = min(S, D) / max(S, D), variance_modifier = ratio^2
     if effective_score == 0 and difficulty == 0:
@@ -262,8 +268,6 @@ def resolve_opposed_check_with_xp(
             - Success: bool
             - Sigma: float
     """
-    from eidolon.constants import ATTRIBUTE_XP_RATIO
-
     # Resolve the check
     result = resolve_opposed_check(aggressor_effective, defender_effective)
 

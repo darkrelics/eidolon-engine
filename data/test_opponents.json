@@ -12,7 +12,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 2,
       "ArmorRating": 1,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Chance": 0.5
@@ -37,7 +37,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 3,
       "ArmorRating": 3,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
           "Chance": 0.4
@@ -66,7 +66,7 @@
       "WeaponType": "aggravated",
       "WeaponDamage": 2,
       "ArmorRating": 0,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
           "Chance": 0.3
@@ -95,7 +95,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 3,
       "ArmorRating": 2,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
           "Chance": 0.5
@@ -124,7 +124,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 2,
       "ArmorRating": 0,
-      "LootTable": [],
+      "Items": [],
       "Tags": ["animal", "forest", "fast", "weak"],
       "CreatedAt": "2025-01-23T10:00:00Z"
     },
@@ -140,7 +140,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 4,
       "ArmorRating": 1,
-      "LootTable": [],
+      "Items": [],
       "Tags": ["animal", "forest", "fast", "strong"],
       "CreatedAt": "2025-01-23T10:00:00Z"
     },
@@ -156,7 +156,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 2,
       "ArmorRating": 2,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "Chance": 0.2
@@ -177,7 +177,7 @@
       "WeaponType": "bashing",
       "WeaponDamage": 2,
       "ArmorRating": 0,
-      "LootTable": [],
+      "Items": [],
       "Tags": ["undead", "dungeon", "slow", "medium"],
       "CreatedAt": "2025-01-23T10:00:00Z"
     },
@@ -193,7 +193,7 @@
       "WeaponType": "aggravated",
       "WeaponDamage": 3,
       "ArmorRating": 1,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "Chance": 0.3
@@ -218,7 +218,7 @@
       "WeaponType": "bashing",
       "WeaponDamage": 5,
       "ArmorRating": 2,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Chance": 0.8
@@ -243,7 +243,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 3,
       "ArmorRating": 1,
-      "LootTable": [],
+      "Items": [],
       "Tags": ["animal", "dungeon", "venomous", "medium"],
       "CreatedAt": "2025-01-23T10:00:00Z"
     },
@@ -259,7 +259,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 4,
       "ArmorRating": 3,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
           "Chance": 0.4
@@ -288,7 +288,7 @@
       "WeaponType": "aggravated",
       "WeaponDamage": 3,
       "ArmorRating": 0,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
           "Chance": 0.5
@@ -313,7 +313,7 @@
       "WeaponType": "bashing",
       "WeaponDamage": 4,
       "ArmorRating": 5,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485",
           "Chance": 0.4
@@ -334,7 +334,7 @@
       "WeaponType": "lethal",
       "WeaponDamage": 1,
       "ArmorRating": 0,
-      "LootTable": [],
+      "Items": [],
       "Tags": ["demon", "dungeon", "flying", "weak"],
       "CreatedAt": "2025-01-23T10:00:00Z"
     },
@@ -343,14 +343,14 @@
       "Name": "Gremlin",
       "Description": "A small, mischievous creature with sharp teeth and grubby claws",
       "OffensiveAction": "Brawling",
-      "OffensiveRating": 4,
+      "OffensiveRating": 3,
       "DefensiveAction": "Dodge",
-      "DefensiveRating": 5,
-      "Health": 3,
+      "DefensiveRating": 3,
+      "Health": 2,
       "WeaponType": "bashing",
       "WeaponDamage": 1,
       "ArmorRating": 0,
-      "LootTable": [
+      "Items": [
         {
           "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
           "Chance": 0.2

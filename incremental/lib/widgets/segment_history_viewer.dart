@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
-import 'package:eidolon_incremental/utils/combat_narrative.dart';
 import 'package:eidolon_incremental/utils/outcome_colors.dart';
 
 class SegmentHistoryViewer extends StatefulWidget {
@@ -238,6 +237,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
                           _buildEventSummary(event as Map<String, dynamic>),
                     ),
                   ],
+                  ..._buildItemsList(segment, theme),
                 ],
               ),
             ),
@@ -260,20 +260,7 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
   Widget _buildEventSummary(Map<String, dynamic> event) {
     final eventType = event['eventType'] as String? ?? event['EventType'] as String?;
     final title = event['title'] as String? ?? event['Title'] as String? ?? 'Event';
-
-    // Use combat narrative for combat events
-    String description;
-    if (CombatNarrative.isCombatEvent(event)) {
-      final characterName = _extractCharacterName(event);
-      final opponentName = _extractOpponentNameFromEvent(event);
-      description = CombatNarrative.generateEventNarrative(
-        event,
-        characterName: characterName,
-        opponentName: opponentName,
-      );
-    } else {
-      description = event['description'] as String? ?? event['Description'] as String? ?? '';
-    }
+    final description = event['description'] as String? ?? event['Description'] as String? ?? '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -312,31 +299,6 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
         ],
       ),
     );
-  }
-
-  String _extractCharacterName(Map<String, dynamic> event) {
-    // Try to get character name from event data
-    final data = event['Data'] as Map<String, dynamic>?;
-    final charOffensive = data?['CharacterOffensive'] as Map<String, dynamic>?;
-    if (charOffensive != null) {
-      final name = charOffensive['Name'];
-      if (name is String && name.isNotEmpty) {
-        return name;
-      }
-    }
-    return 'You';
-  }
-
-  String _extractOpponentNameFromEvent(Map<String, dynamic> event) {
-    final data = event['Data'] as Map<String, dynamic>?;
-    final oppOffensive = data?['OpponentOffensive'] as Map<String, dynamic>?;
-    if (oppOffensive != null) {
-      final name = oppOffensive['Name'];
-      if (name is String && name.isNotEmpty) {
-        return name;
-      }
-    }
-    return 'the opponent';
   }
 
   IconData _getSegmentIcon(String segmentType) {
@@ -406,5 +368,66 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
     } else {
       return 'Just now';
     }
+  }
+
+  List<Widget> _buildItemsList(Map<String, dynamic> segment, ThemeData theme) {
+    final characterUpdates = segment['CharacterUpdates'] as Map<String, dynamic>?;
+    if (characterUpdates == null) {
+      return [];
+    }
+
+    final grantedItemIDs = characterUpdates['GrantedItemIDs'] as List<dynamic>?;
+    if (grantedItemIDs == null || grantedItemIDs.isEmpty) {
+      return [];
+    }
+
+    return [
+      const SizedBox(height: 12),
+      Text(
+        'Items Received',
+        style: theme.textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: grantedItemIDs.map((itemId) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: theme.colorScheme.outline.withValues(alpha: 0.5),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.category_outlined,
+                  size: 14,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  _formatItemId(itemId.toString()),
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    ];
+  }
+
+  String _formatItemId(String itemId) {
+    if (itemId.length > 8) {
+      return 'Item ${itemId.substring(itemId.length - 8)}';
+    }
+    return 'Item $itemId';
   }
 }

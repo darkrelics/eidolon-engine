@@ -33,7 +33,11 @@ Release 4 establishes the **economy and inventory management system** by impleme
 
 - R4-T5: Store/shop implementation (purchase items with currency)
 
-**Total:** 5 tasks (economy foundation → inventory operations → player store)
+### Content Enablement — 1 Task
+
+- R4-T6: Author Quick-Start documentation (moved from R3)
+
+**Total:** 6 tasks (economy foundation → inventory operations → player store → content enablement)
 
 ---
 
@@ -1734,6 +1738,248 @@ def test_purchase_insufficient_funds():
 - [ ] Store inventory refreshes after purchase
 - [ ] Insufficient funds displays error message
 - [ ] At least 5 items available in initial store
+
+---
+
+### R4-T6: Author Quick-Start Documentation
+
+**Status:** 🟡 IMPORTANT - Moved from R3
+**Priority:** P1 - Required for content authoring at scale
+**Issues:** #729 (documentation suite), #619 (author handbook - merge duplicate)
+
+**Moved from:** R3-T4 (deferred to better document complete system)
+
+#### Rationale for R4 Inclusion
+
+**Why defer from R3:**
+- R3 focused on core bug fixes and minimal beta readiness
+- Author documentation more valuable after R4 economy system complete
+- Authors need to understand currency rewards, item drops, store mechanics
+- Better to write comprehensive guide once than iterate
+
+**Why include in R4:**
+- Economy features (currency, items, store) add complexity requiring documentation
+- Authors need clear guidance on reward balancing
+- Quick-start enables non-developer content creation at scale
+- Unblocks community content contributions
+
+#### Current State
+
+**What Exists:**
+
+- `documentation/incremental-design.md` (896 lines) - Technical architecture
+- `documentation/schema.md` (38,185 lines) - Complete DynamoDB schema
+- `scripts_python/validate_story_content.py` - Content validator
+- `scripts_python/validate_branching.py` - Branching validator
+- `database/data_loader.py` - Story loader implementation
+- `.github/workflows/story-validation.yml` - CI validation workflow
+
+**What's Missing:**
+
+- **Pragmatic, non-developer-friendly** guide to create stories
+- Copy-paste examples for common patterns including economy features
+- Clear workflow: create → validate → load → test
+- Guidance on balancing currency rewards and item drops
+
+**NOT Required (deferred to R5+):**
+
+- Comprehensive author handbook
+- Story design theory or creative writing guidance
+- Advanced balancing formulas
+- Visual story editor
+
+#### Implementation Requirements
+
+**Create: `documentation/story-author-quickstart.md`**
+
+**Target Audience:** Non-developers who can edit JSON and run command-line tools.
+
+**Core Sections:**
+
+1. **Prerequisites**
+   - Text editor setup
+   - Python 3.12+ installation
+   - Repository access
+   - AWS CLI configuration
+
+2. **Story Creation Workflow**
+   - Create story JSON
+   - Define segments (mechanical, decision)
+   - Add economy features (currency rewards, item drops)
+   - Validate content
+   - Load to DynamoDB
+   - Test in-game
+
+3. **Field Reference**
+   - Story metadata fields explained
+   - Segment types and fields
+   - Challenge definitions
+   - Outcome specifications
+   - **NEW: Currency reward tiers**
+   - **NEW: Item drop configuration**
+
+4. **Copy-Paste Templates** (3 required)
+   - Linear 3-segment story with currency reward
+   - Branching story with 2 decision points and item drops
+   - Combat story with skill challenge and mixed rewards
+
+5. **Common Patterns**
+   - Simple quests
+   - Branching narratives
+   - Combat encounters
+   - **NEW: Economy-focused stories (earn/spend loops)**
+
+6. **Balance Guidelines**
+   - Segment durations by tier
+   - Difficulty progression
+   - **NEW: Currency reward scaling**
+   - **NEW: Item drop rates and value**
+   - **NEW: Store item pricing guidance**
+
+7. **Troubleshooting**
+   - Validation errors and fixes
+   - Loading issues
+   - Testing problems
+   - **NEW: Economy balance issues**
+
+**Economy-Specific Content:**
+
+Add sections covering R4 features:
+
+````markdown
+### Currency Rewards
+
+Stories can award currency based on outcome quality:
+
+```json
+{
+  "RewardTiers": {
+    "Exceptional": {"Currency": 100, "Items": ["health-potion"]},
+    "Success": {"Currency": 50, "Items": []},
+    "Minimal": {"Currency": 25, "Items": []},
+    "Failure": {"Currency": 0, "Items": []}
+  }
+}
+```text
+
+**Balancing Guidelines:**
+
+- Tier 1 stories (beginner): 10-50 currency per completion
+- Tier 2 stories (intermediate): 50-200 currency
+- Tier 3 stories (advanced): 200-1000 currency
+
+Consider:
+- Story length (longer = higher rewards)
+- Difficulty (harder = higher rewards)
+- Repeatability (repeatable = lower rewards)
+
+### Item Drops
+
+Items can be rewarded based on outcome:
+
+```json
+{
+  "RewardTiers": {
+    "Exceptional": {
+      "Items": [
+        {"PrototypeID": "health-potion", "Quantity": 3},
+        {"PrototypeID": "iron-sword", "Quantity": 1}
+      ]
+    }
+  }
+}
+```text
+
+**Item Value Guidance:**
+
+- Consumables (potions): 10-20 currency value
+- Common equipment: 50-150 currency value
+- Rare equipment: 200-500 currency value
+
+**Drop Rate Guidelines:**
+
+- Consumables: 50-80% chance per completion
+- Common equipment: 10-30% chance
+- Rare equipment: 1-10% chance
+
+### Store Item Pricing
+
+When creating items for the store, consider:
+
+1. **Crafting Cost** - How much would it cost to obtain via stories?
+2. **Utility Value** - How useful is the item?
+3. **Scarcity** - Is it a unique/rare item?
+
+**Pricing Formula:**
+
+```
+Store Price = (Average Currency Reward × Story Completions Required) × 1.5
+```text
+
+Example:
+- Health Potion drops 30% of the time from Tier 1 stories (50 currency)
+- Expected value: 50 ÷ 0.3 = ~166 currency of story completion
+- Store price: 166 × 1.5 = ~250 currency → Round to 15 currency (instant purchase option)
+````
+
+#### Additional Documentation Updates
+
+**Update `README.md`:**
+
+```markdown
+## Documentation
+
+- [Story Author Quick-Start](documentation/story-author-quickstart.md) - Create your first story
+- [Deployment Guide](documentation/deployment.md) - Infrastructure setup
+- [Architecture Overview](documentation/architecture.md) - System design
+```text
+
+**Update `.github/workflows/story-validation.yml`:**
+
+```yaml
+# This workflow validates story content on every PR
+# Ensures stories meet structural requirements before merge
+# See documentation/story-author-quickstart.md for authoring guide
+```text
+
+#### Files Modified
+
+- ➕ `documentation/story-author-quickstart.md` - New comprehensive guide
+- ✏️ `README.md` - Add link to quick-start
+- ✏️ `.github/workflows/story-validation.yml` - Add documentation reference
+
+#### Acceptance Criteria
+
+- [ ] Quick-Start document created with all core sections
+- [ ] Economy-specific sections added (currency, items, pricing)
+- [ ] 3 copy-paste templates included and validated
+- [ ] All examples include economy features (rewards, items)
+- [ ] Balance guidelines cover currency and item scaling
+- [ ] README.md updated with link
+- [ ] CI workflow commented with documentation reference
+- [ ] Non-developer can follow guide end-to-end without additional help
+- [ ] All examples pass validation when copy-pasted
+
+#### Definition of Done
+
+**Documentation Quality:**
+
+- Guide is scannable (clear headings, short paragraphs)
+- Examples are complete and immediately usable
+- Balance guidelines are practical and testable
+- Troubleshooting covers common issues
+
+**Validation:**
+
+- Have a non-developer (or simulated non-developer) follow the guide
+- They should successfully create, validate, load, and test a story
+- No questions should arise that aren't answered in the guide
+
+**Integration:**
+
+- Guide linked from README
+- Examples referenced in validation workflow
+- Community can find and use documentation
 
 ---
 

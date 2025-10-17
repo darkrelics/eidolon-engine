@@ -143,7 +143,7 @@ def deploy_character(params, config: Config, _state: CDKState, config_path: Path
                 print("\nError: Build succeeded but artifacts still missing")
                 return False
         else:
-            print("✓ Lambda artifacts found")
+            print("Lambda artifacts found")
     except ClientError:
         print(f"\nError: S3 bucket {params.s3_bucket} not accessible")
         print("Please ensure CodeBuild stack has been deployed")
@@ -163,5 +163,5 @@ def deploy_character(params, config: Config, _state: CDKState, config_path: Path
         print("\nWarning: Character deployment completed with issues")
         return False
 
-    print("\n✓ Character Stack deployed successfully")
+    print("\nCharacter Stack deployed successfully")
     return True

@@ -38,12 +38,12 @@ jobs:
       - name: Validate story branching
         id: validate_branching
         run: |
-          python3 scripts_python/validate_branching.py data/test_story.json data/test_story_branching.json
+          python3 scripts_python/validate_branching.py data/story/*.json
 
       - name: Validate story content
         id: validate_content
         run: |
-          python3 scripts_python/validate_story_content.py data/test_story.json data/test_story_branching.json
+          python3 scripts_python/validate_story_content.py data/story/*.json
 
       - name: Generate validation summary
         if: always()

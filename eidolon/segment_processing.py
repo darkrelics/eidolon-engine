@@ -6,13 +6,14 @@ Provides functions for processing different segment types.
 
 from botocore.exceptions import ClientError
 
-from eidolon.branching import select_next_branch, select_weighted_branch
+from eidolon.branching import select_weighted_branch
 from eidolon.character_data import apply_character_updates
 from eidolon.character_story import apply_story_outcome_effects
 from eidolon.constants import ATTRIBUTE_XP_RATIO
 from eidolon.dynamo import TableName, dynamo
-from eidolon.items import add_items_to_inventory
+from eidolon.items import add_items_to_inventory, process_items_with_probability
 from eidolon.logger import logger
+from eidolon.mechanics import calculate_skill_increase
 from eidolon.segment_challenges import process_skill_challenges
 from eidolon.segment_combat import process_combat_segment
 from eidolon.segment_core import map_outcome_to_key
@@ -144,8 +145,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 difficulty = best_attempt.get("Difficulty", 0)
 
                 # Calculate skill increase directly using same formula as combat
-                from eidolon.mechanics import calculate_skill_increase
-
                 # Get current skill and attribute values from character
                 current_skill = float(character.get("Skills", {}).get(skill, 0))
                 current_attribute = float(character.get("Attributes", {}).get(attribute, 0))
@@ -232,6 +231,30 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             else:
                 results["XPUpdates"] = combat_xp
 
+        # Process opponent items if defeated
+        opponent_defeated = combat_state.get("OpponentDefeated", False)
+        if opponent_defeated:
+            opponent_id = combat_state.get("OpponentID")
+            if opponent_id:
+                try:
+                    opponent_data = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+                    if opponent_data:
+                        opponent_items = opponent_data.get("Items", [])
+                        if opponent_items:
+                            character_id = character.get("CharacterID")
+                            if character_id:
+                                # Process opponent items with probability
+                                prototype_ids = process_items_with_probability(opponent_items)
+                                if prototype_ids:
+                                    granted_items = add_items_to_inventory(character_id, prototype_ids)
+                                    if granted_items:
+                                        # Merge with any items from story effects
+                                        existing_items = results.get("GrantedItemIDs", [])
+                                        results["GrantedItemIDs"] = existing_items + granted_items
+                                        logger.info(f"Granted {len(granted_items)} items from defeated opponent {opponent_id}")
+                except Exception as err:
+                    logger.error(f"Failed to process opponent items for {opponent_id} Error: {err}", exc_info=True)
+
     # Determine overall outcome
     if not outcomes:
         logger.warning(f"Mechanical segment has no challenges or combat for {segment_def.get('SegmentID')}")
@@ -266,9 +289,12 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
             reward_items = story_effects.get("Items")
             if reward_items:
-                granted_items = add_items_to_inventory(character_id, reward_items)
-                if granted_items:
-                    results["GrantedItemIDs"] = granted_items
+                # Process probability for items (handles both simple and probabilistic formats)
+                prototype_ids = process_items_with_probability(reward_items)
+                if prototype_ids:
+                    granted_items = add_items_to_inventory(character_id, prototype_ids)
+                    if granted_items:
+                        results["GrantedItemIDs"] = granted_items
 
     return overall_outcome, results
 
@@ -362,7 +388,7 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
         return "", {"SelectionMethod": "no_decision"}
 
     elif segment_type == "mechanical":
-        # Mechanical segments: outcome-based branching (Death, Failure, Minimal, Normal, Exceptional)
+        # Mechanical segments: direct outcome-based next segment (Death, Failure, Minimal, Normal, Exceptional)
         outcome_key = map_outcome_to_key(outcome or "normal")
 
         # Get results dict
@@ -381,14 +407,12 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
             logger.warning(f"Outcome result for '{outcome_key}' is not a dict in {segment_id} - story ends")
             return "", {"SelectionMethod": "invalid_outcome_result"}
 
-        # Use weighted branching system for mechanical outcomes
-        branch_result = select_next_branch(outcome_result, character)
-
-        next_segment_id = branch_result["NextSegmentID"]
-        branch_metadata = branch_result["BranchMetadata"]
+        # Direct NextSegmentID lookup for mechanical outcomes
+        next_segment_id = outcome_result.get("NextSegmentID", "")
+        branch_metadata = {"SelectionMethod": "outcome_based", "Outcome": outcome_key}
 
         if next_segment_id:
-            logger.info(f"Mechanical outcome branch for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
+            logger.info(f"Mechanical outcome for {active_segment_id}: outcome={outcome_key}, next={next_segment_id}")
         else:
             logger.info(f"No next segment for outcome '{outcome_key}' in {segment_id} - story ends")
 

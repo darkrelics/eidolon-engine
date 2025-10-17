@@ -6,12 +6,12 @@ import 'api_service.dart';
 /// Server-authoritative story polling service.
 ///
 /// Polling strategy:
-/// 1. Wait 60 seconds after segment StartTime
-/// 2. GET /segment/status to check ProcessingStatus
-/// 3. Wait for TimeRemaining to reach 0
+/// 1. GET /segment/status immediately to check current state
+/// 2. If ProcessingStatus='pending', use server's PollAfter field for next check
+/// 3. If ProcessingStatus='processed', wait for TimeRemaining to reach 0
 /// 4. GET /character to reload character state (wounds, XP, etc.)
 /// 5. GET /segment/status to check for next segment
-/// 6. Repeat until story complete
+/// 6. Repeat until story complete (404 response)
 class StoryPollingService {
   StoryPollingService({required ApiService apiService}) : _apiService = apiService;
 
@@ -21,9 +21,11 @@ class StoryPollingService {
   Timer? _pollingTimer;
   bool _isPolling = false;
   int _consecutiveErrors = 0;
+  String? _lastSeenActiveSegmentId;
+  String? _lastReloadedSegmentId;
   static const int _maxConsecutiveErrors = 3;
   static const int _errorRetryDelaySeconds = 30;
-  static const int _initialDelaySeconds = 60;
+  static const int _defaultPollDelaySeconds = 60;  // Fallback if no PollAfter
 
   void dispose() {
     stopPolling();
@@ -35,6 +37,8 @@ class StoryPollingService {
     _isPolling = false;
     _characterId = null;
     _consecutiveErrors = 0;
+    _lastSeenActiveSegmentId = null;
+    _lastReloadedSegmentId = null;
   }
 
   /// Start polling for the character's active story.
@@ -63,9 +67,8 @@ class StoryPollingService {
 
     debugPrint('StoryPollingService: Started polling for character $characterId');
 
-    // Wait 60 seconds before first status check (gives server time to process mechanical segments)
-    _scheduleNextPoll(
-      const Duration(seconds: _initialDelaySeconds),
+    // Check immediately to get current status and PollAfter guidance from server
+    _pollOnce(
       characterId: characterId,
       onStatusUpdate: onStatusUpdate,
       onCharacterReload: onCharacterReload,
@@ -99,6 +102,13 @@ class StoryPollingService {
 
       // Check if story is complete (ActiveSegmentID will be null)
       final activeSegmentId = segmentStatus['ActiveSegmentID'] as String?;
+
+      if (activeSegmentId != _lastSeenActiveSegmentId) {
+        // Active segment changed; reset boundary reload guard so the new segment can sync once
+        _lastSeenActiveSegmentId = activeSegmentId;
+        _lastReloadedSegmentId = null;
+      }
+
       if (activeSegmentId == null) {
         debugPrint('StoryPollingService: Story complete - stopping polling');
         stopPolling();
@@ -111,10 +121,29 @@ class StoryPollingService {
       final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
 
       if (processingStatus == 'pending') {
-        // Server still processing - retry in 30 seconds
-        debugPrint('StoryPollingService: Segment still processing (pending), retrying in 30 seconds');
+        // Server still processing - use PollAfter if available, fallback to default
+        final pollAfter = segmentStatus['PollAfter'] as String?;
+        Duration delay = const Duration(seconds: _defaultPollDelaySeconds);
+
+        if (pollAfter != null && pollAfter.isNotEmpty) {
+          try {
+            final pollTime = DateTime.parse(pollAfter).toUtc();
+            final now = DateTime.now().toUtc();
+            final waitSeconds = pollTime.difference(now).inSeconds;
+            if (waitSeconds > 0) {
+              delay = Duration(seconds: waitSeconds);
+            } else {
+              // PollAfter is in the past, poll immediately
+              delay = Duration.zero;
+            }
+          } catch (e) {
+            debugPrint('StoryPollingService: Error parsing PollAfter, using default delay: $e');
+          }
+        }
+
+        debugPrint('StoryPollingService: Segment still processing (pending), retrying in ${delay.inSeconds}s');
         _scheduleNextPoll(
-          const Duration(seconds: 30),
+          delay,
           characterId: characterId,
           onStatusUpdate: onStatusUpdate,
           onCharacterReload: onCharacterReload,
@@ -126,16 +155,22 @@ class StoryPollingService {
         debugPrint('StoryPollingService: Segment processed, waiting $timeRemaining seconds then reloading character');
 
         // Schedule character reload at segment end
+        final pendingSegmentId = activeSegmentId;
         Timer(Duration(seconds: timeRemaining), () async {
           if (!_isPolling || _characterId != characterId) return;
 
           try {
-            // Reload character to get updated state (wounds, XP, attributes)
-            debugPrint('StoryPollingService: Reloading character at segment boundary');
-            final character = await _apiService.getCharacterById(characterId);
+            if (_lastReloadedSegmentId == pendingSegmentId) {
+              debugPrint('StoryPollingService: Skipping character reload for segment $pendingSegmentId - already synchronized');
+            } else {
+              // Reload character to get updated state (wounds, XP, attributes)
+              debugPrint('StoryPollingService: Reloading character at segment boundary');
+              final character = await _apiService.getCharacterById(characterId);
 
-            if (character != null) {
-              onCharacterReload(character.toJson());
+              if (character != null) {
+                onCharacterReload(character.toJson());
+                _lastReloadedSegmentId = pendingSegmentId;
+              }
             }
 
             // Brief delay then check for next segment
@@ -173,14 +208,21 @@ class StoryPollingService {
         // Segment complete (TimeRemaining = 0) - reload character and check for next segment
         debugPrint('StoryPollingService: Segment complete, reloading character');
 
-        try {
-          final character = await _apiService.getCharacterById(characterId);
-          if (character != null) {
-            onCharacterReload(character.toJson());
+        final segmentIdForReload = activeSegmentId;
+
+        if (_lastReloadedSegmentId == segmentIdForReload) {
+          debugPrint('StoryPollingService: Skipping character reload for segment $segmentIdForReload - already synchronized');
+        } else {
+          try {
+            final character = await _apiService.getCharacterById(characterId);
+            if (character != null) {
+              onCharacterReload(character.toJson());
+              _lastReloadedSegmentId = segmentIdForReload;
+            }
+          } catch (e) {
+            debugPrint('StoryPollingService: Error reloading character: $e');
+            onError?.call(e);
           }
-        } catch (e) {
-          debugPrint('StoryPollingService: Error reloading character: $e');
-          onError?.call(e);
         }
 
         // Brief delay then check for next segment
