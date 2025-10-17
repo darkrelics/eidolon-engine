@@ -551,6 +551,87 @@ Retrieves completed segment history for a character's active or most recent stor
 - `404 Not Found` - Character does not exist
 - `500 Internal Server Error` - Database operation failed
 
+### Get Item Brief
+
+Retrieves lightweight item metadata for IndexedDB caching. Returns only ItemID and PrototypeID.
+
+**Endpoint:** `GET /item/brief`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+- `ItemID` (required): UUID of the item instance
+
+**Response (200 OK):**
+
+```json
+{
+  "ItemID": "550e8400-e29b-41d4-a716-446655440000",
+  "PrototypeID": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing ItemID parameter, invalid UUID format
+- `401 Unauthorized` - Missing or invalid authentication token
+- `404 Not Found` - Item does not exist
+- `500 Internal Server Error` - Database operation failed
+
+### Get Item Prototype
+
+Retrieves complete item prototype definition for client-side caching.
+
+**Endpoint:** `GET /item/prototype`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+- `PrototypeID` (required): UUID of the item prototype
+
+**Response (200 OK):**
+
+```json
+{
+  "PrototypeID": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "PrototypeName": "Iron Sword",
+  "Description": "A well-crafted iron sword with a leather-wrapped hilt.",
+  "Mass": 3.5,
+  "Value": 150,
+  "Stackable": false,
+  "MaxStack": 1,
+  "Quantity": 1,
+  "Wearable": true,
+  "WornOn": ["right_hand", "left_hand"],
+  "Verbs": {
+    "examine": "You examine the iron sword closely.",
+    "swing": "You swing the sword through the air."
+  },
+  "Overrides": {},
+  "TraitMods": {
+    "Melee": 1.0,
+    "Damage": 3
+  },
+  "Container": false,
+  "Contents": [],
+  "IsWorn": false,
+  "CanPickUp": true,
+  "Metadata": {
+    "WeaponType": "sword",
+    "DamageType": "lethal"
+  }
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing PrototypeID parameter, invalid UUID format
+- `401 Unauthorized` - Missing or invalid authentication token
+- `404 Not Found` - Prototype does not exist
+- `500 Internal Server Error` - Database operation failed
+
 ## Client Cadence (Incremental mode)
 
 - After `POST /story/start`, the client updates the UI with the first segment immediately.

@@ -24,6 +24,8 @@ tags:
     description: Story lifecycle operations
   - name: Segments
     description: Segment processing and polling operations
+  - name: Items
+    description: Item and prototype retrieval for client caching
 
 paths:
   /archetype:
@@ -632,6 +634,138 @@ paths:
                 $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /item/brief:
+    get:
+      tags:
+        - Items
+      summary: Get item brief
+      description: Retrieves lightweight item metadata (ItemID and PrototypeID only) for IndexedDB caching strategy.
+      operationId: getItemBrief
+      parameters:
+        - in: query
+          name: ItemID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the item instance
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Successfully retrieved item brief
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemBriefResponse"
+              example:
+                ItemID: 550e8400-e29b-41d4-a716-446655440000
+                PrototypeID: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingItemID:
+                  summary: Missing ItemID parameter
+                  value:
+                    Error: "Missing ItemID parameter"
+                invalidUUID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid ItemID format"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Item not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /item/prototype:
+    get:
+      tags:
+        - Items
+      summary: Get item prototype
+      description: Retrieves complete item prototype definition for client-side caching. Prototypes are shared across all item instances.
+      operationId: getItemPrototype
+      parameters:
+        - in: query
+          name: PrototypeID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the item prototype
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+      responses:
+        "200":
+          description: Successfully retrieved item prototype
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPrototypeResponse"
+              example:
+                PrototypeID: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                PrototypeName: Iron Sword
+                Description: A well-crafted iron sword with a leather-wrapped hilt.
+                Mass: 3.5
+                Value: 150
+                Stackable: false
+                MaxStack: 1
+                Quantity: 1
+                Wearable: true
+                WornOn:
+                  - right_hand
+                  - left_hand
+                Verbs:
+                  examine: You examine the iron sword closely.
+                  swing: You swing the sword through the air.
+                Overrides: {}
+                TraitMods:
+                  Melee: 1.0
+                  Damage: 3
+                Container: false
+                Contents: []
+                IsWorn: false
+                CanPickUp: true
+                Metadata:
+                  WeaponType: sword
+                  DamageType: lethal
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingPrototypeID:
+                  summary: Missing PrototypeID parameter
+                  value:
+                    Error: "Missing PrototypeID parameter"
+                invalidUUID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid PrototypeID format"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Prototype not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Prototype not found"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -1550,3 +1684,130 @@ components:
         Message:
           type: string
       required: [CharacterID, StoryID, Abandoned]
+
+    ItemBriefResponse:
+      type: object
+      required:
+        - ItemID
+        - PrototypeID
+      properties:
+        ItemID:
+          type: string
+          format: uuid
+          description: UUID of the item instance
+          example: 550e8400-e29b-41d4-a716-446655440000
+        PrototypeID:
+          type: string
+          format: uuid
+          description: UUID of the item's prototype
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+
+    ItemPrototypeResponse:
+      type: object
+      required:
+        - PrototypeID
+        - PrototypeName
+        - Description
+        - Mass
+        - Value
+        - Stackable
+        - MaxStack
+        - Quantity
+        - Wearable
+        - Container
+        - CanPickUp
+      properties:
+        PrototypeID:
+          type: string
+          format: uuid
+          description: UUID of the prototype
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        PrototypeName:
+          type: string
+          description: Display name of the item
+          example: Iron Sword
+        Description:
+          type: string
+          description: Item description text
+          example: A well-crafted iron sword with a leather-wrapped hilt.
+        Mass:
+          type: number
+          description: Weight of the item
+          minimum: 0
+          example: 3.5
+        Value:
+          type: integer
+          description: Monetary value of the item
+          minimum: 0
+          example: 150
+        Stackable:
+          type: boolean
+          description: Whether multiple items can stack
+          example: false
+        MaxStack:
+          type: integer
+          description: Maximum stack size
+          minimum: 1
+          example: 1
+        Quantity:
+          type: integer
+          description: Default quantity when created
+          minimum: 1
+          example: 1
+        Wearable:
+          type: boolean
+          description: Whether the item can be worn/equipped
+          example: true
+        WornOn:
+          type: array
+          items:
+            type: string
+          description: Body slots where item can be worn
+          example:
+            - right_hand
+            - left_hand
+        Verbs:
+          type: object
+          additionalProperties:
+            type: string
+          description: Actions available for this item
+          example:
+            examine: You examine the iron sword closely.
+            swing: You swing the sword through the air.
+        Overrides:
+          type: object
+          description: Behavior overrides for this item
+          example: {}
+        TraitMods:
+          type: object
+          additionalProperties:
+            type: number
+          description: Skill/attribute modifiers when equipped
+          example:
+            Melee: 1.0
+            Damage: 3
+        Container:
+          type: boolean
+          description: Whether item can contain other items
+          example: false
+        Contents:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Default contents when created
+          example: []
+        IsWorn:
+          type: boolean
+          description: Default worn state when created
+          example: false
+        CanPickUp:
+          type: boolean
+          description: Whether the item can be picked up
+          example: true
+        Metadata:
+          type: object
+          description: Additional custom properties
+          example:
+            WeaponType: sword
+            DamageType: lethal

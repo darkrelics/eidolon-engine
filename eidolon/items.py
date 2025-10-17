@@ -25,6 +25,68 @@ def get_prototype(prototype_id: str) -> dict | None:
     return dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
 
 
+def get_item_brief(item_id: str) -> dict:
+    """
+    Retrieve item brief information for IndexedDB caching.
+
+    Returns only ItemID and PrototypeID for lightweight item loading.
+
+    Args:
+        item_id: Item UUID to fetch
+
+    Returns:
+        Dict containing ItemID and PrototypeID
+
+    Raises:
+        ValueError: If item not found or missing PrototypeID
+        RuntimeError: If database operation fails
+    """
+    try:
+        item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+    except ClientError as err:
+        logger.error(f"Failed to fetch item {item_id} from database")
+        raise RuntimeError(f"Failed to retrieve item data") from err
+
+    if not item:
+        raise ValueError(f"Item {item_id} not found")
+
+    prototype_id = item.get("PrototypeID")
+    if not prototype_id:
+        logger.error(f"Item {item_id} missing PrototypeID field")
+        raise ValueError(f"Item data incomplete")
+
+    return {"ItemID": item_id, "PrototypeID": prototype_id}
+
+
+def get_item_prototype_full(prototype_id: str) -> dict:
+    """
+    Retrieve complete item prototype definition for client-side caching.
+
+    Returns the full prototype data including all properties, stats, and metadata.
+    Prototypes are immutable game data and safe to cache indefinitely on client.
+
+    Args:
+        prototype_id: Prototype UUID to fetch
+
+    Returns:
+        Complete prototype data dict
+
+    Raises:
+        ValueError: If prototype not found
+        RuntimeError: If database operation fails
+    """
+    try:
+        prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
+    except ClientError as err:
+        logger.error(f"Failed to fetch prototype {prototype_id} from database")
+        raise RuntimeError(f"Failed to retrieve prototype data") from err
+
+    if not prototype:
+        raise ValueError(f"Prototype {prototype_id} not found")
+
+    return prototype
+
+
 def build_item_payload(
     prototype: dict,
     item_id: str,

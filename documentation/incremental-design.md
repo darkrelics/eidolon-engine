@@ -548,6 +548,56 @@ The client implements an intelligent cache layer using IndexedDB that provides:
 - **Story Preservation**: Complete narrative history with search, analytics, and offline access
 - **Performance Optimization**: 85-90% reduction in API calls while maintaining server-authoritative design
 
+#### **IndexedDB Schema Design**
+
+The database is named "EidolonDB" version 1, containing five object stores organized into three data domains:
+
+**1. Stories Store - Historical Preservation**
+
+Preserves completed story history with rich metadata for narrative journey curation. Each record represents a completed story instance containing the full story outcome, segment history references, and XP totals.
+
+- **Key Path**: `['characterId', 'storyInstanceId']` (composite key)
+- **Indexes**:
+  - `by-character`: Query all stories for a player
+  - `by-completion-date`: Chronological display (`['characterId', 'completedAt']`)
+  - `by-outcome`: Filter by result type (`['characterId', 'finalOutcome']`)
+  - `by-story-type`: Categorize story experiences (`['characterId', 'storyType']`)
+
+**2. Story Segments Store - Segment History Storage**
+
+Archives individual segment instances with complete narrative data and outcomes. Each record is keyed by the combination of character ID, story instance ID, and active segment ID.
+
+- **Key Path**: `['characterId', 'storyInstanceId', 'activeSegmentId']` (composite key)
+- **Indexes**:
+  - `by-story-instance`: Load all segments for a specific playthrough (`['characterId', 'storyInstanceId']`)
+  - `by-segment-type`: Filter mechanical vs decision segments (`['characterId', 'segmentType']`)
+  - `by-outcome`: Analyze performance patterns (`['characterId', 'outcome']`)
+
+**3. Characters Store - Primary Character Storage**
+
+Serves as the primary cache for character data. Each record is keyed by the character ID and contains the full character object along with metadata for cache management.
+
+- **Key Path**: `characterId`
+- **Indexes**:
+  - `by-player`: Find all characters belonging to a player (`playerId`)
+  - `by-last-updated`: Cache invalidation strategies (`lastUpdated`)
+
+**4. Items Store - Item Instance Storage**
+
+Caches individual item instances belonging to characters. Each item record contains only essential data: the item UUID and its prototype UUID.
+
+- **Key Path**: `itemId`
+- **Indexes**:
+  - `by-character`: Retrieve all items for a specific character (`characterId`)
+
+**5. Item Prototypes Store - Item Template Storage**
+
+Caches complete prototype definitions for all items. Each prototype record contains the full item template including name, description, stats, requirements, and special properties.
+
+- **Key Path**: `prototypeId`
+- **Indexes**:
+  - `by-last-fetched`: Cache invalidation strategies (`lastFetched`)
+
 #### **Data Flow Pattern**
 
 ```
@@ -562,6 +612,49 @@ Server Updates → IndexedDB Cache → Provider State → UI Components
 ```
 
 Character and inventory panels maintain instant responsiveness with IndexedDB data, while the story panel provides rich historical context. This approach eliminates loading states for cached data while preserving server authority for all game logic.
+
+#### **Smart Update Strategies**
+
+The IndexedDB system uses domain-specific update patterns to minimize server requests while maintaining data consistency:
+
+**Stories Domain - Completion-Triggered Preservation:**
+
+When a story completes, the client immediately preserves the narrative data before the server clears the active state. This involves fetching the complete story history using `GET /story/history` and `GET /segment/history`, then storing both records in their respective IndexedDB object stores. The system performs this preservation in the background after triggering the UI update, ensuring no user-visible latency.
+
+**Characters Domain - Field-Level Updates:**
+
+Rather than fetching complete character records for every change, the system applies incremental field updates during active gameplay. When segment responses contain `CharacterUpdates`, the client retrieves the cached character, applies only the specified changes (XP, wounds, health, essence), and updates the cached record. Full character refreshes occur only at character selection and story completion, reducing API calls by 90%.
+
+**Inventory Domain - Relationship-Aware Caching:**
+
+The two-tier item caching strategy separates item instances from their prototype definitions. When loading inventory, the client first fetches lightweight item briefs (UUID + PrototypeID), then checks IndexedDB for cached prototypes. Only missing prototypes require server fetches. This approach dramatically reduces network calls since many items share common prototypes (e.g., multiple health potions all reference the same prototype).
+
+#### **Error Handling and Resilience**
+
+The IndexedDB cache layer implements a three-tier fallback strategy for graceful degradation:
+
+**Three-Tier Fallback Pattern:**
+
+For each data domain, the system attempts access in order:
+1. **Primary**: Read from IndexedDB cache for instant display
+2. **Fallback**: Fetch fresh data from server API on cache failure
+3. **Graceful Degradation**: Return empty state or stale cache as last resort
+
+**Stories Domain Fallback:**
+- IndexedDB fails → fetch via `GET /story/history` → return empty array if server fails
+- Story history is non-critical, so empty state provides acceptable experience
+
+**Characters Domain Fallback:**
+- IndexedDB fails → fetch via `GET /character` → use stale cache if server fails
+- Character data is critical, so stale data better than no data
+
+**Inventory Domain Fallback:**
+- IndexedDB fails → fetch all item details via server → return empty inventory if server fails
+- Inventory display degrades gracefully with "unable to load items" message
+
+**Database Corruption Recovery:**
+
+When IndexedDB corruption is detected, the client clears the corrupted domain's data and reinitializes the database. For story history, the system attempts to preserve cached stories before clearing. For character and inventory data, the system falls back to fresh server fetches. This ensures users never lose access to game functionality even with client-side storage issues.
 
 ### 7.4 Client Polling Strategy
 

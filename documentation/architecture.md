@@ -721,6 +721,16 @@ System failures are handled gracefully with player-favorable defaults to prevent
 - Front-loaded processing eliminates runtime calculations
 - Pre-calculated ClientEvents for entire segment duration
 - Server-authoritative state eliminates client synchronization
+- IndexedDB caching layer reduces API calls by 85-90%
+
+**IndexedDB Cache Layer:**
+
+The Flutter client implements an intelligent IndexedDB cache for three data domains:
+- **Stories**: Historical preservation of completed narratives for offline access
+- **Characters**: Smart caching with field-level updates (60+ API calls/hour → 5-10)
+- **Items**: Two-tier prototype caching minimizes redundant item data fetches
+
+See [Incremental Design](incremental-design.md#indexeddb-cache-layer-integration) for complete schema and implementation details.
 
 ## Security Considerations
 
