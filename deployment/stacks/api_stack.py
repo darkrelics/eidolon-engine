@@ -202,6 +202,17 @@ class ApiStack(Stack):
             list_resource = character_resource.add_resource("list")
             self._add_lambda_integration(list_resource, "GET", "api-character-list", authorizer)
 
+        # Item endpoints
+        item_resource = api.root.add_resource("item")
+
+        if "api-item-brief" in self.lambda_arns:
+            brief_resource = item_resource.add_resource("brief")
+            self._add_lambda_integration(brief_resource, "GET", "api-item-brief", authorizer)
+
+        if "api-item-prototype" in self.lambda_arns:
+            prototype_resource = item_resource.add_resource("prototype")
+            self._add_lambda_integration(prototype_resource, "GET", "api-item-prototype", authorizer)
+
         # Story endpoints (for incremental/hybrid modes)
         if self.deployment_mode in ["incremental", "hybrid"]:
             story_resource = api.root.add_resource("story")
@@ -353,6 +364,8 @@ class ApiStack(Stack):
             "api-character-delete": "ImportApiCharacterDelete",
             "api-character-get": "ImportApiCharacterGet",
             "api-character-list": "ImportApiCharacterList",
+            "api-item-brief": "ImportApiItemBrief",
+            "api-item-prototype": "ImportApiItemPrototype",
             "api-segment-decision": "ImportApiSegmentDecision",
             "api-segment-history": "ImportApiSegmentHistory",
             "api-segment-status": "ImportApiSegmentStatus",

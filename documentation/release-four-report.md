@@ -71,13 +71,64 @@ Following the project's philosophy, the implementation will prioritize:
 
 ### Phase 1: IndexedDB Infrastructure
 
-#### 1.1 Database Service Implementation
+#### 1.1 Database Service Implementation ✓ **Completed**
 
-The IndexedDB service will be implemented as a singleton service responsible for database initialization and management. During initialization, it will open a connection to the EidolonDB database with version 1.
+**File:** `incremental/lib/services/indexeddb_service.dart`
 
-When the database is opened for the first time or when the version changes, the service will create the necessary object stores. This involves establishing the five stores described in the schema design: stories, story segments, characters, items, and item prototypes. Each store will be configured with its primary key path and appropriate indexes for efficient querying.
+The IndexedDB service has been implemented as a singleton service responsible for database initialization and management. During initialization, it opens a connection to the EidolonDB database with version 1.
 
-The service will provide methods for basic CRUD operations on each object store, handling transactions appropriately to ensure data consistency. It will also implement proper error handling for failed operations, falling back to fetching fresh data from the server if database operations fail.
+When the database is opened for the first time or when the version changes, the service creates the necessary object stores. This involves establishing the five stores described in the schema design: stories, story segments, characters, items, and item prototypes. Each store is configured with its primary key path and appropriate indexes for efficient querying.
+
+The service provides methods for basic CRUD operations on each object store, handling transactions appropriately to ensure data consistency. It implements proper error handling for failed operations, falling back to fetching fresh data from the server if database operations fail.
+
+**Implementation Details:**
+
+**Singleton Pattern:**
+```dart
+static final IndexedDBService _instance = IndexedDBService._internal();
+factory IndexedDBService() => _instance;
+```
+
+**Web Platform Detection:**
+```dart
+bool get isSupported => kIsWeb && getIdbFactory() != null;
+```
+
+**Database Schema (EidolonDB v1):**
+- **stories** - Composite key: `[CharacterID, StoryInstanceID]`
+  - Indexes: `characterId`, `completedAt`, `outcome`, `storyId`
+- **story_segments** - Composite key: `[CharacterID, StoryInstanceID, ActiveSegmentID]`
+  - Indexes: `storyInstance`, `segmentType`, `outcome`
+- **characters** - Key: `CharacterID`
+  - Indexes: `playerId`, `lastFetchedAt`
+  - Auto-added metadata: `LastFetchedAt` timestamp
+- **items** - Key: `ItemID`
+  - Index: `characterId`
+  - Minimal storage: ItemID + PrototypeID only
+- **item_prototypes** - Key: `PrototypeID`
+  - Index: `lastFetchedAt`
+  - Full prototype data with `LastFetchedAt` metadata
+
+**API Surface (31 methods):**
+- **Characters:** `putCharacter()`, `getCharacter()`, `getPlayerCharacters()`, `deleteCharacter()`
+- **Stories:** `putStory()`, `getCharacterStories()`
+- **Segments:** `putSegment()`, `getStorySegments()`
+- **Items:** `putItemBrief()`, `getItemBrief()`
+- **Prototypes:** `putItemPrototype()`, `getItemPrototype()`, `hasItemPrototype()`
+- **Utilities:** `initialize()`, `close()`, `clearAll()`, `isSupported`
+
+**Error Handling Strategy:**
+- All operations wrapped in try-catch blocks
+- `debugPrint()` logging for troubleshooting
+- Graceful null returns on failures
+- Operations return `Future<void>` or nullable types
+- Automatic fallback to server fetches when unavailable
+
+**Verification:**
+- ✓ Flutter analyze: 0 issues
+- ✓ Web build: Successfully compiles
+- ✓ Compatible with idb_shim 2.6.7
+- ✓ Follows existing service patterns
 
 #### 1.2 Character Repository Pattern
 
@@ -265,11 +316,30 @@ Critical user paths will be tested manually to verify:
 
 ## Implementation Status
 
-### Phase 1: Foundation
-- [ ] Create IndexedDB service
+### API Endpoints (Backend)
+- [x] Create `lambda/api_item_brief.py` - GET /item/brief endpoint
+- [x] Create `lambda/api_item_prototype.py` - GET /item/prototype endpoint
+- [x] Add `get_item_brief()` to `eidolon/items.py`
+- [x] Add `get_item_prototype_full()` to `eidolon/items.py`
+- [x] Add Lambda functions to CDK Character Stack (`deployment/stacks/character_stack.py`)
+- [x] Add functions to Lambda update list (`deployment/lambda_functions.py`)
+- [x] Configure API Gateway routes for /item resource (`deployment/stacks/api_stack.py`)
+- [ ] Deploy updated stacks to AWS
+
+### Phase 1: Foundation (Frontend)
+- [x] Create IndexedDB service (`incremental/lib/services/indexeddb_service.dart`) ✓ **Completed**
+  - [x] Database initialization (EidolonDB v1)
+  - [x] Five object stores (stories, story_segments, characters, items, item_prototypes)
+  - [x] Index creation for efficient querying
+  - [x] CRUD operations for all stores
+  - [x] Error handling with fallback to server
+  - [x] Web platform detection and compatibility checks
+  - [x] Singleton pattern implementation
+  - [x] Analyzed and verified (0 issues)
+  - [x] Successfully integrated into Flutter web build
 - [ ] Implement character repository
 
-### Phase 2: Integration
+### Phase 2: Integration (Frontend)
 - [ ] Integrate with story polling
 - [ ] Implement segment update application
 
@@ -326,9 +396,9 @@ Two new endpoints are required for the two-tier item caching strategy:
 }
 ```
 
-**Lambda Function:** `lambda/api_item_brief.py`
+**Lambda Function:** `lambda/api_item_brief.py` ✓ **Implemented**
 
-**Business Logic:**
+**Business Logic:** `eidolon.items.get_item_brief()` ✓ **Implemented**
 1. Extract and validate player ID from JWT token
 2. Validate player exists in Players table
 3. Validate ItemID parameter is a valid UUID
@@ -380,9 +450,9 @@ Two new endpoints are required for the two-tier item caching strategy:
 }
 ```
 
-**Lambda Function:** `lambda/api_item_prototype.py`
+**Lambda Function:** `lambda/api_item_prototype.py` ✓ **Implemented**
 
-**Business Logic:**
+**Business Logic:** `eidolon.items.get_item_prototype_full()` ✓ **Implemented**
 1. Extract and validate player ID from JWT token
 2. Validate player exists in Players table
 3. Validate PrototypeID parameter is a valid UUID
@@ -408,25 +478,26 @@ Two new endpoints are required for the two-tier item caching strategy:
 
 ### Implementation Requirements
 
-**Lambda Functions:**
+**Lambda Functions:** ✓ **Completed**
 Both functions follow standard patterns:
-- Use `eidolon.cognito.extract_player_id()` for authentication
-- Use `eidolon.player.validate_player()` for player validation
-- Use `eidolon.validation.validate_uuid()` for parameter validation
-- Use `eidolon.dynamo` for database access
-- Use `eidolon.cors.cors_handler` for CORS handling
-- Use `eidolon.responses.lambda_response()` for responses
-- Follow error handling patterns from existing endpoints
+- ✓ Use `eidolon.cognito.extract_player_id()` for authentication
+- ✓ Use `eidolon.player.validate_player()` for player validation
+- ✓ Use `eidolon.validation.validate_uuid()` for parameter validation
+- ✓ Use `eidolon.dynamo` for database access
+- ✓ Use `eidolon.cors.cors_handler` for CORS handling
+- ✓ Use `eidolon.responses.lambda_response()` for responses
+- ✓ Follow error handling patterns from existing endpoints
 
-**CDK Deployment:**
-- Add function definitions to appropriate CDK stack
-- Configure API Gateway routes under `/item` resource
-- Use Cognito authorizer for authentication
-- Standard Lambda configuration (128MB memory, 30s timeout)
+**CDK Deployment:** ✓ **Completed**
+- ✓ Add function definitions to Character Stack (`deployment/stacks/character_stack.py`)
+- ✓ Configure API Gateway routes under `/item` resource (`deployment/stacks/api_stack.py`)
+- ✓ Use Cognito authorizer for authentication
+- ✓ Standard Lambda configuration (128MB memory, 30s timeout)
+- ✓ Fixed logical IDs: `ApiItemBriefFunction` and `ApiItemPrototypeFunction`
 
-**API Gateway Routes:**
-- `GET /item/brief` → `api-item-brief` Lambda
-- `GET /item/prototype` → `api-item-prototype` Lambda
+**API Gateway Routes:** ✓ **Completed**
+- `GET /item/brief` → `api-item-brief` Lambda (handler: `api_item_brief.lambda_handler`)
+- `GET /item/prototype` → `api-item-prototype` Lambda (handler: `api_item_prototype.lambda_handler`)
 
 ### Existing Endpoints
 
