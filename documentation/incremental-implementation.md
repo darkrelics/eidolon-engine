@@ -3364,14 +3364,21 @@ def claim_segment_for_processing(active_segment_id):
 
 ### 6.1 Server-Authoritative Design
 
-The Flutter client follows a server-authoritative design where all state determination happens on the server. The client maintains a simple polling loop and displays what the server provides without making any state decisions.
+The Flutter client follows a server-authoritative design where all state determination happens on the server. The client maintains a polling loop guided by server PollAfter timing and applies incremental character updates from segment responses.
 
 #### Key Principles
 
 1. **Server Authority**: The server determines all state transitions. Clients never modify story state.
-2. **Simple Polling**: Fixed cadence polling rather than dynamic intervals.
-3. **Display-Only History**: Local segment history is maintained purely for UI display.
-4. **Completion Detection**: Story completion is detected by checking `activeSegmentID == null`.
+2. **Server-Guided Polling**: Uses PollAfter field from responses, not fixed intervals.
+3. **Incremental Updates**: Applies CharacterUpdates from segment responses to IndexedDB cache.
+4. **Minimal Character Fetches**: Only at character selection and story completion.
+5. **Single Polling Source**: Only GameScreen polls (SegmentProvider disabled).
+6. **Completion Detection**: Story completion detected when `activeSegmentID == null`.
+
+**Implementation Status:**
+- See `incremental/lib/services/story_polling_service.dart` for actual implementation
+- Known bug: Polls immediately (T+0) instead of waiting 60 seconds (INITIAL_POLL_DELAY)
+- Otherwise follows server-authoritative design correctly
 
 ### 6.2 Polling Implementation
 
@@ -3387,7 +3394,11 @@ class _GameScreenState extends State<GameScreen> {
   // Segment history for UI display only
   final List<Map<String, dynamic>> _segmentHistory = [];
 
-  /// Simple polling loop following the server cadence
+  /// Designed polling pattern (OUTDATED - see actual implementation)
+  ///
+  /// NOTE: This example shows the DESIGNED behavior.
+  /// ACTUAL IMPLEMENTATION in story_polling_service.dart polls immediately (T+0), not T+60.
+  /// This is a known bug - client violates INITIAL_POLL_DELAY specification.
   Future<void> _runStoryPolling() async {
     if (_character?.activeSegmentID == null) {
       _isPolling = false;
@@ -3396,7 +3407,8 @@ class _GameScreenState extends State<GameScreen> {
 
     debugPrint('Starting story polling loop');
 
-    // Wait 60 seconds for initial processing
+    // DESIGN: Wait 60 seconds for initial processing (INITIAL_POLL_DELAY)
+    // ACTUAL: story_polling_service.dart polls immediately - BUG
     await Future.delayed(const Duration(seconds: 60));
 
     while (_isPolling && _character?.activeSegmentID != null) {
@@ -3407,6 +3419,9 @@ class _GameScreenState extends State<GameScreen> {
             characterId: _character!.id,
           ),
         );
+
+        // DESIGN: Use server PollAfter field for timing (not shown in this example)
+        // ACTUAL: story_polling_service.dart does use PollAfter - correct
 
         // Add to display history if processed
         if (status['ProcessingStatus'] == 'processed') {
@@ -3419,7 +3434,8 @@ class _GameScreenState extends State<GameScreen> {
           await Future.delayed(Duration(seconds: timeRemaining));
         }
 
-        // Get updated character
+        // DESIGN: Get updated character after each segment
+        // ACTUAL: story_polling_service.dart uses incremental updates via CharacterRepository - better
         await _loadCharacterData();
 
         // If story continues, wait for next segment processing

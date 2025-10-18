@@ -16,7 +16,7 @@ graph TB
 
     subgraph "AWS Cloud"
         APIGW[API Gateway<br/>api.domain]
-        Lambda[Lambda Functions<br/>15 Deployed]
+        Lambda[Lambda Functions<br/>17 Deployed]
         DynamoDB[(DynamoDB<br/>14 Tables)]
         EventBridge[EventBridge<br/>1 min Poller]
         ProcessQ[SQS Queue<br/>Processing]
@@ -44,7 +44,7 @@ graph TB
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **16 Lambda Functions Total**: 15 deployed (cognito_player_delete excluded), API handlers and operational functions
+- **18 Lambda Functions Total**: 17 deployed, 1 not deployed (cognito-player-delete reserved for future API)
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **2 SQS Queues**: Processing and advancement queues
 - **1 EventBridge Rule**: 1-minute polling for segment completion
@@ -162,13 +162,15 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 
 **Function Categories:**
 
-**API Layer (11 functions):**
+**API Layer (13 functions):**
 
 - `api-archetype-list`: List available archetypes
 - `api-character-add`: Create new character with name validation
 - `api-character-delete`: Delete character
 - `api-character-get`: Retrieve character details with GameMode cleanup
 - `api-character-list`: List player's characters
+- `api-item-brief`: Get lightweight item metadata for IndexedDB caching
+- `api-item-prototype`: Get complete item prototype definition
 - `api-segment-decision`: Record player choice in decision segment
 - `api-segment-history`: Get segment history
 - `api-segment-status`: Get current segment status

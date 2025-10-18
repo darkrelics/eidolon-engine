@@ -202,7 +202,7 @@ Retrieves complete character data including active story and segment information
     "Essence": 3,
     "MaxHealth": 12,
     "Wounds": [],
-    "CharState": "standing",
+    "Resources": {},
     "AvailableStories": ["story_1", "story_2"],
     "ActiveStoryID": "story_current_uuid",
     "ActiveSegmentID": "segment_current_uuid",
@@ -632,10 +632,26 @@ Retrieves complete item prototype definition for client-side caching.
 - `404 Not Found` - Prototype does not exist
 - `500 Internal Server Error` - Database operation failed
 
-## Client Cadence (Incremental mode)
+## Client Polling Pattern (Incremental mode)
 
-- After `POST /story/start`, the client updates the UI with the first segment immediately.
-- First `GET /segment/status` occurs 60 seconds after `StartTime`.
-- If the segment is still unprocessed, the client calls `GET /segment/status` every 30 seconds until processed.
-- At `EndTime`, the client calls `GET /character` to load the next segment or completion state.
-- Only if segments fail to process are there additional status calls beyond the first.
+The designed polling pattern (from backend constants):
+
+1. **After `POST /story/start`**: Client displays first segment immediately
+2. **Initial Delay**: Wait 60 seconds after `StartTime` before first poll (INITIAL_POLL_DELAY)
+3. **First Status Check**: `GET /segment/status` at T+60 seconds
+4. **Server-Guided Polling**: Uses `PollAfter` field from response for subsequent checks
+5. **Processing States**:
+   - If `ProcessingStatus="pending"`: Wait until `PollAfter` time, then poll again
+   - If `ProcessingStatus="processed"` with `TimeRemaining > 0`: Wait for timer to expire
+   - If `ProcessingStatus="processed"` with `TimeRemaining = 0`: Segment complete
+6. **Incremental Updates**: When segment completes, apply `CharacterUpdates` from segment response to local cache via CharacterRepository
+7. **Story Completion**: When `ActiveSegmentID` becomes null, fetch fresh character from server
+8. **No Periodic Character Fetches**: Character only fetched at selection and story completion
+
+**Current Implementation Note:**
+- Flutter client currently polls immediately (T+0), not T+60
+- This is inconsistent with backend INITIAL_POLL_DELAY constant
+- Single polling source in GameScreen (no dual-polling)
+- Respects server PollAfter guidance for subsequent polls
+- Uses incremental character updates (not full reloads between segments)
+- Falls back to full character fetch on error

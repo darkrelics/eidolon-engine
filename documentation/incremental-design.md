@@ -10,7 +10,7 @@ graph TB
 
     subgraph "AWS Cloud"
         APIGW[API Gateway<br/>api.domain]
-        Lambda[Lambda Functions<br/>16 Functions]
+        Lambda[Lambda Functions<br/>17 Deployed]
         DynamoDB[(DynamoDB<br/>14 Tables)]
         EventBridge[EventBridge<br/>1 min Poller]
         ProcessQ[SQS Queue<br/>Processing]
@@ -131,7 +131,7 @@ def business_logic(param1: str, param2: str) -> dict:
 
 ### 3.2 Core Lambda Functions
 
-**Production Lambda Functions (16 Total):**
+**Production Lambda Functions (17 Deployed, 18 Total):**
 
 All functions use:
 
@@ -663,11 +663,12 @@ When IndexedDB corruption is detected, the client clears the corrupted domain's 
 #### **Core Polling Principles**
 
 1. **Server Authority**: Always trust server timing and state
-2. **Single Polling Loop**: Only one timer, one source of truth
+2. **Single Polling Loop**: Only one timer, one source of truth (GameScreen only)
 3. **Single API Endpoint**: GET /segment/status provides all needed data
-4. **Minimal API Calls**: 2 calls per segment (1 initial + 1 completion check)
-5. **Simple Error Handling**: 30-second retry delay only
-6. **No Local State Management**: Server provides all timing information
+4. **Server-Guided Timing**: Use PollAfter field from response, not fixed intervals
+5. **Incremental Updates**: Apply CharacterUpdates from segment response to local cache
+6. **Minimal Character Fetches**: Only at character selection and story completion
+7. **Simple Error Handling**: Retry with exponential backoff, stop after 3 consecutive errors
 
 #### **Why Polling Architecture is Optimal**
 
@@ -697,53 +698,39 @@ When IndexedDB corruption is detected, the client clears the corrupted domain's 
 - No complex WebSocket reconnection logic required
 - Graceful degradation with intermittent connectivity
 
-#### **Recommended Polling Implementation**
+#### **Actual Implementation (StoryPollingService)**
 
+See `incremental/lib/services/story_polling_service.dart` for complete implementation.
+
+**Key Behaviors:**
+
+1. **Immediate Check**: GET /segment/status called immediately after story start (not delayed)
+2. **Server-Guided Delay**: Uses PollAfter field from response for next check timing
+3. **Processing Status Handling**:
+   - If ProcessingStatus="pending": Wait until PollAfter time
+   - If ProcessingStatus="processed" with TimeRemaining > 0: Wait for timer to expire
+   - If ProcessingStatus="processed" with TimeRemaining = 0: Segment complete
+4. **Incremental Updates**: Applies CharacterUpdates from segment response to IndexedDB cache via CharacterRepository
+5. **Deduplication**: Tracks last reloaded segment ID to avoid duplicate updates
+6. **Story Completion**: When ActiveSegmentID becomes null, refreshes character from server and stops polling
+7. **Error Handling**: Consecutive error counter with max 3 failures before stopping
+
+**Pattern:**
 ```dart
-class ServerAuthoritativePolling {
-  bool _isPolling = false;
-
-  /// Simple polling loop that follows server cadence exactly
-  Future<void> startStoryPolling(String characterId) async {
-    if (_isPolling) return;
-    _isPolling = true;
-
-    while (_isPolling) {
-      try {
-        // Single API call - GET /segment/status includes all needed data:
-        // - TimeRemaining (server-calculated)
-        // - ActiveSegmentID (for completion check)
-        // - ProcessingStatus, narrative, outcomes
-        final segmentStatus = await apiService.getSegmentStatus(
-          characterId: characterId
-        );
-
-        // Update UI with segment status
-        updateUIWithServerState(segmentStatus);
-
-        // Check if story is complete (ActiveSegmentID will be null)
-        if (segmentStatus.activeSegmentID == null) {
-          break; // Story finished - stop polling
-        }
-
-        // Wait exactly the time server specifies
-        final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
-        if (timeRemaining > 0) {
-          await Future.delayed(Duration(seconds: timeRemaining));
-        } else {
-          // Segment complete, brief delay before next check
-          await Future.delayed(const Duration(seconds: 2));
-        }
-
-      } catch (e) {
-        // 30-second retry delay for all errors
-        await Future.delayed(const Duration(seconds: 30));
-      }
-    }
-
-    _isPolling = false;
-  }
-}
+// Simplified view - see actual file for complete implementation
+_runtime.startPolling(
+  characterId: characterId,
+  onStatusUpdate: (status) {
+    // Update UI with segment status (ProcessingStatus, TimeRemaining, etc.)
+  },
+  onSegmentComplete: (segmentUpdates) {
+    // Apply incremental character updates from CharacterUpdates field
+    characterRepository.updateCharacterFromSegment(characterId, segmentUpdates);
+  },
+  onStoryComplete: () {
+    // Refresh character from server, stop polling
+  },
+);
 ```
 
 #### **Polling Flow by Segment Type**
@@ -775,12 +762,12 @@ class ServerAuthoritativePolling {
 
 #### **Error Recovery**
 
-**Network Errors**: 30-second delay, then retry
-**404 Errors**: Story complete - stop polling  
-**Other Errors**: 30-second delay, then retry
+**Actual Implementation** (from story_polling_service.dart):
 
-**Maximum 3 consecutive errors before stopping** - prevents battery drain on network issues.
-**Minimum 30-second intervals** - aligns with system's overall timing cadence.
+- **Network/API Errors**: Increment consecutive error counter, retry after 30 seconds
+- **404 "No active segment"**: Indicates story complete - stop polling
+- **Maximum 3 Consecutive Errors**: Stop polling to prevent battery drain
+- **Error Reset**: Successful API call resets error counter to 0
 
 #### **Common Implementation Problems**
 
@@ -819,10 +806,11 @@ pollingService.start(
   onError: (err) { /* optional toast + retry affordance */ },
 );
 
-// Cadence
-// - First status at T+60s from segment StartTime
-// - If unprocessed, repeat status every 30s
-// - At EndTime, GET /character to load next segment or completion
+// Actual Implementation (StoryPollingService):
+// - Immediate status check after story start
+// - Server PollAfter field guides next check timing (not fixed intervals)
+// - Incremental character updates from segment CharacterUpdates (not GET /character)
+// - Full character fetch only at story completion
 ```
 
 **Benefits of Correct Implementation**:
@@ -839,7 +827,7 @@ pollingService.start(
 
 **Lambda Functions:**
 
-- 16 total functions deployed via Lambda Stack
+- 17 total functions deployed (18 total, 1 not deployed)
 - Python 3.12 runtime with eidolon library layer
 - Shared execution role with DynamoDB access
 - Post-deployment updates from S3 artifacts
@@ -905,25 +893,32 @@ Incremental mode uses the shared deployment system described in [Deployment Guid
 
 ```python
 # From lambda_stack.py - Fixed logical IDs prevent recreation
+# Note: This is a simplified view. Actual deployment splits functions across Character, Player, and Story stacks.
+# See deployment/stacks/character_stack.py, player_stack.py, story_stack.py for actual deployment.
+
 lambda_configs = [
-    # Character API functions
+    # Character Stack (7 functions)
     ("api-archetype-list", "api_archetype_list.lambda_handler"),
     ("api-character-add", "api_character_add.lambda_handler"),
     ("api-character-delete", "api_character_delete.lambda_handler"),
     ("api-character-get", "api_character_get.lambda_handler"),
     ("api-character-list", "api_character_list.lambda_handler"),
-    # Story API functions
+    ("api-item-brief", "api_item_brief.lambda_handler"),
+    ("api-item-prototype", "api_item_prototype.lambda_handler"),
+    # Player Stack (1 function)
+    ("cognito-player-new", "cognito_player_new.lambda_handler"),
+    # Story Stack (9 functions)
     ("api-segment-decision", "api_segment_decision.lambda_handler"),
     ("api-segment-history", "api_segment_history.lambda_handler"),
     ("api-segment-status", "api_segment_status.lambda_handler"),
     ("api-story-abandon", "api_story_abandon.lambda_handler"),
+    ("api-story-history", "api_story_history.lambda_handler"),
     ("api-story-start", "api_story_start.lambda_handler"),
-    # Operational functions
-    ("cognito-player-new", "cognito_player_new.lambda_handler"),
     ("ops-segment-poller", "ops_segment_poller.lambda_handler"),
     ("ops-segment-process", "ops_segment_process.lambda_handler"),
     ("ops-story-advance", "ops_story_advance.lambda_handler"),
 ]
+# Total: 17 deployed (cognito-player-delete exists but not deployed)
 ```
 
 **Portal Build Automation:**
@@ -978,8 +973,8 @@ All Lambda functions receive standardized environment variables:
 
 **Deployment Metrics:**
 
-- **9 CDK Stacks**: All operational in production
-- **16 Lambda Functions**: Deployed with fixed logical IDs
+- **10 CDK Stacks**: All operational in production
+- **17 Lambda Functions**: Deployed with fixed logical IDs (18 total, cognito-player-delete not deployed)
 - **14 DynamoDB Tables**: Created with RemovalPolicy.RETAIN
 - **Module Size**: 94% under 300 lines (modular architecture)
 - **Deployment Time**: Full deployment in under 15 minutes

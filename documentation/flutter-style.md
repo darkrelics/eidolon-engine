@@ -8,6 +8,7 @@ This document defines the Flutter/Dart coding standards and best practices for t
 - Use `dart analyze` to check for issues before committing
 - Maintain consistency with existing code patterns
 - Prioritize readability and maintainability
+- Code formatting enforced by automated linters in CI/CD
 
 ## Code Organization
 

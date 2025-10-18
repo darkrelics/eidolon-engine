@@ -69,7 +69,7 @@ def lambda_handler(event: dict, context: object) -> dict:
         result = get_item_prototype_full(prototype_id)
         result_converted = decimal_to_float(result)
         logger.info(f"Retrieved item prototype for {prototype_id} for player {player_id}")
-        return lambda_response(200, result_converted, event)
+        return lambda_response(200, result_converted, event) #type: ignore
     except ValueError as err:
         logger.warning(f"Item prototype request failed: {err}")
         return lambda_response(404, {"Error": str(err)}, event)
