@@ -263,12 +263,13 @@ def start_story_transaction(character_id, story_id, segment_data):
 ### Good Table
 
 ```markdown
-| Segment Type | Description         | Processing Method | Duration Range |
-| ------------ | ------------------- | ----------------- | -------------- |
-| Decision     | Player makes choice | Immediate         | 1-60 minutes   |
-| Mechanical   | Challenges/combat   | Queued to SQS     | 1-24 hours     |
-| Rest         | Healing period      | Simple advance    | 1-24 hours     |
+| Segment Type | Description                          | Processing Method | Duration Range    |
+| ------------ | ------------------------------------ | ----------------- | ----------------- |
+| Decision     | Player makes choice                  | Immediate         | 2 minutes-24 hours|
+| Mechanical   | Challenges/combat or rest (healing)  | Queued to SQS     | 2 minutes-24 hours|
 ```
+
+Note: Rest segments are mechanical segments with no Challenges and no Combat. Fixed duration: 15 minutes.
 
 ## Conclusion
 

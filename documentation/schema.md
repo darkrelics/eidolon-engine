@@ -40,7 +40,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
 | `MaxHealth`        | `NUMBER`        |          | The character's maximum health levels.                                        |
 | `Hidden`           | `BOOL`          |          | Whether the character is currently hidden.                                    |
 | `Wounds`           | `LIST` of `MAP` |          | List of wound objects. Each wound is a map with DamageType and HealAt fields. |
-| `CharState`        | `STRING`        |          | Current character state (e.g., "standing", "unconscious").                    |
+| `CharState`        | `STRING`        |          | Current character state (e.g., "standing", "unconscious", "dead"). Stored in DB but NOT returned in GET /character API response. |
 | `LeftHandID`       | `STRING`        |          | UUID of item equipped in left hand (if any).                                  |
 | `RightHandID`      | `STRING`        |          | UUID of item equipped in right hand (if any).                                 |
 | `AvailableStories` | `LIST`          |          | List of story IDs available to this character.                                |
@@ -50,7 +50,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
 | `ActiveSegmentID`  | `STRING`        |          | UUID of the currently active segment (if any).                                |
 | `Archetype`        | `STRING`        |          | Name of the character's archetype.                                            |
 | `MaxEssence`       | `NUMBER`        |          | The character's maximum essence points.                                       |
-| `Resources`        | `MAP`           |          | Map of resource types to quantities (e.g., gold: 100).                        |
+| `Resources`        | `MAP`           |          | Map of resource types to quantities (e.g., gold: 100). Currently always empty - currency rewards not implemented. |
 | `Progress`         | `MAP`           |          | Map tracking story progress flags and achievements.                           |
 | `CreatedAt`        | `STRING`        |          | ISO 8601 timestamp when character was created.                                |
 | `UpdatedAt`        | `STRING`        |          | ISO 8601 timestamp of last character update.                                  |
@@ -296,7 +296,7 @@ In this example:
 | `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.      |
 | `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).     |
 | `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.  |
-| `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier.       |
+| `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier. Current implementation: text strings. Design intent: reward objects with items/currency arrays. |
 | `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.              |
 | `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.      |
 

@@ -403,14 +403,16 @@ Death outcomes don't always end the story. The system supports:
 - **Underworld Journeys**: Death begins a new quest
 - **Reincarnation**: Death leads to rebirth scenarios
 
-Example:
+**Implementation Note:** Ghost state is defined in health.md specification and implemented in MUD server, but NOT in Incremental mode (Python constants.py missing ghost state). This limits death-continuation storylines in current implementation.
+
+Example (design concept):
 
 ```json
 "Death": {
   "Narrative": "As darkness takes you, you feel your spirit rise...",
   "NextSegmentID": "ghost-revenge-segment-1",
   "Effects": {
-    "State": "ghost"  // Character becomes a ghost
+    "State": "ghost"  // NOT IMPLEMENTED in Incremental
   }
 }
 ```

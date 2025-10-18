@@ -583,6 +583,18 @@ Tasks ordered for progressive product improvement. Each task makes the game more
    - Flutter implementation: Polls at T+0 (immediately)
    - File: incremental/lib/services/story_polling_service.dart:72
 
+### Deployment/Infrastructure
+
+**Lambda Layer Cleanup:**
+1. [ISSUE] Manual layer version cleanup required
+   - AWS limit: 75 layer versions maximum
+   - Current: Each deployment reuses existing layer (doesn't publish new)
+   - Problem: Old versions never deleted automatically
+   - Impact: Frequent deployments will hit 75-version limit, causing deployment failures
+   - Fix needed: Automate cleanup of old layer versions in deployment process
+   - File: deployment/lambda_functions.py:310-314 (reuses layer but doesn't clean up)
+   - Note in docs: deployment.md:310 mentions manual cleanup required
+
 ---
 
 ## Path to Player-Ready

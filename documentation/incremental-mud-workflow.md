@@ -51,6 +51,7 @@ Characters can transition between modes with these safeguards:
 **Lambda Function**: `api-story-start` (POST /story/start)
 
 - Character must have GameMode "None" (not in any active mode)
+- **Known Bug:** Should also check CharState != "dead" but doesn't (story_eligibility bug)
 - Player selects a story from AvailableStories list
 - GameMode updated to "Incremental"
 - ActiveStoryID and ActiveSegmentID set
@@ -103,7 +104,8 @@ Character state persists across mode transitions in the 14 DynamoDB tables (all 
   - Standing: Normal state with health > 0
   - Unconscious: Health = 0 with at least one bashing wound
   - Dead: Health = 0 with only lethal/aggravated wounds
-- Death in either mode requires resurrection before continuing
+- **Known Bug:** Dead characters can currently start Incremental stories (story_eligibility doesn't check CharState)
+- **Design Intent:** Death in either mode should require resurrection before continuing (not implemented)
 
 **Skill Progression:**
 
@@ -117,7 +119,8 @@ Character state persists across mode transitions in the 14 DynamoDB tables (all 
 - Items gained in Incremental stories appear in MUD inventory
 - Equipment worn affects combat stats in both modes
 - Lost or destroyed items affect both game modes
-- Currency (gold, resources) shared between modes
+- **Known Bug:** Currency never populated (Resources field always empty, apply_story_rewards is empty function)
+- **Design Intent:** Currency (gold, resources) should be shared between modes (not implemented)
 
 **Location:**
 
@@ -264,19 +267,19 @@ The wound healing system operates continuously across both game modes:
 
 ### Mode-Specific Stack Deployment
 
-**MUD Mode (8 Stacks):**
+**MUD Mode (9 Stacks):**
 
 - Excludes Story Stack (no SQS/EventBridge)
 - Includes S3 Scripts and CloudWatch for Lua support
 - Portal frontend via `buildspec/portal.yml`
 
-**Incremental Mode (7 Stacks):**
+**Incremental Mode (8 Stacks):**
 
 - Includes Story Stack for segment processing
 - Excludes S3 Scripts and CloudWatch stacks
 - Incremental frontend via `buildspec/incremental.yml`
 
-**Hybrid Mode (9 Stacks - Default):**
+**Hybrid Mode (10 Stacks - Default):**
 
 - Includes all stacks for complete functionality
 - Supports both MUD and Incremental gameplay

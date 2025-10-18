@@ -7,7 +7,7 @@ This document defines the Python coding standards for the Eidolon Engine project
 These style guidelines have been validated through production deployment:
 
 - **Module Size Compliance**: 94% of modules under 300 lines, 100% under 1000 lines
-- **16 Lambda Functions**: All following separation of concerns pattern
+- **17 Lambda Functions**: All following separation of concerns pattern (18 total, cognito-player-delete not deployed)
 - **Fixed Logical IDs**: Implemented throughout for resource stability
 - **140 Lessons Applied**: Style patterns refined through deployment experience
 
@@ -53,7 +53,7 @@ Always use explicit imports with `from ... import ...` syntax:
 ```python
 # Good
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger logger
+from eidolon.logger import logger
 from botocore.exceptions import ClientError
 
 # Bad
@@ -78,7 +78,7 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, field_validator
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger logger
+from eidolon.logger import logger
 from eidolon.validation import validate_uuid
 ```
 
@@ -683,7 +683,7 @@ The `lambda_handler` function is the entry point for AWS Lambda and must **NEVER
 
 #### Production Lambda Configuration
 
-All 16 production Lambda functions follow these standards:
+All 17 deployed Lambda functions follow these standards:
 
 - **Runtime**: Python 3.12
 - **Memory**: 128MB (standardized across all functions)
@@ -1300,7 +1300,7 @@ from datetime import datetime
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger logger
+from eidolon.logger import logger
 
 # Constants
 MAX_NAME_LENGTH = 30
@@ -1395,4 +1395,4 @@ Be explicit with parameter passing:
 - Keep functions small and focused (max 50 lines)
 - Use meaningful variable names
 - Ensure all code follows PEP 8 where not overridden by this guide
-- These guidelines have been validated through production deployment of 9 CDK stacks
+- These guidelines have been validated through production deployment of 10 CDK stacks

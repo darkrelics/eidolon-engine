@@ -6,7 +6,13 @@ The Incremental Game Module is an idle RPG subsystem within the Eidolon Engine t
 
 ## System Status
 
-The incremental game system is fully deployed to production. For deployment details and metrics, see the [Implementation Guide](incremental-implementation.md#production-deployment-status).
+The incremental game system is deployed to production with core gameplay functional. Known bugs in economy system and death mechanics documented in [INCREMENTAL-STATUS.md](INCREMENTAL-STATUS.md).
+
+**Infrastructure:** All AWS resources deployed and operational
+**Core Gameplay:** Story progression, combat, XP system working
+**Known Issues:** Currency rewards broken, dead character prevention broken, inventory display showing UUIDs
+
+For deployment details and metrics, see the [Implementation Guide](incremental-implementation.md).
 
 ## Purpose
 

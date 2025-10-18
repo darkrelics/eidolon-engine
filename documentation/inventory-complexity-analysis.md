@@ -1,10 +1,25 @@
 # Inventory System Complexity Analysis
 
-**Why SharedPreferences is Insufficient for Game Inventory Management**
+**Why IndexedDB is Required for Advanced Inventory Features**
 
 ## Overview
 
-This document analyzes the complexity of the Eidolon Engine's inventory system and demonstrates why the current SharedPreferences-based caching is architecturally inadequate for rich inventory features.
+This document describes planned advanced inventory features that require IndexedDB relational data management. These features are NOT yet implemented.
+
+**Current Implementation Status (Release 4):**
+- Basic IndexedDB caching implemented (items and item_prototypes stores)
+- Simple inventory display (Equipped + Bag sections)
+- No container navigation, search, optimization, or analytics features
+- Current UI falls back to UUID display when InventoryDetails empty
+
+**This Document Describes:**
+- Planned container hierarchy navigation
+- Planned inventory search and filtering
+- Planned equipment optimization
+- Planned inventory analytics
+- Design justification for why IndexedDB (not SharedPreferences) enables these features
+
+For current inventory implementation, see incremental-implementation.md section 6.8.
 
 ## Current Inventory Architecture
 
@@ -398,7 +413,7 @@ Total: 0 API calls, <50ms query time
 
 ## Conclusion
 
-The inventory system's complexity **requires relational data management capabilities** that SharedPreferences fundamentally cannot provide.
+The planned advanced inventory features require relational data management capabilities that SharedPreferences fundamentally cannot provide.
 
 The container hierarchies, equipment relationships, and item state management create a web of data dependencies that need:
 
@@ -409,4 +424,23 @@ The container hierarchies, equipment relationships, and item state management cr
 
 **IndexedDB is not over-engineering for this use case - it's the appropriate tool for managing complex relational game data that enables rich user experiences impossible with simple key-value storage.**
 
-The inventory complexity alone justifies the IndexedDB investment, with story preservation and character caching providing additional architectural benefits.
+## Current vs Planned
+
+**Current Implementation (Release 4):**
+- IndexedDB service implemented with basic item caching
+- Simple inventory display (equipped items + bag grid)
+- No container navigation
+- No search or filtering
+- No optimization features
+- No analytics
+
+**Planned Features (This Document):**
+- Container hierarchy navigation with breadcrumbs
+- Multi-criteria inventory search
+- Equipment optimization suggestions
+- Inventory analytics and insights
+- Drag-and-drop organization
+- All enabled by IndexedDB relational capabilities
+
+**Implementation Roadmap:**
+These features are lower priority than fixing core gameplay bugs (currency system, death mechanics, inventory UUID display). See INCREMENTAL-STATUS.md for current priorities.

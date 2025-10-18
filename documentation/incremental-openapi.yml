@@ -518,55 +518,6 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /segment/outcome:
-    get:
-      tags:
-        - Segments
-      summary: Get segment outcome
-      description: Retrieves outcome narrative and effects for a completed or processed segment.
-      operationId: getSegmentOutcome
-      parameters:
-        - in: query
-          name: CharacterID
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - in: query
-          name: SegmentID
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Outcome data
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SegmentOutcomeResponse"
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          description: Character or segment not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "409":
-          description: Segment not yet completed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-
   /segment/status:
     get:
       tags:
@@ -634,6 +585,79 @@ paths:
                 $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /story/history:
+    get:
+      tags:
+        - Stories
+      summary: Get story history
+      description: Retrieves story history entries by story instance IDs. Accepts up to 10 instance IDs and returns them in requested order with Missing array for not found.
+      operationId: getStoryHistory
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the character
+        - in: query
+          name: StoryInstanceIDs
+          required: false
+          schema:
+            type: string
+          description: Comma-separated list of story instance UUIDs (max 10)
+          example: "uuid1,uuid2,uuid3"
+      responses:
+        "200":
+          description: Story history entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryHistoryResponse"
+              example:
+                CharacterID: "550e8400-e29b-41d4-a716-446655440000"
+                Stories:
+                  - CharacterID: "550e8400-e29b-41d4-a716-446655440000"
+                    StoryInstanceID: "uuid1"
+                    StoryID: "story_uuid"
+                    StoryTitle: "The Goblin's Ambush"
+                    StartedAt: 1705329900
+                    CompletedAt: 1705330800
+                    FinalOutcome: "normal"
+                    SegmentHistory: ["seg1", "seg2", "seg3"]
+                    SkillXPAwarded:
+                      Investigation: 15
+                    AttributeXPAwarded:
+                      Perception: 5
+                Missing: ["uuid3"]
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingCharacterID:
+                  summary: Missing CharacterID
+                  value:
+                    Error: "Missing CharacterID"
+                invalidStoryInstanceID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid StoryInstanceID values"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Access denied"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -1075,7 +1099,6 @@ components:
         - Essence
         - MaxEssence
         - Wounds
-        - CharState
         - AvailableStories
         - AbandonedStories
         - CompletedStories
@@ -1134,8 +1157,9 @@ components:
           description: List of current wounds
         CharState:
           type: string
-          description: Current character state
+          description: Current character state (not returned in API response - use Dead flag from character list)
           enum: [standing, unconscious, dead]
+          nullable: true
         LeftHandID:
           type: string
           format: uuid
@@ -1684,6 +1708,80 @@ components:
         Message:
           type: string
       required: [CharacterID, StoryID, Abandoned]
+
+    StoryHistoryResponse:
+      type: object
+      required:
+        - CharacterID
+        - Stories
+        - Missing
+      properties:
+        CharacterID:
+          type: string
+          format: uuid
+          description: UUID of the character
+        Stories:
+          type: array
+          description: Story history entries in requested order
+          items:
+            $ref: "#/components/schemas/StoryHistoryEntry"
+        Missing:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Story instance IDs that were not found
+
+    StoryHistoryEntry:
+      type: object
+      required:
+        - CharacterID
+        - StoryInstanceID
+        - StoryID
+        - StoryTitle
+        - StartedAt
+      properties:
+        CharacterID:
+          type: string
+          format: uuid
+          description: Character who played the story
+        StoryInstanceID:
+          type: string
+          format: uuid
+          description: Unique instance of this story playthrough
+        StoryID:
+          type: string
+          description: Story definition UUID
+        StoryTitle:
+          type: string
+          description: Story title for display
+        StartedAt:
+          type: integer
+          description: Unix timestamp when story started
+        CompletedAt:
+          type: integer
+          nullable: true
+          description: Unix timestamp when story completed (null if abandoned)
+        FinalOutcome:
+          type: string
+          enum: [death, failure, minimal, normal, exceptional, abandoned]
+          nullable: true
+          description: Final outcome of the story
+        SegmentHistory:
+          type: array
+          items:
+            type: string
+          description: Array of segment IDs completed in order
+        SkillXPAwarded:
+          type: object
+          additionalProperties:
+            type: number
+          description: Total skill XP earned from this story
+        AttributeXPAwarded:
+          type: object
+          additionalProperties:
+            type: number
+          description: Total attribute XP earned from this story
 
     ItemBriefResponse:
       type: object
