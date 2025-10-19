@@ -130,15 +130,78 @@ bool get isSupported => kIsWeb && getIdbFactory() != null;
 - ✓ Compatible with idb_shim 2.6.7
 - ✓ Follows existing service patterns
 
-#### 1.2 Character Repository Pattern
+#### 1.2 Character Repository Pattern ✓ **Completed**
 
-The character repository will serve as the primary interface for character data management, implementing a cache-first strategy to minimize server calls. The repository will coordinate between the IndexedDB service for local storage and the API service for server communication.
+**File:** `incremental/lib/repositories/character_repository.dart`
 
-The repository will fetch complete character data from the server at two specific points: when entering the character selection screen (loading all of the player's characters), and after each story completes. This results in N+1 character fetches per session where N is the number of stories played. These fresh fetches ensure the cache starts with accurate data and remains synchronized. Only characters actually loaded in the incremental game will be stored in IndexedDB - characters created but never accessed will not be cached.
+The character repository serves as the primary interface for character data management, implementing a cache-first strategy to minimize server calls. The repository coordinates between the IndexedDB service for local storage and the API service for server communication.
 
-For segment updates during story gameplay, the repository will implement an incremental update strategy. When receiving character updates from a segment response, it will retrieve the current cached character state and apply only the changes specified in the segment update. This includes updating experience points for skills and attributes, modifying resource values, applying wounds, and adjusting health or essence values. After applying updates, the repository will update the cache with the new character state.
+The repository fetches complete character data from the server at two specific points: when entering the character selection screen (loading all of the player's characters), and after each story completes. This results in N+1 character fetches per session where N is the number of stories played. These fresh fetches ensure the cache starts with accurate data and remains synchronized. Only characters actually loaded in the incremental game are stored in IndexedDB - characters created but never accessed will not be cached.
 
-The repository will maintain consistency by ensuring all updates are atomic and properly sequenced, preventing race conditions during concurrent operations.
+For segment updates during story gameplay, the repository implements an incremental update strategy. When receiving character updates from a segment response, it retrieves the current cached character state and applies only the changes specified in the segment update. This includes updating experience points for skills and attributes, modifying resource values, applying wounds, and adjusting health or essence values. After applying updates, the repository updates the cache with the new character state.
+
+The repository maintains consistency by ensuring all updates are atomic and properly sequenced, preventing race conditions during concurrent operations.
+
+**Implementation Details:**
+
+**Public API (9 methods):**
+```dart
+loadPlayerCharacters() → Future<List<CharacterInfo>>
+getCharacter(String) → Future<Character?>
+refreshCharacterFromServer(String) → Future<Character?>
+updateCharacterFromSegment(String, Map) → Future<Character?>
+deleteCharacterFromCache(String) → Future<void>
+getCachedPlayerCharacters(String) → Future<List<Character>>
+clearCache() → Future<void>
+```
+
+**Cache-First Strategy:**
+```dart
+// 1. Try cache first
+final cachedData = await _indexedDB.getCharacter(characterId);
+if (cachedData != null) {
+  return Character.fromJson(cachedData);
+}
+
+// 2. Cache miss - fetch from server
+final character = await _apiService.getCharacterById(characterId);
+await _cacheCharacter(character);
+return character;
+```
+
+**Incremental Update Logic:**
+The `_applyUpdates()` method applies field-level changes:
+- **Health/Essence**: Direct replacement from updates
+- **Skills/Attributes**: Additive XP (current + delta)
+- **Resources**: Additive values (current + delta)
+- **Inventory**: Full replacement if provided
+- **Wounds**: Full replacement if provided
+- **Progress**: Merge with existing progress
+
+**Server Fetch Points:**
+1. **Character Selection** (`loadPlayerCharacters()`):
+   - Fetches list from server
+   - Fetches full details for each character
+   - Caches all characters in IndexedDB
+
+2. **Story Completion** (`refreshCharacterFromServer()`):
+   - Forces server fetch (bypasses cache)
+   - Updates cache with fresh data
+   - Ensures synchronization after major state changes
+
+**Error Handling:**
+- All cache operations wrapped in try-catch
+- Automatic fallback to server on cache errors
+- Graceful degradation when IndexedDB unavailable
+- Silent failures for best-effort caching
+- Server always remains accessible
+
+**Verification:**
+- ✓ Flutter analyze: 0 issues
+- ✓ Web build: Successfully compiles
+- ✓ Integrates with IndexedDB service
+- ✓ Integrates with API service
+- ✓ Follows repository pattern
 
 #### 1.3 Item Loading Process
 
@@ -337,11 +400,102 @@ Critical user paths will be tested manually to verify:
   - [x] Singleton pattern implementation
   - [x] Analyzed and verified (0 issues)
   - [x] Successfully integrated into Flutter web build
-- [ ] Implement character repository
+- [x] Implement character repository (`incremental/lib/repositories/character_repository.dart`) ✓ **Completed**
+  - [x] Cache-first strategy implementation
+  - [x] Server fetch at character selection
+  - [x] Server refresh after story completion
+  - [x] Incremental update logic from segment responses
+  - [x] Field-level updates (health, essence, skills, attributes, resources, inventory, wounds)
+  - [x] Error handling with automatic server fallback
+  - [x] Analyzed and verified (0 issues)
+  - [x] Successfully integrated into Flutter web build
 
-### Phase 2: Integration (Frontend)
-- [ ] Integrate with story polling
-- [ ] Implement segment update application
+### Phase 2: Integration (Frontend) ✓ **Completed**
+
+#### 2.1 Story Polling Service Integration ✓ **Completed**
+
+**Files Modified:**
+- `incremental/lib/services/story_polling_service.dart`
+- `incremental/lib/screens/game_screen.dart`
+
+The story polling service has been successfully modified to use incremental character updates instead of full character reloads. The service now extracts character updates from segment status responses and applies them using the Character Repository.
+
+**Implementation Changes:**
+
+**New Callback Added:**
+```dart
+onSegmentComplete: (Map<String, dynamic> segmentUpdates)
+```
+This callback is invoked when a segment completes, providing the segment response data for incremental updates.
+
+**Segment Completion Flow:**
+1. Poll segment status via `GET /segment/status`
+2. When segment complete (ProcessingStatus='processed' and TimeRemaining=0):
+   - Extract segment updates from response
+   - Call `onSegmentComplete` with segment data
+   - Character Repository applies incremental updates
+3. Only fetch full character from server at story completion
+
+**Character Reload Eliminated:**
+- Removed `_apiService.getCharacterById()` calls at segment boundaries
+- Character updates now applied via `CharacterRepository.updateCharacterFromSegment()`
+- Full character reloads only occur at story completion
+
+#### 2.2 GameScreen Integration ✓ **Completed**
+
+**Implementation Details:**
+
+**Character Repository Integration:**
+```dart
+late CharacterRepository _characterRepository;
+
+_characterRepository = CharacterRepository(
+  apiService: _apiService,
+  indexedDBService: IndexedDBService(),
+);
+```
+
+**Segment Update Handler:**
+```dart
+onSegmentComplete: (segmentUpdates) async {
+  final updatedCharacter = await _characterRepository.updateCharacterFromSegment(
+    _character!.id,
+    segmentUpdates,
+  );
+
+  if (updatedCharacter != null) {
+    setState(() {
+      _character = updatedCharacter;
+    });
+  }
+}
+```
+
+**Story Completion Refresh:**
+```dart
+onStoryComplete: () async {
+  // Refresh character from server after story completion
+  final refreshedCharacter = await _characterRepository.refreshCharacterFromServer(_character!.id);
+  setState(() {
+    _character = refreshedCharacter;
+  });
+
+  // Handle completion UI updates
+  await _handleStoryCompletion(refreshCharacter: false, showMessage: true);
+}
+```
+
+**Error Handling:**
+- Automatic fallback to full character reload if incremental update fails
+- Graceful degradation when IndexedDB unavailable
+- All cache operations wrapped in try-catch blocks
+
+**Verification:**
+- ✓ Flutter analyze: 0 issues
+- ✓ Web build: Successfully compiles
+- ✓ Character Repository fully integrated
+- ✓ Incremental updates applied correctly
+- ✓ Story completion refreshes from server
 
 ### Phase 3: Testing
 - [ ] Integration tests
