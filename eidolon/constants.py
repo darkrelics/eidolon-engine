@@ -36,7 +36,6 @@ PLAYER_INCAPACITATED_TOTAL_WOUNDS = 10  # Total wounds causing incapacitation
 
 # Opponent defeat heuristics
 DEFAULT_OPPONENT_HEALTH = 5  # Default opponent health when unknown
-COMBAT_OPPONENT_WOUNDS_MULTIPLIER_FOR_DEFEAT = 2  # Total wounds vs health
 
 # Opposed check mechanics (MUD mechanics)
 OPPOSED_SHIFT = 0.20  # How much rating difference matters

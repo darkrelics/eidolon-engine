@@ -4,6 +4,7 @@ Story validation and prerequisites.
 Provides functions for checking story availability and prerequisites.
 """
 
+from eidolon.constants import CharState
 from eidolon.logger import logger
 
 
@@ -63,6 +64,12 @@ def story_eligibility(character: dict) -> bool:
     Returns:
         True if character can start a new story, False otherwise
     """
+    # Check death state first - dead characters cannot start stories
+    char_state = character.get("CharState")
+    if char_state == CharState.DEAD.value:
+        return False
+
+    # Existing GameMode validation continues unchanged
     game_mode = character.get("GameMode", "None")
     if game_mode == "None":
         return True
