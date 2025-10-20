@@ -1,7 +1,7 @@
 # Directly called packages.
 bandit==1.8.6
 pip-audit==2.9.0
-pylint==4.0.0
+pylint==4.0.1
 ruff==0.13.3
 vulture==2.14
 
