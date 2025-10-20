@@ -54,7 +54,6 @@ void main() {
             'estimatedDuration': 600,
           },
         ],
-        abandonedStories: [],
         completedStories: [],
       );
     });
@@ -188,7 +187,6 @@ void main() {
         lastUpdated: DateTime.now(),
         availableStories: [],
         availableStoriesDetails: null, // This will cause an error
-        abandonedStories: [],
         completedStories: [],
       );
 

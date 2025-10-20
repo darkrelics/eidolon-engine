@@ -204,6 +204,10 @@ Retrieves complete character data including active story and segment information
     "Wounds": [],
     "Resources": {},
     "AvailableStories": ["story_1", "story_2"],
+    "CompletedStories": [
+      {"story-uuid-3": {"StoryType": "one-time", "CompletedAt": 1729468900}},
+      {"story-uuid-4": {"StoryType": "daily", "CompletedAt": 1729555200}}
+    ],
     "ActiveStoryID": "story_current_uuid",
     "ActiveSegmentID": "segment_current_uuid",
     "Archetype": "Knight",

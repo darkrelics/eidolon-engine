@@ -113,7 +113,7 @@ def set_character_game_mode(
 
     # Build update expression
     update_expression = "SET GameMode = :new_mode, UpdatedAt = :timestamp"
-    expression_values = {
+    expression_values: dict = {
         ":new_mode": new_game_mode.value,
         ":timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -144,7 +144,7 @@ def set_character_game_mode(
         if story_instance_id:
             try:
                 # Fetch story to get StoryType
-                story = dynamo.get_item(TableName.STORIES, {"StoryID": active_story_id})
+                story = dynamo.get_item(TableName.STORY, {"StoryID": active_story_id})
                 story_type = story.get("StoryType", "repeatable") if story else "repeatable"
 
                 # Only add one-time and daily stories to CompletedStories

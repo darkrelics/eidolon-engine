@@ -14,7 +14,7 @@ graph TB
 
     subgraph "AWS Cloud"
         APIGW[API Gateway<br/>api.domain]
-        Lambda[Lambda Functions<br/>17 Deployed]
+        Lambda[Lambda Functions<br/>18 Total]
         DynamoDB[(DynamoDB<br/>14 Tables)]
         EventBridge[EventBridge<br/>1 min Poller]
         ProcessQ[SQS Queue<br/>Processing]
@@ -42,7 +42,7 @@ graph TB
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **18 Lambda Functions Total**: 17 deployed, 1 not deployed (cognito-player-delete reserved for future API)
+- **18 Lambda Functions**: 17 deployed, 1 not deployed (cognito-player-delete reserved for future)
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **2 SQS Queues**: Processing and advancement queues
 - **1 EventBridge Rule**: 1-minute polling for segment completion
@@ -71,43 +71,6 @@ The incremental subsystem provides timer-based story progression with narrative 
    - Story Advancement Queue: All segments processed when timer expires
 5. **Result Application**: Pre-calculated outcomes applied and story advanced
 
-**Story State Machine:**
-
-```mermaid
-stateDiagram-v2
-    [*] --> Available
-    Available --> Active: POST /story/start<br/>(api-story-start)
-    Active --> Completed: Final segment completes<br/>(ops-story-advance)
-    Active --> Abandoned: POST /story/abandon<br/>(api-story-abandon)
-    Completed --> [*]
-    Abandoned --> [*]
-
-    note right of Available
-        Story listed in character
-        AvailableStories array
-    end note
-
-    note right of Active
-        Actions on activation:
-        - Create ActiveSegment for first segment
-        - Set GameMode = Incremental
-        - Set ActiveStoryID and ActiveSegmentID
-        - Queue mechanical segments
-        - Enable polling infrastructure
-        - Create StoryHistory entry
-    end note
-
-    note right of Completed
-        Actions on completion:
-        - Apply final updates and rewards
-        - Move to CompletedStories
-        - Clear ActiveStoryID and ActiveSegmentID
-        - Set GameMode = None
-        - Update StoryHistory with FinalOutcome
-        - Delete ActiveSegment record
-    end note
-```
-
 **Segment Types:**
 
 - **Mechanical Segments**: Skill challenges and/or combat, processed immediately via SQS
@@ -122,7 +85,7 @@ stateDiagram-v2
 
 ### 2. Database Schema
 
-**14 DynamoDB Tables (all with RemovalPolicy.RETAIN):**
+**14 DynamoDB Tables:**
 
 1. **players**: Player accounts and authentication data
 2. **characters**: Character records with skills, attributes, inventory
@@ -141,6 +104,7 @@ stateDiagram-v2
 
 **Key Schema Patterns:**
 
+- All tables use RemovalPolicy.RETAIN for data persistence
 - GSI for secondary access patterns (CharacterNameIndex, EndTimeIndex)
 - Server-side state authority with no client caching
 - ProcessingStatus field for idempotent segment processing
@@ -150,15 +114,12 @@ See [schema.md](schema.md) for detailed table schemas.
 
 ### 3. Lambda Functions
 
-**Shared Execution Role:**
+**Total Functions: 18 (17 deployed, 1 reserved)**
 
 All Lambda functions use `eidolon-lambda-execution-role` with:
-
 - DynamoDB access via managed policy `eidolon-dynamodb-policy`
 - CloudWatch Logs permissions
 - Additional policies attached by dependent stacks
-
-**Function Categories:**
 
 **API Layer (13 functions):**
 
@@ -185,7 +146,7 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 **Cognito Functions (2 functions):**
 
 - `cognito-player-new`: PostConfirmation trigger for new accounts (deployed)
-- `cognito-player-delete`: Player deletion handler (NOT DEPLOYED)
+- `cognito-player-delete`: Player deletion handler (NOT DEPLOYED - reserved for future)
 
 **Lambda Configuration:**
 
@@ -197,48 +158,34 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 
 ### 4. Queue Architecture
 
-The dual-queue design separates immediate mechanical processing from timed segment advancement, enabling parallel processing while maintaining strict ordering guarantees.
+The dual-queue design separates immediate mechanical processing from timed segment advancement:
 
-**processing-queue (SQS Standard Queue):**
+**processing-queue:**
+- Target: `ops-segment-process` Lambda
+- Purpose: Immediate processing of mechanical segments
+- Configuration: 4-day retention, 30-second visibility, 3 retries before DLQ
 
-- Feeds `ops-segment-process` Lambda
-- Handles mechanical segments only
-- Message retention: 4 days
-- Visibility timeout: 30 seconds
-- Dead-letter queue after 3 retries
+**advancement-queue:**
+- Target: `ops-story-advance` Lambda
+- Purpose: Timed processing of all segment types
+- Configuration: 4-day retention, 30-second visibility, 3 retries before DLQ
 
-**advancement-queue (SQS Standard Queue):**
-
-- Feeds `ops-story-advance` Lambda
-- Handles all segment types for completion
-- Message retention: 4 days
-- Visibility timeout: 30 seconds
-- Dead-letter queue after 3 retries
-
-**Queue Flow:**
-
-1. Mechanical segments queued IMMEDIATELY at creation to processing queue
-2. All segments queued to advancement queue when EndTime reached
-3. SQS triggers Lambda functions for asynchronous processing
-4. Idempotent processing via ProcessingStatus prevents duplicates
+**Processing Flow:**
+1. Mechanical segments queued immediately at creation
+2. All segments queued to advancement when timer expires
+3. ProcessingStatus field ensures idempotent processing
 
 ### 5. Polling Infrastructure
 
-**EventBridge Rule: `eidolon-story-poller`**
-
+**EventBridge Rule:** `eidolon-story-poller`
 - Schedule: rate(1 minute)
 - Target: `ops-segment-poller` Lambda
 - State: DISABLED by default, enabled when stories start
 
-**SSM Parameter: `/eidolon/story/config`**
-
-- Stores polling state: "run" or "stop"
-- Checked by poller each invocation
-- Enables/disables polling based on active segment count
-
-**Polling State Machine:**
-
-The polling system automatically enables when stories start and disables when no active segments remain, optimizing costs while ensuring timely segment processing.
+**SSM Parameter:** `/eidolon/story/config`
+- Values: "run" or "stop"
+- Controls polling execution
+- Auto-managed based on active segment count
 
 ```mermaid
 stateDiagram-v2
@@ -285,19 +232,9 @@ stateDiagram-v2
 
 ## Game Mechanics
 
-### GameMode State Management
+### State Machines
 
-**Server-Authoritative State:**
-
-- All game state stored in DynamoDB tables only
-- Client maintains no authoritative state or calculations
-- GameMode field prevents concurrent access between MUD and Incremental modes
-
-**GameMode Values:**
-
-- **None**: Character idle, can enter either mode
-- **MUD**: Character active in traditional MUD gameplay
-- **Incremental**: Character active in story progression
+The system uses several state machines to manage game flow and ensure data consistency:
 
 **Character GameMode State Machine:**
 
@@ -428,7 +365,8 @@ stateDiagram-v2
 
     note left of Completed
         On completion:
-        - Add to CompletedStories set
+        - Add to CompletedStories if StoryType is
+          "one-time" or "daily" (not "repeatable")
         - Clear ActiveStoryID
         - Clear ActiveSegmentID
         - Set GameMode = None
@@ -440,7 +378,7 @@ stateDiagram-v2
 
     note left of Abandoned
         On abandonment:
-        - Add to AbandonedStories set
+        - Record in StoryHistory only (not in character)
         - Clear ActiveStoryID
         - Clear ActiveSegmentID
         - Set GameMode = None
@@ -452,19 +390,6 @@ stateDiagram-v2
         retried immediately.
     end note
 ```
-
-**Automatic Recovery Paths:**
-
-1. **Character Retrieval Cleanup**: `api-character-get` resets GameMode to None if no valid ActiveStoryID or ActiveSegmentID exists
-2. **Polling System Recovery**: EventBridge triggers `ops-segment-poller` every minute to process expired segments and clean orphaned states
-3. **Segment Processing Guarantee**: `ops-story-advance` ensures eventual processing of all segments
-
-**Failure Recovery Scenarios:**
-
-- **Client crash or network loss**: Next API call triggers automatic GameMode cleanup
-- **Lambda timeout**: EventBridge ensures retry within 1 minute maximum
-- **Orphaned segments**: Automatic timeout to exceptional outcome protects players
-- **Maximum stuck time**: 2 minutes (1 EventBridge cycle plus processing time)
 
 ### Health and Wounds System
 
@@ -602,7 +527,7 @@ graph LR
 
 1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
 2. **DynamoDB Stack**: 14 tables with managed IAM policy
-3. **Lambda Stack**: Layer, 15 functions deployed (16 total, cognito_player_delete excluded), shared execution role
+3. **Lambda Stack**: Layer, execution role, Lambda functions
 4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
 5. **Character Stack**: Character-related Lambda resources
 6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
@@ -645,138 +570,109 @@ graph LR
 
 ### Concurrency Control
 
-The ProcessingStatus state machine ensures atomic segment processing using DynamoDB conditional writes.
+The system uses DynamoDB conditional writes to ensure atomic state transitions and prevent race conditions:
 
-**ProcessingStatus State Machine:**
+- **ProcessingStatus Field**: Ensures only one Lambda processes each segment
+- **GameMode Field**: Prevents concurrent access between MUD and Incremental modes
+- **Conditional Updates**: All state transitions use atomic DynamoDB operations
+- **Idempotent Processing**: SQS at-least-once delivery with deduplication
 
-- **pending**: Mechanical segment awaiting processing
-- **processing**: Segment claimed by Lambda for exclusive processing
-- **processed**: Segment ready for advancement when timer expires
+### Recovery Mechanisms
 
-**Atomic Transitions:**
+**Automatic Recovery Paths:**
 
-- DynamoDB conditional updates ensure only one Lambda processes each segment
-- SQS provides at-least-once delivery with idempotent processing
-- ProcessingStatus prevents duplicate processing
+1. **Character Retrieval Cleanup**: `api-character-get` resets GameMode to None if no ActiveStoryID/ActiveSegmentID
+2. **Polling System Recovery**: EventBridge triggers `ops-segment-poller` every minute to find stuck segments
+3. **Stuck Segment Recovery**: Segments stuck >5 minutes get ProcessingStatus reset to "pending" for retry
+4. **Timeout Protection**: Segments past EndTime marked "exceptional" (player-favorable outcome)
 
-### Timeout Recovery
+**Failure Scenarios and Handling:**
 
-System failures are handled gracefully with player-favorable defaults to prevent indefinite waiting.
+| Failure Type | Detection | Recovery | Maximum Recovery Time |
+|-------------|-----------|----------|----------------------|
+| Client crash/network loss | Next API call | Automatic GameMode cleanup | Immediate |
+| Lambda timeout | Polling system | Retry with new Lambda | 1 minute |
+| Processing stuck | ProcessingStatus check | Reset to pending | 5 minutes |
+| Orphaned segments | EndTime exceeded | Mark exceptional | 2 minutes |
+| Queue message loss | Poller scan | Re-queue segment | 1 minute |
+| DLQ overflow | CloudWatch alarm | Manual intervention | N/A |
 
-**Segment Timeout Protection:**
+**Protection Mechanisms:**
 
-- Segments past EndTime marked exceptional (best outcome)
-- Prevents indefinite waiting from system failures
-- Player-favorable defaults protect user experience
-
-**Stuck Segment Recovery:**
-
-- Mechanical segments stuck over 5 minutes get retried
-- ProcessingStatus reset to pending for reprocessing
+- Player-favorable defaults for all timeout scenarios
 - Maximum 3 retry attempts before DLQ
-
-### Failure Modes
-
-**Processing Failure:**
-
-- Segment remains in processing state
-- Poller eventually marks as exceptional
-- Player protected from system errors
-
-**Queue Message Loss:**
-
-- Poller re-queues unprocessed segments
-- Idempotent processing prevents duplicate effects
-- History tables provide audit trail
-
-**Lambda Timeout:**
-
-- ProcessingStatus remains in processing state
-- Poller detects stuck segment
-- Automatic retry after 5 minutes
+- History tables provide complete audit trail
+- No data loss - all state persisted in DynamoDB
 
 ## Performance Optimization
 
-**Database Access:**
-
+**Database:**
 - Pay-per-request DynamoDB pricing (no capacity planning)
-- GSI queries for efficient secondary access patterns
+- GSI for efficient secondary access patterns
 - Conditional writes prevent race conditions
 
-**Lambda Optimization:**
-
+**Lambda:**
 - Cold start caching of archetype data
-- Shared layer for common dependencies
-- 128MB memory sufficient for all functions
-- 30-second timeout handles complex processing
+- Shared dependency layer
+- 128MB memory, 30-second timeout
+- Post-deployment code updates from S3
 
-**Queue Optimization:**
-
+**Queue:**
 - Batch processing via SQS
-- Auto-disable polling when no active stories
-- Immediate queueing of mechanical segments eliminates latency
+- Auto-disable polling when inactive
+- Immediate mechanical segment processing
 
-**Client Optimization:**
+**Client:**
+- Front-loaded outcome calculation
+- Server-authoritative state (no client sync)
+- IndexedDB caching reduces API calls by 90%
+- Two-tier item loading strategy
 
-- Front-loaded processing eliminates runtime calculations
-- Pre-calculated ClientEvents for entire segment duration
-- Server-authoritative state eliminates client synchronization
-- IndexedDB caching layer reduces API calls by 85-90%
+**IndexedDB Cache Domains:**
+- **Stories**: Historical preservation for offline access
+- **Characters**: Field-level updates (60+ calls/hour → 5-10)
+- **Items**: Prototype caching with memory layer
 
-**IndexedDB Cache Layer:**
-
-The Flutter client implements an intelligent IndexedDB cache for three data domains:
-
-- **Stories**: Historical preservation of completed narratives for offline access
-- **Characters**: Smart caching with field-level updates (60+ API calls/hour → 5-10)
-- **Items**: Two-tier prototype caching minimizes redundant item data fetches
-
-See [Incremental Design](incremental-design.md#indexeddb-cache-layer-integration) for complete schema and implementation details.
+See [Incremental Design](incremental-design.md#indexeddb-cache-layer-integration) for implementation details.
 
 ## Security Considerations
 
-**Authentication and Authorization:**
+**Authentication:**
+- Cognito User Pool (`eidolon-users`)
+- API Gateway Cognito authorizer
+- JWT validation on protected endpoints
 
-- Cognito User Pool (`eidolon-users`) for authentication
-- API Gateway with Cognito authorizer
-- JWT token validation on all protected endpoints
-
-**IAM and Permissions:**
-
+**IAM:**
 - Shared execution role: `eidolon-lambda-execution-role`
-- Managed policies (no inline policies)
-- Least privilege access per stack
-- Fixed logical IDs prevent accidental recreation
+- Managed policies only (no inline)
+- Least privilege per stack
+- Fixed logical IDs prevent recreation
 
-**CORS Configuration:**
-
-- Lambda-level CORS validation
+**CORS:**
+- Lambda-level validation
 - Environment variable configuration
-- Credentials support for authenticated requests
+- Credentials support
 
 **State Protection:**
-
-- GameMode field only modifiable through authorized Lambdas
-- Mode transitions require validation of game state
-- ProcessingStatus state transitions prevent concurrent processing
+- GameMode modifications restricted to authorized Lambdas
 - Conditional updates prevent race conditions
+- ProcessingStatus ensures single processing
+- All transitions validated
 
 ## Monitoring and Observability
 
 **CloudWatch Integration:**
-
 - All Lambda functions log to CloudWatch
 - Structured logging with correlation IDs
 - Error tracking with stack traces
 
-**Metrics and Alarms:**
+**Metrics:**
+- Lambda: Duration, errors, throttles
+- DynamoDB: Read/write capacity, throttles
+- SQS: Message age, DLQ depth
+- Custom game event metrics
 
-- Lambda execution metrics (duration, errors, throttles)
-- DynamoDB metrics (read/write capacity, throttles)
-- Queue metrics (message age, DLQ depth)
-- Custom metrics for game events
-
-**Note**: CloudWatch dashboards and alarms deferred until revenue generation.
+**Note**: Dashboards and alarms deferred until revenue generation.
 
 ## References
 

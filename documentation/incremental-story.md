@@ -89,8 +89,8 @@ Stories exist in one of these states relative to a character:
 
 1. **Available**: Listed in character's AvailableStories array
 2. **Active**: Character has ActiveStoryID set
-3. **Completed**: Listed in CompletedStories array
-4. **Abandoned**: Listed in AbandonedStories array
+3. **Completed**: Entry in CompletedStories list (one-time and daily stories only)
+4. **Abandoned**: Tracked in story history only (not in character record)
 
 ### State Transitions
 
@@ -121,7 +121,9 @@ stateDiagram-v2
     note right of Completed
         Actions on completion:
         - Apply final updates and rewards
-        - Move to CompletedStories
+        - Add to CompletedStories if StoryType is
+          "one-time" or "daily" (not "repeatable")
+        - Format: {StoryID: {"StoryType": "daily", "CompletedAt": timestamp}}
         - Clear ActiveStoryID/ActiveSegmentID
         - Set GameMode = "None"
         - Update StoryHistory with FinalOutcome
@@ -132,7 +134,8 @@ stateDiagram-v2
 
     note right of Abandoned
         Actions on abandonment:
-        - Move to AbandonedStories
+        - Record in StoryHistory only
+        - Do NOT add to character record
         - Clear ActiveStoryID/ActiveSegmentID
         - Set GameMode = "None"
         - Update StoryHistory (abandoned)
@@ -167,6 +170,43 @@ stateDiagram-v2
    - All rewards and effects applied
    - Story moved to history tables
    - Character returned to idle state
+
+### Story Types and Repeatability
+
+Stories have a `StoryType` field that determines their repeatability:
+
+1. **one-time**: Can only be completed once per character
+   - Added to CompletedStories on first start (not completion)
+   - Permanently blocks subsequent attempts
+   - Entry format: `{StoryID: {"StoryType": "one-time", "CompletedAt": timestamp}}`
+   - Example: Discovery quests, unique narrative events
+
+2. **daily**: Can be repeated after 24-hour cooldown
+   - Added to CompletedStories on start
+   - Entry format: `{StoryID: {"StoryType": "daily", "CompletedAt": timestamp}}`
+   - Automatically removed from CompletedStories after 24 hours (UTC)
+   - Cleanup occurs during character load (api-character-get)
+   - Example: Resource gathering, routine tasks
+
+3. **repeatable**: Can be repeated immediately
+   - Never added to CompletedStories
+   - No tracking or cooldown
+   - Example: Combat training, random encounters
+
+**CompletedStories Structure:**
+```json
+"CompletedStories": [
+  {"story-uuid-1": {"StoryType": "one-time", "CompletedAt": 1729468900}},
+  {"story-uuid-2": {"StoryType": "daily", "CompletedAt": 1729555200}}
+]
+```
+
+**Story Eligibility Logic:**
+- Check AvailableStories list (must be present)
+- Check CompletedStories for story ID:
+  - If found with `StoryType: "one-time"` → Blocked permanently
+  - If found with `StoryType: "daily"` → Blocked until cleanup (shouldn't happen if cleanup works)
+  - If not found → Allowed to start
 
 ## Segment State Machine
 
