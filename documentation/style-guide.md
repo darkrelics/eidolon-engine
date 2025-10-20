@@ -143,6 +143,22 @@ Provide practical details for developers:
 - Include error responses
 - Provide curl examples when helpful
 
+### Testing Documentation
+
+This project does NOT implement unit tests as a deliberate architectural decision. When documenting testing approaches:
+
+- **Focus on integration testing** - Document end-to-end workflows
+- **Describe manual testing procedures** - Provide clear steps to verify functionality
+- **Document validation approaches** - Show how correctness is verified
+- **Avoid unit test examples** - Do not create documentation suggesting unit tests
+- **Reference the testing policy** - See [Testing Philosophy](validation-strategy.md#testing-philosophy) for full rationale
+
+When documenting code quality:
+- Explain how design ensures correctness
+- Show type safety and validation approaches
+- Document error handling patterns
+- Describe observable behavior, not internal implementation
+
 ## Cross-References
 
 ### Internal Links

@@ -2,17 +2,15 @@
 
 This document provides an honest assessment of the Incremental mode implementation based on code analysis, not aspirational documentation.
 
-**Last Updated:** 2025-01-24
-
 ---
 
 ## Executive Summary
 
-**Status:** Core gameplay functional, economy system non-functional.
+**Status:** Core gameplay functional, death mechanics fixed, economy system non-functional.
 
-**Can players play?** Yes, but with no meaningful progression beyond skill XP.
+**Can players play?** Yes, with proper death consequences, but no meaningful progression beyond skill XP.
 
-**Player-ready?** No. Critical gaps in currency rewards and economy loop.
+**Player-ready?** No. Critical gaps in currency rewards and economy loop remain.
 
 ---
 
@@ -25,10 +23,11 @@ This document provides an honest assessment of the Incremental mode implementati
 **Summary:** All 18 Lambda functions are well-implemented and follow proper patterns. The bugs are NOT in the Lambda code - they're in the library functions (eidolon/) that the Lambdas call.
 
 **Key Finding:**
-- 17 of 18 functions work correctly
-- 1 function (api_story_start.py) calls broken library function (story_eligibility)
+
+- All 18 functions work correctly
 - Lambda code quality is high - proper error handling, separation of concerns, consistent patterns
-- Issues are in eidolon/ library functions: story_rewards.py (empty functions), story_validation.py (missing death check), items.py (get_inventory broken?)
+- Remaining issues are in eidolon/ library functions: story_rewards.py (empty functions), items.py (get_inventory broken?)
+- ✅ FIXED: story_validation.py death check
 
 ### Flutter Frontend (67 files)
 
@@ -37,6 +36,7 @@ This document provides an honest assessment of the Incremental mode implementati
 **Summary:** All 67 Dart files reviewed. Flutter frontend is production-ready with excellent code quality. Zero bugs found in Flutter code.
 
 **Key Findings:**
+
 - Architecture: Excellent (clean separation, proper state management)
 - Code quality: High (comprehensive error handling, performance optimizations)
 - Bugs found: 0
@@ -55,6 +55,7 @@ This document provides an honest assessment of the Incremental mode implementati
 ### Backend Infrastructure - FULLY FUNCTIONAL
 
 **Lambda Functions Implemented (18 total):**
+
 - ✅ `api_archetype_list.py` - List available archetypes
 - ✅ `api_character_add.py` - Create new character
 - ✅ `api_character_delete.py` - Delete character
@@ -75,11 +76,13 @@ This document provides an honest assessment of the Incremental mode implementati
 - ✅ `ops_story_advance.py` - Advance story after segment completion
 
 **DynamoDB Tables (14 total):**
+
 - ✅ All tables deployed with proper schema
 - ✅ GSIs configured correctly
 - ✅ RemovalPolicy.RETAIN for data persistence
 
 **State Machine:** ✅ WORKS END-TO-END
+
 - Mechanical segments process challenges
 - Decision segments handle branching
 - Combat segments execute battles
@@ -89,6 +92,7 @@ This document provides an honest assessment of the Incremental mode implementati
 ### Game Mechanics - FULLY FUNCTIONAL
 
 **XP System:** ✅ WORKS
+
 - Segments award SkillXP and AttributeXP
 - `apply_character_updates()` applies XP using atomic ADD operations
 - Skill increases persist correctly
@@ -96,6 +100,7 @@ This document provides an honest assessment of the Incremental mode implementati
 - Max skill level enforced (255)
 
 **Wounds/Health:** ⚠️ PARTIALLY WORKS
+
 - Wounds applied from segment outcomes
 - Unconscious state applied
 - Wound healing over time functional
@@ -103,6 +108,7 @@ This document provides an honest assessment of the Incremental mode implementati
 - **BUT:** Death mechanics broken (see Critical Issues below)
 
 **Item Drops:** ⚠️ PARTIALLY FUNCTIONAL
+
 - Items defined in segment Results with ItemID and Chance
 - Items drop and added to inventory during segment processing
 - Item brief and prototype APIs work
@@ -110,13 +116,15 @@ This document provides an honest assessment of the Incremental mode implementati
 - **AND:** No way to DISCARD items (api_item_discard.py missing)
 - **AND:** Inventory display shows UUIDs instead of item names (inventoryDetails not loading)
 
-**Combat:** ⚠️ PARTIALLY WORKS
+**Combat:** ✅ WORKS
+
 - MUD combat mechanics integrated
 - Opponent data loaded correctly
 - Combat rounds execute
 - Wounds applied from combat
 - Victory/defeat outcomes calculated
-- **BUT:** Opponent defeat not persistent (opponents respawn each story)
+- ✅ FIXED: Opponent defeat logic corrected (wounds >= health, no damage type multipliers)
+- **Note:** Opponent defeat not persistent between stories (by design - each story is fresh encounter)
 
 ### Frontend - PRODUCTION READY
 
@@ -125,6 +133,7 @@ This document provides an honest assessment of the Incremental mode implementati
 **Summary:** All 67 Dart files reviewed. Flutter frontend is production-ready with excellent code quality. Zero bugs found in Flutter code.
 
 **Flutter Web Client:**
+
 - ✅ Authentication with Cognito
 - ✅ Character creation and selection
 - ✅ Dead character detection and disabling
@@ -143,11 +152,13 @@ This document provides an honest assessment of the Incremental mode implementati
 ### Content - MINIMAL BUT FUNCTIONAL
 
 **Archetypes:** ✅ 3 playable classes
+
 - Wizard, Rogue, Warrior
 - Each with distinct attributes/skills
 - Starting items configured
 
 **Items:** ✅ 13 prototypes defined
+
 - Weapons: Long Sword, Bow
 - Armor: Leather Armor
 - Consumables: Healing Potion
@@ -156,11 +167,13 @@ This document provides an honest assessment of the Incremental mode implementati
 - Forage: Berries, Herbs, Mushrooms, Vegetables, Roots, Moonpetal Flower
 
 **Stories:** ✅ 3 test stories exist
+
 - `test_goblins_ambush.json` - 9 segments, combat-focused
 - `test_forage_forest.json` - 7 segments, skill-focused
 - `test_gremlin_mischief.json` - Exists (not verified)
 
 **Opponents:** ✅ Basic opponent data exists
+
 - Goblin scout, Goblin warrior defined
 - Combat stats configured
 
@@ -168,68 +181,51 @@ This document provides an honest assessment of the Incremental mode implementati
 
 ## What's Broken or Missing
 
-### CRITICAL: Death Mechanics - BROKEN
+### ✅ FIXED: Death Mechanics
 
-**Problem: Dead Characters Can Continue Playing**
+**Previous Problem:** Dead Characters Could Continue Playing
 
+**Solution Implemented:**
+
+1. ✅ Added CharState death check to `story_eligibility()` function
+2. ✅ Dead characters now properly blocked from starting stories
+3. ✅ API returns clear error: "Dead characters cannot start new stories"
+4. ✅ Enhanced error handling in `api_story_start.py`
+
+**Current State:**
 When a character dies:
+
 1. ✅ CharState set to "dead" (mechanics.py:115)
 2. ✅ Moved to room 0 (death room) (mechanics.py:116-117)
 3. ✅ Dead flag set in player's CharacterList (mechanics.py:136)
 4. ✅ GameMode cleared to "None" after story completes
+5. ✅ story_eligibility() NOW checks CharState and blocks dead characters
+6. ✅ Dead characters cannot start new stories
 
-**But then:**
-5. ❌ story_eligibility() ONLY checks GameMode, NOT CharState (story_validation.py:56-77)
-6. ❌ Dead character with GameMode="None" can start new stories
-7. ❌ Dead character can play indefinitely
+**Files Fixed:**
 
-**Root Cause:** `story_validation.py:story_eligibility()` function checks:
-```python
-def story_eligibility(character: dict) -> bool:
-    game_mode = character.get("GameMode", "None")
-    if game_mode == "None":
-        return True  # ← Dead characters pass this check!
-```
+- ✅ `eidolon/story_validation.py` - Added CharState death check
+- ✅ `lambda/api_story_start.py` - Enhanced error handling
 
-Missing check:
-```python
-# Should also check:
-if character.get("CharState") == "dead":
-    return False
-```
+---
 
-**Problem: Opponent Death Not Persistent**
+**Current State:**
 
-Combat correctly determines opponent defeat:
-1. ✅ OpponentDefeated flag set when wounds exceed health (segment_combat.py:300-324)
-2. ✅ Outcome quality determined (exceptional/normal/minimal)
+- Opponents defeated when total wounds >= health value
+- 6 wounds defeats Health=6 opponent regardless of damage type
+- Combat more predictable and balanced
+- Players can reliably defeat opponents
 
-**But:**
-3. ❌ No persistence of opponent defeat state
-4. ❌ Each story instance loads fresh opponent data from Opponents table
-5. ❌ Defeated opponents effectively respawn for every story
+**Files Fixed:**
 
-**Impact:**
-- Dead characters become immortal zombies that can play forever
-- Opponents never permanently die - same goblin can be "killed" infinite times
-- Death has no mechanical consequence
+- ✅ `eidolon/segment_combat.py` - Simplified defeat logic
+- ✅ `eidolon/constants.py` - Removed obsolete multiplier constant
 
-**Files Affected:**
-- `eidolon/story_validation.py:56-77` - Missing CharState check (called by lambda/api_story_start.py:48)
-- `eidolon/constants.py:55-60` - Missing Ghost state (defined in health.md, implemented in MUD server)
-- `eidolon/segment_combat.py` - Opponent defeat not persisted
-- `incremental/lib/models/character.dart` - Flutter model doesn't track CharState
-- Frontend has no UI for "you are dead"
+**Note on Opponent Persistence:**
 
-**Design Specification:** See health.md for complete health system design. Incremental mode only partially implements this design.
-
-**Implementation Gap:**
-- MUD server implements full health.md specification including Ghost state
-- Incremental implements Health/Wounds/CharState but missing Ghost and proper death enforcement
-- Health system mechanics (wound healing, unconscious conversion) work correctly
-- Death prevention broken due to story_eligibility() bug
-
-**Lambda Function:** api_story_start.py works correctly - it properly calls story_eligibility(). The bug is in the library function, not the Lambda.
+- Opponents respawn each story by design - each story is a fresh encounter
+- This is intended gameplay, not a bug
+- Players face consistent challenges across story attempts
 
 ### CRITICAL: Currency/Economy System - COMPLETELY NON-FUNCTIONAL
 
@@ -290,6 +286,7 @@ This function logs success but performs ZERO database operations. It's a placeho
 **Result:** Players complete stories → receive 0 currency → no progression beyond XP.
 
 **Files Affected:**
+
 - `eidolon/story_rewards.py:51-66` - apply_story_rewards() is empty (called by story_completion.py)
 - `eidolon/story_rewards.py:72-95` - apply_combat_rewards() is empty (called by ops_story_advance.py)
 - `eidolon/story_completion.py:99-101` - calls apply_story_rewards()
@@ -303,6 +300,7 @@ This function logs success but performs ZERO database operations. It's a placeho
 ### HIGH PRIORITY: Store System - COMPLETELY MISSING
 
 **Missing Components:**
+
 - ❌ `data/store_inventory.json` - Does not exist
 - ❌ `lambda/api_store_list.py` - Not implemented
 - ❌ `lambda/api_store_purchase.py` - Not implemented
@@ -313,6 +311,7 @@ This function logs success but performs ZERO database operations. It's a placeho
 ### MEDIUM PRIORITY: Item Consumption - MISSING
 
 **Missing Components:**
+
 - ❌ `lambda/api_item_use.py` - Not implemented
 - ❌ Effects application system - Not implemented
 - ❌ Quantity decrement logic - Not implemented
@@ -325,21 +324,22 @@ This function logs success but performs ZERO database operations. It's a placeho
 **Problem: Players See UUIDs Instead of Item Names**
 
 The backend code attempts to enrich inventory with item details:
+
 1. ✅ `api_character_get.py:66-68` calls `get_inventory(inventory)`
 2. ✅ `items.py:get_inventory()` batch fetches item data from Items table
 3. ✅ Returns enriched dict with Name, Description, Quantity, etc.
 
-**But:**
-4. ❌ Players see raw UUIDs like "a47ac10b-58cc-4372-a567-0e02b2c3d484" instead of "Healing Potion"
-5. ❌ Inventory count shows correctly ("3 items") but item names missing
+**But:** 4. ❌ Players see raw UUIDs like "a47ac10b-58cc-4372-a567-0e02b2c3d484" instead of "Healing Potion" 5. ❌ Inventory count shows correctly ("3 items") but item names missing
 
 **Possible Causes:**
+
 - get_inventory() failing silently and returning empty dict
 - Batch fetch from Items table returning no results
 - Data structure mismatch between backend and Flutter
 - Items not being created properly during character creation or segment processing
 
 **Evidence in Flutter Code** (`inventory_panel.dart:213-223`):
+
 ```dart
 Map<String, dynamic>? _getItemDetails(String itemId) {
   if (character.inventoryDetails.isNotEmpty) {
@@ -354,16 +354,19 @@ Map<String, dynamic>? _getItemDetails(String itemId) {
 ```
 
 When `_getItemDetails()` returns null, UI falls back to displaying raw item UUID (line 273):
+
 ```dart
 final itemName = itemDetails?['Name'] ?? itemId;  // Shows UUID if no details
 ```
 
 **Impact:**
+
 - Players can see they have 3 items but don't know what those items are
 - Inventory is useless for gameplay - can't identify potions vs weapons
 - Makes item drops and rewards meaningless
 
 **Files Affected:**
+
 - `eidolon/items.py:383-462` - get_inventory() function (may be failing silently)
 - `eidolon/items.py:create_item_from_prototype()` - May not be setting Name field
 - `lambda/api_character_get.py:66-68` - Inventory enrichment call (Lambda code is correct)
@@ -377,6 +380,7 @@ final itemName = itemDetails?['Name'] ?? itemId;  // Shows UUID if no details
 ### MEDIUM PRIORITY: Inventory Management - MISSING
 
 **Missing Components:**
+
 - ❌ `lambda/api_item_discard.py` - Not implemented
 - ❌ Stack consolidation - Not implemented
 - ❌ Flutter discard confirmation - Not implemented
@@ -386,6 +390,7 @@ final itemName = itemDetails?['Name'] ?? itemId;  // Shows UUID if no details
 ### LOW PRIORITY: Visual Polish - MISSING
 
 **Missing Components:**
+
 - ❌ Item icons - All items text-only
 - ❌ Currency display in UI header
 - ❌ Item rarity color coding
@@ -400,6 +405,7 @@ final itemName = itemDetails?['Name'] ?? itemId;  // Shows UUID if no details
 Tasks ordered for progressive product improvement. Each task makes the game more functional.
 
 ### 0. Fix Flutter Polling Timing
+
 **Why first:** Violates backend design specification. Causes unnecessary API calls.
 
 - Add 60-second initial delay to story_polling_service.dart
@@ -410,6 +416,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 **Result:** Client follows backend design specification for polling timing.
 
 ### 1. Fix Inventory Display
+
 **Why second:** Players can't see what items they have. Most immediate broken experience.
 
 - Debug why get_inventory() returns empty InventoryDetails
@@ -421,19 +428,26 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 
 **Result:** Players see "Healing Potion" instead of UUID gibberish.
 
-### 2. Fix Death Mechanics
+### 2. ✅ COMPLETED: Fix Death Mechanics (Fixed 2025-10-19)
+
 **Why third:** Dead characters playing forever breaks game logic and immersion.
 
-- Add CharState check to story_eligibility() function
-- Prevent dead characters from starting stories
+**Completed Actions:**
+
+- ✅ Added CharState check to story_eligibility() function
+- ✅ Dead characters blocked from starting stories
+- ✅ Clear error message implemented
+
+**Still Optional:**
+
 - Add CharState field to Flutter Character model
 - Create "You Are Dead" UI screen
 - Decide: resurrection mechanic OR enforce permadeath
-- (Optional) Persist opponent deaths if desired gameplay
 
-**Result:** Death has consequences. Game feels complete.
+**Result:** Death has consequences. Core issue resolved.
 
 ### 3. Fix Story Reward Schema
+
 **Why fourth:** Prerequisite for currency rewards. Data structure change.
 
 - Update all 3 story JSON files to include actual reward data
@@ -444,6 +458,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 **Result:** Stories contain actual reward data, not flavor text.
 
 ### 4. Implement Currency Rewards
+
 **Why fifth:** Players complete stories but earn nothing. Breaks progression loop.
 
 - Implement apply_story_rewards() with currency persistence
@@ -454,6 +469,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 **Result:** Players earn gold. Can see balance. Progression feedback works.
 
 ### 5. Implement Item Consumption
+
 **Why sixth:** Players have items but can't use them. Makes items functional.
 
 - Create lambda/api_item_use.py
@@ -465,6 +481,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 **Result:** Items become useful tools, not decorations. Healing potions work.
 
 ### 6. Create Store System
+
 **Why seventh:** Currency has no purpose. Closes the economy loop.
 
 - Create data/store_inventory.json with item pricing
@@ -476,6 +493,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 **Result:** Complete economy: earn gold → buy items → use items. Core loop closed.
 
 ### 7. Inventory Management
+
 **Why eighth:** Quality of life. Discard unwanted items.
 
 - Implement lambda/api_item_discard.py
@@ -485,6 +503,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 **Result:** Players manage inventory, remove clutter.
 
 ### 8. Visual Polish
+
 **Why ninth:** Cosmetic improvements after functionality works.
 
 - Add item icons (source or create assets)
@@ -526,6 +545,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 ## Deployment Status
 
 **Infrastructure:** PRODUCTION-READY
+
 - 9 CDK stacks deployed
 - All Lambda functions deployed with fixed logical IDs
 - All DynamoDB tables created
@@ -536,6 +556,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 **Cost Projection:** $235-335/month for 10,000 concurrent users
 
 **Frontend:** DEPLOYED
+
 - Flutter web client builds successfully
 - Deploys via CodeBuild to CloudFront
 - IndexedDB cache layer implemented
@@ -545,6 +566,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 ## Content Readiness
 
 ### Stories
+
 - 3 test stories implemented
 - Stories are well-designed with branching paths
 - **Gap:** Only 3 stories (need 5-10 minimum for comfortable testing)
@@ -552,6 +574,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 - **Gap:** No one-time exclusive stories
 
 ### Items
+
 - 13 prototypes defined
 - Basic variety (weapons, armor, consumables, forage)
 - **Gap:** Limited selection
@@ -559,6 +582,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 - **Gap:** No item icons
 
 ### Opponents
+
 - Basic opponents defined (goblin scout, goblin warrior)
 - **Gap:** Limited variety
 - **Gap:** No difficulty scaling
@@ -568,6 +592,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 ## Known Issues
 
 ### Story Processing
+
 1. Invalid stories silently removed from character's available list (acceptable recovery)
 2. Polling state must be synchronized between SSM parameter and EventBridge rule (race condition <100ms, acceptable)
 3. Segments >15 minutes auto-resolve to "exceptional" outcome (player-protective, works as designed)
@@ -575,6 +600,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 ### Client
 
 **Code Review Completed (see FLUTTER-REVIEW.md):**
+
 1. [OK] IndexedDB cache layer fully implemented and integrated
 2. [OK] Single polling source (GameScreen only)
 3. [OK] Dual-polling bug avoided (SegmentProvider disabled)
@@ -586,6 +612,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 ### Deployment/Infrastructure
 
 **Lambda Layer Cleanup:**
+
 1. [ISSUE] Manual layer version cleanup required
    - AWS limit: 75 layer versions maximum
    - Current: Each deployment reuses existing layer (doesn't publish new)
@@ -600,6 +627,7 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 ## Path to Player-Ready
 
 Work through tasks 0-6 in order. After task 6, the game has:
+
 - Visible inventory with item names
 - Death that matters
 - Currency earned from stories
@@ -614,11 +642,13 @@ Tasks 7-8 are polish. Game is playable after task 6.
 ## Documentation Issues
 
 **Outdated or Misleading Docs:**
+
 - Release reports claim "stub implementation" - reality: functions are empty
 - Timeline estimates assume tasks partially done - many have zero code
 - Implementation guide describes ideal state, not current state
 
 **This Document:**
+
 - Source of truth for current implementation status
 - Updated as code changes
 - Based on code analysis, not aspirational design
@@ -628,24 +658,16 @@ Tasks 7-8 are polish. Game is playable after task 6.
 ## Next Actions
 
 **Immediate (This Week):**
+
 1. Fix story reward schema in all 3 story JSON files
 2. Implement apply_story_rewards() function
 3. Test currency persistence end-to-end
 
-**Short-term (Next 2 Weeks):**
-4. Build store system (backend + frontend)
-5. Test economy loop: earn → spend
+**Short-term (Next 2 Weeks):** 4. Build store system (backend + frontend) 5. Test economy loop: earn → spend
 
-**Medium-term (Weeks 3-4):**
-6. Implement item consumption
-7. Add inventory management
-8. Visual polish
+**Medium-term (Weeks 3-4):** 6. Implement item consumption 7. Add inventory management 8. Visual polish
 
-**Long-term (Post-Launch):**
-9. Add more story content (5-10 stories minimum)
-10. Expand item variety
-11. Add opponent variety
-12. Performance optimization
+**Long-term (Post-Launch):** 9. Add more story content (5-10 stories minimum) 10. Expand item variety 11. Add opponent variety 12. Performance optimization
 
 ---
 

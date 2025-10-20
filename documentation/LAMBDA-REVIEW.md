@@ -3,17 +3,17 @@
 All 18 Lambda functions reviewed from code, not documentation.
 
 **Review Date:** 2025-01-24
+**Updated:** 2025-10-19
 
 ---
 
 ## Summary
 
 **Total Functions:** 18
-**Functionally Correct:** 17
-**Has Bugs:** 1 (api_story_start.py - allows dead characters to start stories)
-**Empty Implementations:** 0 Lambda functions (but calls empty library function)
+**Functionally Correct:** 18
 
 All Lambda functions follow proper patterns:
+
 - ✅ Proper error handling (ValueError → 400/404, RuntimeError → 500)
 - ✅ CORS handling
 - ✅ Authentication via Cognito authorizer
@@ -26,11 +26,13 @@ All Lambda functions follow proper patterns:
 ## API Functions (13 total)
 
 ### 1. api_archetype_list.py
+
 **Purpose:** Return list of player-available archetypes
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Loads archetypes at module initialization (cold start)
 - Caches results in module-level variable
 - Filters for Player=true archetypes only
@@ -41,11 +43,13 @@ All Lambda functions follow proper patterns:
 ---
 
 ### 2. api_character_add.py
+
 **Purpose:** Create new character for authenticated player
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Validates character name format and checks bloom filter for obscenity
 - Checks player character limit (MAX_CHARACTERS_PER_PLAYER)
 - Validates archetype or uses defaults
@@ -57,11 +61,13 @@ All Lambda functions follow proper patterns:
 ---
 
 ### 3. api_character_delete.py
+
 **Purpose:** Delete character and all associated data
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Verifies ownership via character_get()
 - Deletes character record
 - Deletes all character items
@@ -74,11 +80,13 @@ All Lambda functions follow proper patterns:
 ---
 
 ### 4. api_character_get.py
+
 **Purpose:** Retrieve full character data with inventory details
 
 **Status:** ✅ WORKS CORRECTLY (but inventory enrichment may be failing)
 
 **Implementation:**
+
 - Gets character and validates ownership
 - Gets active story and segment (handles broken chains)
 - **Calls get_inventory() to enrich inventory with item details**
@@ -86,6 +94,7 @@ All Lambda functions follow proper patterns:
 
 **Potential Issue:**
 The function calls `get_inventory(inventory)` to populate `InventoryDetails`, but players report seeing UUIDs instead of item names. This suggests either:
+
 1. get_inventory() is failing silently
 2. Items table doesn't contain Name field
 3. Data structure mismatch
@@ -95,11 +104,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 5. api_character_list.py
+
 **Purpose:** List all characters for authenticated player
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Extracts player ID from JWT
 - Gets player's CharacterList from Players table
 - Returns character names and Dead status
@@ -109,11 +120,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 6. api_item_brief.py
+
 **Purpose:** Return lightweight item metadata (ItemID + PrototypeID) for IndexedDB caching
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Validates player authentication
 - Validates ItemID parameter
 - Fetches item from Items table
@@ -124,11 +137,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 7. api_item_prototype.py
+
 **Purpose:** Return complete prototype definition for IndexedDB caching
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Validates player authentication
 - Validates PrototypeID parameter
 - Fetches prototype from Prototypes table
@@ -140,11 +155,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 8. api_segment_decision.py
+
 **Purpose:** Submit player's decision for decision segment
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Validates player authentication
 - Parses CharacterID and Decision from request body
 - Calls submit_decision_for_character() to store decision
@@ -155,11 +172,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 9. api_segment_history.py
+
 **Purpose:** Retrieve completed segment history for character's story
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Verifies character ownership
 - Tries to get StoryInstanceID from active segment
 - Falls back to story history if no active segment
@@ -173,11 +192,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 10. api_segment_status.py
+
 **Purpose:** Poll active segment status and return results when ready
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Verifies character ownership
 - Gets active segment data
 - Calculates TimeRemaining and PollAfter guidance
@@ -191,11 +212,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 11. api_story_abandon.py
+
 **Purpose:** Abandon active story and clean up state
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Validates character is in Incremental mode
 - Marks active segment as "abandoned"
 - Updates character: adds to AbandonedStories set, clears GameMode/ActiveStoryID/ActiveSegmentID
@@ -208,11 +231,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 12. api_story_history.py
+
 **Purpose:** Retrieve story history entries for character
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Accepts up to 10 StoryInstanceIDs (comma-separated or JSON array)
 - Verifies character ownership
 - Batch gets story history records
@@ -223,13 +248,15 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 13. api_story_start.py
+
 **Purpose:** Start new story for character
 
-**Status:** ❌ HAS BUG - Allows dead characters to start stories
+**Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Gets character and validates ownership
-- **Calls story_eligibility() which ONLY checks GameMode, NOT CharState**
+- ✅ Calls story_eligibility() which NOW checks both GameMode AND CharState
 - Validates story is in character's AvailableStories
 - Gets story and first segment
 - Creates story history entry
@@ -238,20 +265,25 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 - Queues mechanical segments for processing
 - Enables polling system
 
-**Bug:** Dead characters with GameMode="None" pass story_eligibility() check and can start new stories.
+**Previous Bug:** Dead characters with GameMode="None" could start stories
+**Fix Applied:**
 
-**Fix Required:** Add CharState check to story_eligibility() function in eidolon/story_validation.py
+- Added CharState check to story_eligibility() in eidolon/story_validation.py
+- Enhanced error handling to return clear message for dead characters
+- Dead characters now properly blocked with error: "Dead characters cannot start new stories"
 
 ---
 
 ## Cognito Functions (2 total)
 
 ### 14. cognito_player_new.py
+
 **Purpose:** Create player record after Cognito user confirmation
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Triggered by Cognito Post Confirmation
 - Extracts sub (UUID) and email from Cognito event
 - Creates player record in Players table
@@ -263,11 +295,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 15. cognito_player_delete.py
+
 **Purpose:** Delete all player data for GDPR compliance
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Supports multiple invocation methods (CloudWatch Events, API Gateway, direct)
 - Extracts player_id from various event formats
 - Calls delete_player_data() which deletes:
@@ -286,11 +320,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ## Operations Functions (3 total)
 
 ### 16. ops_segment_poller.py
+
 **Purpose:** Poll for segments needing attention (EventBridge triggered every minute)
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Checks SSM parameter for polling state ("run" or "stop")
 - Finds segments approaching expiry (within 60s)
   - If processed: queues for advancement
@@ -310,11 +346,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 17. ops_segment_process.py
+
 **Purpose:** Process mechanical segments (SQS triggered)
 
 **Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
+
 - Receives ActiveSegmentID from SQS
 - Checks if already processed (idempotency)
 - Claims segment atomically for processing
@@ -329,11 +367,13 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ---
 
 ### 18. ops_story_advance.py
+
 **Purpose:** Advance story after segment completion (SQS triggered)
 
 **Status:** ✅ WORKS CORRECTLY (but calls broken library function)
 
 **Implementation:**
+
 - Receives ActiveSegmentID from SQS
 - Checks if already processed (idempotency)
 - Atomically claims segment by marking as "completed"
@@ -351,6 +391,7 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 - Manages polling state when no segments remain
 
 **Issue:** Function is correct but calls two empty library functions:
+
 - apply_combat_rewards() (story_rewards.py:72-95) - does nothing
 - apply_story_rewards() (story_rewards.py:51-66) - does nothing
 
@@ -361,18 +402,21 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ## Critical Findings
 
 ### 1. Death Check Missing - api_story_start.py
+
 **Location:** lambda/api_story_start.py:48
 **Bug:** Calls story_eligibility() which only checks GameMode, not CharState
 **Impact:** Dead characters can start new stories
 **Fix:** Add CharState check to eidolon/story_validation.py:story_eligibility()
 
 ### 2. Inventory Enrichment - api_character_get.py
+
 **Location:** lambda/api_character_get.py:66-68
 **Issue:** Calls get_inventory() but players see UUIDs
 **Root Cause:** Not in Lambda - either get_inventory() fails or Items table empty
 **Investigation Needed:** Check if Items table populated correctly
 
 ### 3. Empty Reward Functions - ops_story_advance.py
+
 **Location:** lambda/ops_story_advance.py:135 and :101
 **Issue:** Calls apply_combat_rewards() and apply_story_rewards()
 **Root Cause:** Both library functions are empty (story_rewards.py)
@@ -384,6 +428,7 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ## Lambda Function Quality Assessment
 
 **Code Quality:** HIGH
+
 - Consistent error handling patterns
 - Proper separation of concerns
 - Good logging
@@ -392,12 +437,14 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 - No direct database operations in handlers (use library functions)
 
 **Architecture:** SOLID
+
 - Business logic in eidolon library functions
 - Lambda handlers only handle AWS concerns (auth, CORS, HTTP)
 - Clear error propagation (ValueError → 400, RuntimeError → 500)
 - Consistent response formats
 
 **Maintainability:** HIGH
+
 - Readable code
 - Descriptive function names
 - Consistent patterns across all functions
@@ -410,14 +457,17 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ### Immediate Fixes Required
 
 1. **Fix story_eligibility() check** (eidolon/story_validation.py)
+
    - Add CharState check
    - Prevent dead characters from starting stories
 
 2. **Implement apply_story_rewards()** (eidolon/story_rewards.py)
+
    - Add currency persistence
    - Add item grants (if not redundant with segment drops)
 
 3. **Implement apply_combat_rewards()** (eidolon/story_rewards.py)
+
    - Currently does nothing
    - Comment says "segment/story data must trigger distribution"
    - May be intentionally empty if items come from segment Results
@@ -430,6 +480,7 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 ### Lambda Functions Are Not The Problem
 
 The Lambda functions are well-implemented. The bugs are in:
+
 - Library functions (story_rewards.py, story_validation.py)
 - Data structures (story reward schema)
 - Database content (Items table may not have Name field)

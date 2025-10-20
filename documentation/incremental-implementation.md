@@ -19,6 +19,7 @@ This guide documents the actual implementation of the Incremental Game system as
 ### 1.1 Deployment Components
 
 **AWS Infrastructure:**
+
 - 10 CDK Stacks: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - 17 Lambda Functions deployed (18 total, cognito-player-delete not deployed)
 - 14 DynamoDB Tables with RemovalPolicy.RETAIN
@@ -27,6 +28,7 @@ This guide documents the actual implementation of the Incremental Game system as
 - 1 SSM Parameter (polling state)
 
 **Lambda Distribution:**
+
 - Character Stack: 7 functions (character APIs, item APIs, archetype)
 - Story Stack: 9 functions (story APIs, segment APIs, operations)
 - Player Stack: 1 function (cognito-player-new)
@@ -44,6 +46,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 **14 Tables:**
 
 **Core Tables:**
+
 - players: User accounts with CharacterList
 - characters: Character data with GameMode field
 - archetypes: Character class templates
@@ -54,6 +57,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 - motd: Message of the day
 
 **Story Tables (Incremental/Hybrid modes):**
+
 - story: Immutable story definitions
 - segments: Immutable segment templates
 - active_segments: Runtime segment instances
@@ -66,6 +70,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 **Purpose:** Tracks runtime segment instances with pre-calculated outcomes.
 
 **Key Fields:**
+
 - ActiveSegmentID (PK): UUIDv7 for time-based ordering
 - CharacterID (GSI): Query segments by character
 - ProcessingStatus: pending/processing/processed state machine
@@ -77,12 +82,14 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 - ChallengeResults: Combat/challenge results
 
 **Indexes:**
+
 - CharacterID-index: Query by character
 - EndTimeIndex: Find expired segments for polling
 
 ### 2.3 Characters Table Structure
 
 **Key Fields:**
+
 - CharacterID (PK): UUIDv4
 - PlayerID: Owner reference
 - CharacterName (GSI): Unique name enforcement
@@ -98,11 +105,13 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 - CharState: standing/unconscious/dead (not returned in API - gap)
 
 **Calculated Fields:**
+
 - Health: MaxHealth - len(Wounds) (calculated on read)
 
 ### 2.4 Items Table Structure
 
 **Key Fields:**
+
 - ItemID (PK): UUIDv4
 - PrototypeID: Reference to Prototypes table
 - Name: Item name (may not exist - causes UUID display bug)
@@ -122,6 +131,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 **API Functions (13 total):**
 
 **Character Stack (7 functions):**
+
 - api-archetype-list: GET /archetype
 - api-character-add: POST /character
 - api-character-delete: DELETE /character
@@ -131,6 +141,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 - api-item-prototype: GET /item/prototype
 
 **Story Stack (6 functions):**
+
 - api-story-start: POST /story/start
 - api-story-abandon: POST /story/abandon
 - api-story-history: GET /story/history
@@ -141,6 +152,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 **Operational Functions (3 total):**
 
 **Story Stack (3 functions):**
+
 - ops-segment-poller: EventBridge triggered (1 minute)
 - ops-segment-process: SQS triggered (mechanical segments)
 - ops-story-advance: SQS triggered (segment advancement)
@@ -148,9 +160,11 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 **Cognito Functions (1 total):**
 
 **Player Stack (1 function):**
+
 - cognito-player-new: PostConfirmation trigger
 
 **Not Deployed (1 total):**
+
 - cognito-player-delete: Code exists, not deployed (awaiting API implementation)
 
 ### 3.2 Lambda Handler Pattern
@@ -187,6 +201,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 ```
 
 **Key Points:**
+
 - All AWS concerns in Lambda handler
 - All business logic in eidolon library
 - CORS handled by cors_handler utility
@@ -195,6 +210,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 ### 3.3 Environment Variables
 
 **Common Variables (all functions):**
+
 ```python
 APPLICATION_NAME: "eidolon-engine"
 LOG_LEVEL: "INFO"
@@ -206,6 +222,7 @@ CORS_MAX_AGE: "86400"
 ```
 
 **Table Names:**
+
 ```python
 players_table: "players"
 characters_table: "characters"
@@ -221,6 +238,7 @@ opponents_table: "opponents"
 ```
 
 **Story Stack Variables:**
+
 ```python
 SEGMENT_QUEUE_URL: SQS processing queue URL
 STORY_ADVANCEMENT_QUEUE_URL: SQS advancement queue URL
@@ -235,6 +253,7 @@ SEGMENT_BATCH_SIZE: "10"
 **Implementation:** eidolon/mechanics.py
 
 **Formula:**
+
 ```python
 # Base XP with variance modifier
 base_xp = BASE_XP * variance_modifier
@@ -252,12 +271,14 @@ increment = base_xp / xp_required
 ```
 
 **Constants:**
+
 - BASE_XP = 0.25
 - FAILURE_XP_PENALTY = 0.5
 - ATTRIBUTE_XP_RATIO = 0.1 (attributes get 10% of skill XP)
 - MAX_SKILL_LEVEL = 10.0
 
 **Application:**
+
 - SkillXP and AttributeXP accumulated during segment processing
 - Applied immediately via apply_character_updates()
 - Uses atomic ADD operations in DynamoDB
@@ -268,11 +289,13 @@ increment = base_xp / xp_required
 **Implementation:** eidolon/mechanics.py, eidolon/constants.py
 
 **Health Calculation:**
+
 ```python
 Health = MaxHealth - len(Wounds)
 ```
 
 **Wound Structure:**
+
 ```python
 {
     "DamageType": "bashing" | "lethal" | "aggravated",
@@ -281,42 +304,88 @@ Health = MaxHealth - len(Wounds)
 ```
 
 **Heal Times:**
+
 - Bashing: 15 minutes (BASHING_HEAL_TIME)
 - Lethal: 6 hours (LETHAL_HEAL_TIME)
 - Aggravated: 7 days (AGGRAVATED_HEAL_TIME)
 
 **Character States:**
+
 - Standing: Health > 0
 - Unconscious: Health = 0 with at least one bashing wound
 - Dead: Health = 0 with only lethal/aggravated wounds
 
 **Unconscious Rules:**
+
 - New bashing damage converts to lethal
 - Implemented in segment_combat.py:231-241
 
 **Design Specification:** See health.md for complete health system design. Incremental partially implements this (missing Ghost state, death enforcement broken).
 
-### 4.3 Combat System
+### 4.3 Currency System
+
+**Implementation:** eidolon/items.py, eidolon/story_rewards.py
+
+**Fundamental Units (FU):**
+
+- Hidden base currency unit
+- All values internally tracked in FU
+- Enables economic flexibility without player confusion
+
+**Coin Types:**
+
+```python
+# Coin values and exchange rates
+Bronze Coin: 10 FU (PrototypeID: 3d8a6f2e-1c4b-4e9f-a5d2-7b3e9f0c1d8a)
+Silver Coin: 120 FU (PrototypeID: 8f5b3c9e-2d7a-4f8e-b6c1-9a4e7d2b5f3c)
+Gold Coin: 2400 FU (PrototypeID: 6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d)
+
+# Exchange rates
+1 Silver = 12 Bronze
+1 Gold = 20 Silver = 240 Bronze
+```
+
+**Stack Management:**
+
+- Coins are stackable items with Quantity field
+- Stack merging uses UUIDv7 oldest-wins logic
+- Automatic consolidation when receiving rewards
+- Implemented in items.py:merge_stacks(), find_matching_stack()
+
+**Currency Application:**
+
+- Story rewards converted to coins via create_coins_from_value()
+- Coins added to inventory with proper stacking
+- Resources.Value tracks total currency in FU
+- Characters start with 1 gold coin (2400 FU)
+
+**Design Specification:** See currency.md for complete currency system design.
+
+### 4.4 Combat System
 
 **Implementation:** eidolon/segment_combat.py
 
 **Dual Action System:**
+
 - Each combatant performs offensive + defensive per round
 - Character uses best offensive skill (Arcane/Brawling/Melee/Archery)
 - Defense determined by offensive choice (Parry for Melee, Dodge otherwise)
 
 **Damage Application:**
+
 - Opposed check success = damage to opponent
 - Sigma > 3.0 = critical hit (2 wounds)
 - Normal hit = 1 wound
 - Wound type from weapon
 
 **Victory Conditions:**
-- Opponent Defeated: Lethal wounds >= Health OR Total wounds >= Health * 2
+
+- Opponent Defeated: Lethal wounds >= Health OR Total wounds >= Health \* 2
 - Character Defeated: Lethal wounds >= 5 OR Total wounds >= 10
 - Timeout: Max rounds reached (failure outcome)
 
 **Outcome Quality:**
+
 - Exceptional: Victory with 0 wounds
 - Normal: Victory with 1-2 wounds
 - Minimal: Victory with 3+ wounds
@@ -326,6 +395,7 @@ Health = MaxHealth - len(Wounds)
 ### 4.4 Segment Outcomes
 
 **Five Outcome Levels:**
+
 1. Death: Character dies or catastrophic failure
 2. Failure: Unsuccessful with consequences
 3. Minimal: Barely successful
@@ -345,8 +415,9 @@ Health = MaxHealth - len(Wounds)
 **File:** lambda/api_story_start.py
 
 **Process:**
+
 1. Get character and validate ownership (character_get)
-2. Check story_eligibility() - validates GameMode="None" (BUG: doesn't check CharState)
+2. Check story_eligibility() - validates GameMode="None" AND CharState != "dead"
 3. Validate story in AvailableStories
 4. Get story definition and first segment
 5. Create StoryHistory entry (UUIDv7 StoryInstanceID)
@@ -356,11 +427,10 @@ Health = MaxHealth - len(Wounds)
 9. Enable polling system (SSM parameter + EventBridge rule)
 10. Return segment details to client
 
-**Known Issue:** story_eligibility() doesn't check CharState, allowing dead characters to start stories.
-
 **Eidolon Functions Used:**
+
 - character_get (character_data.py)
-- story_eligibility (story_validation.py) - BUG HERE
+- story_eligibility (story_validation.py) [FIXED]
 - get_story_and_first_segment (story_retrieval.py)
 - create_story_history_entry (story_history.py)
 - create_active_segment (story_segment.py)
@@ -375,6 +445,7 @@ Health = MaxHealth - len(Wounds)
 **File:** lambda/ops_segment_process.py
 
 **Process:**
+
 1. Receive ActiveSegmentID from SQS
 2. Get ActiveSegment record
 3. Check if already processed (idempotency)
@@ -391,6 +462,7 @@ Health = MaxHealth - len(Wounds)
 12. Done (segment waits for EndTime)
 
 **Eidolon Functions Used:**
+
 - get_active_segment (segment_core.py)
 - claim_segment_for_processing (segment_polling.py)
 - get_segment_definition (segment_core.py)
@@ -399,6 +471,7 @@ Health = MaxHealth - len(Wounds)
 - update_active_segment_outcome (segment_state.py)
 
 **Key Files:**
+
 - segment_processing.py - Orchestration
 - segment_challenges.py - Challenge resolution
 - segment_combat.py - Combat resolution
@@ -411,6 +484,7 @@ Health = MaxHealth - len(Wounds)
 **File:** lambda/ops_story_advance.py
 
 **Process:**
+
 1. Receive ActiveSegmentID from SQS (sent by ops-segment-poller when EndTime reached)
 2. Get ActiveSegment record
 3. Check if already completed (idempotency)
@@ -436,11 +510,13 @@ Health = MaxHealth - len(Wounds)
 16. Check if any active segments remain, update polling state
 
 **Known Issues:**
+
 - apply_combat_rewards() is empty (story_rewards.py:72-95)
 - apply_story_rewards() is empty (story_rewards.py:51-66)
 - Story rewards never applied (currency stays at 0)
 
 **Eidolon Functions Used:**
+
 - get_active_segment (segment_core.py)
 - mark_segment_as_completed (segment_state.py)
 - process_decision_segment (segment_processing.py)
@@ -464,6 +540,7 @@ Health = MaxHealth - len(Wounds)
 **Trigger:** EventBridge rule every 1 minute
 
 **Process:**
+
 1. Check SSM parameter state (run/stop)
 2. Find segments approaching expiry (EndTime <= now + 60 seconds):
    - If ProcessingStatus="processed": enqueue to advancement queue
@@ -478,10 +555,12 @@ Health = MaxHealth - len(Wounds)
    - If state="stop" and no segments: disable EventBridge rule
 
 **Timeout Protection:**
+
 - Mechanical segments past EndTime marked "exceptional" (best outcome)
 - Player-protective: system failures never punish players
 
 **Eidolon Functions Used:**
+
 - get_polling_state (polling.py)
 - get_segments_approaching_expiry (segment_polling.py)
 - get_stuck_mechanical_segments (segment_polling.py)
@@ -497,6 +576,7 @@ Health = MaxHealth - len(Wounds)
 ### 6.1 Architecture
 
 **File Structure:**
+
 ```
 incremental/lib/
 ├── constants/        # Navigation routes (1 file)
@@ -531,6 +611,7 @@ incremental/lib/
 **Extends:** BaseApiService (handles HTTP, auth, retries)
 
 **Key Methods (13 total):**
+
 - getCharacterById(characterId)
 - listCharacters()
 - addCharacter(name, archetype)
@@ -546,6 +627,7 @@ incremental/lib/
 - getItemPrototype(prototypeId) - added in Release 4
 
 **BaseApiService provides:**
+
 - JWT token injection
 - Error handling with status code interpretation
 - Retry logic with exponential backoff
@@ -560,28 +642,33 @@ incremental/lib/
 **Key Methods:**
 
 **loadPlayerCharacters():**
+
 - Fetches all characters from server
 - Caches each in IndexedDB
 - Returns list for character selection
 
 **getCharacter(characterId):**
+
 - Tries IndexedDB first
 - Falls back to server on cache miss
 - Caches result
 
 **refreshCharacterFromServer(characterId):**
+
 - Forces server fetch
 - Updates cache
 - Used after story completion
 
 **updateCharacterFromSegment(characterId, segmentUpdates):**
+
 - Gets cached character
 - Applies CharacterUpdates incrementally (lines 176-260)
 - Updates Skills, Attributes, Resources, Wounds, Inventory
 - Caches updated character
 - Falls back to server fetch on error
 
-**_applyUpdates() Method:**
+**\_applyUpdates() Method:**
+
 ```dart
 Character _applyUpdates(Character character, Map<String, dynamic> updates) {
   // Apply skill XP (additive)
@@ -605,6 +692,7 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 **File:** incremental/lib/services/story_polling_service.dart
 
 **Design Specification:**
+
 - First poll at T+60 seconds after StartTime (backend INITIAL_POLL_DELAY constant)
 - Use server PollAfter field for subsequent timing
 - Apply incremental character updates from CharacterUpdates
@@ -612,18 +700,21 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 **Actual Implementation:**
 
 **BUG:** Polls immediately at T+0, not T+60
+
 - Line 72: "Check immediately to get current status and PollAfter guidance from server"
 - Violates INITIAL_POLL_DELAY specification
 
 **Correct Behaviors:**
+
 - Uses server PollAfter field for subsequent polls
 - Applies incremental updates via CharacterRepository
 - Single polling source (only GameScreen calls startPolling)
-- Deduplication via _lastReloadedSegmentId tracking
+- Deduplication via \_lastReloadedSegmentId tracking
 - Error handling with consecutive error counter (max 3)
 - Stops on 404 or null ActiveSegmentID
 
 **Process:**
+
 1. GET /segment/status immediately (BUG: should wait 60 seconds from StartTime)
 2. Reset consecutive error counter on success
 3. Update UI via onStatusUpdate callback
@@ -634,7 +725,7 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
    - "processed" with TimeRemaining = 0: Apply updates immediately
 6. Apply updates via onSegmentComplete callback
 7. onSegmentComplete calls CharacterRepository.updateCharacterFromSegment()
-8. Schedule next poll with _scheduleNextPoll()
+8. Schedule next poll with \_scheduleNextPoll()
 9. On error: increment error counter, retry after 30 seconds
 10. After 3 consecutive errors: stop polling
 
@@ -647,31 +738,37 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 **Key Features:**
 
 **Single Polling Source:**
-- Line 563: _runtime.startPolling() - only polling location
+
+- Line 563: \_runtime.startPolling() - only polling location
 - SegmentProvider polling disabled to avoid dual-polling bug
 
 **Story Lifecycle State Machine:**
+
 - none: No active story
 - running: Story in progress
 - completed: Story confirmed complete
 
 **Segment History Tracking:**
-- Tracks all segments in _segmentHistory array
-- Deduplicates by _segmentIdentity()
-- Assigns _index for chronological ordering
+
+- Tracks all segments in \_segmentHistory array
+- Deduplicates by \_segmentIdentity()
+- Assigns \_index for chronological ordering
 - Filters completed vs active segments
 
 **Character Update Timer:**
+
 - Runs every 2 minutes when NOT in active story
 - Auto-refreshes character state
 - Stops after 60 ticks or when story starts
 
 **Decision Submission:**
+
 - Multi-layer duplicate prevention
 - Atomic flag + debouncer (300ms) + rate limiter (15s)
 - Backend conditional update (ultimate protection)
 
 **Responsive Layout:**
+
 - Desktop: 3-column (Character | Story | Inventory)
 - Tablet: Collapsible side panels
 - Mobile: Bottom navigation between panels
@@ -685,18 +782,22 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 **Object Stores (5 total):**
 
 1. **stories** - Completed story history
+
    - Key: [characterId, storyInstanceId]
    - Indexes: by-character, by-completion-date, by-outcome, by-story-type
 
 2. **story_segments** - Completed segment history
+
    - Key: [characterId, storyInstanceId, activeSegmentId]
    - Indexes: by-story-instance, by-segment-type, by-outcome
 
 3. **characters** - Character data cache
+
    - Key: characterId
    - Indexes: by-player, by-last-updated
 
 4. **items** - Item instances
+
    - Key: itemId
    - Index: by-character
    - Stores: ItemID + PrototypeID only
@@ -707,12 +808,14 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
    - Stores: Full prototype data
 
 **Integration:**
+
 - CharacterRepository uses characters store for caching
 - Cache-first reads with server fallback
 - Incremental updates from segment responses
 - Fresh fetch at character selection and story completion
 
 **Performance:**
+
 - 90% reduction in character API calls
 - 85-90% reduction in total API calls
 - Reduced latency during story progression
@@ -722,6 +825,7 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 **Game Panels (3 widgets):**
 
 **CharacterPanel (character_panel.dart):**
+
 - Displays name, archetype, health/essence bars
 - Attributes section
 - Skills section
@@ -731,6 +835,7 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 - Last updated timestamp
 
 **StoryPanel (story_panel.dart):**
+
 - Available stories grid (when no active story)
 - Active story card with abandon button
 - Segment display (mechanical progress or decision options)
@@ -738,12 +843,14 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 - Story completion screen
 
 **InventoryPanel (inventory_panel.dart):**
+
 - Equipped items section
 - Bag items grid
 - Item count badge
 - Falls back to UUID display when InventoryDetails empty (current bug)
 
 **Responsive Support:**
+
 - All panels adapt to mobile/tablet/desktop
 - Consistent card-based design
 - Material Design 3 theming
@@ -753,36 +860,22 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 ### 7.1 Flutter Client Bugs
 
 **Polling Timing:**
+
 - File: incremental/lib/services/story_polling_service.dart:72
 - Bug: Polls immediately (T+0) instead of waiting 60 seconds
 - Design: INITIAL_POLL_DELAY = 60 seconds
 - Fix: Calculate delay from StartTime, wait 60 seconds before first poll
 
 **Repository Directory:**
+
 - File: incremental/lib/repositories/character_repository.dart
 - Issue: repositories/ should be under services/ or utils/
 - Fix: Move file and update imports
 
 ### 7.2 Backend Library Bugs
 
-**Empty Reward Functions:**
-- eidolon/story_rewards.py:apply_story_rewards() (lines 51-66)
-  - Function logs success but does nothing
-  - Called by story_completion.py
-  - Impact: Currency and story rewards never applied
-
-- eidolon/story_rewards.py:apply_combat_rewards() (lines 72-95)
-  - Function does nothing
-  - Called by ops_story_advance.py
-  - Impact: Combat rewards not applied
-
-**Missing Death Check:**
-- eidolon/story_validation.py:story_eligibility() (lines 56-77)
-  - Only checks GameMode, not CharState
-  - Missing: if character.get("CharState") == "dead": return False
-  - Impact: Dead characters can start new stories
-
 **Inventory Enrichment:**
+
 - eidolon/items.py:get_inventory() (lines 383-462)
   - Batch fetches items from Items table
   - Returns enriched dict with Name, Description, etc.
@@ -791,26 +884,31 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 
 ### 7.3 Data Structure Issues
 
-**Story Reward Schema:**
-- Files: data/story/*.json
-- Issue: RewardTiers contains text strings, not reward objects
-- Current: "Normal": "Your foraging expedition yields useful resources"
-- Should be: "Normal": {"items": ["uuid-1"], "currency": 30}
-- Impact: calculate_story_rewards() always returns empty
+**Story Reward Schema**
 
-**Resources Field:**
-- Characters created with Resources: {}
-- Never populated by any code
+- Files: data/story/\*.json
+- [OK] RewardTiers now contains proper reward objects with narrative
+- [OK] Format: `"Normal": {"narrative": "text", "currency": 300, "items": []}`
+- [OK] Currency values implemented for all tiers
+- [OK] Fixed: calculate_story_rewards() returns correct values
+
+**Resources Field**
+
+- Characters created with Resources: {"Value": 2400} (start with 1 gold coin)
+- [OK] Resources.Value now tracks total currency in FU
+- [OK] Updated by apply_story_rewards() when receiving currency
 - Frontend ready to display but backend never sends data
 - Impact: No currency display
 
 **CharState Field:**
+
 - Backend sets CharState in Characters table
 - Backend doesn't return it in GET /character API response
 - Frontend uses Dead flag from CharacterList as proxy
 - Impact: Inconsistent death status tracking
 
 **Missing Ghost State:**
+
 - health.md specifies 4 states: standing/unconscious/dead/ghost
 - MUD server implements all 4
 - Python constants.py only has 3 (missing ghost)
@@ -821,19 +919,23 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 ### 8.1 API Call Patterns
 
 **Character Selection:**
+
 - GET /character/list (once)
 - GET /character for each character (N calls)
 - Caches all in IndexedDB
 
 **Story Gameplay (per segment):**
+
 - GET /segment/status (1-3 calls depending on processing time)
 - No GET /character calls (uses incremental updates)
 
 **Story Completion:**
+
 - GET /character (once to refresh)
 - GET /segment/history (optional for history display)
 
 **Typical Session (3 stories, 18 segments each):**
+
 - Without caching: ~60 character fetches
 - With caching: ~5 character fetches (selection + 3 completions + error fallbacks)
 - 90% reduction
@@ -841,6 +943,7 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 ### 8.2 Database Operations
 
 **DynamoDB Access Patterns:**
+
 - Pay-per-request billing (no capacity planning)
 - GSI queries for efficient secondary access
 - Batch operations where possible (batch_get_items for inventory)
@@ -850,12 +953,14 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 ### 8.3 Lambda Performance
 
 **Configuration:**
+
 - Runtime: Python 3.12
 - Memory: 128MB (sufficient for all functions)
 - Timeout: 30 seconds
 - Layer: eidolon-dependencies (shared library)
 
 **Optimization:**
+
 - Cold start caching of archetype data (api-archetype-list)
 - Shared execution role across all functions
 - Post-deployment updates from S3 artifacts
@@ -865,6 +970,7 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 ### 9.1 Infrastructure as Code
 
 **10 CDK Stacks:**
+
 1. CodeBuild: Build projects and artifacts bucket
 2. DynamoDB: 14 tables with managed policy
 3. Lambda: Shared layer and execution role
@@ -877,6 +983,7 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 10. Client: CloudFront, S3, automated portal build
 
 **Post-Deployment:**
+
 - Phase 11: Lambda function code updates from S3
 - Cognito trigger configuration for imported pools
 - S3 bucket policies for CloudFront
@@ -893,6 +1000,7 @@ All modes deploy same 17 Lambda functions.
 ### 9.3 Fixed Logical IDs
 
 All resources use fixed logical IDs to prevent recreation:
+
 - Lambda functions: ApiCharacterGetFunction, OpsSegmentPoller, etc.
 - DynamoDB tables: Stable logical IDs
 - S3 buckets, Cognito pools: Fixed names
@@ -904,6 +1012,7 @@ All resources use fixed logical IDs to prevent recreation:
 Per project policy (unit-tests.md): Focus on integration testing, not unit tests.
 
 **Functional Tests:**
+
 - Character creation with starting items
 - Story start and progression
 - Mechanical segment challenges
@@ -918,23 +1027,96 @@ Per project policy (unit-tests.md): Focus on integration testing, not unit tests
 
 ### 10.2 Known Test Failures
 
-**Cannot Test:**
+**Cannot Test (Remaining Issues):**
+
 - Inventory item names (see UUIDs)
-- Dead character prevention (can start stories)
-- Currency rewards (always 0)
 - Store purchases (no endpoints)
 - Item consumption (no endpoint)
 - Item discarding (no endpoint)
 
-## 11. References
+**Fixed Issues (2025-10-19):**
+
+- ✅ Dead character prevention (now properly blocks story starts)
+- ✅ Currency rewards (now properly calculated and applied)
+
+## 11. Testing Requirements
+
+### Stack Operations Testing
+
+Testing requirements for the stackable item system:
+
+**Unit Tests:**
+
+- Stack merging logic with UUIDv7 oldest-wins
+- Stack splitting for trade/drop operations
+- Stackable vs non-stackable validation rules
+- Coin creation from currency values
+- Inventory consolidation logic
+
+**Integration Tests:**
+
+- Story rewards creating coin stacks
+- Automatic stack merging on item pickup
+- Currency transactions with proper coin conversion
+- Inventory updates preserving stack integrity
+
+**Edge Cases:**
+
+- Merging stacks at integer limits
+- Stack operations with invalid quantities
+- Mixed stackable/non-stackable inventory operations
+- Currency conversion with odd values
+
+### Frontend Testing (Flutter)
+
+Required testing for client-side stack handling:
+
+**Display Testing:**
+
+- Stack quantity display in inventory panel (x123 format)
+- Singular vs plural item names
+- Coin stack formatting with proper denominations
+- Currency value display in inventory header
+- Coin icons distinguishable (gold/silver/bronze)
+- Total currency value in character panel
+
+**Interaction Testing:**
+
+- Drag-drop stack merging
+- Stack splitting UI (when implemented)
+- Store purchases with coin stacks
+
+**Story Rewards Testing:**
+
+- Currency rewards convert to coin display
+- Narrative text displays if present
+- Zero rewards handled gracefully
+- Individual coin amounts shown correctly
+
+**Character Resources Testing:**
+
+- Value field updates correctly
+- Currency formatting works for all amounts (0, partial, large)
+- Resources persist across sessions
+- Backward compatibility with characters without Value field
+
+### Performance Testing
+
+- Stack operations with large inventories (1000+ items)
+- Batch stack merging efficiency
+- Database query optimization for stack lookups
+
+## 12. References
 
 **Implementation Files:**
-- Lambda: lambda/*.py (18 files)
-- Eidolon Library: eidolon/*.py (45 files, 9,640 lines)
-- Flutter: incremental/lib/**/*.dart (67 files)
-- Deployment: deployment/stacks/*.py (13 files)
+
+- Lambda: lambda/\*.py (18 files)
+- Eidolon Library: eidolon/\*.py (45 files, 9,640 lines)
+- Flutter: incremental/lib/\*_/_.dart (67 files)
+- Deployment: deployment/stacks/\*.py (13 files)
 
 **Documentation:**
+
 - INCREMENTAL-STATUS.md - Current status, bugs, missing features
 - LAMBDA-REVIEW.md - Complete Lambda review (17 functions)
 - FLUTTER-REVIEW.md - Complete Flutter review (67 files)
@@ -945,6 +1127,7 @@ Per project policy (unit-tests.md): Focus on integration testing, not unit tests
 - eidolon-library.md - Library module reference
 
 **Code Reviews:**
+
 - All Lambda functions reviewed - 17 working, bugs in library functions
 - All Flutter files reviewed - 1 bug (polling timing), otherwise production-ready
 - All eidolon modules catalogued - 3 empty functions, 1 missing validation

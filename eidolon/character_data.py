@@ -324,7 +324,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}
 
 
-def apply_character_updates(character_id: str, updates: dict, current_character: dict | None = None) -> None:
+def apply_character_updates(character_id: str, updates: dict, current_character=None) -> None:
     """
     Apply accumulated updates to character.
 

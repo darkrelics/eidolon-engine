@@ -114,23 +114,48 @@ When data structure is dynamic or unknown, use bare `dict` or `list` without typ
 
 ## Type Hints
 
-### Use Native Python Types
+### Use Basic Types Only
 
-Always use Python's built-in types for type hints. With Python 3.12+, use the pipe operator for optional types:
+Always use Python's basic built-in types for type hints. Do NOT use Optional, Union, or pipe operator types in function signatures:
 
 ```python
-# Good
+# Good - basic types only
 def process_data(items: list, config: dict) -> dict:
     pass
 
 def get_names() -> list[str]:
     pass
 
-# Good - for optional values (Python 3.12+)
-def get_value(key: str) -> str | None:
-    """Returns value or None if not found."""
-    return data.get(key)
+def get_character(character_id: str) -> dict:
+    """Returns character dict. Raises ValueError if not found."""
+    pass
+
+def find_items(inventory: dict) -> list:
+    """Returns list of items. Empty list if none found."""
+    pass
+
+# Bad - do NOT use pipe operator or Optional
+def get_value(key: str) -> str | None:  # WRONG
+    pass
+
+def find_character(character_id: str) -> dict | None:  # WRONG
+    pass
+
+# Bad - do NOT import from typing module
+from typing import Optional, Union
+def get_value(key: str) -> Optional[str]:  # WRONG
+    pass
 ```
+
+**Allowed basic types:**
+- `str`, `int`, `bool`, `dict`, `list`
+- Parameterized collections: `list[str]`, `dict[str, int]`
+- Object type: `object` (for Lambda context parameter)
+
+**Prohibited:**
+- `Optional[T]` or `T | None` in function signatures
+- `Union[T, U]` or `T | U` in function signatures
+- `Any`, `TypeVar`, `Generic`, or other typing module constructs
 
 ### Union Types in Pydantic Models
 
@@ -153,7 +178,7 @@ class Character(BaseModel):
 
 ### Avoid Union Types in Functions
 
-For regular functions (not Pydantic models), prefer raising exceptions over returning optional values:
+For regular functions (not Pydantic models), NEVER use optional return types. Instead, raise exceptions or return empty collections:
 
 ```python
 # Good - raise exception instead of returning None
@@ -164,8 +189,14 @@ def get_character(character_id: str) -> dict:
         raise ValueError(f"Character {character_id} not found")
     return character
 
-# Less preferred - returning optional
-def find_character(character_id: str) -> dict | None:
+# Good - return empty collection instead of None
+def find_items(character_id: str) -> list:
+    """Returns list of items. Empty list if none found."""
+    items = dynamo.query(...)
+    return items or []
+
+# Bad - NEVER use optional return types
+def find_character(character_id: str) -> dict | None:  # WRONG
     """Returns character dict or None if not found."""
     return dynamo.get_item(...)
 ```

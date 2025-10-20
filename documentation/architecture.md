@@ -4,8 +4,6 @@
 
 The Eidolon Engine is a serverless multi-user game system built on AWS infrastructure, supporting both traditional MUD (Multi-User Dungeon) gameplay and incremental story-driven progression. The system uses a fully serverless architecture with DynamoDB for state persistence, Lambda for compute, and EventBridge for scheduled operations.
 
-**Deployment Status**: All core systems deployed and tested in AWS.
-
 ## System Architecture
 
 ### High-Level Architecture
@@ -728,6 +726,7 @@ System failures are handled gracefully with player-favorable defaults to prevent
 **IndexedDB Cache Layer:**
 
 The Flutter client implements an intelligent IndexedDB cache for three data domains:
+
 - **Stories**: Historical preservation of completed narratives for offline access
 - **Characters**: Smart caching with field-level updates (60+ API calls/hour → 5-10)
 - **Items**: Two-tier prototype caching minimizes redundant item data fetches

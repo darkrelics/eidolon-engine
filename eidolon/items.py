@@ -11,8 +11,130 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 
 
+def merge_stacks(item1: dict, item2: dict) -> dict:
+    """
+    Merge two stackable items.
+    The older stack (by UUIDv7 timestamp) keeps its ItemID.
+
+    Args:
+        item1: First item dict
+        item2: Second item dict
+
+    Returns:
+        Merged item dict or empty dict if items can't stack
+    """
+    # Must be same prototype
+    if item1.get("PrototypeID") != item2.get("PrototypeID"):
+        return {}
+
+    # Get prototype to check if stackable
+    prototype = get_prototype(item1.get("PrototypeID"))
+    if not prototype or not prototype.get("Stackable", False):
+        return {}
+
+    # Check both items have only allowed fields for stackable items
+    allowed_fields = {"ItemID", "PrototypeID", "Quantity", "OwnerID", "LocationID"}
+    item1_fields = set(item1.keys())
+    item2_fields = set(item2.keys())
+
+    # Remove None/empty fields from check
+    item1_fields = {k for k in item1_fields if item1.get(k) is not None}
+    item2_fields = {k for k in item2_fields if item2.get(k) is not None}
+
+    if not item1_fields.issubset(allowed_fields) or not item2_fields.issubset(allowed_fields):
+        return {}
+
+    total_quantity = item1.get("Quantity", 1) + item2.get("Quantity", 1)
+
+    # UUIDv7 has timestamp, so lexicographic comparison gives older item
+    if item1["ItemID"] < item2["ItemID"]:
+        # item1 is older, keep its ID
+        return {
+            "ItemID": item1["ItemID"],
+            "PrototypeID": item1["PrototypeID"],
+            "Quantity": total_quantity,
+            "OwnerID": item1.get("OwnerID"),
+        }
+    else:
+        # item2 is older, keep its ID
+        return {
+            "ItemID": item2["ItemID"],
+            "PrototypeID": item2["PrototypeID"],
+            "Quantity": total_quantity,
+            "OwnerID": item2.get("OwnerID"),
+        }
+
+
+def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
+    """
+    Find an existing stack in inventory that matches the prototype.
+
+    Args:
+        inventory: Dict mapping slot to item ID
+        prototype_id: PrototypeID to find
+
+    Returns:
+        Tuple of (slot, item_dict) or empty tuple if no matching stack found
+    """
+    if not inventory or not prototype_id:
+        return ()
+
+    # Get prototype to check if stackable
+    prototype = get_prototype(prototype_id)
+    if not prototype or not prototype.get("Stackable", False):
+        return ()
+
+    # Check each item in inventory
+    for slot, item_id in inventory.items():
+        if not item_id:
+            continue
+
+        # Get the item from database
+        try:
+            item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+            if item and item.get("PrototypeID") == prototype_id:
+                return (slot, item)
+        except ClientError:
+            continue
+
+    return ()
+
+
+def create_coins_from_value(value: int) -> list[dict]:
+    """
+    Convert a value amount into coin item creation requests.
+    These are just regular item creation requests for coin prototypes.
+
+    Args:
+        value: Total value to convert to coins
+
+    Returns:
+        List of dicts with PrototypeID and Quantity for each coin type
+    """
+    if value <= 0:
+        return []
+
+    items_to_create = []
+
+    # Calculate optimal coin distribution
+    gold_coins = value // 2400
+    remainder = value % 2400
+    silver_coins = remainder // 120
+    bronze_coins = (remainder % 120) // 10
+
+    # Create coin item requests
+    if gold_coins > 0:
+        items_to_create.append({"PrototypeID": "6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d", "Quantity": gold_coins})
+    if silver_coins > 0:
+        items_to_create.append({"PrototypeID": "8f5b3c9e-2d7a-4f8e-b6c1-9a4e7d2b5f3c", "Quantity": silver_coins})
+    if bronze_coins > 0:
+        items_to_create.append({"PrototypeID": "3d8a6f2e-1c4b-4e9f-a5d2-7b3e9f0c1d8a", "Quantity": bronze_coins})
+
+    return items_to_create
+
+
 @cache
-def get_prototype(prototype_id: str) -> dict | None:
+def get_prototype(prototype_id: str) -> dict:
     """
     Retrieve a prototype from DynamoDB with caching.
 
@@ -20,9 +142,10 @@ def get_prototype(prototype_id: str) -> dict | None:
         prototype_id: Prototype ID to fetch
 
     Returns:
-        Prototype data dict or None if not found
+        Prototype data dict or empty dict if not found
     """
-    return dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
+    result = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
+    return result or {}
 
 
 def get_item_brief(item_id: str) -> dict:
@@ -45,7 +168,7 @@ def get_item_brief(item_id: str) -> dict:
         item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
     except ClientError as err:
         logger.error(f"Failed to fetch item {item_id} from database")
-        raise RuntimeError(f"Failed to retrieve item data") from err
+        raise RuntimeError("Failed to retrieve item data") from err
 
     if not item:
         raise ValueError(f"Item {item_id} not found")
@@ -53,7 +176,7 @@ def get_item_brief(item_id: str) -> dict:
     prototype_id = item.get("PrototypeID")
     if not prototype_id:
         logger.error(f"Item {item_id} missing PrototypeID field")
-        raise ValueError(f"Item data incomplete")
+        raise ValueError("Item data incomplete")
 
     return {"ItemID": item_id, "PrototypeID": prototype_id}
 
@@ -79,7 +202,7 @@ def get_item_prototype_full(prototype_id: str) -> dict:
         prototype = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
     except ClientError as err:
         logger.error(f"Failed to fetch prototype {prototype_id} from database")
-        raise RuntimeError(f"Failed to retrieve prototype data") from err
+        raise RuntimeError("Failed to retrieve prototype data") from err
 
     if not prototype:
         raise ValueError(f"Prototype {prototype_id} not found")
@@ -92,7 +215,7 @@ def build_item_payload(
     item_id: str,
     *,
     is_worn: bool = False,
-    contents: list[str] | None = None,
+    contents=None,
 ) -> dict:
     """Construct item payload from a prototype definition."""
 
@@ -125,18 +248,18 @@ def create_item_from_prototype(
     prototype_id: str,
     *,
     is_worn: bool = False,
-    initial_contents: list[str] | None = None,
-) -> dict | None:
+    initial_contents=None,
+) -> dict:
     """Create a single item instance from a prototype and persist it."""
 
     if not prototype_id:
         logger.warning("Cannot create item: missing prototype ID")
-        return None
+        return {}
 
     prototype = get_prototype(prototype_id)
     if not prototype:
         logger.warning(f"Prototype not found for {prototype_id}")
-        return None
+        return {}
 
     item_id = str(uuid.uuid4())
     item_payload = build_item_payload(
@@ -152,7 +275,7 @@ def create_item_from_prototype(
         return item_payload
     except Exception as err:  # pragma: no cover - DynamoDB client handles errors
         logger.error(f"Error creating item {item_id} from prototype {prototype_id} Error: {err}", exc_info=True)
-        return None
+        return {}
 
 
 def find_next_available_slot(inventory: dict) -> str:

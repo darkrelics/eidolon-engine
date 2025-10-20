@@ -12,11 +12,31 @@
       "RequiredRooms": []
     },
     "RewardTiers": {
-      "Death": "No rewards - the forest claims another victim",
-      "Failure": "Minimal rewards - you survive but gain little",
-      "Minimal": "Basic rewards - some items and experience",
-      "Normal": "Good rewards - useful items and solid experience",
-      "Exceptional": "Excellent rewards - rare items and maximum experience"
+      "Death": {
+        "narrative": "No rewards - the forest claims another victim",
+        "currency": 0,
+        "items": []
+      },
+      "Failure": {
+        "narrative": "Minimal rewards - you survive but gain little",
+        "currency": 60,
+        "items": []
+      },
+      "Minimal": {
+        "narrative": "Basic rewards - some items and experience",
+        "currency": 180,
+        "items": []
+      },
+      "Normal": {
+        "narrative": "Good rewards - useful items and solid experience",
+        "currency": 360,
+        "items": []
+      },
+      "Exceptional": {
+        "narrative": "Excellent rewards - rare items and maximum experience",
+        "currency": 720,
+        "items": []
+      }
     },
     "FirstSegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
     "CreatedAt": "2025-08-03T10:00:00Z"

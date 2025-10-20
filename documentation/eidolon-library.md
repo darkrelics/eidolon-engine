@@ -118,7 +118,8 @@ def lambda_handler(event, context):
 **story_rewards.py** - Reward calculation and application
 
 - calculate_story_rewards() - Calculates rewards from story metadata
-- apply_story_rewards() - EMPTY FUNCTION (not implemented)
+- apply_story_rewards() - Applies currency and item rewards to character
+- create_reward_item() - Creates item structure for rewards
 - apply_combat_rewards() - EMPTY FUNCTION (not implemented)
 
 **story_segment.py** - Segment creation
@@ -127,7 +128,7 @@ def lambda_handler(event, context):
 
 **story_validation.py** - Story eligibility
 
-- story_eligibility() - Checks if character can start story (BUG: missing CharState check)
+- story_eligibility() - Checks if character can start story (now checks CharState)
 - validate_story_available() - Validates story in AvailableStories
 - check_story_prerequisites() - Validates skill/item requirements
 
@@ -214,6 +215,9 @@ def lambda_handler(event, context):
 - add_items_to_inventory() - Adds items to character
 - create_items_from_prototypes() - Batch item creation
 - process_items_with_probability() - Handles item drop chances
+- merge_stacks() - Merges two stackable items, oldest wins
+- find_matching_stack() - Finds existing stack for prototype
+- create_coins_from_value() - Converts FU value to coin items
 
 **archetypes.py** - Archetype management
 
@@ -317,14 +321,15 @@ All eidolon modules are packaged in the `eidolon-dependencies` Lambda layer:
 
 ### Empty Functions
 
-**story_rewards.py** contains placeholder functions:
+**story_rewards.py**:
 
-**apply_story_rewards() (lines 51-66):**
+**apply_story_rewards():**
 
-- Function exists but does nothing
-- Logs success without database operations
-- Called by story_completion.py but has no effect
-- **Impact:** Currency and story rewards never applied
+- [OK] NOW fully implemented
+- [OK] Creates coins from currency values
+- [OK] Adds coins to inventory with proper stacking
+- [OK] Updates Resources.Value field
+- [OK] Fixed: Currency and story rewards properly applied
 
 **apply_combat_rewards() (lines 72-95):**
 
@@ -333,13 +338,13 @@ All eidolon modules are packaged in the `eidolon-dependencies` Lambda layer:
 - May be intentionally empty
 - **Impact:** Combat rewards not applied
 
-### Missing Death Check
+### Death Check
 
-**story_validation.py:story_eligibility() (lines 56-77):**
+**story_validation.py:story_eligibility() (lines 56-84):**
 
-- Only checks GameMode, not CharState
-- Dead characters can start stories
-- **Impact:** Death has no mechanical consequence
+- [OK] Now checks both GameMode AND CharState
+- [OK] Dead characters blocked from starting stories
+- **Impact:** Death now has proper consequences
 
 ### Inventory Enrichment
 
@@ -367,7 +372,7 @@ All eidolon modules are packaged in the `eidolon-dependencies` Lambda layer:
 
 **Business logic modules (depend on infrastructure):**
 
-- All character*\*, story*_, segment\__ modules depend on dynamo, logger
+- All character*\*, story*\_, segment\_\_ modules depend on dynamo, logger
 
 ## Testing
 

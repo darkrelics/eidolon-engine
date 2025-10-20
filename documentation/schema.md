@@ -50,7 +50,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
 | `ActiveSegmentID`  | `STRING`        |          | UUID of the currently active segment (if any).                                |
 | `Archetype`        | `STRING`        |          | Name of the character's archetype.                                            |
 | `MaxEssence`       | `NUMBER`        |          | The character's maximum essence points.                                       |
-| `Resources`        | `MAP`           |          | Map of resource types to quantities (e.g., gold: 100). Currently always empty - currency rewards not implemented. |
+| `Resources`        | `MAP`           |          | Map of resource types to values. `Value` field tracks total currency in FU (fundamental units). |
 | `Progress`         | `MAP`           |          | Map tracking story progress flags and achievements.                           |
 | `CreatedAt`        | `STRING`        |          | ISO 8601 timestamp when character was created.                                |
 | `UpdatedAt`        | `STRING`        |          | ISO 8601 timestamp of last character update.                                  |
@@ -157,9 +157,8 @@ This document defines the complete database schema for the Eidolon Engine's unif
 | `Description` | `STRING`  |          | Description of the item.                                      |
 | `Mass`        | `NUMBER`  |          | Weight or mass of the item.                                   |
 | `Value`       | `NUMBER`  |          | Monetary value of the item.                                   |
-| `Stackable`   | `BOOLEAN` |          | Indicates if the item can be stacked.                         |
-| `MaxStack`    | `NUMBER`  |          | Maximum number of items per stack.                            |
-| `Quantity`    | `NUMBER`  |          | Current quantity if stackable.                                |
+| `Stackable`   | `BOOLEAN` |          | Indicates if the item can be stacked. Stackable items are immutable except for Quantity. |
+| `Quantity`    | `NUMBER`  |          | REQUIRED for stackable items, FORBIDDEN for non-stackable. Stack merging uses UUIDv7 oldest-wins. |
 | `Wearable`    | `BOOLEAN` |          | Indicates if the item can be worn.                            |
 | `WornOn`      | `STRING`  |          | Body part where the item can be worn (e.g., "head", "feet").  |
 | `Verbs`       | `MAP`     |          | Actions associated with the item (e.g., "eat": "You eat..."). |
@@ -180,12 +179,12 @@ This document defines the complete database schema for the Eidolon Engine's unif
 | Field           | Type      | Key      | Description                                                   |
 | --------------- | --------- | -------- | ------------------------------------------------------------- |
 | `PrototypeID`   | `STRING`  | **HASH** | UUID of the item prototype.                                   |
-| `PrototypeName` | `STRING`  |          | Name of the item.                                             |
+| `PrototypeName` | `STRING`  |          | Name of the item (singular form).                             |
+| `PrototypeNamePlural` | `STRING`  |     | Plural form of item name for stackable items.                |
 | `Description`   | `STRING`  |          | Description of the item.                                      |
 | `Mass`          | `NUMBER`  |          | Weight or mass of the item.                                   |
-| `Value`         | `NUMBER`  |          | Monetary value of the item.                                   |
-| `Stackable`     | `BOOLEAN` |          | Indicates if the item can be stacked.                         |
-| `MaxStack`      | `NUMBER`  |          | Maximum number of items per stack.                            |
+| `Value`         | `NUMBER`  |          | Monetary value of the item in FU. REQUIRED for all items.     |
+| `Stackable`     | `BOOLEAN` |          | REQUIRED. Indicates if the item can be stacked.               |
 | `Quantity`      | `NUMBER`  |          | Default quantity if stackable.                                |
 | `Wearable`      | `BOOLEAN` |          | Indicates if the item can be worn.                            |
 | `WornOn`        | `LIST`    |          | Body slots where item can be worn                             |
@@ -296,7 +295,7 @@ In this example:
 | `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.      |
 | `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).     |
 | `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.  |
-| `RewardTiers`       | `MAP`    |          | Reward descriptions by outcome tier. Current implementation: text strings. Design intent: reward objects with items/currency arrays. |
+| `RewardTiers`       | `MAP`    |          | Reward data by outcome tier. Format: `{"narrative": "text", "currency": 300, "items": []}` |
 | `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.              |
 | `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.      |
 
@@ -524,6 +523,24 @@ Records the complete history of each segment played by a character. This table s
 ---
 
 ## Data Structure Definitions
+
+### Currency System
+
+The economy uses Fundamental Units (FU) as the base currency unit, which is converted to coins for player-facing display and inventory management.
+
+**Coin Prototypes:**
+- Bronze Coin: 10 FU (PrototypeID: `3d8a6f2e-1c4b-4e9f-a5d2-7b3e9f0c1d8a`)
+- Silver Coin: 120 FU (PrototypeID: `8f5b3c9e-2d7a-4f8e-b6c1-9a4e7d2b5f3c`)
+- Gold Coin: 2400 FU (PrototypeID: `6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d`)
+
+**Exchange Rates:**
+- 1 Silver = 12 Bronze
+- 1 Gold = 20 Silver = 240 Bronze
+
+**Stack Management:**
+- Coins are stackable items with Quantity field
+- Stack merging uses UUIDv7 timestamp comparison (oldest wins)
+- Character Resources.Value tracks total currency in FU
 
 ### Items Structure
 

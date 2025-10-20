@@ -60,6 +60,12 @@
           "Slot": "",
           "IsWorn": false,
           "Container": false
+        },
+        {
+          "PrototypeID": "6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d",
+          "Slot": "",
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
@@ -123,6 +129,12 @@
           "Slot": "",
           "IsWorn": false,
           "Container": false
+        },
+        {
+          "PrototypeID": "6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d",
+          "Slot": "",
+          "IsWorn": false,
+          "Container": false
         }
       ]
     },
@@ -183,6 +195,12 @@
         },
         {
           "PrototypeID": "b47ac10b-58cc-4372-a567-0e02b2c3d483",
+          "Slot": "",
+          "IsWorn": false,
+          "Container": false
+        },
+        {
+          "PrototypeID": "6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d",
           "Slot": "",
           "IsWorn": false,
           "Container": false

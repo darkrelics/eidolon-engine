@@ -308,7 +308,7 @@ Starts a new story for the specified character.
 
 **Error Responses:**
 
-- `400 Bad Request` - Missing CharacterID or StoryID, invalid UUID format
+- `400 Bad Request` - Missing CharacterID or StoryID, invalid UUID format, dead characters cannot start new stories
 - `401 Unauthorized` - Missing or invalid authentication token
 - `403 Forbidden` - Story not available to character (prerequisites not met), character not owned by player
 - `409 Conflict` - Character already in an active story
@@ -631,6 +631,32 @@ Retrieves complete item prototype definition for client-side caching.
 - `401 Unauthorized` - Missing or invalid authentication token
 - `404 Not Found` - Prototype does not exist
 - `500 Internal Server Error` - Database operation failed
+
+### Stack Operations (Future)
+
+These endpoints will manage stackable item operations when implemented:
+
+**Stack Merging:** Automatic during inventory updates
+- When picking up stackable items, system automatically merges with existing stacks
+- Uses UUIDv7 comparison - older stack keeps its ItemID
+- Updates Quantity field on the surviving stack
+
+**Stack Splitting (Planned):** `POST /item/split`
+- Split a stack into two separate stacks
+- Required for trade, dropping partial stacks
+- Body: `{"ItemID": "uuid", "Quantity": 50}`
+- Returns: New stack ItemID
+
+**Inventory Consolidation (Planned):** `POST /inventory/consolidate`
+- Merges all matching stackable items in inventory
+- Reduces inventory slots used
+- Returns: Updated inventory with consolidated stacks
+
+**Stack Rules:**
+- Stackable items: Immutable except for Quantity field
+- Non-stackable items: Mutable, no Quantity field
+- Stack merging: Oldest ItemID (UUIDv7) wins
+- All coins are stackable with unlimited stack size
 
 ## Client Polling Pattern (Incremental mode)
 
