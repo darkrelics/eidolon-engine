@@ -2,15 +2,13 @@
 
 **Status**: Active
 **Created**: 2025-10-19
-**Last Revised**: 2025-10-19 (post-implementation verification)
+**Last Revised**: 2025-10-20 (added Task 10, updated Task 5 requirements)
 **Owner**: Development Team
 
 **REVISION NOTES**:
-- Original document created after Tasks 1-4 completion (2025-10-19)
-- This revision corrects documentation file claims and status alignment
+- 2025-10-20: Added Task 10 (Story Tracking for Repeatables), updated Task 5 (item quantity tracking)
+- 2025-10-19: Original document created after Tasks 1-4 completion
 - All code implementations verified via code review (per project validation strategy)
-- Documentation file consolidation clarified
-- Success Criteria updated to match task completion status
 - INCREMENTAL-STATUS.md is now OUTDATED (predates currency implementation)
 
 ## Executive Summary
@@ -233,50 +231,75 @@ All four critical tasks have been completed in code. The implementations follow 
 
 **Implementation**:
 
-1. **Create Item Repository**
+1. **Update Item Brief Response to Include Quantity**
+   - Modify `eidolon/items.py` - `get_item_brief()` to return Quantity
+   - Return 0 for non-stackable items (default quantity)
+   - Return actual quantity for stackable items
+   - Update response format: `{"ItemID": "...", "PrototypeID": "...", "Quantity": int}`
+   - Update `lambda/api_item_brief.py` response (no changes needed - passthrough)
+
+2. **Update Character Item Storage**
+   - Modify character item attribute in DynamoDB schema to store quantity
+   - Items table already has Quantity field - ensure it's always populated
+   - Character's Inventory field: Change from `{slot: itemId}` to `{slot: {"ItemID": "...", "Quantity": int}}`
+   - Update `eidolon/character_data.py` to handle new inventory structure
+   - Maintain backward compatibility during transition
+
+3. **Create Item Repository**
    - Create `incremental/lib/repositories/item_repository.dart`
    - Implement two-tier loading strategy:
-     - Fetch item brief via `GET /item/brief` (returns ItemID + PrototypeID)
+     - Fetch item brief via `GET /item/brief` (returns ItemID + PrototypeID + Quantity)
      - Check IndexedDB cache for prototype
      - If cache miss: Fetch via `GET /item/prototype` and cache
      - If cache hit: Use cached prototype data
    - Provide `getItemDetails(String itemId)` method
    - Handle batch loading for inventory (multiple items)
+   - Include quantity in returned item details
 
-2. **Integrate Inventory Panel with Item Repository**
+4. **Integrate Inventory Panel with Item Repository**
    - Update `incremental/lib/widgets/game/inventory_panel.dart`
    - Replace `_getItemDetails()` logic to use Item Repository
    - Load item details from IndexedDB cache
    - Display item names, descriptions, stats from cached prototypes
+   - Display quantity for stackable items (coins, potions, etc.)
    - Handle missing items gracefully
 
-3. **Add Item Loading to Character Load Flow**
+5. **Add Item Loading to Character Load Flow**
    - When character loads with inventory
    - Trigger item repository to fetch briefs for all inventory items
    - Cache prototypes that aren't already cached
    - Build item details map for display
+   - Include quantity in enriched inventory details
 
-4. **Test Inventory Display**
+6. **Test Inventory Display**
    - Create character with items
    - Verify item names display (not UUIDs)
+   - Verify quantities display for stackable items (e.g., "Bronze Coin x5")
    - Verify prototype caching works (second item of same type uses cache)
    - Test cache miss scenario (new item type)
    - Test empty inventory state
 
 **Acceptance Criteria**:
+- ✅ Item brief API returns Quantity field (0 for non-stackable, int for stackable)
+- ✅ Character inventory structure updated to include quantity
 - ✅ Item Repository created and functional
-- ✅ Inventory panel displays item names, descriptions, stats
+- ✅ Inventory panel displays item names, descriptions, stats, and quantities
 - ✅ Prototypes cached in IndexedDB (verified via browser DevTools)
 - ✅ Two-tier loading strategy working (brief → cached prototype or fetch prototype)
 - ✅ No UUIDs displayed in inventory
 - ✅ Graceful handling of missing items
+- ✅ Stackable items show quantity (e.g., "Bronze Coin x5")
 
 **Files to Create**:
 - `incremental/lib/repositories/item_repository.dart`
 
 **Files to Modify**:
-- `incremental/lib/widgets/game/inventory_panel.dart`
-- `incremental/lib/screens/game_screen.dart` (integrate item repository)
+- `eidolon/items.py` - Update `get_item_brief()` to return Quantity
+- `eidolon/character_data.py` - Update inventory structure handling
+- `incremental/lib/models/character.dart` - Update inventory field type
+- `incremental/lib/services/api_service.dart` - Add item API methods
+- `incremental/lib/widgets/game/inventory_panel.dart` - Display quantities
+- `incremental/lib/screens/game_screen.dart` - Integrate item repository
 
 **Dependencies**: None
 
@@ -499,6 +522,100 @@ All four critical tasks have been completed in code. The implementations follow 
 
 ---
 
+### Task 10: Refactor Story Tracking for Repeatables 🔨 MEDIUM
+
+**Priority**: Medium (enables daily stories and proper story completion tracking)
+
+**Problem**:
+- CompletedStories currently stores `story_instance_id` UUIDs (not story IDs)
+- No mechanism to prevent re-running "one-time" stories
+- No mechanism to track daily story cooldowns
+- AbandonedStories tracked in character record (should only be in story history)
+
+**Current State**:
+- CompletedStories is a DynamoDB SET of story_instance_id UUIDs
+- Added in `state_machines.py:144` when story **starts** (not when it ends)
+- StoryType field already exists: `"one-time"`, `"daily"`, or `"repeatable"`
+- No check in story eligibility logic prevents re-running stories
+- Test stories currently all use `"repeatable"` StoryType
+
+**Implementation**:
+
+1. **Change CompletedStories Structure**
+   - Change from SET of story_instance_id UUIDs to LIST of MAPs
+   - New structure: `[{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]`
+   - Only track "one-time" and "daily" stories in this list
+   - "repeatable" stories never added to CompletedStories
+   - Each list entry is a single-key map with story_id as key
+
+2. **Update state_machines.py**
+   - Modify `set_character_game_mode()` at line 142-145
+   - Load story definition to get StoryType
+   - If StoryType is "one-time": Append `{story_id: {"StoryType": "one-time", "CompletedAt": timestamp}}`
+   - If StoryType is "daily": Append `{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}`
+   - If StoryType is "repeatable": Don't add to CompletedStories
+   - Change from `ADD` (SET operation) to list append operation
+   - Use current UTC timestamp for CompletedAt
+
+3. **Add Daily Story Cleanup**
+   - Modify `lambda/api_character_get.py`
+   - Before returning character: Call cleanup function
+   - Iterate through CompletedStories list
+   - Remove entries where StoryType is "daily" AND CompletedAt is 24+ hours ago (UTC)
+   - Keep entries where StoryType is "one-time" (permanent)
+   - Function: `cleanup_expired_daily_stories(character: dict) -> dict`
+
+4. **Update Story Validation**
+   - Modify `eidolon/story_validation.py` - `validate_story_available()` function
+   - After checking AvailableStories: Iterate through CompletedStories list
+   - For each entry, extract story_id (the single key in each map)
+   - If story_id matches requested story:
+     - If StoryType is "one-time": Raise error "Story already completed"
+     - If StoryType is "daily": Raise error "Story available again tomorrow" (should be cleaned up, but double-check)
+
+5. **Remove AbandonedStories**
+   - Modify `lambda/api_story_abandon.py`
+   - Remove any code that updates character's AbandonedStories field
+   - Only update story history table (if applicable)
+
+6. **Update Character Schema Documentation**
+   - Modify `documentation/schema.md`
+   - Update CompletedStories field: Change from LIST to MAP
+   - Remove AbandonedStories field
+   - Document daily cleanup behavior
+
+7. **Frontend Updates**
+   - Modify `incremental/lib/models/character.dart`
+   - Change `completedStories` from `List<String>` to `Map<String, String>`
+   - Remove `abandonedStories` field
+   - Update `fromJson()` and `toJson()` methods
+
+**Acceptance Criteria**:
+- ✅ CompletedStories changed from SET to LIST of MAPs structure
+- ✅ Each entry format: `{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}`
+- ✅ CompletedStories only tracks "one-time" and "daily" stories (not "repeatable")
+- ✅ Daily stories automatically removed from CompletedStories after 24 hours (UTC)
+- ✅ One-time stories permanently kept in CompletedStories
+- ✅ Story validation prevents re-starting one-time stories
+- ✅ Story validation prevents re-starting daily stories within 24 hours
+- ✅ AbandonedStories removed from character record
+- ✅ Cleanup runs on character load (api_character_get)
+
+**Files to Modify**:
+- `eidolon/state_machines.py` - Change CompletedStories from SET to LIST of MAPs, add StoryType logic
+- `eidolon/story_validation.py` - Add CompletedStories check in validate_story_available()
+- `lambda/api_character_get.py` - Add daily story cleanup before returning character
+- `lambda/api_story_abandon.py` - Remove AbandonedStories update
+- `documentation/schema.md` - Update CompletedStories field definition (LIST of MAPs), remove AbandonedStories
+- `incremental/lib/models/character.dart` - Update completedStories to List<Map<String, dynamic>>, remove abandonedStories
+
+**Files to Review** (may already be correct):
+- `data/story/*.json` - StoryType field already exists, verify values are correct
+
+**Dependencies**: None
+
+---
+
 ## Task Dependency Graph
 
 ```
@@ -515,7 +632,9 @@ Task 7: Store System ◄─────────── (needs Task 4)┘  │
                                                     │
 Task 8: Refactor Lambdas (no deps, parallel) ──────┤
                                                     │
-Task 9: Monitoring (no deps, parallel) ◄───────────┘
+Task 9: Monitoring (no deps, parallel) ────────────┤
+                                                    │
+Task 10: Story Tracking Refactor (no deps, parallel)┘
 ```
 
 ---
@@ -537,7 +656,12 @@ Task 9: Monitoring (no deps, parallel) ◄───────────┘
 - ⬜ All Lambda functions under 300 lines *(Task 8 pending)*
 
 ### System Verified (Task 5)
-- ⬜ Inventory display working with item names *(Task 5 pending)*
+- ⬜ Inventory display working with item names and quantities *(Task 5 pending)*
+
+### Story System Enhanced (Task 10)
+- ⬜ Daily stories with 24-hour cooldowns functional *(Task 10 pending)*
+- ⬜ Repeatable vs non-repeatable stories properly distinguished *(Task 10 pending)*
+- ⬜ Abandoned stories removed from character record *(Task 10 pending)*
 
 ### Nice-to-Have (Task 9)
 - ⬜ Monitoring dashboard operational *(Task 9 pending)*
@@ -562,28 +686,47 @@ Task 9: Monitoring (no deps, parallel) ◄───────────┘
    - Mitigation: Block consumption during active story, add state validation
 
 ### Medium Risk Items
-1. **Test coverage goals may slip**
+1. **Item inventory structure change may require migration** *(Task 5)*
+   - Mitigation: Maintain backward compatibility, gradual rollout, test with existing characters
+2. **Daily story cooldown timezone handling** *(Task 10)*
+   - Mitigation: Use UTC consistently, clear documentation, test across timezones
+3. **Test coverage goals may slip**
    - Mitigation: Prioritize critical modules, accept lower initial coverage
-2. **Frontend changes may require Flutter expertise**
+4. **Frontend changes may require Flutter expertise**
    - Mitigation: Leverage existing Flutter patterns, reference existing code
 
 ### Low Risk Items
-1. **Death blocking is simple boolean check**
-2. **Inventory verification straightforward**
+1. **Death blocking is simple boolean check** *(Task 1 - completed)*
+2. **Item brief quantity addition is straightforward** *(Task 5)*
+3. **Story tracking refactor is isolated** *(Task 10)*
 
 ---
 
 ## Next Steps
 
-1. Review and approve this project plan
-2. Begin Task 1 (Death Blocking - critical bug fix)
-3. Proceed to Task 2 (Currency Rewards - critical feature)
-4. Continue sequentially through tasks
+**Current Status**: Tasks 1-4 completed (2025-10-19)
+
+1. Begin Task 5 (Inventory Management with IndexedDB - high priority)
+   - Enhances user experience with proper item display
+   - Includes quantity tracking for stackable items
+2. Proceed to Task 6 (Item Consumption - completes economy loop)
+3. Implement Task 7 (Store System - enables item purchases)
+4. Complete remaining tasks in priority order
 
 
 ---
 
 ## Revision Summary
+
+**Latest Revision: 2025-10-20**
+- Added Task 10: Refactor Story Tracking for Repeatables
+- Updated Task 5: Added item quantity tracking to item brief API and inventory structure
+- Updated dependency graph to include Task 10
+- Updated success criteria to include Task 10 and item quantity requirements
+- Updated risk assessment with new task considerations
+- Updated next steps to reflect current state (Tasks 1-4 complete)
+
+**Previous Revision: 2025-10-19**
 
 This document was revised on 2025-10-19 after Tasks 1-4 completion to ensure accuracy. The following corrections were made:
 
@@ -609,8 +752,8 @@ This document was revised on 2025-10-19 after Tasks 1-4 completion to ensure acc
 
 **Still Accurate**:
 - INCREMENTAL-STATUS.md predates currency implementation and should be updated separately
-- Tasks 5-9 remain pending as documented
-- Dependencies and risk assessments unchanged
+- Tasks 5-10 remain pending as documented
+- Core architecture decisions remain valid
 
 ---
 

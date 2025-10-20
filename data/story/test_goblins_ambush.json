@@ -2,8 +2,8 @@
   "Story": {
     "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
     "Title": "The Goblin's Ambush",
-    "Description": "A mysterious path through the Vedant Forest leads to an unexpected encounter.",
-    "NarrativeText": "You've heard rumors of strange happenings in the Vedant Forest. Local villagers speak of missing travelers and eerie sounds at night. Armed with courage and curiosity, you decide to investigate the old forest path that leads to an abandoned campsite deep in the woods.",
+    "Description": "A mysterious path through the Verdant Forest leads to an unexpected encounter.",
+    "NarrativeText": "You've heard rumors of strange happenings in the Verdant Forest. Local villagers speak of missing travelers and eerie sounds at night. Armed with courage and curiosity, you decide to investigate the old forest path that leads to an abandoned campsite deep in the woods.",
     "StoryType": "repeatable",
     "EstimatedDuration": 1170,
     "Prerequisites": {

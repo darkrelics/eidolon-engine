@@ -7,7 +7,7 @@ Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
 """
 
-from eidolon.character_data import character_get
+from eidolon.character_data import character_get, cleanup_expired_daily_stories
 from eidolon.character_story import get_active_story_and_segment, get_stories_with_character
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
@@ -50,6 +50,13 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
     except RuntimeError as err:
         logger.error(f"Failed to get character: {err}")
         return {"success": False, "error": "Failed to retrieve character data", "status_code": 500}
+
+    # Clean up expired daily stories (24+ hours old)
+    try:
+        character = cleanup_expired_daily_stories(character)
+    except RuntimeError as err:
+        logger.error(f"Failed to cleanup expired daily stories: {err}")
+        # Continue - not critical, character data is still valid
 
     # Get active story and segment, handling broken story chains
     active_story, active_segment = get_active_story_and_segment(character)

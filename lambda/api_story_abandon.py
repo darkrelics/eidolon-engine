@@ -65,20 +65,18 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}")
         # Continue anyway since we still want to update character state
 
-    # Update character: add story to AbandonedStories (using ADD for set semantics), clear story state
+    # Update character: clear story state (AbandonedStories removed - only tracked in history)
     try:
-        # Use ADD to prevent duplicates (DynamoDB treats it as a set operation for SS type)
-        # Also clear GameMode, ActiveStoryID and ActiveSegmentID in single update
+        # Clear GameMode, ActiveStoryID and ActiveSegmentID
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
-            UpdateExpression="ADD AbandonedStories :story SET GameMode = :none REMOVE ActiveSegmentID, ActiveStoryID",
+            UpdateExpression="SET GameMode = :none REMOVE ActiveSegmentID, ActiveStoryID",
             ExpressionAttributeValues={
-                ":story": {story_id},  # Set containing story_id
                 ":none": "None",
             },
         )
-        logger.info(f"Added story {story_id} to abandoned list and reset character {character_id} to GameMode=None")
+        logger.info(f"Reset character {character_id} to GameMode=None (story {story_id} abandoned)")
 
     except ClientError as err:
         logger.error(f"Failed to update character abandoned state for {character_id} Error: {err}")

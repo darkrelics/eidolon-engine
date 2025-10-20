@@ -44,8 +44,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
 | `LeftHandID`       | `STRING`        |          | UUID of item equipped in left hand (if any).                                  |
 | `RightHandID`      | `STRING`        |          | UUID of item equipped in right hand (if any).                                 |
 | `AvailableStories` | `LIST`          |          | List of story IDs available to this character.                                |
-| `AbandonedStories` | `LIST`          |          | List of story IDs the character has abandoned.                                |
-| `CompletedStories` | `LIST`          |          | List of story IDs the character has completed.                                |
+| `CompletedStories` | `LIST`          |          | List of maps tracking story completions. Format: `[{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]`. Only tracks "one-time" and "daily" stories. Daily stories auto-removed after 24 hours. |
 | `ActiveStoryID`    | `STRING`        |          | UUID of the currently active story (if any).                                  |
 | `ActiveSegmentID`  | `STRING`        |          | UUID of the currently active segment (if any).                                |
 | `Archetype`        | `STRING`        |          | Name of the character's archetype.                                            |
@@ -442,14 +441,15 @@ The Results map contains outcome entries for Death, Failure, Minimal, Normal, an
 
    - Sets FinishedAt timestamp and FinalOutcome (death/failure/minimal/normal/exceptional)
    - Death and failure outcomes are still considered "completed" attempts, not abandonments
-   - Story added to character's CompletedStories list (regardless of outcome)
+   - Story added to character's CompletedStories list if StoryType is "one-time" or "daily" (not "repeatable")
+   - Entry format: `{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}`
    - Calculates TotalDuration in seconds
    - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
 
 4. **Abandonment (Player-Initiated)**: When player voluntarily quits via `api_story_abandon`
 
    - Sets FinishedAt timestamp and FinalOutcome to "abandoned"
-   - Story added to character's AbandonedStories list (not CompletedStories)
+   - Story recorded in story history only (AbandonedStories field removed from character record)
    - Character GameMode reset to "None", ActiveStoryID/ActiveSegmentID cleared
    - **Cannot be resumed** - must start fresh if repeatable
    - Distinct from death/failure - represents player choice to quit, not story outcome
