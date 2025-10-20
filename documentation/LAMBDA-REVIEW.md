@@ -3,7 +3,7 @@
 All 18 Lambda functions reviewed from code, not documentation.
 
 **Review Date:** 2025-01-24
-**Updated:** 2025-10-19
+**Updated:** 2025-10-19 (issues 1 and 3 resolved)
 
 ---
 
@@ -256,7 +256,7 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 **Implementation:**
 
 - Gets character and validates ownership
-- ✅ Calls story_eligibility() which NOW checks both GameMode AND CharState
+- Calls story_eligibility() which checks both GameMode and CharState
 - Validates story is in character's AvailableStories
 - Gets story and first segment
 - Creates story history entry
@@ -265,12 +265,7 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 - Queues mechanical segments for processing
 - Enables polling system
 
-**Previous Bug:** Dead characters with GameMode="None" could start stories
-**Fix Applied:**
-
-- Added CharState check to story_eligibility() in eidolon/story_validation.py
-- Enhanced error handling to return clear message for dead characters
-- Dead characters now properly blocked with error: "Dead characters cannot start new stories"
+**No Issues Found**
 
 ---
 
@@ -370,7 +365,7 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 
 **Purpose:** Advance story after segment completion (SQS triggered)
 
-**Status:** ✅ WORKS CORRECTLY (but calls broken library function)
+**Status:** ✅ WORKS CORRECTLY
 
 **Implementation:**
 
@@ -378,9 +373,9 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 - Checks if already processed (idempotency)
 - Atomically claims segment by marking as "completed"
 - Processes decision segments if needed
-- **Calls apply_death_or_unconscious_outcome() for death outcomes** ✅
-- **Calls apply_combat_rewards() - empty function** ⚠️
-- **Calls apply_story_rewards() on story completion - empty function** ❌
+- Calls apply_death_or_unconscious_outcome() for death outcomes
+- Calls apply_combat_rewards() for combat loot
+- Calls apply_story_rewards() on story completion
 - Records segment history
 - Updates story history with XP
 - Determines next segment (with weighted branching)
@@ -390,38 +385,32 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 - Deletes processed segment from ActiveSegments
 - Manages polling state when no segments remain
 
-**Issue:** Function is correct but calls two empty library functions:
-
-- apply_combat_rewards() (story_rewards.py:72-95) - does nothing
-- apply_story_rewards() (story_rewards.py:51-66) - does nothing
-
-**The Lambda is fine. The library functions are broken.**
+**No Issues Found**
 
 ---
 
-## Critical Findings
+## Issues Identified
 
-### 1. Death Check Missing - api_story_start.py
+### 1. ✅ RESOLVED - Death Check Missing
 
 **Location:** lambda/api_story_start.py:48
-**Bug:** Calls story_eligibility() which only checks GameMode, not CharState
-**Impact:** Dead characters can start new stories
-**Fix:** Add CharState check to eidolon/story_validation.py:story_eligibility()
+**Issue:** story_eligibility() only checked GameMode, not CharState
+**Impact:** Dead characters could start new stories
+**Resolution:** Added CharState check to eidolon/story_validation.py:story_eligibility()
 
-### 2. Inventory Enrichment - api_character_get.py
+### 2. ⚠️ PENDING - Inventory Enrichment
 
 **Location:** lambda/api_character_get.py:66-68
 **Issue:** Calls get_inventory() but players see UUIDs
 **Root Cause:** Not in Lambda - either get_inventory() fails or Items table empty
-**Investigation Needed:** Check if Items table populated correctly
+**Status:** Requires investigation (Task 5)
 
-### 3. Empty Reward Functions - ops_story_advance.py
+### 3. ✅ RESOLVED - Empty Reward Functions
 
 **Location:** lambda/ops_story_advance.py:135 and :101
-**Issue:** Calls apply_combat_rewards() and apply_story_rewards()
-**Root Cause:** Both library functions are empty (story_rewards.py)
+**Issue:** apply_combat_rewards() and apply_story_rewards() were empty
 **Impact:** No currency or combat rewards applied
-**Fix:** Implement the library functions, not the Lambda
+**Resolution:** Implemented both functions in eidolon/story_rewards.py
 
 ---
 
@@ -452,40 +441,24 @@ The function calls `get_inventory(inventory)` to populate `InventoryDetails`, bu
 
 ---
 
-## Recommendations
+## Current Status
 
-### Immediate Fixes Required
+### Resolved Issues
 
-1. **Fix story_eligibility() check** (eidolon/story_validation.py)
+1. ✅ story_eligibility() now checks CharState (eidolon/story_validation.py)
+2. ✅ apply_story_rewards() implemented with currency system (eidolon/story_rewards.py)
+3. ✅ Story reward schema fixed in all story JSON files
 
-   - Add CharState check
-   - Prevent dead characters from starting stories
+### Remaining Work
 
-2. **Implement apply_story_rewards()** (eidolon/story_rewards.py)
-
-   - Add currency persistence
-   - Add item grants (if not redundant with segment drops)
-
-3. **Implement apply_combat_rewards()** (eidolon/story_rewards.py)
-
-   - Currently does nothing
-   - Comment says "segment/story data must trigger distribution"
-   - May be intentionally empty if items come from segment Results
-
-4. **Investigate inventory enrichment** (eidolon/items.py:get_inventory())
+1. **Investigate inventory enrichment** (eidolon/items.py:get_inventory())
    - Why does get_inventory() return empty InventoryDetails?
    - Are Items created with Name field?
    - Is batch_get_items() working?
 
 ### Lambda Functions Are Not The Problem
 
-The Lambda functions are well-implemented. The bugs are in:
-
-- Library functions (story_rewards.py, story_validation.py)
-- Data structures (story reward schema)
-- Database content (Items table may not have Name field)
-
-No Lambda function code changes needed except indirectly via library function fixes.
+The Lambda functions are well-implemented. Issues identified were in library functions and data structures, not Lambda handlers. All Lambda code remains correct.
 
 ---
 

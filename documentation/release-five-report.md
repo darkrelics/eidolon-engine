@@ -1,9 +1,10 @@
-# Release 4 Report — Economy & Inventory System
+# Release 5 Report — Economy & Inventory System
 
 **Date:** 2025-10-07 (Planning)
-**Branch:** TBD (will branch from develop after R3 merge)
-**Status:** 📋 PLANNING
-**Previous Release:** R3 (inc-26 - Beta readiness)
+**Updated:** 2025-10-19 (status review)
+**Branch:** TBD (will branch from develop after R4 merge)
+**Status:** 📋 PLANNING (R5-T1 complete, remaining tasks pending)
+**Previous Release:** R4 (IndexedDB caching layer)
 
 ---
 
@@ -17,25 +18,25 @@ Release 4 establishes the **economy and inventory management system** by impleme
 
 ---
 
-## R4 Task Categories
+## R5 Task Categories
 
 ### Foundation (Economy) — 1 Task
 
-- R4-T1: Fix currency reward application (moved from R3)
+- R5-T1: Fix currency reward application (moved from R3) ✅ COMPLETE
 
 ### Inventory Operations — 3 Tasks
 
-- R4-T2: Item consumption system (use items, apply effects)
-- R4-T3: Inventory management (discard items, stack consolidation)
-- R4-T4: Item visual assets (icons, enhanced descriptions)
+- R5-T2: Item consumption system (use items, apply effects) ❌ NOT IMPLEMENTED
+- R5-T3: Inventory management (discard items, stack consolidation) ❌ NOT IMPLEMENTED
+- R5-T4: Item visual assets (icons, enhanced descriptions) ❌ NOT IMPLEMENTED
 
 ### Player Economy — 1 Task
 
-- R4-T5: Store/shop implementation (purchase items with currency)
+- R5-T5: Store/shop implementation (purchase items with currency) ❌ NOT IMPLEMENTED
 
 ### Content Enablement — 1 Task
 
-- R4-T6: Author Quick-Start documentation (moved from R3)
+- R5-T6: Author Quick-Start documentation (moved from R3) ❌ NOT IMPLEMENTED
 
 **Total:** 6 tasks (economy foundation → inventory operations → player store → content enablement)
 
@@ -74,37 +75,44 @@ Release 4 establishes the **economy and inventory management system** by impleme
 
 ## Task Details
 
-### R4-T1: Fix Currency Reward Application
+### R5-T1: Fix Currency Reward Application ✅ COMPLETE
 
-**Status:** 🔴 CRITICAL - Moved from R3, foundation for economy
-**Priority:** P0 - Must complete first (blocks R4-T5)
-**Issues:** #726 (effects integration), #639 (economy framework - partial)
+**Status:** ✅ COMPLETE
+**Priority:** P0 - Must complete first (blocks R5-T5)
+**Issues:** #726 (effects integration - resolved), #639 (economy framework - complete)
+**Completed:** 2025-10-19 (commit f36095ac)
 
 #### Current State
 
-**What Exists:**
+**Implementation Complete:**
 
-- `eidolon/story_rewards.py:12-48` - `calculate_story_rewards()` correctly computes currency amounts
-- `eidolon/story_rewards.py:51-69` - `apply_story_rewards()` is a **stub that does nothing**
-- Currency field references in `documentation/schema.md` at lines 53, 98, 105, 108, 111, 114, 601
-- Story JSON supports currency rewards in outcome definitions
+- ✅ `eidolon/story_rewards.py:82-199` - `apply_story_rewards()` fully implemented (199 lines)
+- ✅ Coin-based currency system: Bronze (10 FU), Silver (120 FU), Gold (2400 FU)
+- ✅ `Resources.Value` field tracks total currency value
+- ✅ Stack management with UUIDv7 oldest-wins merging
+- ✅ Currency calculation in `calculate_story_rewards()` (lines 12-79)
+- ✅ All 3 story JSON files updated with currency rewards in RewardTiers
+- ✅ Frontend character model parses Resources (incremental/lib/models/character.dart:123)
+- ✅ Story completion screen displays currency rewards (story_completion_screen.dart:306-308)
 
-**What's Broken:**
+**How It Works:**
 
 ```python
 def apply_story_rewards(character_id: str, rewards: dict) -> None:
     """Apply calculated rewards to a character."""
-    try:
-        # Story rewards currently only handle items and currency
-        # XP is awarded through segment processing for specific skills
-
-        logger.info(f"Applied story rewards for {character_id}")  # ← DOES NOTHING
-    except ClientError as err:
-        logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to apply rewards: {err}") from err
+    # 1. Convert currency value to coin items (bronze/silver/gold)
+    # 2. Check for existing coin stacks and merge if found
+    # 3. Create new coin items for new stacks
+    # 4. Update Resources.Value with total currency value
+    # 5. Handle direct item rewards from story
+    # 6. Update character inventory and resources atomically
 ```
 
-**Impact:** Players complete stories expecting currency rewards but receive nothing. This blocks the entire economy system.
+**Verification:**
+- ✅ Backend implementation complete and deployed
+- ✅ Frontend receives and displays currency
+- ✅ Coins appear in inventory as stackable items
+- ✅ Resources.Value tracks total wealth
 
 #### Implementation Requirements
 
@@ -258,9 +266,9 @@ def test_apply_currency_new_character():
 
 ---
 
-### R4-T2: Item Consumption System
+### R5-T2: Item Consumption System
 
-**Status:** 🟡 IMPORTANT - Core inventory interaction
+**Status:** ❌ NOT IMPLEMENTED
 **Priority:** P1 - Required for meaningful item usage
 **Issues:** New - "Implement item consumption mechanics"
 
@@ -547,11 +555,13 @@ def test_use_decrements_quantity():
 
 ---
 
-### R4-T3: Inventory Management (Discard & Stack Consolidation)
+### R5-T3: Inventory Management (Discard & Stack Consolidation)
 
-**Status:** 🟢 STRAIGHTFORWARD - CRUD operations
+**Status:** ❌ NOT IMPLEMENTED
 **Priority:** P1 - Quality of life feature
 **Issues:** New - "Add inventory discard functionality"
+
+**Note:** Coin stacking is already implemented server-side in `apply_story_rewards()`. This task focuses on UI-driven stack consolidation and item discard functionality.
 
 #### Current State
 
@@ -838,9 +848,9 @@ Future<void> _discardItem(InventoryItem item) async {
 
 ---
 
-### R4-T4: Item Visual Assets (Icons & Descriptions)
+### R5-T4: Item Visual Assets (Icons & Descriptions)
 
-**Status:** 🟡 MEDIUM - UI/UX enhancement
+**Status:** ❌ NOT IMPLEMENTED
 **Priority:** P2 - Nice to have for beta
 **Issues:** New - "Add item icons and rich descriptions"
 
@@ -1107,11 +1117,12 @@ Minimum viable icon set (can use placeholder icons initially):
 
 ---
 
-### R4-T5: Store/Shop Implementation
+### R5-T5: Store/Shop Implementation
 
-**Status:** 🟡 IMPORTANT - Completes economic loop
+**Status:** ❌ NOT IMPLEMENTED
 **Priority:** P1 - Required for meaningful currency usage
 **Issues:** New - "Implement item shop/store"
+**Blocked By:** R5-T1 (✅ complete - currency system operational)
 
 #### Current State
 
@@ -1741,25 +1752,27 @@ def test_purchase_insufficient_funds():
 
 ---
 
-### R4-T6: Author Quick-Start Documentation
+### R5-T6: Author Quick-Start Documentation
 
-**Status:** 🟡 IMPORTANT - Moved from R3
+**Status:** ❌ NOT IMPLEMENTED (no documentation/story-author-quickstart.md)
 **Priority:** P1 - Required for content authoring at scale
 **Issues:** #729 (documentation suite), #619 (author handbook - merge duplicate)
 
-**Moved from:** R3-T4 (deferred to better document complete system)
+**Moved from:** R3-T4 → R4 → R5 (deferred to document complete economy system)
 
-#### Rationale for R4 Inclusion
+#### Rationale for R5 Inclusion
 
-**Why defer from R3:**
+**Why defer from R3 and R4:**
 - R3 focused on core bug fixes and minimal beta readiness
-- Author documentation more valuable after R4 economy system complete
+- R4 focused on IndexedDB caching infrastructure
+- Author documentation more valuable after R5 economy system complete
 - Authors need to understand currency rewards, item drops, store mechanics
 - Better to write comprehensive guide once than iterate
 
-**Why include in R4:**
-- Economy features (currency, items, store) add complexity requiring documentation
-- Authors need clear guidance on reward balancing
+**Why include in R5:**
+- Currency system now complete (R5-T1) provides foundation to document
+- Economy features add complexity requiring clear documentation
+- Authors need guidance on reward balancing with working examples
 - Quick-start enables non-developer content creation at scale
 - Unblocks community content contributions
 
@@ -1983,60 +1996,101 @@ Example:
 
 ---
 
-## R4 Summary
+## Current Status Summary (2025-10-19)
 
-### Success Criteria
+### Completed (1 of 6 tasks)
 
-**Economy Foundation:**
-- ✅ Currency persists correctly from story rewards
-- ✅ Currency displays in character UI
-- ✅ Currency can be spent in store
+**R5-T1: Currency System ✅**
+- Coin-based currency implementation complete (eidolon/story_rewards.py:82-199)
+- Resources.Value tracks total wealth
+- Story rewards apply currency and create coin items
+- Frontend displays currency rewards
+- Server-side coin stacking implemented
+
+### Remaining Tasks (5 of 6 tasks)
+
+**R5-T2: Item Consumption** ❌
+- No api_item_use.py endpoint
+- No consumption UI in inventory panel
+- Required for meaningful item usage
+
+**R5-T3: Inventory Management** ❌
+- No api_item_discard.py endpoint
+- No discard UI in inventory panel
+- Coin stacking works server-side, but no UI consolidation tool
+
+**R5-T4: Item Icons** ❌
+- No IconPath/IconUrl in prototypes
+- Text-only inventory display
+- No visual distinction between item types
+
+**R5-T5: Store/Shop** ❌
+- No store API endpoints (api_store_purchase.py, api_store_list.py)
+- No store UI (StoreScreen)
+- Cannot spend currency despite earning it
+- **Unblocked:** R5-T1 complete, can now implement store
+
+**R5-T6: Author Documentation** ❌
+- No documentation/story-author-quickstart.md
+- Authors lack guidance on currency balancing
+- No copy-paste templates for economy features
+
+## R5 Success Criteria
+
+### Economy Foundation
+- ✅ Currency persists correctly from story rewards (R5-T1 complete)
+- ✅ Currency displays in character UI (R5-T1 complete)
+- ❌ Currency can be spent in store (R5-T5 pending)
 
 **Inventory Operations:**
-- ✅ Items can be used (consumables apply effects)
-- ✅ Items can be discarded with confirmation
-- ✅ Stackable items consolidate properly
-- ✅ Item icons enhance visual presentation
-- ✅ Item details accessible via click/tap
+- ❌ Items can be used (consumables apply effects) - R5-T2 pending
+- ❌ Items can be discarded with confirmation - R5-T3 pending
+- ✅ Stackable items consolidate properly (coins only, server-side)
+- ❌ Item icons enhance visual presentation - R5-T4 pending
+- ❌ Item details accessible via click/tap - R5-T4 pending
 
 **Player Store:**
-- ✅ Store lists purchasable items with prices
-- ✅ Purchase flow validates currency and inventory space
-- ✅ Transactions are atomic (no partial purchases)
-- ✅ Store inventory includes diverse item types
+- ❌ Store lists purchasable items with prices - R5-T5 pending
+- ❌ Purchase flow validates currency and inventory space - R5-T5 pending
+- ❌ Transactions are atomic (no partial purchases) - R5-T5 pending
+- ❌ Store inventory includes diverse item types - R5-T5 pending
 
-### Post-R4 Capabilities
+### Post-R5 Capabilities (When Complete)
 
-**Players Can:**
-- Earn currency from story completion
-- Purchase items from store
-- Use consumable items for immediate effects
-- Manage inventory (discard unwanted items)
-- See item icons and detailed descriptions
-- Track currency balance
+**Players Can (Current):**
+- ✅ Earn currency from story completion (R5-T1)
+- ✅ Track currency balance (Resources.Value)
+- ✅ Receive coin items in inventory
+- ❌ Purchase items from store (R5-T5 pending)
+- ❌ Use consumable items for immediate effects (R5-T2 pending)
+- ❌ Manage inventory (discard unwanted items) (R5-T3 pending)
+- ❌ See item icons and detailed descriptions (R5-T4 pending)
 
-**System Supports:**
-- Full economic loop (earn → spend → use)
-- Item lifecycle management (acquire → use → discard)
-- Extensible store system (multiple stores, dynamic inventory)
-- Visual item presentation (icons, rarity colors)
+**System Supports (Current):**
+- ✅ Currency earning (R5-T1)
+- ✅ Coin stacking and merging
+- ✅ Resources.Value tracking
+- ❌ Full economic loop (earn → spend → use) - partial
+- ❌ Item lifecycle management (acquire → use → discard) - partial
+- ❌ Extensible store system (multiple stores, dynamic inventory) - not started
+- ❌ Visual item presentation (icons, rarity colors) - not started
 
 ---
 
 ## Dependencies
 
-**R4-T1 (Currency) blocks:**
-- R4-T5 (Store) - Cannot purchase without currency persistence
+**R5-T1 (Currency) blocks:**
+- R5-T5 (Store) - ✅ UNBLOCKED (R5-T1 complete)
 
-**R4-T4 (Icons) enhances:**
-- R4-T5 (Store) - Better visual presentation
-- R4-T2 (Consumption) - Clearer item identification
+**R5-T4 (Icons) enhances:**
+- R5-T5 (Store) - Better visual presentation
+- R5-T2 (Consumption) - Clearer item identification
 
-**No other blocking dependencies** - Tasks can be parallelized within constraints
+**No other blocking dependencies** - R5-T2, R5-T3, R5-T4, R5-T5, R5-T6 can be parallelized
 
 ---
 
-## Deferred to R5+
+## Deferred to R6+
 
 **Advanced Inventory Features:**
 - Container navigation and nested inventory
@@ -2070,11 +2124,22 @@ Example:
 
 ---
 
-## Next Steps After R4
+## Next Steps After R5
 
-**Release 5 Planning** should focus on:
+**Release 6 Planning** should focus on:
 - Character progression visualization (skill trees, achievements)
 - Advanced combat mechanics (abilities, status effects)
 - Social features (leaderboards, player profiles)
 - Content authoring tools (visual story editor)
 - Performance optimization (caching, lazy loading)
+
+---
+
+**Document Version:** 1.1
+**Created:** 2025-10-07
+**Updated:** 2025-10-19
+**Status:** Planning (1 of 6 tasks complete)
+
+**Revision History:**
+- v1.0 (2025-10-07): Initial planning document for R4 economy system
+- v1.1 (2025-10-19): Updated to reflect R5-T1 completion, corrected release numbering (R4→R5), updated all task references

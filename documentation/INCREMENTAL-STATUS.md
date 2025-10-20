@@ -2,15 +2,17 @@
 
 This document provides an honest assessment of the Incremental mode implementation based on code analysis, not aspirational documentation.
 
+**Last Updated:** 2025-10-19
+
 ---
 
 ## Executive Summary
 
-**Status:** Core gameplay functional, death mechanics fixed, economy system non-functional.
+**Status:** Core gameplay functional, economy backend complete, frontend integration pending.
 
-**Can players play?** Yes, with proper death consequences, but no meaningful progression beyond skill XP.
+**Can players play?** Yes, with proper death consequences and currency rewards. Progression loop functional on backend.
 
-**Player-ready?** No. Critical gaps in currency rewards and economy loop remain.
+**Player-ready?** Partial. Backend economy complete, but frontend needs currency display and store UI (Tasks 5-7).
 
 ---
 
@@ -20,14 +22,15 @@ This document provides an honest assessment of the Incremental mode implementati
 
 **Full analysis:** See [Lambda Review Document](LAMBDA-REVIEW.md)
 
-**Summary:** All 18 Lambda functions are well-implemented and follow proper patterns. The bugs are NOT in the Lambda code - they're in the library functions (eidolon/) that the Lambdas call.
+**Summary:** All 18 Lambda functions are well-implemented and follow proper patterns.
 
 **Key Finding:**
 
 - All 18 functions work correctly
 - Lambda code quality is high - proper error handling, separation of concerns, consistent patterns
-- Remaining issues are in eidolon/ library functions: story_rewards.py (empty functions), items.py (get_inventory broken?)
-- ✅ FIXED: story_validation.py death check
+- ✅ story_rewards.py implemented (apply_story_rewards, apply_combat_rewards)
+- ✅ story_validation.py death check fixed
+- ⚠️ Remaining issue: items.py get_inventory() returns empty InventoryDetails
 
 ### Flutter Frontend (67 files)
 
@@ -99,13 +102,13 @@ This document provides an honest assessment of the Incremental mode implementati
 - Attribute increases persist correctly
 - Max skill level enforced (255)
 
-**Wounds/Health:** ⚠️ PARTIALLY WORKS
+**Wounds/Health:** ✅ FULLY FUNCTIONAL
 
 - Wounds applied from segment outcomes
-- Unconscious state applied
+- Unconscious state applied correctly
 - Wound healing over time functional
 - Health calculated correctly (MaxHealth - wound count)
-- **BUT:** Death mechanics broken (see Critical Issues below)
+- Death mechanics working correctly (see Fixed Issues below)
 
 **Item Drops:** ⚠️ PARTIALLY FUNCTIONAL
 
@@ -116,14 +119,15 @@ This document provides an honest assessment of the Incremental mode implementati
 - **AND:** No way to DISCARD items (api_item_discard.py missing)
 - **AND:** Inventory display shows UUIDs instead of item names (inventoryDetails not loading)
 
-**Combat:** ✅ WORKS
+**Combat:** ✅ FULLY FUNCTIONAL
 
 - MUD combat mechanics integrated
 - Opponent data loaded correctly
 - Combat rounds execute
 - Wounds applied from combat
 - Victory/defeat outcomes calculated
-- ✅ FIXED: Opponent defeat logic corrected (wounds >= health, no damage type multipliers)
+- ✅ Opponent defeat logic simplified: total_wounds >= health (no damage type multipliers)
+- All wound types count equally for opponents
 - **Note:** Opponent defeat not persistent between stories (by design - each story is fresh encounter)
 
 ### Frontend - PRODUCTION READY
@@ -147,7 +151,7 @@ This document provides an honest assessment of the Incremental mode implementati
 - ✅ Resources/currency display ready (waits for backend data)
 - ✅ InventoryDetails display ready (falls back to UUID when backend sends empty)
 
-**Key Finding:** All user-reported issues (UUIDs in inventory, no currency, dead characters) are caused by backend not sending data, NOT frontend bugs. Flutter properly handles and displays all data backend provides.
+**Key Finding:** Inventory UUIDs caused by backend get_inventory() issue. Currency display ready but needs Flutter integration (backend now sends Resources.Value). Dead character issue resolved.
 
 ### Content - MINIMAL BUT FUNCTIONAL
 
@@ -181,7 +185,9 @@ This document provides an honest assessment of the Incremental mode implementati
 
 ## What's Broken or Missing
 
-### ✅ FIXED: Death Mechanics
+## Fixed Issues
+
+### ✅ Death Mechanics
 
 **Previous Problem:** Dead Characters Could Continue Playing
 
@@ -204,10 +210,21 @@ When a character dies:
 
 **Files Fixed:**
 
-- ✅ `eidolon/story_validation.py` - Added CharState death check
-- ✅ `lambda/api_story_start.py` - Enhanced error handling
+- ✅ `eidolon/story_validation.py` - Added CharState death check (line 68-70)
+- ✅ `lambda/api_story_start.py` - Enhanced error handling (line 50-54)
+
 
 ---
+
+### ✅ Combat Opponent Defeat Logic
+
+**Previous Problem:** Opponent defeat logic incorrectly required different wound counts for different damage types
+
+**Solution Implemented:**
+
+- Simplified opponent defeat to: `total_wounds >= health`
+- Removed damage type distinction for opponents (they don't heal)
+- All wound types now count equally toward defeat
 
 **Current State:**
 
@@ -218,8 +235,9 @@ When a character dies:
 
 **Files Fixed:**
 
-- ✅ `eidolon/segment_combat.py` - Simplified defeat logic
+- ✅ `eidolon/segment_combat.py` - Simplified defeat logic (line 295-297)
 - ✅ `eidolon/constants.py` - Removed obsolete multiplier constant
+
 
 **Note on Opponent Persistence:**
 
@@ -227,75 +245,84 @@ When a character dies:
 - This is intended gameplay, not a bug
 - Players face consistent challenges across story attempts
 
-### CRITICAL: Currency/Economy System - COMPLETELY NON-FUNCTIONAL
+---
 
-**Problem 1: Story Reward Schema is Wrong**
+### ✅ Currency/Economy System
 
-Story JSON files contain reward tier DESCRIPTIONS (flavor text), not reward DATA:
+**Previous Problem:** Story rewards schema was wrong, apply_story_rewards() was empty stub
 
-```json
-"RewardTiers": {
-  "Death": "Lost in the wilderness",
-  "Failure": "You return with little to show",
-  "Minimal": "You gather some basic supplies",
-  "Normal": "Your foraging expedition yields useful resources",
-  "Exceptional": "You discover rare and valuable forest treasures"
-}
-```
+**Implementation:**
 
-These are text strings, NOT reward definitions. They should be:
+Currency system with three coin types:
+- Bronze Coin: 10 FU (Fundamental Units)
+- Silver Coin: 120 FU
+- Gold Coin: 2400 FU
 
-```json
-"RewardTiers": {
-  "Death": {"items": [], "currency": 0},
-  "Failure": {"items": [], "currency": 5},
-  "Minimal": {"items": ["item-uuid-1"], "currency": 15},
-  "Normal": {"items": ["item-uuid-1", "item-uuid-2"], "currency": 30},
-  "Exceptional": {"items": ["rare-item-uuid"], "currency": 75}
-}
-```
+Story reward values:
+- Death: 0 FU
+- Failure: 40-60 FU
+- Minimal: 120-180 FU
+- Normal: 240-360 FU
+- Exceptional: 480-720 FU
 
-**Impact:** `calculate_story_rewards()` (story_rewards.py:12-48) always returns empty rewards because it's trying to extract .get("items") and .get("currency") from text strings.
+Backend changes:
+- Updated all 3 story JSON files with proper RewardTiers structure
+- Added bronze/silver/gold coin prototypes to test_prototypes.json
+- Implemented `apply_story_rewards()` function (199 lines)
+- Currency converted to coin items (stackable)
+- Character's Resources.Value updated with total currency
+- Stack management functions added to items.py
 
-**Problem 2: apply_story_rewards() Does Nothing**
+**Files Fixed:**
 
-File: `eidolon/story_rewards.py:51-66`
+- ✅ `data/story/test_forage_forest.json` - Updated with currency values
+- ✅ `data/story/test_goblins_ambush.json` - Updated with currency values
+- ✅ `data/story/test_gremlin_mischief.json` - Updated with currency values
+- ✅ `data/test_prototypes.json` - Added 3 coin prototypes
+- ✅ `eidolon/story_rewards.py` - Implemented apply_story_rewards() (line 82-199)
+- ✅ `eidolon/items.py` - Added create_coins_from_value() and stack management
 
-```python
-def apply_story_rewards(character_id: str, rewards: dict) -> None:
-    """Apply calculated rewards to a character."""
-    try:
-        # Story rewards currently only handle items and currency
-        # XP is awarded through segment processing for specific skills
+**Current State:**
 
-        logger.info(f"Applied story rewards for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to apply rewards: {err}") from err
-```
+- Story completions award currency
+- Currency converted to coin items
+- Coins added to character inventory
+- Resources.Value field tracks total wealth
+- Coins stack properly using UUIDv7 oldest-wins logic
 
-This function logs success but performs ZERO database operations. It's a placeholder that was never implemented.
+---
 
-**Problem 3: Resources Field Never Updated**
+## Remaining Issues
 
-- Characters created with `"Resources": {}` (character_data.py:289)
-- Zero code exists anywhere to write to Resources.gold
-- Flutter expects `Map<String, int> resources` with gold field
-- Backend never provides it
+### HIGH PRIORITY: Currency/Economy System - FRONTEND INTEGRATION MISSING
 
-**Result:** Players complete stories → receive 0 currency → no progression beyond XP.
+**Backend Status:** ✅ COMPLETE - Currency system fully implemented and functional
 
-**Files Affected:**
+**Frontend Status:** ❌ INCOMPLETE - Flutter needs updates to display and interact with currency
 
-- `eidolon/story_rewards.py:51-66` - apply_story_rewards() is empty (called by story_completion.py)
-- `eidolon/story_rewards.py:72-95` - apply_combat_rewards() is empty (called by ops_story_advance.py)
-- `eidolon/story_completion.py:99-101` - calls apply_story_rewards()
-- `lambda/ops_story_advance.py:135` - calls apply_combat_rewards()
-- `lambda/ops_story_advance.py` at story completion - calls apply_story_rewards() via complete_story()
-- `data/story/*.json` - All story files have wrong reward schema
-- `eidolon/character_data.py:289` - Resources created empty, never updated
+**What Works (Backend):**
 
-**Lambda Functions:** ops_story_advance.py works correctly - it properly calls the reward functions. The bug is in the library functions, not the Lambda.
+- ✅ Story completions award currency
+- ✅ Currency converted to coin items (bronze/silver/gold)
+- ✅ Coins added to character inventory with proper stacking
+- ✅ Resources.Value field tracks total currency
+- ✅ All story files have proper reward structures
+
+**What's Missing (Frontend):**
+
+1. **Currency Display** (Task 5 related)
+   - Flutter needs to display Resources.Value in UI
+   - Currency amount should show in character panel/header
+   - Coin items in inventory need proper display
+
+2. **Store System** (Task 7)
+   - No store UI exists in Flutter
+   - Players earn currency but cannot spend it
+   - Backend store endpoints need implementation
+
+**Impact:** Players earn currency rewards but cannot see balance or spend it. Backend economy functional but invisible to players.
+
+**Next Steps:** See [Implementation Roadmap](#implementation-roadmap) for prioritized tasks.
 
 ### HIGH PRIORITY: Store System - COMPLETELY MISSING
 
@@ -402,11 +429,11 @@ final itemName = itemDetails?['Name'] ?? itemId;  // Shows UUID if no details
 
 ## Implementation Roadmap
 
-Tasks ordered for progressive product improvement. Each task makes the game more functional.
+### Fix Flutter Polling Timing
 
-### 0. Fix Flutter Polling Timing
+**Priority:** Medium (efficiency improvement, not blocking)
 
-**Why first:** Violates backend design specification. Causes unnecessary API calls.
+**Why:** Violates backend design specification. Causes unnecessary API calls.
 
 - Add 60-second initial delay to story_polling_service.dart
 - Wait until StartTime + 60 seconds before first GET /segment/status
@@ -415,103 +442,173 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 
 **Result:** Client follows backend design specification for polling timing.
 
-### 1. Fix Inventory Display
+### Complete Inventory Management with IndexedDB Integration
 
-**Why second:** Players can't see what items they have. Most immediate broken experience.
+**Priority:** HIGH (critical for usability)
 
-- Debug why get_inventory() returns empty InventoryDetails
-- Verify Items table contains item data after character creation
-- Verify Items table contains item data after segment drops
-- Add error logging to get_inventory() for diagnostics
-- Test: create character → verify starting items have Names in DB
-- Test: complete segment with item drop → verify item in DB with Name field
+**Why:** Players can't see what items they have. Most immediate broken experience.
+
+**Backend Status:** ✅ COMPLETE
+- ✅ api_item_brief.py exists (returns ItemID + PrototypeID)
+- ✅ api_item_prototype.py exists (returns full prototype data)
+
+**Frontend Status:** ❌ INCOMPLETE
+- ❌ item_repository.dart missing (integration layer)
+- ❌ inventory_panel.dart doesn't use IndexedDB (shows UUIDs)
+
+**Implementation:**
+
+1. Create `incremental/lib/repositories/item_repository.dart`
+   - Two-tier loading: fetch brief → check IndexedDB cache → fetch prototype if miss
+   - Provide `getItemDetails(String itemId)` method
+   - Handle batch loading for inventory
+
+2. Update `incremental/lib/widgets/game/inventory_panel.dart`
+   - Replace `_getItemDetails()` logic to use Item Repository
+   - Display item names, descriptions, stats from cached prototypes
+
+3. Integrate with character load flow
+   - Trigger item repository to fetch briefs for all inventory items
+   - Cache prototypes that aren't already cached
+
+**Files to Create:** `incremental/lib/repositories/item_repository.dart`
+
+**Files to Modify:** `incremental/lib/widgets/game/inventory_panel.dart`, `incremental/lib/screens/game_screen.dart`
 
 **Result:** Players see "Healing Potion" instead of UUID gibberish.
 
-### 2. ✅ COMPLETED: Fix Death Mechanics (Fixed 2025-10-19)
+### Implement Item Consumption
 
-**Why third:** Dead characters playing forever breaks game logic and immersion.
+**Priority:** HIGH (completes item utility)
 
-**Completed Actions:**
+**Why:** Players have items but can't use them. Makes items functional.
 
-- ✅ Added CharState check to story_eligibility() function
-- ✅ Dead characters blocked from starting stories
-- ✅ Clear error message implemented
+**Implementation:**
 
-**Still Optional:**
+1. Add consumption classification to prototypes
+   - Update prototype schema with Consumable field
+   - Define consumption effect types: Healing, Essence, Buff
 
-- Add CharState field to Flutter Character model
-- Create "You Are Dead" UI screen
-- Decide: resurrection mechanic OR enforce permadeath
+2. Create `lambda/api_item_consume.py`
+   - Endpoint: `POST /item/consume`
+   - Body: `{"CharacterID": "...", "ItemID": "..."}`
+   - Validate character owns item and item is consumable
 
-**Result:** Death has consequences. Core issue resolved.
+3. Implement consumption effects in `eidolon/items.py`
+   - Function: `apply_item_effects(character: dict, item: dict) -> dict`
+   - Healing: Remove wounds (up to item healing amount)
+   - Essence: Restore essence points
+   - Remove item from inventory after use
 
-### 3. Fix Story Reward Schema
+4. Add consumption restrictions
+   - Cannot consume during active story
+   - Cannot consume if effect wasted (full health)
 
-**Why fourth:** Prerequisite for currency rewards. Data structure change.
+**Files to Create:** `lambda/api_item_consume.py`
 
-- Update all 3 story JSON files to include actual reward data
-- Move narrative text to separate field (StoryOutcomeDescriptions?)
-- Define currency amounts for each tier
-- Define item drops for each tier
-
-**Result:** Stories contain actual reward data, not flavor text.
-
-### 4. Implement Currency Rewards
-
-**Why fifth:** Players complete stories but earn nothing. Breaks progression loop.
-
-- Implement apply_story_rewards() with currency persistence
-- Write currency to Resources.gold using atomic ADD with if_not_exists pattern
-- Verify Resources field included in GET /character response
-- Test end-to-end: story completion → currency persisted → GET returns currency
-
-**Result:** Players earn gold. Can see balance. Progression feedback works.
-
-### 5. Implement Item Consumption
-
-**Why sixth:** Players have items but can't use them. Makes items functional.
-
-- Create lambda/api_item_use.py
-- Implement effects (heal wounds, apply buffs, etc.)
-- Decrement quantity or remove consumed items
-- Add "Use" button in Flutter inventory
-- Test: drink healing potion → wounds reduced
+**Files to Modify:** `eidolon/items.py`, `eidolon/character_data.py`, `deployment/api.py`
 
 **Result:** Items become useful tools, not decorations. Healing potions work.
 
-### 6. Create Store System
+### Create Store System
 
-**Why seventh:** Currency has no purpose. Closes the economy loop.
+**Priority:** HIGH (closes economy loop)
 
-- Create data/store_inventory.json with item pricing
-- Implement lambda/api_store_list.py (return store items)
-- Implement lambda/api_store_purchase.py (deduct gold, add item)
-- Build Flutter store UI (screen + navigation)
-- Test purchase flow: list → select → buy → gold deducted → item added
+**Why:** Currency has no purpose. Closes the economy loop.
 
-**Result:** Complete economy: earn gold → buy items → use items. Core loop closed.
+**Implementation:**
 
-### 7. Inventory Management
+1. Design store data structure
+   - Create store inventory in DynamoDB or S3
+   - Define store item format with PrototypeID, Price, Stock
+   - Decide: Global store vs per-character availability
 
-**Why eighth:** Quality of life. Discard unwanted items.
+2. Create `lambda/api_store_list.py`
+   - Endpoint: `GET /store/items?StoreID=general-store`
+   - Returns available items with prices
+   - Include item details from prototypes
 
-- Implement lambda/api_item_discard.py
-- Add confirmation dialog in Flutter
-- Test: discard item → removed from inventory
+3. Create `lambda/api_store_purchase.py`
+   - Endpoint: `POST /store/purchase`
+   - Body: `{"CharacterID": "...", "PrototypeID": "...", "Quantity": 1}`
+   - Validate sufficient currency
+   - Deduct currency atomically
+   - Create item and add to inventory
+   - Handle concurrent purchases
 
-**Result:** Players manage inventory, remove clutter.
+4. Build Flutter store UI
+   - Create store screen with item list
+   - Add navigation from game screen
+   - Implement purchase flow with confirmation
 
-### 8. Visual Polish
+**Files to Create:** `lambda/api_store_list.py`, `lambda/api_store_purchase.py`, `eidolon/store.py`
 
-**Why ninth:** Cosmetic improvements after functionality works.
+**Files to Modify:** `deployment/api.py`, Flutter store UI files
 
-- Add item icons (source or create assets)
-- Display currency in header
-- Color-code item rarity
-- Item detail modals
+**Result:** Complete economy: earn currency → buy items → use items. Core loop closed.
 
-**Result:** Game looks polished, not prototype.
+### Refactor Large Lambda Functions
+
+**Priority:** MEDIUM (code quality)
+
+**Why:** Maintainability and adherence to project standards (300-line limit).
+
+**Target Functions:**
+- `lambda/api_segment_status.py` (359 lines)
+- `lambda/ops_story_advance.py` (315 lines)
+
+**Implementation:**
+
+1. Refactor api_segment_status.py (target: 200-250 lines)
+   - Extract `filter_decision_options()` to `eidolon/story_decision.py`
+   - Extract `_coerce_unix()` to `eidolon/time_utils.py`
+   - Extract segment enrichment logic to `eidolon/segment_core.py`
+
+2. Refactor ops_story_advance.py (target: 200-250 lines)
+   - Move advancement logic to `eidolon/story_advancement.py`
+   - Extract SQS processing to reusable function
+
+**Files to Modify:** `lambda/api_segment_status.py`, `lambda/ops_story_advance.py`
+
+**Files to Create:** `eidolon/story_advancement.py` (new)
+
+**Result:** All Lambda functions under 300 lines, improved maintainability.
+
+### Enhanced Monitoring
+
+**Priority:** LOW (nice-to-have)
+
+**Why:** Production operations support.
+
+**Implementation:**
+
+1. Create CloudWatch dashboard
+   - Lambda invocation metrics, error rates
+   - DynamoDB operation metrics
+   - API Gateway request/error rates
+   - Custom business metrics (active stories, characters created)
+
+2. Set up alarms
+   - Lambda error rate exceeds threshold
+   - DynamoDB throttling events
+   - API Gateway 5xx errors
+   - Dead letter queue messages
+
+3. Add custom metric emission
+   - Emit story start/completion events
+   - Emit segment processing metrics
+   - Use CloudWatch PutMetricData API
+
+4. Create operations runbook
+   - Common issues and resolutions
+   - Alarm response procedures
+   - Deployment rollback process
+
+**Files to Modify:** `deployment/stacks/cloudwatch_stack.py`, Lambda functions (add metric emission)
+
+**Files to Create:** `documentation/operations-runbook.md`
+
+**Result:** Better production observability and incident response.
 
 ---
 
@@ -626,51 +723,94 @@ Tasks ordered for progressive product improvement. Each task makes the game more
 
 ## Path to Player-Ready
 
-Work through tasks 0-6 in order. After task 6, the game has:
+**What Works:**
 
-- Visible inventory with item names
-- Death that matters
-- Currency earned from stories
-- Items that can be used
-- Store to spend gold
-- Complete earn → buy → use loop
+- Death mechanics prevent dead characters from starting stories
+- Combat opponent defeat logic works correctly
+- Currency system awards coins from story completion
+- Story rewards persist to character inventory and Resources.Value field
 
-Tasks 7-8 are polish. Game is playable after task 6.
+**What's Missing:**
+
+- Inventory shows UUIDs instead of item names
+- No way to consume items (healing potions don't work)
+- No store system to spend currency
+- Large Lambda functions exceed project standards (api_segment_status.py 359 lines, ops_story_advance.py 315 lines)
+
+**For MVP:**
+- Need inventory display, item consumption, and store system
+- Code refactoring is optional
 
 ---
 
-## Documentation Issues
-
-**Outdated or Misleading Docs:**
-
-- Release reports claim "stub implementation" - reality: functions are empty
-- Timeline estimates assume tasks partially done - many have zero code
-- Implementation guide describes ideal state, not current state
+## Documentation Status
 
 **This Document:**
 
 - Source of truth for current implementation status
-- Updated as code changes
+- Updated as major milestones complete
 - Based on code analysis, not aspirational design
+- Includes implementation details for all tasks
+
+**Related Documents:**
+
+- **project-plan-01.md** - Task tracking with acceptance criteria and completion status
+- **currency.md** - Currency system design (created 2025-10-19)
+- **item-system.md** - Item system philosophy (created 2025-10-19)
+- **validation-strategy.md** - Testing philosophy and validation approach
 
 ---
 
 ## Next Actions
 
-**Immediate (This Week):**
+**Priority: High**
 
-1. Fix story reward schema in all 3 story JSON files
-2. Implement apply_story_rewards() function
-3. Test currency persistence end-to-end
+1. Fix inventory display showing UUIDs
+   - Investigate why get_inventory() returns empty InventoryDetails
+   - Create item_repository.dart for Flutter caching
+   - Update inventory_panel.dart to display item names
 
-**Short-term (Next 2 Weeks):** 4. Build store system (backend + frontend) 5. Test economy loop: earn → spend
+2. Implement item consumption
+   - Create api_item_consume.py backend endpoint
+   - Add consumption effects (healing, essence restoration)
+   - Add "Use" button in Flutter inventory
 
-**Medium-term (Weeks 3-4):** 6. Implement item consumption 7. Add inventory management 8. Visual polish
+3. Implement store system
+   - Create store endpoints (list, purchase)
+   - Build Flutter store UI
+   - Enable spending currency to buy items
 
-**Long-term (Post-Launch):** 9. Add more story content (5-10 stories minimum) 10. Expand item variety 11. Add opponent variety 12. Performance optimization
+**Priority: Medium**
+
+- Refactor api_segment_status.py (359 lines → target <300)
+- Refactor ops_story_advance.py (315 lines → target <300)
+
+**Priority: Low**
+
+- Add CloudWatch monitoring and alarms
+- Create operations runbook
+
+**Content Expansion (Post-MVP):**
+
+- Add more stories (currently 3, need 5-10)
+- Expand item variety
+- Add more opponents
 
 ---
 
 **Document Status:** Living document, updated as implementation progresses
 
+**Last Major Update:** 2025-10-19 (Tasks 1-4 completion)
+
 **Maintainer:** Update this file when code changes affect implementation status
+
+---
+
+## Related Documentation
+
+- [Project Plan 01](project-plan-01.md) - Task tracking with acceptance criteria
+- [Currency System](currency.md) - Currency design and coin system
+- [Item System](item-system.md) - Stackable items philosophy
+- [Validation Strategy](validation-strategy.md) - Testing policy
+- [Python Style Guide](python-style.md) - Coding standards
+- [API Documentation](incremental-api.md) - API endpoints

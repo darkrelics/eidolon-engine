@@ -3,6 +3,7 @@
 Reviewed all 67 Dart files in incremental/lib.
 
 **Review Date:** 2025-01-24
+**Updated:** 2025-10-19 (backend currency system implemented)
 
 ---
 
@@ -15,7 +16,7 @@ Reviewed all 67 Dart files in incremental/lib.
 **Missing Features:** 0 (all features aligned with backend capabilities)
 **Incomplete Implementations:** 0
 
-**Key Finding:** The Flutter frontend is well-architected, properly implemented, and has no bugs. All reported issues (inventory showing UUIDs, no currency display, dead characters) are caused by **backend** not providing data, not frontend bugs.
+**Key Finding:** The Flutter frontend is well-architected, properly implemented, and has no bugs. Current issues: inventory showing UUIDs (backend get_inventory issue), currency display pending Flutter integration (backend now sends data as of 2025-10-19).
 
 ---
 
@@ -339,6 +340,10 @@ class Resources {
 }
 ```
 
+**Backend Status (as of 2025-10-19):**
+- ✅ Backend now populates Resources.Value with total currency
+- ⚠️ Flutter needs to add Resources.Value constant and display logic (see Currency System Flutter Updates section below)
+
 ### 3. Dead Character Handling - PARTIAL
 
 **Character Selection (character_screen.dart:607-653):**
@@ -353,15 +358,14 @@ class Resources {
 - Comes from Dead flag in Players.CharacterList (api_service.dart:20)
 - Set by backend when CharState="dead" (mechanics.py:136)
 
-**Gap:**
+**Status (as of 2025-10-19):**
 
-- Flutter correctly displays dead status
-- Flutter correctly disables character selection
-- **Backend allows dead characters to start stories** via story_eligibility()
-- If character dies during play and hasn't been reloaded, GameMode clears but CharState stays "dead"
-- User could theoretically navigate to story selection and start stories
+- ✅ Flutter correctly displays dead status
+- ✅ Flutter correctly disables character selection
+- ✅ Backend now blocks dead characters in story_eligibility()
+- Dead characters fully prevented from starting stories
 
-**Not a Flutter bug. Backend validation issue.**
+**Not a Flutter bug. Backend issue was resolved.**
 
 ---
 
@@ -618,7 +622,7 @@ No code smells, anti-patterns, or architectural issues detected.
 | Essence/MaxEssence      | ✅ Yes         | ✅ Yes            | Works              |
 | Attributes              | ✅ Yes         | ✅ Yes            | Works              |
 | Skills                  | ✅ Yes         | ✅ Yes            | Works              |
-| **Resources**           | ❌ Empty {}    | ✅ Yes (ready)    | Hidden (empty)     |
+| **Resources**           | ✅ Yes (Value) | ⚠️ Needs update   | Backend ready      |
 | Inventory               | ✅ Yes (UUIDs) | ✅ Yes            | Works              |
 | **InventoryDetails**    | ❌ Empty {}    | ✅ Yes (ready)    | Falls back to UUID |
 | Wounds                  | ✅ Yes         | ✅ Yes            | Works              |
@@ -733,9 +737,9 @@ Character selection disables dead characters, but could add dedicated "You Are D
 
 **Backend Issues (not Flutter bugs):**
 
-1. Inventory UUIDs → get_inventory() returns empty or Items table empty
-2. No currency display → Resources field never populated by backend
-3. Dead characters playing → story_eligibility() doesn't check CharState
+1. Inventory UUIDs → get_inventory() returns empty or Items table empty (pending investigation)
+2. ✅ Currency system implemented (2025-10-19) → Flutter integration pending (see Currency System Flutter Updates section)
+3. ✅ Dead characters blocked (2025-10-19) → story_eligibility() now checks CharState
 
 ---
 
@@ -835,11 +839,11 @@ The frontend is well-architected, properly implemented, and has no bugs. All fea
 **Implementation:** Complete for all backend-supported features
 **Bugs:** None in Flutter code
 
-**The frontend is waiting on backend to:**
+**The frontend is waiting on:**
 
-1. Send InventoryDetails with item Names
-2. Send Resources with currency amounts
-3. Check CharState in story_eligibility()
+1. Backend: Send InventoryDetails with item Names (get_inventory issue)
+2. Frontend: Integrate currency display (backend now sends Resources.Value as of 2025-10-19)
+3. ✅ RESOLVED: Backend now checks CharState in story_eligibility()
 
 ---
 
