@@ -223,7 +223,7 @@ class CharacterRepository {
     // Inventory updates (if provided)
     final inventoryUpdates = updates['Inventory'] as Map<String, dynamic>?;
     final updatedInventory = inventoryUpdates != null
-        ? Map<String, String>.from(inventoryUpdates)
+        ? Map<String, dynamic>.from(inventoryUpdates)
         : character.inventory;
 
     // Inventory details updates (if provided)

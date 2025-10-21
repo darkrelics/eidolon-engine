@@ -33,7 +33,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
 | `CharacterName`    | `STRING`        | **GSI**  | Name of the character.                                                        |
 | `GameMode`         | `STRING`        |          | Current mode: "MUD", "Incremental", or "None" (prevents concurrent use)       |
 | `RoomID`           | `NUMBER`        |          | ID of the room the character is currently in.                                 |
-| `Inventory`        | `MAP`           |          | Map of inventory slots to item UUIDs.                                         |
+| `Inventory`        | `MAP`           |          | Map of inventory slots to item data objects. Format: `{slot: {"ItemID": "uuid"}}` for non-stackable items, or `{slot: {"ItemID": "uuid", "Quantity": number}}` for stackable items where Quantity represents count (1+). |
 | `Attributes`       | `MAP`           |          | Map of attribute names to their values (e.g., Strength: 4).                   |
 | `Skills`           | `MAP`           |          | Map of skill names to their values (e.g., Stealth: 3).                        |
 | `Essence`          | `NUMBER`        |          | The character's essence or magical energy.                                    |
@@ -72,20 +72,44 @@ This document defines the complete database schema for the Eidolon Engine's unif
 
 - **JSON Field Names**: All fields use PascalCase to match DynamoDB field names (e.g., CharacterID, CharacterName, AvailableStories)
 - **Acronyms**: Acronyms in field names are fully capitalized (e.g., StoryID not StoryId, ItemID not ItemId, PlayerID not PlayerId)
-- **InventoryDetails**: API responses include an enriched `InventoryDetails` field with item information:
+- **Inventory Structure**: Stored as map of slots to item data objects:
   ```json
   {
-    "SlotName": {
-      "ItemID": "uuid",
-      "Name": "Item Name",
-      "Description": "Item description",
-      "Mass": 1.5,
-      "Value": 100,
-      "Wearable": true,
-      "WornOn": "head"
+    "Inventory": {
+      "0": {"ItemID": "uuid-123"},                    // Non-stackable (equipment, no Quantity field)
+      "1": {"ItemID": "uuid-456", "Quantity": 50}     // Stackable (coins with count)
     }
   }
   ```
+  - **Stackable items**: Include `Quantity` field representing the count (1 or more)
+  - **Non-stackable items**: No `Quantity` field (unique items)
+
+- **InventoryDetails**: API responses include an enriched `InventoryDetails` field merging item and prototype data:
+  ```json
+  {
+    "0": {
+      "ItemID": "uuid-123",
+      "Name": "Iron Sword",
+      "Description": "A sturdy iron blade",
+      "Quantity": 0,              // API interface: 0 for non-stackable (field omitted in storage)
+      "Stackable": false,
+      "Mass": 3.5,
+      "Value": 150,
+      "Wearable": true,
+      "WornOn": "main_hand"
+    },
+    "1": {
+      "ItemID": "uuid-456",
+      "Name": "Gold Coin",
+      "Description": "Shiny gold currency",
+      "Quantity": 50,              // Actual count for stackable items
+      "Stackable": true,
+      "Mass": 0.01,
+      "Value": 100
+    }
+  }
+  ```
+  Note: `Quantity: 0` is returned in API responses for non-stackable items for interface consistency, but the field is not stored in the database or inventory structure.
 
 #### **Data Type Conversion Standards**
 
@@ -157,7 +181,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
 | `Mass`        | `NUMBER`  |          | Weight or mass of the item.                                   |
 | `Value`       | `NUMBER`  |          | Monetary value of the item.                                   |
 | `Stackable`   | `BOOLEAN` |          | Indicates if the item can be stacked. Stackable items are immutable except for Quantity. |
-| `Quantity`    | `NUMBER`  |          | REQUIRED for stackable items, FORBIDDEN for non-stackable. Stack merging uses UUIDv7 oldest-wins. |
+| `Quantity`    | `NUMBER`  |          | **Only for stackable items**: count (1+). Non-stackable items do not have this field. Stack merging uses UUIDv7 oldest-wins. |
 | `Wearable`    | `BOOLEAN` |          | Indicates if the item can be worn.                            |
 | `WornOn`      | `STRING`  |          | Body part where the item can be worn (e.g., "head", "feet").  |
 | `Verbs`       | `MAP`     |          | Actions associated with the item (e.g., "eat": "You eat..."). |
@@ -661,7 +685,7 @@ The CharacterUpdates map stored in ActiveSegments and SegmentHistory contains al
     "supplies": -2
   },
   "Inventory": {
-    "right_hand": "item-uuid-123"
+    "0": {"ItemID": "item-uuid-123"}
   }
 }
 ```

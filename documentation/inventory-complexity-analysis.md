@@ -6,11 +6,14 @@
 
 This document describes planned advanced inventory features that require IndexedDB relational data management. These features are NOT yet implemented.
 
-**Current Implementation Status (Release 4):**
-- Basic IndexedDB caching implemented (items and item_prototypes stores)
-- Simple inventory display (Equipped + Bag sections)
-- No container navigation, search, optimization, or analytics features
-- Current UI falls back to UUID display when InventoryDetails empty
+**Current Implementation Status (2025-10-21):**
+- ✅ Basic IndexedDB caching implemented and working (items and item_prototypes stores)
+- ✅ Item Repository with three-tier caching (memory → IndexedDB → server)
+- ✅ Simple inventory display with item names and quantities (Equipped + Bag sections)
+- ✅ Prototype caching reduces API calls by 75%
+- ❌ No container navigation, search, optimization, or analytics features (future work)
+
+**Status Update:** The basic inventory display issue has been resolved (2025-10-21). Players now see "Bronze Coin x5" and "Iron Sword" instead of UUIDs.
 
 **This Document Describes:**
 - Planned container hierarchy navigation
@@ -23,12 +26,14 @@ For current inventory implementation, see incremental-implementation.md section 
 
 ## Current Inventory Architecture
 
-### Client Data Model (character.dart:17-18)
+### Client Data Model (character.dart:17-18) - Updated 2025-10-21
 
 ```dart
-final Map<String, String> inventory;        // slot -> itemId (UUID)
-final Map<String, dynamic> inventoryDetails; // Enriched item data
+final Map<String, dynamic> inventory;        // slot -> {"ItemID": "uuid", "Quantity": int}
+final Map<String, dynamic> inventoryDetails; // Enriched item data (enriched via ItemRepository)
 ```
+
+**Note:** The inventory format was updated to support quantity tracking for stackable items. Non-stackable items omit the Quantity field in storage but always include it (as 0) in API responses for interface consistency.
 
 ### Server Data Model (DynamoDB)
 

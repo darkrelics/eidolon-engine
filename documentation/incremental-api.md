@@ -557,7 +557,7 @@ Retrieves completed segment history for a character's active or most recent stor
 
 ### Get Item Brief
 
-Retrieves lightweight item metadata for IndexedDB caching. Returns only ItemID and PrototypeID.
+Retrieves lightweight item metadata for IndexedDB caching. Returns ItemID, PrototypeID, and Quantity.
 
 **Endpoint:** `GET /item/brief`
 
@@ -572,9 +572,12 @@ Retrieves lightweight item metadata for IndexedDB caching. Returns only ItemID a
 ```json
 {
   "ItemID": "550e8400-e29b-41d4-a716-446655440000",
-  "PrototypeID": "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+  "PrototypeID": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "Quantity": 5
 }
 ```
+
+**Note:** For stackable items, `Quantity` contains the actual count (1+). For non-stackable items, `Quantity` is 0. This provides a consistent interface regardless of item type.
 
 **Error Responses:**
 

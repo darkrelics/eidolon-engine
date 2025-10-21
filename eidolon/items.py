@@ -70,11 +70,11 @@ def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
     Find an existing stack in inventory that matches the prototype.
 
     Args:
-        inventory: Dict mapping slot to item ID
+        inventory: Dict mapping slot to item data: {slot: {"ItemID": "...", "Quantity": int}}
         prototype_id: PrototypeID to find
 
     Returns:
-        Tuple of (slot, item_dict) or empty tuple if no matching stack found
+        Tuple of (slot, item_data_dict) or empty tuple if no matching stack found
     """
     if not inventory or not prototype_id:
         return ()
@@ -85,15 +85,20 @@ def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
         return ()
 
     # Check each item in inventory
-    for slot, item_id in inventory.items():
+    for slot, item_data in inventory.items():
+        if not item_data or not isinstance(item_data, dict):
+            continue
+
+        item_id = item_data.get("ItemID")
         if not item_id:
             continue
 
-        # Get the item from database
+        # Get the item from database to check PrototypeID
         try:
             item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
             if item and item.get("PrototypeID") == prototype_id:
-                return (slot, item)
+                # Return slot and the inventory entry (includes Quantity)
+                return (slot, item_data)
         except ClientError:
             continue
 
@@ -152,13 +157,13 @@ def get_item_brief(item_id: str) -> dict:
     """
     Retrieve item brief information for IndexedDB caching.
 
-    Returns only ItemID and PrototypeID for lightweight item loading.
+    Returns ItemID, PrototypeID, and Quantity for lightweight item loading.
 
     Args:
         item_id: Item UUID to fetch
 
     Returns:
-        Dict containing ItemID and PrototypeID
+        Dict containing ItemID, PrototypeID, and Quantity
 
     Raises:
         ValueError: If item not found or missing PrototypeID
@@ -178,7 +183,25 @@ def get_item_brief(item_id: str) -> dict:
         logger.error(f"Item {item_id} missing PrototypeID field")
         raise ValueError("Item data incomplete")
 
-    return {"ItemID": item_id, "PrototypeID": prototype_id}
+    # Get prototype to determine if item is stackable
+    prototype = get_prototype(prototype_id)
+    is_stackable = prototype.get("Stackable", False) if prototype else False
+
+    # Build response with Quantity field for API consistency
+    # Storage: stackable items have Quantity field, non-stackable don't
+    # API response: always include Quantity (actual count or 0 for non-stackable)
+    result = {
+        "ItemID": item_id,
+        "PrototypeID": prototype_id,
+    }
+
+    if is_stackable:
+        result["Quantity"] = item.get("Quantity", 1)
+    else:
+        # Non-stackable: return 0 for API consistency (field not stored in DB)
+        result["Quantity"] = 0
+
+    return result
 
 
 def get_item_prototype_full(prototype_id: str) -> dict:
@@ -384,8 +407,10 @@ def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[
             continue
 
         slot_key = find_next_available_slot(normalized_inventory)
-        normalized_inventory[slot_key] = item_payload["ItemID"]
-        granted_items.append(item_payload["ItemID"])
+        item_id = item_payload["ItemID"]
+        # Non-stackable items don't have Quantity field
+        normalized_inventory[slot_key] = {"ItemID": item_id}
+        granted_items.append(item_id)
 
     if not granted_items:
         return []
@@ -422,7 +447,9 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
         character_id: Character ID for logging
 
     Returns:
-        Dict mapping slot numbers to item UUIDs (only worn items and containers)
+        Dict mapping slot numbers to item data.
+        Non-stackable (equipment): {slot: {"ItemID": "..."}}
+        Stackable (if any): {slot: {"ItemID": "...", "Quantity": count}}
     """
     if not starting_items:
         return {}
@@ -473,7 +500,8 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
 
             # Add to inventory only if worn or is the container
             if is_worn or (is_container and item_id == container_id):
-                inventory[str(slot_num)] = item_id
+                # Non-stackable items (equipment, containers) don't have Quantity field
+                inventory[str(slot_num)] = {"ItemID": item_id}
                 slot_num += 1
 
         # Batch write all items at once
@@ -508,25 +536,45 @@ def get_inventory(inventory: dict) -> dict:
     Enrich inventory with item details for display.
 
     Args:
-        inventory: Dict mapping slot to item ID
+        inventory: Dict mapping slot to item data.
+            Stackable: {slot: {"ItemID": "...", "Quantity": count}}
+            Non-stackable: {slot: {"ItemID": "..."}} (no Quantity field)
 
     Returns:
-        Dict mapping slot to item details including name and description
+        Dict mapping slot to enriched item details including name, description, and quantity.
+        Quantity field always included in response: actual count for stackable, 0 for non-stackable.
     """
     if not inventory:
         return {}
 
     enriched_inventory = {}
 
-    # Separate null slots from actual item IDs
-    item_slots = {}  # Maps item_id to list of slots
-    for slot, item_id in inventory.items():
+    # Separate null/empty slots from actual item entries
+    # Track both item_id and the slot's quantity
+    item_slots = {}  # Maps item_id to list of (slot, quantity) tuples
+    for slot, item_data in inventory.items():
+        if not item_data:
+            enriched_inventory[slot] = None
+            continue
+
+        # Extract ItemID and Quantity from new format
+        if isinstance(item_data, dict):
+            item_id = item_data.get("ItemID")
+            # If Quantity field exists, use it (stackable)
+            # If Quantity field missing, default to 0 (non-stackable)
+            quantity = item_data.get("Quantity", 0)
+        else:
+            # Malformed entry
+            logger.warning(f"Invalid inventory entry in slot {slot}: {item_data}")
+            enriched_inventory[slot] = None
+            continue
+
         if not item_id:
             enriched_inventory[slot] = None
         else:
             if item_id not in item_slots:
                 item_slots[item_id] = []
-            item_slots[item_id].append(slot)
+            item_slots[item_id].append((slot, quantity))
 
     # If no actual items, return early
     if not item_slots:
@@ -546,77 +594,78 @@ def get_inventory(inventory: dict) -> dict:
             items_map = {item["ItemID"]: item for item in items_data}
 
         # Process each item and its slots
-        for item_id, slots in item_slots.items():
+        for item_id, slot_data in item_slots.items():
             item = items_map.get(item_id)
 
             if item:
-                # Create enriched item data
-                item_details = {
+                # Get base item data (shared across all slots with this item)
+                base_item_details = {
                     "ItemID": item_id,
                     "Name": item.get("Name", "Unknown Item"),
                     "Description": item.get("Description", ""),
-                    "Quantity": item.get("Quantity", 1),
                     "Stackable": item.get("Stackable", False),
-                    # Prefer 'Equipped', fall back to 'IsWorn' used at creation
                     "Equipped": item.get("Equipped", item.get("IsWorn", False)),
                     "Mass": item.get("Mass", 0),
                     "Value": item.get("Value", 0),
                 }
 
-                # Assign to all slots that have this item
-                for slot in slots:
-                    enriched_inventory[slot] = item_details
+                # Assign to all slots with slot-specific quantity
+                for slot, quantity in slot_data:
+                    enriched_inventory[slot] = {
+                        **base_item_details,
+                        "Quantity": quantity,  # Use slot-specific quantity
+                    }
             else:
                 # Item not found - create missing item placeholder
                 logger.warning(f"Item not found in inventory for {item_id}")
-                missing_item = {
-                    "ItemID": item_id,
-                    "Name": "Missing Item",
-                    "Description": "This item could not be loaded",
-                    "Quantity": 0,
-                }
-
-                for slot in slots:
-                    enriched_inventory[slot] = missing_item
+                for slot, quantity in slot_data:
+                    enriched_inventory[slot] = {
+                        "ItemID": item_id,
+                        "Name": "Missing Item",
+                        "Description": "This item could not be loaded",
+                        "Quantity": quantity,
+                    }
 
     except ClientError as err:
         logger.error(f"Failed to batch get item details Error: {err}")
         # Fall back to individual lookups on batch failure
-        for item_id, slots in item_slots.items():
+        for item_id, slot_data in item_slots.items():
             try:
                 item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
 
                 if item:
-                    item_details = {
+                    base_item_details = {
                         "ItemID": item_id,
                         "Name": item.get("Name", "Unknown Item"),
                         "Description": item.get("Description", ""),
-                        "Quantity": item.get("Quantity", 1),
                         "Stackable": item.get("Stackable", False),
                         "Equipped": item.get("Equipped", item.get("IsWorn", False)),
                         "Mass": item.get("Mass", 0),
                         "Value": item.get("Value", 0),
                     }
 
-                    for slot in slots:
-                        enriched_inventory[slot] = item_details
+                    for slot, quantity in slot_data:
+                        enriched_inventory[slot] = {
+                            **base_item_details,
+                            "Quantity": quantity,
+                        }
                 else:
-                    for slot in slots:
+                    for slot, quantity in slot_data:
                         enriched_inventory[slot] = {
                             "ItemID": item_id,
                             "Name": "Missing Item",
                             "Description": "This item could not be loaded",
-                            "Quantity": 0,
+                            "Quantity": quantity,
                         }
 
             except ClientError as individual_err:
                 logger.error(f"Failed to get item {item_id} Error: {individual_err}")
-                for slot in slots:
+                for slot, quantity in slot_data:
                     enriched_inventory[slot] = {
                         "ItemID": item_id,
                         "Name": "Error Loading Item",
                         "Description": "Failed to load item details",
-                        "Quantity": 0,
+                        "Quantity": quantity,
                     }
 
     return enriched_inventory

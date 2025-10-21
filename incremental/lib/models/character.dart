@@ -14,7 +14,7 @@ class Character {
   final Map<String, double> attributes;
   final Map<String, double> skills;
   final Map<String, int> resources;
-  final Map<String, String> inventory; // MUD-compatible: slot -> itemId
+  final Map<String, dynamic> inventory; // Format: slot -> {ItemID: string, Quantity: int}
   final Map<String, dynamic> inventoryDetails; // Enriched inventory data with item details
   final Map<String, dynamic> progress; // Story progress flags
   Map<String, dynamic>? storyState; // Current story position
@@ -141,7 +141,7 @@ class Character {
       attributes: parsedAttributes,
       skills: parsedSkills,
       resources: parsedResources,
-      inventory: Map<String, String>.from(json['Inventory'] ?? {}),
+      inventory: Map<String, dynamic>.from(json['Inventory'] ?? {}),
       inventoryDetails: Map<String, dynamic>.from(json['InventoryDetails'] ?? {}),
       progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
       storyState: json['StoryState'] as Map<String, dynamic>?,
@@ -195,7 +195,7 @@ class Character {
     Map<String, double>? attributes,
     Map<String, double>? skills,
     Map<String, int>? resources,
-    Map<String, String>? inventory,
+    Map<String, dynamic>? inventory,
     Map<String, dynamic>? inventoryDetails,
     Map<String, dynamic>? progress,
     Map<String, dynamic>? storyState,

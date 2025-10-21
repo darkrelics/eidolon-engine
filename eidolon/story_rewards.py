@@ -14,6 +14,24 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.items import create_coins_from_value, find_matching_stack
 
 
+def find_next_available_slot(inventory: dict) -> str:
+    """
+    Find the next available numeric slot in inventory.
+
+    Args:
+        inventory: Inventory dict. Format:
+            Non-stackable: {slot: {"ItemID": "..."}}
+            Stackable: {slot: {"ItemID": "...", "Quantity": count}}
+
+    Returns:
+        Next available slot as string (e.g., "0", "1", "2")
+    """
+    slot_num = 0
+    while str(slot_num) in inventory and inventory[str(slot_num)]:
+        slot_num += 1
+    return str(slot_num)
+
+
 def create_reward_item(prototype_id: str, quantity=None, owner_id=None) -> dict:
     """
     Create an item structure for rewards without database operations.
@@ -122,18 +140,20 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
 
                 if existing_stack:
                     # Merge with existing stack
-                    stack_id, stack_data = existing_stack
+                    stack_slot, stack_data = existing_stack
                     new_quantity = stack_data.get("Quantity", 1) + quantity
 
                     # Update the existing stack with new quantity
-                    inventory[stack_id]["Quantity"] = new_quantity
-                    logger.info(f"Updated existing coin stack {stack_id}: +{quantity} (total: {new_quantity})")
+                    inventory[stack_slot]["Quantity"] = new_quantity
+                    logger.info(f"Updated existing coin stack in slot {stack_slot}: +{quantity} (total: {new_quantity})")
                 else:
-                    # Create new coin stack
+                    # Create new coin stack in next available slot
                     new_item = create_reward_item(prototype_id=prototype_id, quantity=quantity, owner_id=character_id)
-                    inventory[new_item["ItemID"]] = new_item
-                    items_created.append(new_item["ItemID"])
-                    logger.info(f"Created new coin stack: {new_item['ItemID']} (Quantity: {quantity})")
+                    item_id = new_item["ItemID"]
+                    next_slot = find_next_available_slot(inventory)
+                    inventory[next_slot] = {"ItemID": item_id, "Quantity": quantity}
+                    items_created.append(item_id)
+                    logger.info(f"Created new coin stack in slot {next_slot}: {item_id} (Quantity: {quantity})")
 
             # Update character's total currency value
             current_value = character.get("Resources", {}).get("Value", 0)
@@ -158,17 +178,28 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                     existing_stack = find_matching_stack(inventory, prototype_id)
                     if existing_stack and item_reward.get("Stackable"):
                         # Merge with existing stack
-                        stack_id, stack_data = existing_stack
+                        stack_slot, stack_data = existing_stack
                         new_quantity = stack_data.get("Quantity", 1) + quantity
-                        inventory[stack_id]["Quantity"] = new_quantity
-                        logger.info(f"Merged reward item with existing stack {stack_id}: +{quantity}")
+                        inventory[stack_slot]["Quantity"] = new_quantity
+                        logger.info(f"Merged reward item with existing stack in slot {stack_slot}: +{quantity}")
                     else:
-                        # Create as new item
-                        item_quantity = quantity if item_reward.get("Stackable") else None
-                        new_item = create_reward_item(prototype_id=prototype_id, quantity=item_quantity, owner_id=character_id)
-                        inventory[new_item["ItemID"]] = new_item
-                        items_created.append(new_item["ItemID"])
-                        logger.info(f"Created reward item: {new_item['ItemID']}")
+                        # Create as new item in next available slot
+                        new_item = create_reward_item(
+                            prototype_id=prototype_id,
+                            quantity=quantity if item_reward.get("Stackable") else None,
+                            owner_id=character_id
+                        )
+                        item_id = new_item["ItemID"]
+                        next_slot = find_next_available_slot(inventory)
+
+                        # Stackable: include Quantity field, Non-stackable: omit Quantity
+                        if item_reward.get("Stackable"):
+                            inventory[next_slot] = {"ItemID": item_id, "Quantity": quantity}
+                        else:
+                            inventory[next_slot] = {"ItemID": item_id}
+
+                        items_created.append(item_id)
+                        logger.info(f"Created reward item in slot {next_slot}: {item_id}")
 
         # Update inventory in update expression
         update_expressions.append("Inventory = :inventory")
