@@ -72,12 +72,15 @@ def authenticated_handler(business_logic_func):
             body = result.get("body", {})
             return lambda_response(status_code, body, event)
         except ValueError as err:
-            # Business logic validation errors (400/409)
+            # Business logic validation errors (400/403/404/409)
             logger.warning(f"Business logic validation error: {err}")
             # Allow business logic to specify status code via error message prefix
+            # Format: "STATUS_CODE:Error message"
             error_msg = str(err)
-            if error_msg.startswith("409:"):
-                return lambda_response(409, {"Error": error_msg[4:].strip()}, event)
+            if ":" in error_msg and error_msg.split(":", 1)[0].isdigit():
+                status_code = int(error_msg.split(":", 1)[0])
+                error_text = error_msg.split(":", 1)[1].strip()
+                return lambda_response(status_code, {"Error": error_text}, event)
             return lambda_response(400, {"Error": error_msg}, event)
         except RuntimeError as err:
             # System errors (500)
