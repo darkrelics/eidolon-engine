@@ -84,7 +84,10 @@ class ApiService extends BaseApiService {
         queryParams: {'CharacterID': characterId},
       );
 
-      final characterData = json['Character'] as Map<String, dynamic>;
+      final characterData = json['Character'] as Map<String, dynamic>?;
+      if (characterData == null) {
+        throw FormatException('Missing Character data in API response');
+      }
 
       // ActiveStoryID and ActiveSegmentID are already in characterData from the server
 
@@ -169,7 +172,11 @@ class ApiService extends BaseApiService {
         '/story/start',
         body: {'CharacterID': characterId, 'StoryID': storyId},
       );
-      return json['Segment'] as Map<String, dynamic>;
+      final segment = json['Segment'] as Map<String, dynamic>?;
+      if (segment == null) {
+        throw FormatException('Missing Segment data in API response');
+      }
+      return segment;
     } catch (e) {
       if (e is ApiException) {
         if (e.statusCode == 403) {
