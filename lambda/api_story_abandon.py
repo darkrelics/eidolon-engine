@@ -10,12 +10,10 @@ Updates character state, marks active segments as abandoned, and updates history
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import character_get
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.requests import get_query_parameter, parse_event_body
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_history import record_abandoned_segment_history
 from eidolon.story_active import get_active_story_segment, mark_segment_as_abandoned
 from eidolon.story_history import record_story_abandonment
@@ -33,14 +31,14 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         Dict with response data for successful abandonment
 
     Raises:
-        ValueError: If character not found, not owned, or not in a story
+        ValueError: If character not found, not owned, or not in a story (with status code prefix)
         RuntimeError: If database operations fail
     """
     character: dict = character_get(character_id, player_id)
 
     if character.get("GameMode", "None") != "Incremental":
         logger.warning(f"Character not in Incremental mode for {character_id}")
-        raise ValueError("Character not in Incremental mode")
+        raise ValueError("409:Character not in Incremental mode")
 
     active_segment = get_active_story_segment(character_id)
     active_segment_id = active_segment.get("ActiveSegmentID")
@@ -49,7 +47,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
 
     if not active_segment_id or not story_id:
         logger.error(f"Active segment missing required fields for {character_id}")
-        raise ValueError("Invalid active segment data")
+        raise ValueError("409:No active story to abandon")
 
     # Mark segment as abandoned (set Status to "abandoned")
     try:
@@ -113,33 +111,18 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     }
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """Lambda handler to abandon an active story.
 
     Args:
         event: API Gateway Lambda proxy event
         context: Lambda context
+        player_id: Authenticated player ID
 
     Returns:
-        API Gateway Lambda proxy response
+        Dict with status_code and body
     """
-    # Log invocation
-    log_lambda_statistics(event, context)
-
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    # Extract player ID from JWT
-    try:
-        player_id = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
     # Get character ID from body or query parameters (body preferred per API contract)
     character_id = None
 
@@ -150,36 +133,18 @@ def lambda_handler(event: dict, context: object) -> dict:
     except ValueError:
         # Fall through to query string handling
         character_id = None
-    except Exception as err:
-        return lambda_error(event, err)
 
     # Fallback to query parameters for backward compatibility
     if not character_id:
         character_id = get_query_parameter(event, "CharacterID")
 
     if not character_id:
-        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+        raise ValueError("Missing CharacterID parameter")
 
     if not validate_uuid(character_id):
-        return lambda_response(400, {"Error": "Invalid character ID format"}, event)
+        raise ValueError("Invalid character ID format")
 
     # Call business logic
-    try:
-        logger.info(f"Abandoning story for {character_id}")
-        result: dict = abandon_story_business_logic(character_id, player_id)
-        return lambda_response(200, result, event)
-    except ValueError as err:
-        logger.warning(f"Business logic error Error: {err}")
-        error_msg = str(err).lower()
-        if "no active" in error_msg:
-            return lambda_response(409, {"Error": "No active story to abandon"}, event)
-        elif "character not found" in error_msg:
-            return lambda_response(404, {"Error": "Character not found"}, event)
-        elif "not owned" in error_msg:
-            return lambda_response(403, {"Error": "Access denied"}, event)
-        return lambda_response(400, {"Error": str(err)}, event)
-    except RuntimeError as err:
-        logger.error(f"Database error Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    logger.info(f"Abandoning story for {character_id}")
+    result: dict = abandon_story_business_logic(character_id, player_id)
+    return {"status_code": 200, "body": result}
