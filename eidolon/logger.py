@@ -9,6 +9,52 @@ logger = logging.getLogger(APPLICATION_NAME)
 logger.setLevel(LOG_LEVEL)
 
 
+def sanitize_event_for_logging(event: dict) -> dict:
+    """
+    Sanitize Lambda event by removing sensitive data before logging.
+
+    Removes or redacts:
+    - Authorization headers
+    - Cookie headers
+    - JWT tokens
+    - Other potentially sensitive headers
+
+    Args:
+        event: The Lambda event dict
+
+    Returns:
+        Sanitized copy of the event safe for logging
+    """
+    if not isinstance(event, dict):
+        return event
+
+    sanitized = event.copy()
+
+    # Sanitize headers if present
+    if "headers" in sanitized and isinstance(sanitized["headers"], dict):
+        headers = sanitized["headers"].copy()
+        # Remove or redact sensitive headers
+        sensitive_headers = ["Authorization", "authorization", "Cookie", "cookie", "X-Amz-Security-Token"]
+        for header in sensitive_headers:
+            if header in headers:
+                headers[header] = "[REDACTED]"
+        sanitized["headers"] = headers
+
+    # Sanitize multiValueHeaders if present
+    if "multiValueHeaders" in sanitized and isinstance(sanitized["multiValueHeaders"], dict):
+        multi_headers = sanitized["multiValueHeaders"].copy()
+        sensitive_headers = ["Authorization", "authorization", "Cookie", "cookie", "X-Amz-Security-Token"]
+        for header in sensitive_headers:
+            if header in multi_headers:
+                multi_headers[header] = ["[REDACTED]"]
+        sanitized["multiValueHeaders"] = multi_headers
+
+    # Keep requestContext but be cautious about claims (already logged separately)
+    # The claims themselves don't contain tokens, just user attributes
+
+    return sanitized
+
+
 def log_lambda_statistics(event, context) -> None:
     """
     Logs statistics and details of a Lambda function execution.
@@ -25,4 +71,7 @@ def log_lambda_statistics(event, context) -> None:
     if event:
         claims = event.get("requestContext", {}).get("authorizer", {}).get("claims", {})
         logger.info(f"User: {claims.get('cognito:username')}")
-        logger.debug(f"Event: {json.dumps(event, indent=2)}")
+
+        # Sanitize event before logging to prevent credential exposure
+        sanitized_event = sanitize_event_for_logging(event)
+        logger.debug(f"Event: {json.dumps(sanitized_event, indent=2)}")
