@@ -793,6 +793,221 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /store/list:
+    get:
+      tags:
+        - Store
+      summary: List store items
+      description: Retrieves available items for purchase from the store, filtered by character level if CharacterID provided.
+      operationId: getStoreList
+      parameters:
+        - in: query
+          name: StoreID
+          required: false
+          schema:
+            type: string
+          description: Store identifier (defaults to "general-store")
+          example: general-store
+        - in: query
+          name: CharacterID
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Character UUID for level-based filtering
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Successfully retrieved store inventory
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - StoreID
+                  - StoreName
+                  - Description
+                  - Items
+                properties:
+                  StoreID:
+                    type: string
+                    example: general-store
+                  StoreName:
+                    type: string
+                    example: General Merchant
+                  Description:
+                    type: string
+                    example: A traveling merchant offering essential supplies and equipment for adventurers.
+                  Items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        PrototypeID:
+                          type: string
+                          format: uuid
+                        PrototypeName:
+                          type: string
+                        Price:
+                          type: integer
+                          description: Item price in fundamental units (FU)
+                        Stock:
+                          type: integer
+                          description: Available stock (-1 = unlimited)
+                        Category:
+                          type: string
+                          example: consumable
+                        Featured:
+                          type: boolean
+                        Prototype:
+                          type: object
+                          description: Full item prototype details
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Character access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not owned by player"
+        "404":
+          description: Store not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Store 'unknown-store' not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /store/purchase:
+    post:
+      tags:
+        - Store
+      summary: Purchase store item
+      description: Purchase an item from the store with atomic currency deduction and inventory update.
+      operationId: purchaseStoreItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - CharacterID
+                - PrototypeID
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                  description: Character UUID making the purchase
+                PrototypeID:
+                  type: string
+                  format: uuid
+                  description: Item prototype UUID to purchase
+                Quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 99
+                  default: 1
+                  description: Number of items to purchase
+            example:
+              CharacterID: 550e8400-e29b-41d4-a716-446655440000
+              PrototypeID: b47ac10b-58cc-4372-a567-0e02b2c3d483
+              Quantity: 3
+      responses:
+        "200":
+          description: Successfully purchased item
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - Success
+                  - ItemIDs
+                  - Quantity
+                  - TotalCost
+                  - CurrencyRemaining
+                  - Message
+                properties:
+                  Success:
+                    type: boolean
+                    example: true
+                  ItemIDs:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                    description: UUID(s) of created/updated items
+                  Quantity:
+                    type: integer
+                    example: 3
+                  TotalCost:
+                    type: integer
+                    description: Total cost in fundamental units
+                    example: 750
+                  CurrencyRemaining:
+                    type: integer
+                    description: Character's remaining currency after purchase
+                    example: 250
+                  Message:
+                    type: string
+                    example: Successfully purchased 3 item(s)
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingCharacterID:
+                  summary: Missing CharacterID
+                  value:
+                    Error: "CharacterID is required"
+                invalidQuantity:
+                  summary: Invalid quantity
+                  value:
+                    Error: "Quantity must be a positive integer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Insufficient funds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Insufficient funds: need 750, have 250"
+        "403":
+          description: Character access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not owned by player"
+        "404":
+          description: Item not found in store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Item not available in store"
+        "409":
+          description: Insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Insufficient stock: only 1 available"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
 components:
   securitySchemes:
     CognitoAuth:

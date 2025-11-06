@@ -327,6 +327,9 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
         # Item functions
         "api-item-brief",
         "api-item-prototype",
+        # Store functions
+        "api-store-list",
+        "api-store-purchase",
         # Player functions
         "cognito-player-new",
         "cognito-player-delete",

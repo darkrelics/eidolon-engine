@@ -213,6 +213,18 @@ class ApiStack(Stack):
             prototype_resource = item_resource.add_resource("prototype")
             self._add_lambda_integration(prototype_resource, "GET", "api-item-prototype", authorizer)
 
+        # Store endpoints (for incremental/hybrid modes)
+        if self.deployment_mode in ["incremental", "hybrid"]:
+            store_resource = api.root.add_resource("store")
+
+            if "api-store-list" in self.lambda_arns:
+                list_resource = store_resource.add_resource("list")
+                self._add_lambda_integration(list_resource, "GET", "api-store-list", authorizer)
+
+            if "api-store-purchase" in self.lambda_arns:
+                purchase_resource = store_resource.add_resource("purchase")
+                self._add_lambda_integration(purchase_resource, "POST", "api-store-purchase", authorizer)
+
         # Story endpoints (for incremental/hybrid modes)
         if self.deployment_mode in ["incremental", "hybrid"]:
             story_resource = api.root.add_resource("story")
@@ -369,6 +381,8 @@ class ApiStack(Stack):
             "api-segment-decision": "ImportApiSegmentDecision",
             "api-segment-history": "ImportApiSegmentHistory",
             "api-segment-status": "ImportApiSegmentStatus",
+            "api-store-list": "ImportApiStoreList",
+            "api-store-purchase": "ImportApiStorePurchase",
             "api-story-abandon": "ImportApiStoryAbandon",
             "api-story-history": "ImportApiStoryHistory",
             "api-story-start": "ImportApiStoryStart",
