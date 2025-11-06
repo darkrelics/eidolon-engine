@@ -10,69 +10,47 @@ Endpoint: GET /item/brief
 Authentication: Cognito (required)
 """
 
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
 from eidolon.items import get_item_brief
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.player import validate_player
 from eidolon.requests import get_query_parameter
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_uuid
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Lambda handler for getting item brief information.
 
     Args:
         event: API Gateway Lambda proxy event
         context: Lambda context
+        player_id: Authenticated player ID
 
     Returns:
-        API Gateway Lambda proxy response
+        Dict with status_code and body
     """
-    log_lambda_statistics(event, context)
+    # Validate player exists
+    if not validate_player(player_id):
+        logger.error(f"Player {player_id} not found in database")
+        raise ValueError("401:Unauthorized")
 
-    preflight_response = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    try:
-        player_id = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        logger.error(f"Failed to extract player ID: {err}", exc_info=True)
-        return lambda_error(event, err)
-
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player {player_id} not found in database")
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
+    # Get item ID from query parameters
     item_id = get_query_parameter(event, "ItemID")
 
     if not item_id:
-        return lambda_response(400, {"Error": "Missing ItemID parameter"}, event)
+        raise ValueError("Missing ItemID parameter")
 
     if not validate_uuid(item_id):
-        return lambda_response(400, {"Error": "Invalid ItemID format"}, event)
+        raise ValueError("Invalid ItemID format")
 
+    # Get item brief data
     try:
         result = get_item_brief(item_id)
-        logger.info(f"Retrieved item brief for {item_id} for player {player_id}")
-        return lambda_response(200, result, event)
     except ValueError as err:
         logger.warning(f"Item brief request failed: {err}")
-        return lambda_response(404, {"Error": str(err)}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to retrieve item brief: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+        raise ValueError(f"404:{err}") from err
+
+    logger.info(f"Retrieved item brief for {item_id} for player {player_id}")
+    return {"status_code": 200, "body": result}
