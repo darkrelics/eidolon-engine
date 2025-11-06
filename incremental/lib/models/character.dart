@@ -14,7 +14,7 @@ class Character {
   final Map<String, double> attributes;
   final Map<String, double> skills;
   final Map<String, int> resources;
-  final Map<String, String> inventory; // MUD-compatible: slot -> itemId
+  final Map<String, dynamic> inventory; // Format: slot -> {ItemID: string, Quantity: int}
   final Map<String, dynamic> inventoryDetails; // Enriched inventory data with item details
   final Map<String, dynamic> progress; // Story progress flags
   Map<String, dynamic>? storyState; // Current story position
@@ -23,8 +23,7 @@ class Character {
   final String gameMode; // "None", "Incremental", or "MUD"
   final DateTime lastUpdated;
   final List<String> availableStories;
-  final List<String> abandonedStories;
-  final List<String> completedStories;
+  final List<Map<String, dynamic>> completedStories; // Format: [{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]
   final List<Map<String, dynamic>>? availableStoriesDetails; // Full story metadata when no active story
   final List<Map<String, dynamic>>? wounds; // List of wound objects with DamageType and HealAt
 
@@ -49,7 +48,6 @@ class Character {
     required this.gameMode,
     required this.lastUpdated,
     this.availableStories = const [],
-    this.abandonedStories = const [],
     this.completedStories = const [],
     this.availableStoriesDetails,
     this.wounds,
@@ -143,7 +141,7 @@ class Character {
       attributes: parsedAttributes,
       skills: parsedSkills,
       resources: parsedResources,
-      inventory: Map<String, String>.from(json['Inventory'] ?? {}),
+      inventory: Map<String, dynamic>.from(json['Inventory'] ?? {}),
       inventoryDetails: Map<String, dynamic>.from(json['InventoryDetails'] ?? {}),
       progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
       storyState: json['StoryState'] as Map<String, dynamic>?,
@@ -152,8 +150,7 @@ class Character {
       gameMode: json['GameMode'] as String? ?? 'None',
       lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
       availableStories: (json['AvailableStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
-      abandonedStories: (json['AbandonedStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
-      completedStories: (json['CompletedStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
+      completedStories: (json['CompletedStories'] as List? ?? []).map((entry) => entry as Map<String, dynamic>).toList(),
       availableStoriesDetails: json['AvailableStoriesDetails'] != null
           ? (json['AvailableStoriesDetails'] as List).map((story) => story as Map<String, dynamic>).toList()
           : null,
@@ -185,7 +182,6 @@ class Character {
       'GameMode': gameMode,
       'UpdatedAt': lastUpdated.toIso8601String(),
       'AvailableStories': availableStories,
-      'AbandonedStories': abandonedStories,
       'CompletedStories': completedStories,
       if (availableStoriesDetails != null) 'AvailableStoriesDetails': availableStoriesDetails,
       if (wounds != null) 'Wounds': wounds,
@@ -199,7 +195,7 @@ class Character {
     Map<String, double>? attributes,
     Map<String, double>? skills,
     Map<String, int>? resources,
-    Map<String, String>? inventory,
+    Map<String, dynamic>? inventory,
     Map<String, dynamic>? inventoryDetails,
     Map<String, dynamic>? progress,
     Map<String, dynamic>? storyState,
@@ -208,8 +204,7 @@ class Character {
     String? gameMode,
     DateTime? lastUpdated,
     List<String>? availableStories,
-    List<String>? abandonedStories,
-    List<String>? completedStories,
+    List<Map<String, dynamic>>? completedStories,
     List<Map<String, dynamic>>? availableStoriesDetails,
     List<Map<String, dynamic>>? wounds,
   }) {
@@ -234,7 +229,6 @@ class Character {
       gameMode: gameMode ?? this.gameMode,
       lastUpdated: lastUpdated ?? this.lastUpdated,
       availableStories: availableStories ?? this.availableStories,
-      abandonedStories: abandonedStories ?? this.abandonedStories,
       completedStories: completedStories ?? this.completedStories,
       availableStoriesDetails: availableStoriesDetails ?? this.availableStoriesDetails,
       wounds: wounds ?? this.wounds,

@@ -7,7 +7,6 @@ Provides functions for processing combat encounters using dual action system.
 from botocore.exceptions import ClientError
 
 from eidolon.constants import (
-    COMBAT_OPPONENT_WOUNDS_MULTIPLIER_FOR_DEFEAT,
     DEFAULT_COMBAT_ROUNDS,
     PLAYER_DEATH_LETHAL_WOUNDS,
     PLAYER_INCAPACITATED_TOTAL_WOUNDS,
@@ -292,14 +291,10 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
                 "XPUpdates": xp_accumulator,
             }
 
-        # Check opponent defeat
-        opponent_lethal_wounds = sum(1 for w in opponent_wounds if w.get("DamageType") == "lethal")
+        # Check opponent defeat - any wounds count equally since opponents don't heal
         opponent_total_wounds = len(opponent_wounds)
 
-        if (
-            opponent_lethal_wounds >= opponent_health
-            or opponent_total_wounds >= opponent_health * COMBAT_OPPONENT_WOUNDS_MULTIPLIER_FOR_DEFEAT
-        ):
+        if opponent_total_wounds >= opponent_health:
             # Opponent defeated - determine outcome quality based on character wounds taken
             player_wound_count = len(player_wounds)
 

@@ -8,6 +8,7 @@ Validates character state, creates active segment, and returns first segment det
 """
 
 from eidolon.character_data import character_get
+from eidolon.constants import CharState
 from eidolon.dynamo import TableName, dynamo
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
@@ -44,6 +45,13 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
 
     # Check if character can start a story
     if not story_eligibility(character):
+        # Check specifically for dead character
+        char_state = character.get("CharState")
+        if char_state == CharState.DEAD.value:
+            logger.warning(f"Character {character_id} is dead, cannot start new story")
+            raise ValueError("Dead characters cannot start new stories")
+
+        # Existing game mode error handling
         game_mode = character.get("GameMode", "None")
         logger.warning(f"Character {character_id} in {game_mode} mode, cannot start new story")
         raise ValueError(f"409:Character is currently in {game_mode} mode with an active story")

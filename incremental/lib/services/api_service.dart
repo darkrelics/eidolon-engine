@@ -329,6 +329,33 @@ class ApiService extends BaseApiService {
       rethrow;
     }
   }
+
+  /// Get item brief (ItemID, PrototypeID, Quantity only).
+  ///
+  /// Fetches lightweight item data for IndexedDB caching.
+  /// Returns item brief data.
+  Future<Map<String, dynamic>> getItemBrief(String itemId) async {
+    ApiMetrics.recordCall('GET /item/brief', details: 'itemId=$itemId');
+
+    return get<Map<String, dynamic>>(
+      '/item/brief',
+      queryParams: {'ItemID': itemId},
+    );
+  }
+
+  /// Get full item prototype definition.
+  ///
+  /// Fetches complete prototype data including all properties and stats.
+  /// Prototypes are immutable and safe to cache indefinitely.
+  /// Returns full prototype data.
+  Future<Map<String, dynamic>> getItemPrototype(String prototypeId) async {
+    ApiMetrics.recordCall('GET /item/prototype', details: 'prototypeId=$prototypeId');
+
+    return get<Map<String, dynamic>>(
+      '/item/prototype',
+      queryParams: {'PrototypeID': prototypeId},
+    );
+  }
 }
 
 /// Archetype info for character creation

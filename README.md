@@ -36,14 +36,14 @@ The system features a complete end-to-end deployment pipeline that provisions al
 
 ### Technical Features
 
-- AWS Lambda backend for all game logic (16 functions)
+- AWS Lambda backend for all game logic (18 functions)
 - DynamoDB for data persistence (14 tables)
 - Infrastructure as Code using AWS CDK (9 stacks)
 - Fully automated deployment with portal build
 - Three deployment modes with dynamic stack ordering
 - Fixed logical IDs preventing resource recreation
 - Post-deployment Lambda updates from S3 artifacts
-- Flutter web applications
+- Flutter web applications with IndexedDB caching
 - Go-based SSH server for MUD mode
 - Lua scripting for game mechanics and content
 
@@ -118,10 +118,34 @@ The engine uses a modern cloud-native architecture with a unified backend servin
    - API endpoint: `https://api.yourdomain.com`
    - SSH server can be run locally or on EC2 (MUD mode)
 
+## Implementation Status
+
+### MUD Mode
+Status: Production-ready and fully functional.
+
+### Incremental Mode
+Status: Core gameplay functional, but critical mechanics broken.
+
+- ✅ Character creation and progression
+- ✅ Story progression and branching narratives
+- ✅ Skill/attribute XP system
+- ✅ Combat mechanics (rounds execute, wounds apply)
+- ⚠️ Item drops (items acquired but names not displayed)
+- ❌ Inventory display (players see UUIDs instead of item names)
+- ❌ Death mechanics (dead characters can continue playing)
+- ❌ Currency rewards (broken - applies 0 gold)
+- ❌ Store system (not implemented)
+- ❌ Item consumption (not implemented)
+
+**Current State:** Players can create characters, run stories, gain XP, and collect items. However, inventory displays raw UUIDs instead of item names ("a47ac10b-..." instead of "Healing Potion"), dead characters become immortal zombies that can play indefinitely, and no currency is earned. The economy loop (earn currency → buy items → use items) is incomplete.
+
+**Details:** See [Incremental Status Document](documentation/INCREMENTAL-STATUS.md) for a complete code-level analysis of what works, what's broken, and what's missing.
+
 ## Documentation
 
 Comprehensive documentation is available in the `/documentation` directory:
 
+- [Incremental Implementation Status](documentation/INCREMENTAL-STATUS.md) - Current state analysis (updated regularly)
 - [Deployment Design](documentation/deployment-design.md) - Architecture and infrastructure design
 - [Deployment Guide](documentation/deployment.md) - Step-by-step deployment instructions
 - [Incremental Game Design](documentation/incremental-design.md) - Game system design

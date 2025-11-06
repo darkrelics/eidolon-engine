@@ -12,11 +12,31 @@
       "RequiredRooms": []
     },
     "RewardTiers": {
-      "Death": "The gremlin's mischief proves fatal",
-      "Failure": "You retreat, unable to handle even a gremlin",
-      "Minimal": "You survive the encounter with minor injuries",
-      "Normal": "You successfully deal with the gremlin threat",
-      "Exceptional": "You masterfully handle the situation"
+      "Death": {
+        "narrative": "The gremlin's mischief proves fatal",
+        "currency": 0,
+        "items": []
+      },
+      "Failure": {
+        "narrative": "You retreat, unable to handle even a gremlin",
+        "currency": 40,
+        "items": []
+      },
+      "Minimal": {
+        "narrative": "You survive the encounter with minor injuries",
+        "currency": 120,
+        "items": []
+      },
+      "Normal": {
+        "narrative": "You successfully deal with the gremlin threat",
+        "currency": 240,
+        "items": []
+      },
+      "Exceptional": {
+        "narrative": "You masterfully handle the situation",
+        "currency": 480,
+        "items": []
+      }
     },
     "FirstSegmentID": "d9857bfc-50ba-4954-a38c-f64c30882ba8",
     "CreatedAt": "2025-01-23T10:00:00Z"

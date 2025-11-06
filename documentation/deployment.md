@@ -34,7 +34,7 @@ This section is the canonical infrastructure overview referenced by other docume
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **15 Lambda Functions**: API handlers and operational functions
+- **18 Lambda Functions Total**: 17 deployed, 1 not deployed (cognito-player-delete reserved for future API)
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **Fixed Logical IDs**: Preventing resource recreation on updates
 - **Post-Deploy Updates**: Lambda functions automatically updated from S3
@@ -82,10 +82,10 @@ Stacks deploy in a specific order based on dependencies:
 
 1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
 2. **DynamoDB Stack**: 14 tables with managed IAM policy
-3. **Lambda Stack**: Layer, 15 functions, shared execution role
-4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
-5. **Character Stack**: Character-related Lambda resources
-6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
+3. **Lambda Stack**: Shared layer and execution role (no functions deployed here)
+4. **Player Stack**: Cognito User Pool, 1 Lambda function (cognito-player-new)
+5. **Character Stack**: 7 Lambda functions (character APIs, item APIs, archetype)
+6. **Story Stack** (Incremental/Hybrid only): 9 Lambda functions (story APIs, segment APIs, operations), SSM, SQS, EventBridge
 7. **S3 Stack** (MUD/Hybrid only): Scripts bucket with Lua upload
 8. **CloudWatch Stack** (MUD/Hybrid only): Logging infrastructure
 9. **API Stack**: API Gateway with Lambda integrations
@@ -232,11 +232,12 @@ API:
   HostedZoneId: Z1234567890ABC
   Subdomain: api # api.darkrelics.net
 
-# CORS configuration for API Gateway
-allowed_cors_origins:
-  [] # Optional list; when empty, API preflight defaults to "*" without credentials
-  # When set, API Gateway preflight uses this explicit list and allows credentials
-  # ALLOWED_ORIGINS env var is passed to Lambdas as a comma-separated string
+# Client configuration (for CORS)
+Client:
+  Host: portal # Client subdomain (portal.darkrelics.net)
+  # CORS origin is constructed as https://{Host}.{Domain}
+  # API Gateway preflight uses this explicit origin
+  # Lambda ALLOWED_ORIGINS env var set to this value
 
 CloudFront:
   distribution_id: E1234567890ABC
@@ -292,7 +293,7 @@ Tracks deployed resources and outputs (gitignored).
 ## Resource Naming
 
 - **DynamoDB Tables** (14): `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`, `story`, `segments`, `active_segments`, `story_history`, `segment_history`, `opponents`
-- **Lambda Functions** (15): `api-*` and `ops-*` prefixed names
+- **Lambda Functions** (17 deployed, 18 total): `api-*`, `ops-*`, and `cognito-*` prefixed names (cognito-player-delete not deployed)
 - **S3 Buckets**: `eidolon-engine-lambda-{account}`, `eidolon-scripts-{account}`, portal bucket
 - **Cognito Pool**: `eidolon-users`
 - **CloudWatch**: `/eidolon/server` log group
@@ -376,7 +377,7 @@ if current_trigger == lambda_arn:
 ### Deployment Statistics
 
 - **Total Stacks**: 10 independent CDK stacks
-- **Lambda Functions**: 15 with shared execution role
+- **Lambda Functions**: 17 deployed (18 total, cognito-player-delete not deployed)
 - **DynamoDB Tables**: 14 with RemovalPolicy.RETAIN
 - **Module Size**: 94% under 300 lines, 100% under 1000 lines
 - **Deployment Time**: Full deployment in under 15 minutes
@@ -445,15 +446,18 @@ Each stack has its own app file:
 graph LR
     CodeBuild -->|provides artifacts for| Lambda
     DynamoDB -->|policy attached to| Lambda
-    Lambda -->|functions used by| Player
-    Lambda -->|functions used by| Story
-    Lambda -->|functions used by| API
-    Player -->|authorizer for| API
+    Lambda -->|layer and role used by| Character
+    Lambda -->|layer and role used by| Player
+    Lambda -->|layer and role used by| Story
+    Character -->|functions used by| API
+    Player -->|function and authorizer for| API
+    Story -->|functions used by| API
     API -->|URL passed to| Client
 
     style CodeBuild fill:#e1f5ff
     style DynamoDB fill:#fff3cd
     style Lambda fill:#d4edda
+    style Character fill:#f8d7da
     style Player fill:#f8d7da
     style Story fill:#f8d7da
     style API fill:#d1ecf1
@@ -615,7 +619,7 @@ const String apiDomain = String.fromEnvironment(
 
 The Eidolon Engine deployment system represents a complete transformation from a monolithic 1800+ line class to a clean, modular architecture with:
 
-- **9 Independent CDK Stacks**: Each with focused responsibility
+- **10 Independent CDK Stacks**: Each with focused responsibility
 - **3 Deployment Modes**: MUD, Incremental, and Hybrid
 - **Automated End-to-End**: Infrastructure to portal deployment
 - **Production Tested**: All components operational
