@@ -793,6 +793,148 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
+  /item/use:
+    post:
+      tags:
+        - Items
+      summary: Use consumable item
+      description: Uses (consumes) an item from character inventory, applying effects and removing/decrementing the item.
+      operationId: useItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - CharacterID
+                - ItemID
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                  description: Character UUID
+                ItemID:
+                  type: string
+                  format: uuid
+                  description: Item UUID to use
+                InventorySlot:
+                  type: string
+                  description: Optional inventory slot for faster lookup
+            example:
+              CharacterID: 550e8400-e29b-41d4-a716-446655440000
+              ItemID: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+              InventorySlot: "1"
+      responses:
+        "200":
+          description: Successfully used item
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - Success
+                  - ItemUsed
+                  - Effects
+                  - Message
+                  - ItemConsumed
+                properties:
+                  Success:
+                    type: boolean
+                    example: true
+                  ItemUsed:
+                    type: object
+                    properties:
+                      ItemID:
+                        type: string
+                        format: uuid
+                      PrototypeID:
+                        type: string
+                        format: uuid
+                      PrototypeName:
+                        type: string
+                        example: Healing Potion
+                  Effects:
+                    type: array
+                    items:
+                      type: string
+                    description: List of effects applied
+                    example:
+                      - "Healed 3 wound(s) (7/10 HP)"
+                  Message:
+                    type: string
+                    description: Flavor text from item's Use verb
+                    example: "You drink the healing potion, feeling a warm sensation spread through your body."
+                  ItemConsumed:
+                    type: boolean
+                    description: Whether item was completely consumed (removed from inventory)
+                    example: false
+                  Healing:
+                    type: object
+                    description: Healing details if healing occurred
+                    properties:
+                      wounds_healed:
+                        type: integer
+                        example: 3
+                      remaining_wounds:
+                        type: integer
+                        example: 3
+                      current_health:
+                        type: integer
+                        example: 7
+                      max_health:
+                        type: integer
+                        example: 10
+                      was_dead:
+                        type: boolean
+                        example: false
+                  RemainingQuantity:
+                    type: integer
+                    description: Quantity remaining if not consumed (stackable items only)
+                    example: 4
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingCharacterID:
+                  summary: Missing CharacterID
+                  value:
+                    Error: "CharacterID is required"
+                invalidUUID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid ItemID format"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Character access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not owned by player"
+        "404":
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                itemNotInInventory:
+                  summary: Item not in inventory
+                  value:
+                    Error: "Item not found in character inventory"
+                itemDataNotFound:
+                  summary: Item data missing
+                  value:
+                    Error: "Item data not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
   /store/list:
     get:
       tags:
