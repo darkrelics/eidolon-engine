@@ -217,6 +217,14 @@ class ApiStack(Stack):
             use_resource = item_resource.add_resource("use")
             self._add_lambda_integration(use_resource, "POST", "api-item-use", authorizer)
 
+        if "api-item-discard" in self.lambda_arns:
+            discard_resource = item_resource.add_resource("discard")
+            self._add_lambda_integration(discard_resource, "POST", "api-item-discard", authorizer)
+
+        if "api-item-consolidate" in self.lambda_arns:
+            consolidate_resource = item_resource.add_resource("consolidate")
+            self._add_lambda_integration(consolidate_resource, "POST", "api-item-consolidate", authorizer)
+
         # Store endpoints (for incremental/hybrid modes)
         if self.deployment_mode in ["incremental", "hybrid"]:
             store_resource = api.root.add_resource("store")
@@ -383,6 +391,8 @@ class ApiStack(Stack):
             "api-item-brief": "ImportApiItemBrief",
             "api-item-prototype": "ImportApiItemPrototype",
             "api-item-use": "ImportApiItemUse",
+            "api-item-discard": "ImportApiItemDiscard",
+            "api-item-consolidate": "ImportApiItemConsolidate",
             "api-segment-decision": "ImportApiSegmentDecision",
             "api-segment-history": "ImportApiSegmentHistory",
             "api-segment-status": "ImportApiSegmentStatus",
