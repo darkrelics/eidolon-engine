@@ -34,7 +34,10 @@ This section is the canonical infrastructure overview referenced by other docume
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **18 Lambda Functions Total**: 17 deployed, 1 not deployed (cognito-player-delete reserved for future API)
+- **23 Lambda Functions Total**: 22 deployed, 1 not deployed (cognito-player-delete reserved for future API)
+  - 12 Character Stack functions (character, archetype, item, store management)
+  - 9 Story Stack functions (story, segment, decision processing)
+  - 1 Player Stack function (cognito-player-new)
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **Fixed Logical IDs**: Preventing resource recreation on updates
 - **Post-Deploy Updates**: Lambda functions automatically updated from S3

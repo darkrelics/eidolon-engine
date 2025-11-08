@@ -1,15 +1,29 @@
 # Lambda Function Review - Complete Analysis
 
-All 18 Lambda functions reviewed from code, not documentation.
+**⚠️ STATUS: OUTDATED - Needs Update**
 
-**Review Date:** 2025-01-24
-**Updated:** 2025-10-19 (issues 1 and 3 resolved)
+This review covers the original 18 Lambda functions. Since this review, 5 additional functions have been added for the economy system (Release 5):
+- `api_item_use.py` - Item consumption (R5-T2)
+- `api_item_discard.py` - Inventory management (R5-T3)
+- `api_item_consolidate.py` - Stack consolidation (R5-T3)
+- `api_store_list.py` - Store browsing (R5-T5)
+- `api_store_purchase.py` - Item purchasing (R5-T5)
+
+**Current Total:** 23 Lambda functions (22 deployed, 1 reserved)
+
+See `documentation/RELEASE-FIVE-COMPLETION.md` for details on the new functions.
 
 ---
 
-## Summary
+**Review Date:** 2025-01-24
+**Updated:** 2025-10-19 (issues 1 and 3 resolved)
+**Needs Update:** 2025-11-07 (5 new functions added, not yet reviewed)
 
-**Total Functions:** 18
+---
+
+## Summary (Original 18 Functions)
+
+**Total Functions Reviewed:** 18
 **Functionally Correct:** 18
 
 All Lambda functions follow proper patterns:

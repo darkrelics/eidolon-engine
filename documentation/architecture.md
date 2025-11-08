@@ -42,7 +42,10 @@ graph TB
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **18 Lambda Functions**: 17 deployed, 1 not deployed (cognito-player-delete reserved for future)
+- **23 Lambda Functions**: 22 deployed, 1 not deployed (cognito-player-delete reserved for future)
+  - Character Stack: 12 functions (character, archetype, item, store management)
+  - Story Stack: 9 functions (story, segment, decision processing)
+  - Player Stack: 1 function (cognito-player-new)
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **2 SQS Queues**: Processing and advancement queues
 - **1 EventBridge Rule**: 1-minute polling for segment completion
