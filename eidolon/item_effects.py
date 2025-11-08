@@ -6,7 +6,6 @@ Handles applying consumable item effects to characters (healing, buffs, etc.).
 
 import random
 import re
-from typing import Optional
 
 from botocore.exceptions import ClientError
 
@@ -96,7 +95,7 @@ def apply_healing(character: dict, healing_amount: int) -> dict:
     if was_dead and len(remaining_wounds) < max_health:
         # Character is no longer dead (has some health)
         character["CharState"] = CharState.ALIVE.value
-        logger.info(f"Character revived from death by healing")
+        logger.info("Character revived from death by healing")
 
     return {
         "wounds_healed": wounds_to_heal,

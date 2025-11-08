@@ -266,4 +266,3 @@ def coerce_unix_timestamp(timestamp_value: object, default=None) -> int | None:
 
     # Unknown type
     return default
-

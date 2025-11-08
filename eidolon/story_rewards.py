@@ -9,9 +9,9 @@ from decimal import Decimal
 
 from botocore.exceptions import ClientError
 
-from eidolon.logger import logger
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import create_coins_from_value, find_matching_stack
+from eidolon.logger import logger
 
 
 def find_next_available_slot(inventory: dict) -> str:
@@ -187,7 +187,7 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                         new_item = create_reward_item(
                             prototype_id=prototype_id,
                             quantity=quantity if item_reward.get("Stackable") else None,
-                            owner_id=character_id
+                            owner_id=character_id,
                         )
                         item_id = new_item["ItemID"]
                         next_slot = find_next_available_slot(inventory)

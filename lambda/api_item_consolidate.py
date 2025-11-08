@@ -163,10 +163,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             }
         )
 
-        logger.info(
-            f"Consolidated {len(item_list)} stacks of {proto_id} "
-            f"into slot {keep_slot} with {total_quantity} items"
-        )
+        logger.info(f"Consolidated {len(item_list)} stacks of {proto_id} " f"into slot {keep_slot} with {total_quantity} items")
 
     # Update inventory if consolidation occurred
     if consolidated_stacks:

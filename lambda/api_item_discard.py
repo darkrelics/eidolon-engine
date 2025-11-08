@@ -137,10 +137,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         else:
             # Decrement quantity
             current_inventory[found_slot]["Quantity"] = item_quantity - quantity_to_discard
-            logger.info(
-                f"Decremented item {item_id} quantity: {item_quantity} -> "
-                f"{item_quantity - quantity_to_discard}"
-            )
+            logger.info(f"Decremented item {item_id} quantity: {item_quantity} -> " f"{item_quantity - quantity_to_discard}")
             item_fully_discarded = False
 
         # Update character inventory
@@ -170,9 +167,6 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     if not item_fully_discarded:
         response_body["RemainingQuantity"] = item_quantity - quantity_to_discard
 
-    logger.info(
-        f"Item {item_id} discarded by character {character_id}: "
-        f"{quantity_to_discard} of {item_quantity}"
-    )
+    logger.info(f"Item {item_id} discarded by character {character_id}: " f"{quantity_to_discard} of {item_quantity}")
 
     return {"status_code": 200, "body": response_body}

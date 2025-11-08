@@ -159,7 +159,9 @@ def set_character_game_mode(
 
                     # Append to CompletedStories list
                     # Initialize as empty list if not exists
-                    update_expression += " SET CompletedStories = list_append(if_not_exists(CompletedStories, :empty_list), :completed_entry)"
+                    update_expression += (
+                        " SET CompletedStories = list_append(if_not_exists(CompletedStories, :empty_list), :completed_entry)"
+                    )
                     expression_values[":empty_list"] = []
                     expression_values[":completed_entry"] = [completed_entry]
 

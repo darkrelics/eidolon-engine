@@ -7,7 +7,6 @@ Handles store inventory management, item purchasing, and currency transactions.
 import json
 import os
 from decimal import Decimal
-from typing import Optional
 
 from botocore.exceptions import ClientError
 

@@ -82,8 +82,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     try:
         result = purchase_item(character_id, prototype_id, quantity)
         logger.info(
-            f"Purchase successful: {quantity}x {prototype_id} "
-            f"for character {character_id} (cost: {result['total_cost']})"
+            f"Purchase successful: {quantity}x {prototype_id} " f"for character {character_id} (cost: {result['total_cost']})"
         )
 
         # Return purchase results
