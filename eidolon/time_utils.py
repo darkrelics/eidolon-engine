@@ -215,3 +215,55 @@ def past_unix(seconds: int) -> int:
     """
     past_time = datetime.now(timezone.utc) - timedelta(seconds=seconds)
     return int(past_time.timestamp())
+
+
+def coerce_unix_timestamp(timestamp_value: object, default=None) -> int | None:
+    """
+    Coerce various timestamp formats to Unix timestamp (int).
+
+    Handles DynamoDB Decimal types, strings, ints, floats, and None/empty values.
+    Used for robust timestamp handling when reading from DynamoDB.
+
+    Args:
+        timestamp_value: Timestamp value in various formats
+        default: Default value to return if coercion fails
+
+    Returns:
+        Unix timestamp as int, or default if coercion fails
+
+    Examples:
+        >>> coerce_unix_timestamp(1234567890)
+        1234567890
+        >>> coerce_unix_timestamp("1234567890")
+        1234567890
+        >>> coerce_unix_timestamp(None, 0)
+        0
+        >>> from decimal import Decimal
+        >>> coerce_unix_timestamp(Decimal("1234567890"))
+        1234567890
+    """
+    # Handle None and empty values
+    if timestamp_value in (None, "", 0, "0"):
+        return default
+
+    # Handle int/float
+    if isinstance(timestamp_value, (int, float)):
+        return int(timestamp_value)
+
+    # Handle DynamoDB Decimal type (without importing)
+    if "Decimal" in type(timestamp_value).__name__:
+        try:
+            return int(timestamp_value)  # type: ignore[arg-type]
+        except Exception:
+            return default
+
+    # Handle string
+    if isinstance(timestamp_value, str):
+        try:
+            return int(float(timestamp_value))
+        except ValueError:
+            return default
+
+    # Unknown type
+    return default
+

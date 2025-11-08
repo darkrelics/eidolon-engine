@@ -19,7 +19,7 @@ from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
-from eidolon.time_utils import from_unix
+from eidolon.time_utils import coerce_unix_timestamp, from_unix
 from eidolon.validation import validate_uuid
 
 
@@ -72,29 +72,12 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             raise ValueError("No active story. Please select a story to begin your adventure.") from err
         raise
 
-    def _coerce_unix(timestamp_value: object, default=None):
-        if timestamp_value in (None, "", 0, "0"):
-            return default
-        if isinstance(timestamp_value, (int, float)):
-            return int(timestamp_value)
-        if "Decimal" in type(timestamp_value).__name__:
-            try:
-                return int(timestamp_value)  # type: ignore[arg-type]
-            except Exception:
-                return default
-        if isinstance(timestamp_value, str):
-            try:
-                return int(float(timestamp_value))
-            except ValueError:
-                return default
-        return default
-
     now = time.time()
-    start_time_unix = _coerce_unix(active_segment.get("StartTime"), int(now))
+    start_time_unix = coerce_unix_timestamp(active_segment.get("StartTime"), int(now))
     if start_time_unix is None:
         start_time_unix = int(now)
 
-    end_time_unix = _coerce_unix(active_segment.get("EndTime"), None)
+    end_time_unix = coerce_unix_timestamp(active_segment.get("EndTime"), None)
     if end_time_unix is None:
         # No EndTime stored, try to get duration from segment fields
         raw_duration = (
