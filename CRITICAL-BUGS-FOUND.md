@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-A comprehensive, adversarial code audit revealed **7 CRITICAL BUGS** and multiple systemic issues that make this codebase **NOT PRODUCTION READY**. The documentation claims features are "production-ready" and "fully functional" - these claims are **FALSE**.
+A comprehensive, adversarial code audit revealed **8 CRITICAL BUGS** and multiple systemic issues that make this codebase **NOT PRODUCTION READY**. The documentation claims features are "production-ready" and "fully functional" - these claims are **FALSE**.
 
 **Critical Issues Summary**:
 - 🔴 Race conditions in ALL inventory/currency operations (infinite money exploits)
@@ -17,6 +17,7 @@ A comprehensive, adversarial code audit revealed **7 CRITICAL BUGS** and multipl
 - 🔴 No validation that items are actually consumable
 - 🔴 API endpoints can deploy without authentication
 - 🔴 Multiple database operations vulnerable to double-execution
+- 🔴 Unsafe dictionary access can crash character retrieval
 
 ---
 
@@ -350,23 +351,99 @@ def extract_player_id(event: dict) -> str:
 
 ---
 
+## CRITICAL BUG #8: Unsafe Dictionary Key Access
+
+**Severity**: 🔴 CRITICAL
+**Impact**: Crashes, data loss if CompletedStories is malformed
+**Files**: `eidolon/character_data.py:135`
+
+### The Bug
+
+The `cleanup_expired_daily_stories()` function assumes dictionary entries have exactly one key:
+
+```python
+# eidolon/character_data.py:135
+for entry in completed_stories:
+    story_id = list(entry.keys())[0]  # ❌ CRASHES if entry is empty dict!
+    story_data = entry[story_id]
+```
+
+### What Can Go Wrong
+
+1. **Empty dict**: `list({}.keys())[0]` → `IndexError: list index out of range`
+2. **Multiple keys**: Takes first key silently, ignores others (data loss)
+3. **Non-dict entry**: `list(None.keys())` → `AttributeError`
+4. **Corrupted data**: Database corruption, manual edits, migration bugs
+
+### Expected Structure
+
+CompletedStories should be:
+```python
+[
+    {"story-uuid-1": {"StoryType": "daily", "CompletedAt": 1234567890}},
+    {"story-uuid-2": {"StoryType": "one-time", "CompletedAt": 1234567890}}
+]
+```
+
+But **NOTHING VALIDATES THIS** before accessing `[0]`.
+
+### Exploit Scenario
+
+1. Database gets corrupted (bug, migration, manual edit)
+2. Entry becomes `{}` or `{"uuid1": {...}, "uuid2": {...}}`
+3. Player logs in
+4. Lambda function crashes with `IndexError`
+5. **Player cannot access their character**
+
+### Fix Applied
+
+```python
+# eidolon/character_data.py:135-146
+for entry in completed_stories:
+    # Defensive: validate entry structure before accessing
+    if not isinstance(entry, dict) or len(entry) != 1:
+        logger.warning(f"Malformed CompletedStories entry: {entry}")
+        continue  # Skip malformed entries instead of crashing
+
+    story_id = list(entry.keys())[0]
+    story_data = entry[story_id]
+
+    # Validate story_data structure
+    if not isinstance(story_data, dict):
+        logger.warning(f"Malformed story data for {story_id}: {story_data}")
+        continue
+```
+
+**Also updated docstring** to document expected structure explicitly.
+
+### Why This Matters
+
+This is defensive programming 101. Never assume data structure without validation, especially when:
+- Data comes from database (can be corrupted)
+- Structure is complex (nested dicts)
+- Failure is catastrophic (crashes character access)
+
+**Pattern to watch for**: Any use of `[0]` without checking length first.
+
+---
+
 ## Additional Issues (Medium Severity)
 
-### Issue #8: No Idempotency Keys
+### Issue #9: No Idempotency Keys
 
 **Impact**: Double-click can cause duplicate purchases/actions
 **Files**: All API endpoints
 
 None of the endpoints support idempotency keys. A user double-clicking "Buy" in the UI will trigger two purchases.
 
-### Issue #9: No Rate Limiting
+### Issue #10: No Rate Limiting
 
 **Impact**: Abuse, DoS, rapid exploitation of race conditions
 **Files**: API Gateway configuration
 
 No rate limiting is configured at the API Gateway level. An attacker can send thousands of concurrent requests to exploit race conditions.
 
-### Issue #10: Error Messages Leak Information
+### Issue #11: Error Messages Leak Information
 
 **Impact**: Information disclosure
 **Files**: Multiple Lambda functions
@@ -379,14 +456,14 @@ raise ValueError(f"Insufficient funds: need {total_cost}, have {current_currency
 # ← Tells attacker exact currency balance
 ```
 
-### Issue #11: No Input Sanitization
+### Issue #12: No Input Sanitization
 
 **Impact**: NoSQL injection potential
 **Files**: Query parameter handling
 
 Query parameters are passed directly to DynamoDB without sanitization. While DynamoDB isn't SQL-injectable, expression injection is possible.
 
-### Issue #12: Logging Contains PII
+### Issue #13: Logging Contains PII
 
 **Impact**: GDPR/privacy concerns
 **Files**: Multiple Lambda functions

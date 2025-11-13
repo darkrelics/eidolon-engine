@@ -110,6 +110,25 @@ def cleanup_expired_daily_stories(character: dict) -> dict:
     Similar to wound healing, this automatically cleans up expired daily story cooldowns
     using UTC time for consistency. One-time stories are kept permanently.
 
+    Expected CompletedStories structure:
+        [
+            {
+                "story-uuid-1": {
+                    "StoryType": "daily",
+                    "CompletedAt": 1234567890  # Unix timestamp
+                }
+            },
+            {
+                "story-uuid-2": {
+                    "StoryType": "one-time",
+                    "CompletedAt": 1234567890
+                }
+            }
+        ]
+
+    Each entry MUST be a dict with exactly one key (the story ID).
+    Malformed entries are skipped with a warning.
+
     Args:
         character: Character dict from database
 
@@ -132,8 +151,19 @@ def cleanup_expired_daily_stories(character: dict) -> dict:
 
     for entry in completed_stories:
         # Each entry is {story_id: {"StoryType": "daily", "CompletedAt": timestamp}}
+        # Defensive: validate entry structure before accessing
+        if not isinstance(entry, dict) or len(entry) != 1:
+            logger.warning(f"Malformed CompletedStories entry (expected dict with 1 key): {entry}")
+            continue
+
         story_id = list(entry.keys())[0]
         story_data = entry[story_id]
+
+        # Validate story_data structure
+        if not isinstance(story_data, dict):
+            logger.warning(f"Malformed story data for {story_id}: {story_data}")
+            continue
+
         story_type = story_data.get("StoryType", "")
         completed_at = story_data.get("CompletedAt", 0)
 
