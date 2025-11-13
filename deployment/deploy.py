@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import sys
 import traceback
 from dataclasses import dataclass
@@ -43,8 +44,91 @@ class DeploymentParams:
     reply_email: str = "contact@darkrelics.net"
 
 
+def is_interactive() -> bool:
+    """Check if running in interactive mode (TTY available)."""
+    return sys.stdin.isatty()
+
+
+def get_param_value(
+    env_var: str,
+    config_value: str,
+    cdk_value: str,
+    default_value: str,
+    prompt: str,
+    required: bool = False,
+) -> str:
+    """
+    Get parameter value with precedence: env var > config > cdk.json > prompt > default.
+
+    Args:
+        env_var: Environment variable name
+        config_value: Value from config.yml
+        cdk_value: Value from cdk.json context
+        default_value: Default value to use
+        prompt: Prompt text for interactive mode
+        required: If True, will loop until value provided
+
+    Returns:
+        The resolved parameter value
+    """
+    # Check environment variable first
+    env_value = os.environ.get(env_var, "").strip()
+    if env_value:
+        return env_value
+
+    # Use config value if available
+    if config_value:
+        if is_interactive():
+            user_input = input(f"{prompt} [{config_value}]: ").strip()
+            return user_input if user_input else config_value
+        return config_value
+
+    # Use cdk.json value if available
+    if cdk_value:
+        if is_interactive():
+            user_input = input(f"{prompt} [{cdk_value}]: ").strip()
+            return user_input if user_input else cdk_value
+        return cdk_value
+
+    # Use default value if available
+    if default_value:
+        if is_interactive():
+            user_input = input(f"{prompt} [{default_value}]: ").strip()
+            return user_input if user_input else default_value
+        return default_value
+
+    # No defaults available, must prompt or error
+    if is_interactive():
+        if required:
+            value = ""
+            while not value:
+                value = input(f"{prompt}: ").strip()
+                if not value:
+                    print(f"Value is required for {env_var}")
+            return value
+        else:
+            return input(f"{prompt}: ").strip()
+    else:
+        # Non-interactive mode without value - error for required, empty for optional
+        if required:
+            raise ValueError(f"Required parameter {env_var} not set (set via environment variable or config file)")
+        return ""
+
+
 def collect_deployment_params(config: Config) -> DeploymentParams:
-    """Collect deployment parameters from user input."""
+    """
+    Collect deployment parameters from environment variables, config files, or user input.
+
+    Parameter resolution order:
+    1. Environment variables (AWS_REGION, EIDOLON_S3_BUCKET, etc.)
+    2. config.yml values
+    3. cdk.json context values
+    4. Interactive prompts (if TTY available)
+    5. Default values
+
+    Raises:
+        ValueError: If required parameters missing in non-interactive mode
+    """
     print("\nConfiguration Parameters:")
 
     # Get account ID
@@ -53,34 +137,41 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
         raise ValueError("Unable to determine AWS account ID")
     print(f"AWS Account: {account_id}")
 
-    # Get region with user input and validation
-    print(f"Current region: {config.region}")
-
-    # Validate current config region first
-    validated_region = validate_region(config.region)
-    if not validated_region:
-        # Current config has invalid region, force user to enter valid one
-        while not validated_region:
-            region_input = input("Enter AWS Region (us-east-1, us-east-2, us-west-2): ").strip()
-            validated_region = validate_region(region_input)
-            if not validated_region:
-                print("Please enter a valid region")
+    # Get region from environment or config
+    region_from_env = os.environ.get("AWS_REGION", "").strip()
+    if region_from_env:
+        validated_region = validate_region(region_from_env)
+        if not validated_region:
+            raise ValueError(f"Invalid AWS_REGION environment variable: {region_from_env}")
+        print(f"Region (from AWS_REGION): {validated_region}")
     else:
-        # Current config region is valid, offer it as default
-        region_input = input(f"AWS Region [{config.region}]: ").strip()
-        if region_input:
-            # User entered a new region, validate it
-            new_region = validate_region(region_input)
-            if new_region:
-                validated_region = new_region
+        # Validate current config region
+        validated_region = validate_region(config.region)
+        if not validated_region:
+            # Invalid config region - must prompt or error
+            if is_interactive():
+                while not validated_region:
+                    region_input = input("Enter AWS Region (us-east-1, us-east-2, us-west-2): ").strip()
+                    validated_region = validate_region(region_input)
+                    if not validated_region:
+                        print("Please enter a valid region")
             else:
-                print(f"Keeping current region: {config.region}")
-                validated_region = config.region
+                raise ValueError("Invalid region in config.yml and AWS_REGION not set")
+        else:
+            # Valid config region - allow override in interactive mode
+            if is_interactive():
+                region_input = input(f"AWS Region [{config.region}]: ").strip()
+                if region_input:
+                    new_region = validate_region(region_input)
+                    if new_region:
+                        validated_region = new_region
+                    else:
+                        print(f"Keeping current region: {config.region}")
+            print(f"Region: {validated_region}")
 
     # Update config if region changed
     if validated_region != config.region:
         config.region = validated_region
-        print(f"Updated region to: {validated_region}")
 
     # Create params with defaults
     params = DeploymentParams(region=validated_region, account_id=account_id)
@@ -93,112 +184,127 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
             cdk_data = json.load(f)
             cdk_context = cdk_data.get("context", {})
 
-    # Deployment Mode - priority: config.yml → cdk.json → default
-    deployment_mode = config.deployment_mode or cdk_context.get("deployment_mode", params.deployment_mode)
-    mode_input = input(f"Deployment Mode (mud/incremental/hybrid) [{deployment_mode}]: ").strip()
-    if mode_input:
-        params.deployment_mode = validate_deployment_mode(mode_input)
-    else:
-        params.deployment_mode = validate_deployment_mode(deployment_mode)
+    # Deployment Mode
+    deployment_mode_value = get_param_value(
+        env_var="EIDOLON_DEPLOYMENT_MODE",
+        config_value=config.deployment_mode or "",
+        cdk_value=cdk_context.get("deployment_mode", ""),
+        default_value=params.deployment_mode,
+        prompt="Deployment Mode (mud/incremental/hybrid)",
+        required=False,
+    )
+    params.deployment_mode = validate_deployment_mode(deployment_mode_value)
 
-    # S3 Artifacts Bucket - priority: default → cdk.json → config.yml → user prompt
-    s3_bucket = params.s3_bucket or cdk_context.get("s3_bucket", "") or getattr(config, "s3_artifacts_bucket", "")
-    if s3_bucket:
-        bucket_input = input(f"S3 Artifacts Bucket [{s3_bucket}]: ").strip()
-        params.s3_bucket = bucket_input if bucket_input else s3_bucket
-    else:
-        while not params.s3_bucket:
-            params.s3_bucket = input("S3 Artifacts Bucket: ").strip()
-            if not params.s3_bucket:
-                print("S3 bucket name is required")
+    # S3 Artifacts Bucket
+    params.s3_bucket = get_param_value(
+        env_var="EIDOLON_S3_BUCKET",
+        config_value=getattr(config, "s3_artifacts_bucket", ""),
+        cdk_value=cdk_context.get("s3_bucket", ""),
+        default_value="",
+        prompt="S3 Artifacts Bucket",
+        required=True,
+    )
 
     # S3 Scripts Bucket - only needed for MUD and Hybrid modes
     if params.deployment_mode != "incremental":
-        scripts_bucket = params.scripts_bucket or cdk_context.get("scripts_bucket", "") or getattr(config, "s3_scripts_bucket", "")
-        if scripts_bucket:
-            scripts_input = input(f"S3 Scripts Bucket [{scripts_bucket}]: ").strip()
-            params.scripts_bucket = scripts_input if scripts_input else scripts_bucket
-        else:
-            while not params.scripts_bucket:
-                params.scripts_bucket = input("S3 Scripts Bucket: ").strip()
-                if not params.scripts_bucket:
-                    print("S3 scripts bucket name is required")
+        params.scripts_bucket = get_param_value(
+            env_var="EIDOLON_SCRIPTS_BUCKET",
+            config_value=getattr(config, "s3_scripts_bucket", ""),
+            cdk_value=cdk_context.get("scripts_bucket", ""),
+            default_value="",
+            prompt="S3 Scripts Bucket",
+            required=True,
+        )
 
     # S3 Client Bucket (for portal static files)
-    client_bucket = cdk_context.get("client_bucket", params.client_bucket)
-    if client_bucket:
-        client_input = input(f"S3 Client Bucket [{client_bucket}]: ").strip()
-        params.client_bucket = client_input if client_input else client_bucket
-    else:
-        while not params.client_bucket:
-            params.client_bucket = input("S3 Client Bucket: ").strip()
-            if not params.client_bucket:
-                print("S3 client bucket name is required")
+    params.client_bucket = get_param_value(
+        env_var="EIDOLON_CLIENT_BUCKET",
+        config_value="",
+        cdk_value=cdk_context.get("client_bucket", ""),
+        default_value="",
+        prompt="S3 Client Bucket",
+        required=True,
+    )
 
     # GitHub Owner
-    github_owner = cdk_context.get("github_owner", params.github_owner)
-    owner_input = input(f"GitHub Owner [{github_owner}]: ").strip()
-    params.github_owner = owner_input if owner_input else github_owner
+    params.github_owner = get_param_value(
+        env_var="GITHUB_OWNER",
+        config_value="",
+        cdk_value=cdk_context.get("github_owner", ""),
+        default_value=params.github_owner,
+        prompt="GitHub Owner",
+        required=False,
+    )
 
     # GitHub Repository
-    github_repo = cdk_context.get("github_repo", params.github_repo)
-    repo_input = input(f"GitHub Repository [{github_repo}]: ").strip()
-    params.github_repo = repo_input if repo_input else github_repo
+    params.github_repo = get_param_value(
+        env_var="GITHUB_REPO",
+        config_value="",
+        cdk_value=cdk_context.get("github_repo", ""),
+        default_value=params.github_repo,
+        prompt="GitHub Repository",
+        required=False,
+    )
 
     # GitHub Branch
-    github_branch = cdk_context.get("github_branch", params.github_branch)
-    branch_input = input(f"GitHub Branch [{github_branch}]: ").strip()
-    params.github_branch = branch_input if branch_input else github_branch
+    params.github_branch = get_param_value(
+        env_var="GITHUB_BRANCH",
+        config_value="",
+        cdk_value=cdk_context.get("github_branch", ""),
+        default_value=params.github_branch,
+        prompt="GitHub Branch",
+        required=False,
+    )
 
-    # Domain and Hosting Configuration
     # Domain (base domain for all services)
-    domain = cdk_context.get("domain", params.domain)
-    if domain:
-        domain_input = input(f"Domain (e.g., darkrelics.net) [{domain}]: ").strip()
-        params.domain = domain_input if domain_input else domain
-    else:
-        while not params.domain:
-            params.domain = input("Domain (e.g., darkrelics.net): ").strip()
-            if not params.domain:
-                print("Domain is required for deployment")
+    params.domain = get_param_value(
+        env_var="EIDOLON_DOMAIN",
+        config_value="",
+        cdk_value=cdk_context.get("domain", ""),
+        default_value=params.domain,
+        prompt="Domain (e.g., darkrelics.net)",
+        required=True,
+    )
 
     # Route53 Hosted Zone ID
-    hosted_zone_id = cdk_context.get("hosted_zone_id", params.hosted_zone_id)
-    if hosted_zone_id:
-        zone_input = input(f"Route53 Hosted Zone ID [{hosted_zone_id}]: ").strip()
-        params.hosted_zone_id = zone_input if zone_input else hosted_zone_id
-    else:
-        while not params.hosted_zone_id:
-            params.hosted_zone_id = input("Route53 Hosted Zone ID (e.g., Z1234567890ABC): ").strip()
-            if not params.hosted_zone_id:
-                print("Hosted Zone ID is required for DNS configuration")
+    params.hosted_zone_id = get_param_value(
+        env_var="EIDOLON_HOSTED_ZONE_ID",
+        config_value="",
+        cdk_value=cdk_context.get("hosted_zone_id", ""),
+        default_value="",
+        prompt="Route53 Hosted Zone ID (e.g., Z1234567890ABC)",
+        required=True,
+    )
 
     # API Host (subdomain for API)
-    api_host = cdk_context.get("api_host", params.api_host)
-    if api_host:
-        api_input = input(f"API Host (e.g., api) [{api_host}]: ").strip()
-        params.api_host = api_input if api_input else api_host
-    else:
-        while not params.api_host:
-            params.api_host = input("API Host (e.g., api): ").strip()
-            if not params.api_host:
-                print("API host is required for API configuration")
+    params.api_host = get_param_value(
+        env_var="EIDOLON_API_HOST",
+        config_value="",
+        cdk_value=cdk_context.get("api_host", ""),
+        default_value=params.api_host,
+        prompt="API Host (e.g., api)",
+        required=True,
+    )
 
     # Client Host (subdomain for portal)
-    client_host = cdk_context.get("client_host", params.client_host)
-    if client_host:
-        host_input = input(f"Client Host (e.g., portal) [{client_host}]: ").strip()
-        params.client_host = host_input if host_input else client_host
-    else:
-        while not params.client_host:
-            params.client_host = input("Client Host (e.g., portal): ").strip()
-            if not params.client_host:
-                print("Client host is required for portal configuration")
+    params.client_host = get_param_value(
+        env_var="EIDOLON_CLIENT_HOST",
+        config_value="",
+        cdk_value=cdk_context.get("client_host", ""),
+        default_value=params.client_host,
+        prompt="Client Host (e.g., portal)",
+        required=True,
+    )
 
     # Reply Email (for Cognito)
-    reply_email = cdk_context.get("reply_email", params.reply_email)
-    email_input = input(f"Reply email for Cognito [{reply_email}]: ").strip()
-    params.reply_email = email_input if email_input else reply_email
+    params.reply_email = get_param_value(
+        env_var="EIDOLON_REPLY_EMAIL",
+        config_value="",
+        cdk_value=cdk_context.get("reply_email", ""),
+        default_value=params.reply_email,
+        prompt="Reply email for Cognito",
+        required=False,
+    )
 
     # Save user selections back to cdk.json
     cdk_data = {"app": "python3 app.py", "context": {}}
@@ -249,22 +355,29 @@ def update_lambdas_only():
             print("Error: Invalid region in configuration")
             return 1
 
-        # Get S3 bucket from config or user input
-        s3_bucket = getattr(config, "s3_artifacts_bucket", "")
+        # Get S3 bucket from environment, config, or user input
+        s3_bucket = os.environ.get("EIDOLON_S3_BUCKET", "").strip()
         if not s3_bucket:
-            s3_bucket = input("S3 Artifacts Bucket: ").strip()
+            s3_bucket = getattr(config, "s3_artifacts_bucket", "")
+        if not s3_bucket:
+            if is_interactive():
+                s3_bucket = input("S3 Artifacts Bucket: ").strip()
             if not s3_bucket:
-                print("Error: S3 bucket name is required")
+                print("Error: S3 bucket name is required (set EIDOLON_S3_BUCKET or config.yml)")
                 return 1
 
         print(f"\nAccount: {account_id}")
         print(f"Region: {region}")
         print(f"S3 Bucket: {s3_bucket}")
 
-        response = input("\nProceed with Lambda updates? [Y/n]: ").strip().lower()
-        if response == "n":
-            print("Lambda update cancelled")
-            return 0
+        # Skip confirmation in non-interactive mode
+        if is_interactive():
+            response = input("\nProceed with Lambda updates? [Y/n]: ").strip().lower()
+            if response == "n":
+                print("Lambda update cancelled")
+                return 0
+        else:
+            print("\nProceeding with Lambda updates (non-interactive mode)")
 
         # Create minimal params object
         class UpdateParams:
@@ -332,10 +445,13 @@ def main():
 
     # Check CDK bootstrap
     if not verify_cdk_bootstrap(params.region):
-        response = input("\nCDK bootstrap not found. Continue anyway? [y/N]: ").strip().lower()
-        if response != "y":
-            print("Deployment cancelled")
-            return 0
+        if is_interactive():
+            response = input("\nCDK bootstrap not found. Continue anyway? [y/N]: ").strip().lower()
+            if response != "y":
+                print("Deployment cancelled")
+                return 0
+        else:
+            print("\nWARNING: CDK bootstrap not found, proceeding anyway (non-interactive mode)")
 
     # Display deployment summary based on mode
     print("\n" + "=" * 60)
@@ -352,10 +468,14 @@ def main():
     print(f"  Client URL: {params.client_host}.{params.domain}")
     print("=" * 60)
 
-    response = input("\nProceed with deployment? [Y/n]: ").strip().lower()
-    if response == "n":
-        print("Deployment cancelled")
-        return 0
+    # Skip confirmation in non-interactive mode
+    if is_interactive():
+        response = input("\nProceed with deployment? [Y/n]: ").strip().lower()
+        if response == "n":
+            print("Deployment cancelled")
+            return 0
+    else:
+        print("\nProceeding with deployment (non-interactive mode)")
 
     # Update config with deployment mode
     config.deployment_mode = params.deployment_mode
