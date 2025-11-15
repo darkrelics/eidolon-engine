@@ -197,7 +197,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         except ClientError as err:
             # Check if this was a conditional check failure (inventory changed = race condition)
             if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-                logger.warning(f"Consolidation failed: inventory changed during operation (race condition detected)")
+                logger.warning("Consolidation failed: inventory changed during operation (race condition detected)")
                 raise ValueError("409:Inventory changed during consolidation. Please try again.") from err
 
             logger.error(f"Failed to update inventory for {character_id}: {err}")

@@ -248,7 +248,7 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     except ClientError as err:
         # Check if this was a conditional check failure (currency changed = race condition)
         if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning(f"Purchase failed: currency changed during transaction (race condition detected)")
+            logger.warning("Purchase failed: currency changed during transaction (race condition detected)")
             raise ValueError("409:Currency balance changed during purchase. Please try again.") from err
 
         logger.error(f"Failed to complete purchase for {character_id}: {err}")

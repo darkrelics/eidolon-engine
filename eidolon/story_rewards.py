@@ -222,7 +222,7 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                     update_expression,
                     expression_names if expression_names else None,
                     expression_values,
-                    f"#resources.#check_value = :expected_currency",
+                    "#resources.#check_value = :expected_currency",
                     {":expected_currency": Decimal(str(current_value))},
                 )
             else:
@@ -242,7 +242,7 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
     except ClientError as err:
         # Check if this was a conditional check failure (rewards already applied = race condition)
         if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning(f"Rewards failed: currency changed during application (race condition/double-reward detected)")
+            logger.warning("Rewards failed: currency changed during application (race condition/double-reward detected)")
             raise RuntimeError("Rewards already applied or character state changed") from err
 
         logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
