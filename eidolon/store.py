@@ -167,9 +167,13 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     if current_currency < total_cost:
         raise ValueError(f"Insufficient funds: need {total_cost}, have {current_currency}")
 
-    # Check stock availability
+    # ✅ FIX BUG #4: Stock management documented as not implemented
+    # Check stock availability (currently all items set to -1 = unlimited)
+    # TODO: Implement proper stock management with DynamoDB table or atomic file updates
     stock = store_item.get("Stock", 0)
     if stock != -1 and stock < quantity:  # -1 = unlimited
+        # NOTE: Stock is checked but never decremented (static JSON file)
+        # All items currently set to Stock=-1 to avoid confusion
         raise ValueError(f"Insufficient stock: only {stock} available")
 
     # Get prototype to determine if stackable
@@ -222,12 +226,14 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     # Calculate new currency value
     new_currency = current_currency - total_cost
 
-    # Atomic update: deduct currency and update inventory
+    # ✅ FIX BUG #1: Use conditional update to prevent race conditions
+    # Ensures currency hasn't changed since we read it (prevents double-purchase exploits)
     try:
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
             UpdateExpression="SET Inventory = :inventory, #resources.#value = :value",
+            ConditionExpression="#resources.#value = :expected_currency",
             ExpressionAttributeNames={
                 "#resources": "Resources",
                 "#value": "Value",
@@ -235,10 +241,16 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
             ExpressionAttributeValues={
                 ":inventory": inventory,
                 ":value": Decimal(str(new_currency)),
+                ":expected_currency": Decimal(str(current_currency)),
             },
         )
         logger.info(f"Purchase complete: {quantity}x {prototype_id} for {total_cost} currency")
     except ClientError as err:
+        # Check if this was a conditional check failure (currency changed = race condition)
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.warning(f"Purchase failed: currency changed during transaction (race condition detected)")
+            raise ValueError("409:Currency balance changed during purchase. Please try again.") from err
+
         logger.error(f"Failed to complete purchase for {character_id}: {err}")
         raise RuntimeError("Purchase transaction failed") from err
 

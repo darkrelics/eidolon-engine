@@ -209,19 +209,42 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
         if update_expressions:
             update_expression = "SET " + ", ".join(update_expressions)
 
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                {"CharacterID": character_id},
-                update_expression,
-                expression_names if expression_names else None,
-                expression_values,
-            )
+            # ✅ FIX BUG #3: Use conditional update to prevent race conditions
+            # If currency was updated, check it hasn't changed (prevents double-reward exploits)
+            if currency_value > 0:
+                current_value = character.get("Resources", {}).get("Value", 0)
+                expression_names["#resources"] = "Resources"
+                expression_names["#check_value"] = "Value"
+
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    {"CharacterID": character_id},
+                    update_expression,
+                    expression_names if expression_names else None,
+                    expression_values,
+                    f"#resources.#check_value = :expected_currency",
+                    {":expected_currency": Decimal(str(current_value))},
+                )
+            else:
+                # No currency reward, do unchecked update (only inventory items)
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    {"CharacterID": character_id},
+                    update_expression,
+                    expression_names if expression_names else None,
+                    expression_values,
+                )
 
         logger.info(
             f"Applied story rewards for {character_id}: " f"{currency_value} currency value, " f"{len(items_created)} items created"
         )
 
     except ClientError as err:
+        # Check if this was a conditional check failure (rewards already applied = race condition)
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.warning(f"Rewards failed: currency changed during application (race condition/double-reward detected)")
+            raise RuntimeError("Rewards already applied or character state changed") from err
+
         logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply rewards: {err}") from err
     except Exception as err:

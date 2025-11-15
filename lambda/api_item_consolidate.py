@@ -168,13 +168,38 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Update inventory if consolidation occurred
     if consolidated_stacks:
         try:
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression="SET Inventory = :inventory",
-                ExpressionAttributeValues={":inventory": updated_inventory},
-            )
+            # ✅ FIX BUG #3: Use conditional update to prevent race conditions
+            # Check that the first removed slot still exists (if inventory changed, consolidation is stale)
+            # Get first consolidated entry to validate against
+            first_stack = consolidated_stacks[0]
+            first_removed_slot = first_stack["RemovedSlots"][0] if first_stack["RemovedSlots"] else None
+
+            if first_removed_slot:
+                # Ensure the slot we're about to remove still exists in its original state
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    Key={"CharacterID": character_id},
+                    UpdateExpression="SET Inventory = :inventory",
+                    ConditionExpression="attribute_exists(Inventory.#check_slot)",
+                    ExpressionAttributeNames={
+                        "#check_slot": first_removed_slot,
+                    },
+                    ExpressionAttributeValues={":inventory": updated_inventory},
+                )
+            else:
+                # No slots removed (edge case), do unchecked update
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    Key={"CharacterID": character_id},
+                    UpdateExpression="SET Inventory = :inventory",
+                    ExpressionAttributeValues={":inventory": updated_inventory},
+                )
         except ClientError as err:
+            # Check if this was a conditional check failure (inventory changed = race condition)
+            if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                logger.warning(f"Consolidation failed: inventory changed during operation (race condition detected)")
+                raise ValueError("409:Inventory changed during consolidation. Please try again.") from err
+
             logger.error(f"Failed to update inventory for {character_id}: {err}")
             raise RuntimeError("Failed to consolidate stacks") from err
 

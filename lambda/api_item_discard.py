@@ -140,15 +140,28 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             logger.info(f"Decremented item {item_id} quantity: {item_quantity} -> " f"{item_quantity - quantity_to_discard}")
             item_fully_discarded = False
 
-        # Update character inventory
+        # ✅ FIX BUG #3: Use conditional update to prevent race conditions
+        # Ensures item still exists in the expected slot with expected ID
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
             UpdateExpression="SET Inventory = :inventory",
-            ExpressionAttributeValues={":inventory": current_inventory},
+            ConditionExpression="Inventory.#slot.ItemID = :expected_item_id",
+            ExpressionAttributeNames={
+                "#slot": found_slot,
+            },
+            ExpressionAttributeValues={
+                ":inventory": current_inventory,
+                ":expected_item_id": item_id,
+            },
         )
 
     except ClientError as err:
+        # Check if this was a conditional check failure (item already removed = race condition)
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.warning(f"Discard failed: item {item_id} already removed (race condition detected)")
+            raise ValueError("409:Item has already been discarded. Please refresh your inventory.") from err
+
         logger.error(f"Failed to update inventory for {character_id}: {err}")
         raise RuntimeError("Failed to discard item") from err
 

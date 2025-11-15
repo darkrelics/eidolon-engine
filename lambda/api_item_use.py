@@ -113,6 +113,17 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         logger.error(f"Failed to get prototype {prototype_id}: {err}")
         raise ValueError("404:Item prototype not found") from err
 
+    # ✅ FIX BUG #5: Validate item is consumable
+    metadata = prototype.get("Metadata", {})
+    has_healing = metadata.get("HealingAmount")
+    has_nutrition = metadata.get("NutritionValue")
+    has_buff = metadata.get("BuffDuration")
+
+    if not (has_healing or has_nutrition or has_buff):
+        item_name = prototype.get("PrototypeName", "Item")
+        logger.warning(f"Attempt to use non-consumable item: {item_name} ({prototype_id})")
+        raise ValueError(f"400:{item_name} is not consumable")
+
     # Check if item is stackable (typically consumable)
     is_stackable = prototype.get("Stackable", False)
 
@@ -134,26 +145,41 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
 
         current_inventory = character_update.get("Inventory", {})
 
+        # ✅ FIX BUG #6: Safe to delete because we validated consumability above
+        # Only consumable items reach this point (checked at line 122)
         if is_stackable and item_quantity and item_quantity > 1:
-            # Decrement quantity
+            # Decrement quantity for stackable consumables
             current_inventory[found_slot]["Quantity"] = item_quantity - 1
             logger.info(f"Decremented item {item_id} quantity: {item_quantity} -> {item_quantity - 1}")
             item_consumed = False
         else:
-            # Remove item entirely
+            # Remove item entirely (last in stack OR non-stackable consumable)
             del current_inventory[found_slot]
-            logger.info(f"Removed item {item_id} from inventory slot {found_slot}")
+            logger.info(f"Consumed item {item_id} from inventory slot {found_slot}")
             item_consumed = True
 
-        # Update character inventory
+        # ✅ FIX BUG #2: Use conditional update to prevent race conditions
+        # Ensures item still exists in the same slot (prevents double-use exploits)
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
             UpdateExpression="SET Inventory = :inventory",
-            ExpressionAttributeValues={":inventory": current_inventory},
+            ConditionExpression="Inventory.#slot.ItemID = :expected_item_id",
+            ExpressionAttributeNames={
+                "#slot": found_slot,
+            },
+            ExpressionAttributeValues={
+                ":inventory": current_inventory,
+                ":expected_item_id": item_id,
+            },
         )
 
     except ClientError as err:
+        # Check if this was a conditional check failure (item already consumed = race condition)
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.warning(f"Item use failed: item {item_id} already consumed (race condition detected)")
+            raise ValueError("409:Item has already been used. Please refresh your inventory.") from err
+
         logger.error(f"Failed to update inventory for {character_id}: {err}")
         raise RuntimeError("Failed to update inventory") from err
 

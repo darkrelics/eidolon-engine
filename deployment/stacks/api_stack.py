@@ -156,20 +156,27 @@ class ApiStack(Stack):
             ),
         )
 
-        # Create Cognito authorizer if we have the pool ARN
-        authorizer = None
-        if self.cognito_user_pool_arn:
-            user_pool = cognito.UserPool.from_user_pool_arn(self, "ImportedUserPool", self.cognito_user_pool_arn)
-            authorizer = apigateway.CognitoUserPoolsAuthorizer(
-                self,
-                "ApiAuthorizer",
-                cognito_user_pools=[user_pool],
-                authorizer_name="eidolon-api-authorizer",
-                identity_source="method.request.header.Authorization",
+        # ✅ FIX BUG #7: Require Cognito configuration for security
+        # Fail deployment if authentication not configured
+        if not self.cognito_user_pool_arn:
+            raise ValueError(
+                "CRITICAL SECURITY ERROR: Cognito User Pool ARN not configured. "
+                "Cannot deploy API without authentication. "
+                "Set COGNITO_USER_POOL_ARN in environment or config."
             )
 
+        # Create Cognito authorizer (guaranteed to exist after check above)
+        user_pool = cognito.UserPool.from_user_pool_arn(self, "ImportedUserPool", self.cognito_user_pool_arn)
+        authorizer = apigateway.CognitoUserPoolsAuthorizer(
+            self,
+            "ApiAuthorizer",
+            cognito_user_pools=[user_pool],
+            authorizer_name="eidolon-api-authorizer",
+            identity_source="method.request.header.Authorization",
+        )
+
         # Add Lambda integrations for available functions
-        self._add_api_endpoints(api, authorizer)  # type: ignore
+        self._add_api_endpoints(api, authorizer)
 
         # Configure CORS for error responses
         self._configure_gateway_responses(api, client_origin)
@@ -280,12 +287,13 @@ class ApiStack(Stack):
             # Create integration
             integration = apigateway.LambdaIntegration(lambda_function)
 
-            # Add method
+            # Add method with required authentication
+            # Authorizer is guaranteed non-None (checked at stack creation)
             resource.add_method(
                 method,
                 integration,
                 authorizer=authorizer,
-                authorization_type=apigateway.AuthorizationType.COGNITO if authorizer else None,
+                authorization_type=apigateway.AuthorizationType.COGNITO,
             )
 
             # Grant API Gateway permission to invoke the Lambda

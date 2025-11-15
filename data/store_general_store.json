@@ -17,37 +17,41 @@
       "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       "PrototypeName": "Long Sword",
       "Price": 500,
-      "Stock": 3,
+      "Stock": -1,
       "MinLevel": 1,
       "Category": "weapon",
-      "Featured": false
+      "Featured": false,
+      "_comment": "Stock changed to -1 (unlimited) - stock tracking not yet implemented"
     },
     {
       "PrototypeID": "c47ac10b-58cc-4372-a567-0e02b2c3d482",
       "PrototypeName": "Leather Armor",
       "Price": 800,
-      "Stock": 2,
+      "Stock": -1,
       "MinLevel": 1,
       "Category": "armor",
-      "Featured": false
+      "Featured": false,
+      "_comment": "Stock changed to -1 (unlimited) - stock tracking not yet implemented"
     },
     {
       "PrototypeID": "d47ac10b-58cc-4372-a567-0e02b2c3d481",
       "PrototypeName": "Bow",
       "Price": 750,
-      "Stock": 2,
+      "Stock": -1,
       "MinLevel": 1,
       "Category": "weapon",
-      "Featured": false
+      "Featured": false,
+      "_comment": "Stock changed to -1 (unlimited) - stock tracking not yet implemented"
     },
     {
       "PrototypeID": "e47ac10b-58cc-4372-a567-0e02b2c3d480",
       "PrototypeName": "Magic Book",
       "Price": 1000,
-      "Stock": 1,
+      "Stock": -1,
       "MinLevel": 2,
       "Category": "magical",
-      "Featured": true
+      "Featured": true,
+      "_comment": "Stock changed to -1 (unlimited) - stock tracking not yet implemented"
     }
   ],
   "Metadata": {
