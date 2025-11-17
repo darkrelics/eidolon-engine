@@ -9,9 +9,8 @@ Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
 """
 
 from eidolon.archetypes import get_archetypes
-from eidolon.cors import cors_handler
-from eidolon.logger import log_lambda_statistics, logger
-from eidolon.responses import lambda_error, lambda_response
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 
 archetypes_cache = []
 
@@ -46,20 +45,17 @@ def handle_get_archetypes() -> dict:
 
     # Cache failed to load at module init, try again
     logger.warning("Cache not loaded at module init, attempting to load now")
-    try:
-        archetypes: list = get_archetypes()
+    archetypes: list = get_archetypes()
 
-        # Cache the results
-        archetypes_cache = archetypes
+    # Cache the results
+    archetypes_cache = archetypes
 
-        logger.info(f"Successfully loaded archetypes cache on demand: {len(archetypes)} archetypes")
-        return {"archetypes": archetypes, "count": len(archetypes)}
-    except RuntimeError as err:
-        logger.error(f"Failed to load archetypes on demand: {err}")
-        raise
+    logger.info(f"Successfully loaded archetypes cache on demand: {len(archetypes)} archetypes")
+    return {"archetypes": archetypes, "count": len(archetypes)}
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Lambda handler to return player-available archetypes.
 
@@ -68,34 +64,19 @@ def lambda_handler(event: dict, context: object) -> dict:
     Args:
         event: API Gateway event or direct invocation event
         context: Lambda context
+        player_id: Authenticated player ID (not used but required by decorator)
 
     Returns:
-        API Gateway response with player archetypes
+        Dict with status_code and body containing archetypes
     """
-    # Log invocation
-    log_lambda_statistics(event, context)
-
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    # Note: Authentication is handled by API Gateway Cognito authorizer
+    # Note: Authentication is handled by decorator
 
     # Call business logic
-    try:
-        result: dict = handle_get_archetypes()
-        return lambda_response(
-            200,
-            {
-                "Archetypes": result.get("archetypes", []),
-                "Count": result.get("count", 0),
-            },
-            event,
-        )
-    except RuntimeError as err:
-        # Database or system failures
-        logger.error(f"Failed to load archetypes Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Failed to load archetypes"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    result: dict = handle_get_archetypes()
+    return {
+        "status_code": 200,
+        "body": {
+            "Archetypes": result.get("archetypes", []),
+            "Count": result.get("count", 0),
+        },
+    }

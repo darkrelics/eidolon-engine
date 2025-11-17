@@ -1,6 +1,8 @@
 # Eidolon Engine Lua Scripting System
 
-The Eidolon Engine incorporates a powerful Lua scripting system that allows developers and game operators to create dynamic, interactive content for rooms, items, and other game elements. Scripts are stored in Amazon S3 and loaded on demand by the game server.
+**Scope:** MUD mode only (Go server). Not applicable to Incremental mode (Lambda-based, uses Python for logic).
+
+The Eidolon Engine MUD incorporates a Lua scripting system that allows developers to create dynamic, interactive content for rooms, items, and other game elements. Scripts are stored in Amazon S3 and loaded on demand by the Go MUD server.
 
 ## Architecture Overview
 
@@ -13,31 +15,45 @@ Scripts are automatically loaded when referenced and cached for performance. The
 
 ## Script Storage and Deployment
 
-Scripts are stored in Amazon S3 with the following structure:
+**Local Storage:** scripts_lua/ directory (3 scripts currently)
+**S3 Storage:** Uploaded to scripts/ prefix in S3 bucket
 
 ```
-s3://your-bucket/scripts/
+Local: scripts_lua/
 ├── room_tavern.lua
 ├── room_cricket.lua
-├── room_puzzle.lua
-└── ...
+└── room_puzzle.lua
+
+S3: s3://eidolon-scripts-{account}/scripts/
+├── room_tavern.lua
+├── room_cricket.lua
+└── room_puzzle.lua
 ```
 
 ### Deployment
 
-Use the deployment script to upload scripts:
+Scripts are automatically uploaded during S3 stack deployment.
+
+**Automatic Upload:**
+
+When deploying MUD or Hybrid mode, the S3 stack (Phase 7) automatically:
+1. Creates S3 bucket (if needed)
+2. Uploads all files from scripts_lua/ directory
+3. Scripts uploaded to scripts/ prefix in bucket
+
+**Manual Upload:**
+
+To manually update scripts without full redeployment:
 
 ```bash
-cd deployment
-./deploy_scripts.py <bucket-name>
+# Using AWS CLI
+aws s3 sync scripts_lua/ s3://your-bucket/scripts/ --region us-east-1
+
+# Verify upload
+aws s3 ls s3://your-bucket/scripts/
 ```
 
-Options:
-
-- `--dry-run`: Preview what would be uploaded
-- `--profile <name>`: Use specific AWS profile
-- `list`: List deployed scripts
-- `delete <script>`: Remove a script
+**Implementation:** deployment/s3.py:upload_scripts() function (lines 46-84)
 
 ## Script Structure
 
@@ -303,9 +319,16 @@ The scripting system provides robust error handling:
 
 When updating scripts:
 
-1. Test changes in development environment
-2. Deploy to S3 using deployment script
-3. Reload scripts on running servers if needed
+1. Edit .lua files in scripts_lua/ directory
+2. Upload to S3:
+   - Automatic: Redeploy S3 stack (deployment/s3.py)
+   - Manual: `aws s3 sync scripts_lua/ s3://bucket/scripts/`
+3. Scripts are cached by server - may need server restart to reload
 4. Monitor logs for any errors after deployment
 
-The scripting system provides a powerful way to create dynamic, engaging content while maintaining performance and reliability in the Eidolon Engine.
+**Deployment Modes:**
+- MUD Mode: S3 stack deployed, scripts uploaded
+- Incremental Mode: S3 stack NOT deployed (no Lua scripting)
+- Hybrid Mode: S3 stack deployed, scripts uploaded
+
+The scripting system provides a powerful way to create dynamic, engaging content for the MUD server while maintaining performance and reliability.

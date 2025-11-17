@@ -2,7 +2,13 @@
 
 ## Overview
 
-This document describes the ordinal selection utility system for the Eidolon Engine MUD. The system allows players to disambiguate between multiple items with the same name by using ordinal numbers (first, second, third, etc.), providing an intuitive way to interact with game objects when multiple instances exist in the same context.
+This document describes the ordinal selection utility system for the Eidolon Engine MUD.
+
+**Scope:** MUD mode only (Go server). Not applicable to Incremental mode (web UI with click-based interaction).
+
+**Implementation:** server/command-parsing.go - ordinal word parsing and fuzzy matching
+
+The system allows players to disambiguate between multiple items with the same name by using ordinal numbers (first, second, third, etc.), providing an intuitive way to interact with game objects when multiple instances exist in the same context.
 
 ## Usage Examples
 
@@ -82,3 +88,22 @@ The backpack contains:
 - Maximum of 20 items with same name supported
 - If no ordinal specified, defaults to first item
 - Clear error messages guide players to use ordinals when needed
+
+## Implementation
+
+**File:** server/command-parsing.go
+
+**Components:**
+- ordinalWords map: Maps "first" through "twentieth" to numeric values
+- ordinalIndex: Array for fuzzy matching
+- fuzzyMatchOrdinal(): Attempts fuzzy match on input string
+
+**Usage in Commands:**
+- get/drop/take commands check for ordinals
+- Container operations (put/take) support ordinals for both item and container
+- Exit selection supports ordinals for duplicate directions
+- Disambiguation messages generated automatically when needed
+
+**Error Messages:** server/room-commands-items.go, server/room-commands-item-containers.go
+
+Examples match actual implementation ("Try 'get first %s' or 'get second %s'")

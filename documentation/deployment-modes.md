@@ -11,7 +11,7 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 | **Frontend Deployed**  | Portal (portal.yml)  | Incremental (incremental.yml) | Incremental (incremental.yml) |
 | **Stack Count**        | 9 stacks             | 8 stacks                      | 10 stacks                     |
 | **Excluded Stacks**    | Story Stack          | S3, CloudWatch Stacks         | None (all stacks)             |
-| **Lambda Functions**   | 15 functions         | 15 functions                  | 15 functions                  |
+| **Lambda Functions**   | 17 deployed          | 17 deployed                   | 17 deployed                   |
 | **DynamoDB Tables**    | 14 tables            | 14 tables                     | 14 tables                     |
 | **Story Processing**   | Not available        | SQS, EventBridge, SSM         | SQS, EventBridge, SSM         |
 | **Scripts Support**    | Lua scripts in S3    | Not available                 | Lua scripts in S3             |

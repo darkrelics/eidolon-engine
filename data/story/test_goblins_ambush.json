@@ -2,8 +2,8 @@
   "Story": {
     "StoryID": "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
     "Title": "The Goblin's Ambush",
-    "Description": "A mysterious path through the Vedant Forest leads to an unexpected encounter.",
-    "NarrativeText": "You've heard rumors of strange happenings in the Vedant Forest. Local villagers speak of missing travelers and eerie sounds at night. Armed with courage and curiosity, you decide to investigate the old forest path that leads to an abandoned campsite deep in the woods.",
+    "Description": "A mysterious path through the Verdant Forest leads to an unexpected encounter.",
+    "NarrativeText": "You've heard rumors of strange happenings in the Verdant Forest. Local villagers speak of missing travelers and eerie sounds at night. Armed with courage and curiosity, you decide to investigate the old forest path that leads to an abandoned campsite deep in the woods.",
     "StoryType": "repeatable",
     "EstimatedDuration": 1170,
     "Prerequisites": {
@@ -12,11 +12,31 @@
       "RequiredRooms": []
     },
     "RewardTiers": {
-      "Death": "No rewards - the forest claims another victim",
-      "Failure": "Minimal rewards - you survive but gain little",
-      "Minimal": "Basic rewards - some items and experience",
-      "Normal": "Good rewards - useful items and solid experience",
-      "Exceptional": "Excellent rewards - rare items and maximum experience"
+      "Death": {
+        "narrative": "No rewards - the forest claims another victim",
+        "currency": 0,
+        "items": []
+      },
+      "Failure": {
+        "narrative": "Minimal rewards - you survive but gain little",
+        "currency": 60,
+        "items": []
+      },
+      "Minimal": {
+        "narrative": "Basic rewards - some items and experience",
+        "currency": 180,
+        "items": []
+      },
+      "Normal": {
+        "narrative": "Good rewards - useful items and solid experience",
+        "currency": 360,
+        "items": []
+      },
+      "Exceptional": {
+        "narrative": "Excellent rewards - rare items and maximum experience",
+        "currency": 720,
+        "items": []
+      }
     },
     "FirstSegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
     "CreatedAt": "2025-08-03T10:00:00Z"

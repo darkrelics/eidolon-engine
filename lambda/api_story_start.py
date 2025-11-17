@@ -8,13 +8,12 @@ Validates character state, creates active segment, and returns first segment det
 """
 
 from eidolon.character_data import character_get
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
+from eidolon.constants import CharState
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.polling import ensure_polling_enabled
 from eidolon.requests import parse_event_body
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_response import new_segment_response
 from eidolon.sqs import queue_segment_for_processing
 from eidolon.story_active import story_update_character
@@ -35,10 +34,10 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
         player_id: Authenticated player ID
 
     Returns:
-        Dict with success and segment data
+        Dict with segment data
 
     Raises:
-        ValueError: If validation fails
+        ValueError: If validation fails (with status code prefix)
         RuntimeError: If critical operations fail
     """
     # Get character and verify ownership
@@ -46,9 +45,16 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
 
     # Check if character can start a story
     if not story_eligibility(character):
+        # Check specifically for dead character
+        char_state = character.get("CharState")
+        if char_state == CharState.DEAD.value:
+            logger.warning(f"Character {character_id} is dead, cannot start new story")
+            raise ValueError("Dead characters cannot start new stories")
+
+        # Existing game mode error handling
         game_mode = character.get("GameMode", "None")
         logger.warning(f"Character {character_id} in {game_mode} mode, cannot start new story")
-        raise ValueError(f"Character is currently in {game_mode} mode with an active story")
+        raise ValueError(f"409:Character is currently in {game_mode} mode with an active story")
 
     # Validate story is available
     validate_story_available(character, story_id)
@@ -72,7 +78,7 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
                 logger.info(f"Removed invalid story {story_id} from character {character_id}")
         except Exception as cleanup_err:
             logger.error(f"Failed to remove invalid story from character: {cleanup_err}")
-        raise ValueError("Story no longer exists") from err
+        raise ValueError("404:Story no longer exists") from err
 
     # Create story instance
     story_instance_id = create_story_history_entry(character_id, story_id, story)
@@ -109,7 +115,8 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     return new_segment_response(active_segment, first_segment)
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Lambda handler to start a story for a character.
 
@@ -118,90 +125,38 @@ def lambda_handler(event: dict, context: object) -> dict:
     enables the polling system if needed.
 
     Args:
-        event: API Gateway Lambda proxy event containing:
-            - httpMethod: POST
-            - body: JSON with CharacterID and StoryID
-            - requestContext.authorizer.claims.sub: Player ID from JWT
-        context: Lambda context with request ID and function name
+        event: API Gateway Lambda proxy event
+        context: Lambda context
+        player_id: Authenticated player ID
 
     Returns:
-        API Gateway Lambda proxy response with:
-            - 200: Success with segment details
-            - 400: Invalid request parameters
-            - 401: Unauthorized (no JWT or invalid player)
-            - 403: Story not available to character
-            - 404: Character or story not found
-            - 409: Character already in a game mode
-            - 500: Internal server error
+        Dict with status_code and body
     """
-    # Log invocation
-    log_lambda_statistics(event, context)
-
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    # Extract player ID from JWT
-    try:
-        player_id = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
     # Parse request body with flexible field names
-    try:
-        body = parse_event_body(event)
-        character_id = body.get("CharacterID", "")
-        story_id = body.get("StoryID", "")
-
-    except ValueError as err:
-        logger.error(f"Failed to parse request body Error: {err}", exc_info=True)
-        return lambda_response(400, {"Error": "Improper request body"}, event)
+    body = parse_event_body(event)
+    character_id = body.get("CharacterID", "")
+    story_id = body.get("StoryID", "")
 
     # Validate required parameters
     if not character_id:
         logger.error("Missing required parameter: CharacterID")
-        return lambda_response(400, {"Error": "CharacterID is required"}, event)
+        raise ValueError("CharacterID is required")
 
     if not story_id:
         logger.error("Missing required parameter: StoryID")
-        return lambda_response(400, {"Error": "StoryID is required"}, event)
+        raise ValueError("StoryID is required")
 
     # Validate UUIDs
     if not validate_uuid(character_id):
         logger.error(f"Invalid character ID format: {character_id}")
-        return lambda_response(400, {"Error": "Invalid character ID format"}, event)
+        raise ValueError("Invalid character ID format")
 
     if not validate_uuid(story_id):
         logger.error(f"Invalid story ID format: {story_id}")
-        return lambda_response(400, {"Error": "Invalid story ID format"}, event)
+        raise ValueError("Invalid story ID format")
 
     logger.info(f"Starting story {story_id} for character {character_id} owned by {player_id}")
 
     # Call business logic
-    try:
-        response_data = start_story(character_id, story_id, player_id)
-        return lambda_response(200, response_data, event)
-    except ValueError as err:
-        error_msg = str(err)
-        logger.warning(f"Invalid request for character={character_id}, story={story_id}: {error_msg}")
-        if "not found" in error_msg.lower():
-            return lambda_response(404, {"Error": error_msg}, event)
-        elif "not owned" in error_msg.lower():
-            return lambda_response(403, {"Error": "Access denied"}, event)
-        elif "already in" in error_msg.lower() and "mode" in error_msg.lower():
-            return lambda_response(409, {"Error": error_msg}, event)
-        elif "not available" in error_msg.lower():
-            return lambda_response(403, {"Error": error_msg}, event)
-        return lambda_response(400, {"Error": error_msg}, event)
-    except RuntimeError as err:
-        logger.error(
-            f"Runtime error starting story={story_id} for character={character_id}: {err}",
-            exc_info=True,
-        )
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    response_data = start_story(character_id, story_id, player_id)
+    return {"status_code": 200, "body": response_data}

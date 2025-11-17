@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -15,6 +16,7 @@ import 'screens/login_screen.dart';
 import 'screens/password_reset_confirm_screen.dart';
 import 'screens/password_reset_screen.dart';
 import 'screens/registration_screen.dart';
+import 'services/indexeddb_service.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -22,6 +24,12 @@ void main() async {
 
   // Initialize SharedPreferences
   final prefs = await SharedPreferences.getInstance();
+
+  // Initialize IndexedDB (web only)
+  if (kIsWeb && IndexedDBService().isSupported) {
+    await IndexedDBService().initialize();
+    debugPrint('IndexedDB initialization completed');
+  }
 
   // Set up global error handlers
   FlutterError.onError = (FlutterErrorDetails details) {

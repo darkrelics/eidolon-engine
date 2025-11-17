@@ -1,6 +1,6 @@
 # Release -1: Discovery & Baseline Report
 
-**Date:** 2025-10-01 (Revised: 2025-10-03)
+**Date:** 2025-10-01 (Revised: 2025-10-19)
 **Purpose:** Audit existing incremental subsystem implementation before executing release plan
 **Status:** Pre-release, no deployment, no backwards compatibility required
 
@@ -383,7 +383,7 @@ stateDiagram-v2
 
 **Missing Modules:**
 
-- ❌ Currency/gold management (stub exists in `story_rewards.py`)
+- ✅ Currency/gold management (implemented in `story_rewards.py` as of 2025-10-19)
 - ❌ Story index/manifest generation (not needed - server-side filtering)
 
 ---
@@ -479,9 +479,10 @@ stateDiagram-v2
 - Room teleportation ✅ `character_story.py:377-380` - updates RoomID from Effects
 - Item rewards ✅ `add_items_to_inventory()` in `items.py:93-153`, called from `segment_processing.py:228`
 
-**Missing:**
+**All Complete:**
 
-- Currency/gold rewards (TODO comment in `story_rewards.py:67` - note: line 66 TODO for items is outdated, items are fully implemented)
+- XP, wounds, death, room teleportation, and item rewards all implemented
+- Currency rewards implemented as of 2025-10-19 (coin-based economy)
 
 **Implementation:**
 
@@ -593,12 +594,12 @@ stateDiagram-v2
    - `get_stories_with_character()` handles filtering
    - Client development not blocked
 
-2. **Complete effects system**
+2. **Complete effects system** ✅ COMPLETE (as of 2025-10-19)
 
-   - ~~Item rewards~~ ✅ Fully implemented via `items.py:add_items_to_inventory()`
-   - ~~Room teleportation~~ ✅ Implemented
-   - ~~Atomicity~~ ✅ Implemented via ProcessingStatus conditional writes
-   - Currency/gold system ❌ Not implemented (TODO in `story_rewards.py:67`)
+   - ✅ Item rewards - Fully implemented via `items.py:add_items_to_inventory()`
+   - ✅ Room teleportation - Implemented
+   - ✅ Atomicity - Implemented via ProcessingStatus conditional writes
+   - ✅ Currency/gold system - Implemented with coin-based economy (bronze/silver/gold coins)
 
 3. ~~**Update issue #491**~~ ✅ CLOSED (2025-10-02)
    - State machines fully documented in `documentation/schema.md`
@@ -649,11 +650,11 @@ Phase 2: API Specification (Parallel) ✅ COMPLETE
 ├─ ✅ All 11 endpoints documented in incremental-api.md
 └─ ✅ API reference doc complete (560 lines)
 
-Phase 3: Currency System
+Phase 3: Currency System ✅ COMPLETE (2025-10-19)
 ├─ ✅ Items fully implemented via `items.py:add_items_to_inventory()`
 ├─ ✅ Rooms implemented
 ├─ ✅ Atomicity via ProcessingStatus conditional writes
-└─ ❌ Currency/gold system not implemented
+└─ ✅ Currency system implemented with coin-based economy
 
 Phase 4: Testing (Parallel)
 ├─ Integration tests for processing flow
@@ -734,11 +735,14 @@ The incremental subsystem is **substantially more complete than initially assess
 
 ### What's Missing ❌
 
-1. **Currency/Gold System** - Not implemented (TODO at `story_rewards.py:67`; Issues #726, #639 open)
-2. **User-Facing Documentation** - Author guides and operations runbooks (Issue #729 updated Oct 3)
-3. **State Machine Tests** - Unit/integration tests for concurrent operations
+1. **Inventory Display** - get_inventory() returns empty InventoryDetails (players see UUIDs instead of item names)
+2. **Item Consumption** - No api_item_consume.py endpoint (healing potions don't work)
+3. **Store System** - No store endpoints to spend currency
+4. **Currency Display in Flutter** - Backend sends Resources.Value but Flutter needs integration
+5. **User-Facing Documentation** - Author guides and operations runbooks
+6. **State Machine Tests** - Unit/integration tests for concurrent operations
 
-**Note:** Item rewards are fully implemented via `items.py:add_items_to_inventory()`. The TODO comment at `story_rewards.py:66` is outdated.
+**Note:** Currency backend is complete. Item rewards are fully implemented via `items.py:add_items_to_inventory()`.
 
 ### What Was Wrong in Initial Assessment ⚠️
 
@@ -751,13 +755,16 @@ The incremental subsystem is **substantially more complete than initially assess
 7. ~~"CI integration needed"~~ → Completed before this report (Sept 29)
 8. ~~"Story loader missing"~~ → Completed before this report (Sept 30)
 
-### Recommended Focus (Updated October 3, 2025)
+### Recommended Focus (Updated October 19, 2025)
 
-1. **User-Facing Documentation** - Author guides, operations runbooks (Issue #729)
-2. **Testing** - Unit/integration/system tests for state machines
-3. **Currency System** - Implement gold/currency rewards (Issues #726, #639)
-4. **Security & Operations** - CloudWatch dashboards, WAF, security review (Issues #603, #616, #693-695)
+1. **Inventory Display Fix** - Investigate get_inventory() issue, implement item_repository.dart in Flutter
+2. **Item Consumption** - Implement api_item_consume.py and Flutter UI
+3. **Store System** - Implement store endpoints and Flutter store UI
+4. **Currency Display** - Integrate currency display in Flutter (backend ready)
+5. **User-Facing Documentation** - Author guides, operations runbooks
+6. **Testing** - Integration tests for currency system, store, and item consumption
+7. **Code Quality** - Refactor large Lambda functions (api_segment_status.py 359 lines, ops_story_advance.py 315 lines)
 
-**Update:** System deployed to AWS (inc-24 branch merged to develop) as of October 2, 2025. Not yet in production.
+**Update:** System deployed to AWS. Currency backend implemented 2025-10-19. Core gameplay loop functional (earn currency, accumulate items). Missing: inventory display, item usage, store system.
 
-The system is **deployment-ready** for core story gameplay. Foundation complete - now focusing on operational tooling, user documentation, and optional enhancements (currency system) before production release.
+The system is **deployment-ready** for core story gameplay. Currency and death mechanics fixed. Now focusing on completing the economy loop (inventory display, item consumption, store system) and operational tooling.

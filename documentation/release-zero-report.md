@@ -2,7 +2,7 @@
 
 **Date:** 2025-10-01
 **Updated:** 2025-10-02 (R0 completion)
-**Revised:** 2025-10-03 (Deployment verification)
+**Revised:** 2025-10-19 (Post-currency implementation)
 **Release Phase:** R0 — Complete
 **Status:** ✅ COMPLETE
 
@@ -695,13 +695,21 @@ Deployment complete with all core infrastructure tested and operational. R1 work
   - Added 3 Mermaid state diagrams to architecture.md
   - Phase 3 (integration testing) pending
 
-**R1 Next Steps:**
+**Post-R1 Status (2025-10-19):**
 
-1. Complete integration testing for state machine transitions
-2. Combat system enhancements (in progress)
-3. Atomic outcome application (Task 2)
-4. Idempotency testing
-5. Failure injection testing
+- ✅ Currency system implemented with coin-based economy
+- ✅ Death mechanics fixed (dead characters blocked from starting stories)
+- ✅ Combat opponent defeat logic simplified
+- ⚠️ Inventory display shows UUIDs (get_inventory issue)
+- ❌ Item consumption not implemented (no api_item_consume.py)
+- ❌ Store system not implemented
+
+**Current Focus:**
+
+1. Inventory display fix (investigate get_inventory)
+2. Item consumption implementation
+3. Store system implementation
+4. Currency display in Flutter
 
 ---
 
@@ -711,41 +719,35 @@ Deployment complete with all core infrastructure tested and operational. R1 work
 
 ✅ All R0 objectives completed. The system was deployed and tested.
 
-### R1 Immediate Actions
+### Current Actions (Post-R1)
 
-1. **Complete Combat System Rework** (in progress)
+**Completed:**
+- ✅ Combat system fixes (opponent defeat logic simplified)
+- ✅ Currency system implementation (coin-based economy)
+- ✅ Death mechanics (dead characters blocked)
 
-   - Address combat mechanics issues
-   - Update combat processing logic
-   - Test combat outcomes
+**In Progress:**
 
-2. **Integration Testing**
+1. **Inventory Display Fix**
+   - Investigate get_inventory() returning empty InventoryDetails
+   - Implement item_repository.dart in Flutter
+   - Display item names instead of UUIDs
 
-   - End-to-end Lambda testing with local DynamoDB
-   - Test state machine transitions
-   - Test idempotency keys
-   - Test race conditions
+2. **Item Consumption**
+   - Create api_item_consume.py endpoint
+   - Add consumption effects (healing, essence)
+   - Add "Use" button in Flutter inventory
 
-3. **State Machine Validation**
-   - Manual verification of state transitions
-   - Verify GameMode enforcement via logs and DB inspection
-   - Test ProcessingStatus atomicity through concurrent requests
+3. **Store System**
+   - Implement store endpoints (list, purchase)
+   - Create Flutter store UI
+   - Complete economy loop (earn → buy → use)
+
+4. **Currency Display Integration**
+   - Flutter integration for Resources.Value display
+   - Backend sends data, needs frontend implementation
 
 **Note:** Per project policy (documentation/unit-tests.md), we do not implement unit tests. Integration testing and manual verification provide sufficient validation.
-
-### R1 Medium-Term Actions
-
-4. **Failure Injection Testing**
-
-   - DynamoDB throttling scenarios
-   - Lambda timeout handling
-   - SQS message replay
-   - EventBridge polling failures
-
-5. **Performance Optimization**
-   - Lambda cold start reduction
-   - DynamoDB query optimization
-   - Client polling efficiency
 
 ### Future Releases (R2+)
 
@@ -788,11 +790,16 @@ The Eidolon Engine incremental subsystem has a complete baseline with:
 - Automated story validation enforcing data quality
 - All core systems operational
 
-**Ready for R1:**
+**R1 Complete, Current Work:**
 
-R1 work continues with state machine formalization and atomic update implementation.
+R1 work completed with state machine formalization and currency system implementation. Current focus on completing the economy loop (inventory display, item consumption, store system).
 
 The incremental subsystem has **completed its baseline story validation objective**. The CI safety harness is live and will prevent invalid story data from entering the repository.
+
+**Status as of 2025-10-19:**
+- Core gameplay loop functional (stories, combat, death, currency)
+- Economy backend complete (currency awarded, Resources.Value tracked)
+- Missing frontend integration (inventory display, item usage, store UI)
 
 ---
 
@@ -856,7 +863,7 @@ The incremental subsystem has **completed its baseline story validation objectiv
 - Issue #603 - Observability foundation noted (dashboard not priority)
 - Issue #690 - No issues found for incremental mode
 - Issue #491 - State machines already implemented, testing deferred
-- Issue #726 - Story effects already implemented, currency deferred
+- Issue #726 - Story effects already implemented, currency completed 2025-10-19
 
 ---
 

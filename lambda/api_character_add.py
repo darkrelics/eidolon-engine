@@ -3,11 +3,9 @@
 from eidolon.archetypes import get_archetype
 from eidolon.bloom import character_name_filter
 from eidolon.character_data import check_character_limit, create_character
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.requests import parse_event_body
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_character_name
 
 
@@ -40,7 +38,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
 
     # Check bloom filter for restricted names (approve returns True when allowed)
     if not character_name_filter.approve(character_name.lower()):
-        raise ValueError("Character name is not available")
+        raise ValueError("409:Character name is not available")
 
     # Check character limit
     can_create = check_character_limit(player_id)
@@ -81,68 +79,35 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
     return {"character_id": result.get("character_id"), "archetype_name": result.get("archetype", "default")}
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """Lambda handler for incremental character creation API."""
-    # Log invocation
-    log_lambda_statistics(event, context)
-
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    # Extract player ID from JWT
-    try:
-        player_id: str = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
     # Parse request body
-    try:
-        body = parse_event_body(event)
-    except ValueError as err:
-        logger.error(f"Failed to parse request body: {err}", exc_info=False)
-        return lambda_response(400, {"Error": str(err)}, event)
-    except Exception as err:
-        logger.error(f"Failed to parse request body: {err}", exc_info=True)
-        return lambda_error(event, err)
+    body = parse_event_body(event)
 
     character_name = body.get("CharacterName")
     if not character_name:
         logger.warning("Character creation request missing CharacterName")
-        return lambda_response(400, {"Error": "CharacterName is required"}, event)
+        raise ValueError("CharacterName is required")
 
     archetype_name = body.get("ArchetypeName", "")
 
     logger.info(f"Character creation request received for {character_name}")
 
     # Call business logic
-    try:
-        result: dict = handle_character_creation(player_id, character_name, archetype_name)  # type: ignore
-        logger.info(
-            f"Created character '{character_name}' ({result.get('character_id')}) with archetype '{result.get('archetype_name', 'default')}' for player {player_id}"
-        )
-        return lambda_response(
-            201,
-            {
-                "CharacterID": result.get("character_id"),
-                "CharacterName": character_name,
-                "Archetype": result.get("archetype_name", "default"),
-                "Message": "Character created successfully",
-            },
-            event,
-        )
-    except ValueError as err:
-        # Business logic errors (invalid name, limit reached, name taken)
-        logger.warning(f"Character creation validation failed Error: {err}")
-        status_code: int = 409 if str(err) == "Character name is already taken" else 400
-        return lambda_response(status_code, {"Error": str(err)}, event)
-    except RuntimeError as err:
-        # System errors (database failures, etc.)
-        logger.error(f"Character creation system error Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    result: dict = handle_character_creation(player_id, character_name, archetype_name)
+    logger.info(
+        f"Created character '{character_name}' ({result.get('character_id')}) "
+        f"with archetype '{result.get('archetype_name', 'default')}' for player {player_id}"
+    )
+
+    # Return success response
+    return {
+        "status_code": 201,
+        "body": {
+            "CharacterID": result.get("character_id"),
+            "CharacterName": character_name,
+            "Archetype": result.get("archetype_name", "default"),
+            "Message": "Character created successfully",
+        },
+    }
