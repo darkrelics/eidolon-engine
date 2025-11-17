@@ -94,6 +94,13 @@ class CharacterStack(Stack):
             ("api-character-get", "api_character_get.lambda_handler"),
             ("api-character-list", "api_character_list.lambda_handler"),
             ("api-archetype-list", "api_archetype_list.lambda_handler"),
+            ("api-item-brief", "api_item_brief.lambda_handler"),
+            ("api-item-prototype", "api_item_prototype.lambda_handler"),
+            ("api-item-use", "api_item_use.lambda_handler"),
+            ("api-item-discard", "api_item_discard.lambda_handler"),
+            ("api-item-consolidate", "api_item_consolidate.lambda_handler"),
+            ("api-store-list", "api_store_list.lambda_handler"),
+            ("api-store-purchase", "api_store_purchase.lambda_handler"),
         ]
 
         # Get common environment variables
@@ -130,6 +137,13 @@ class CharacterStack(Stack):
             "api-character-get": "ApiCharacterGetFunction",
             "api-character-list": "ApiCharacterListFunction",
             "api-archetype-list": "ApiArchetypeListFunction",
+            "api-item-brief": "ApiItemBriefFunction",
+            "api-item-prototype": "ApiItemPrototypeFunction",
+            "api-item-use": "ApiItemUseFunction",
+            "api-item-discard": "ApiItemDiscardFunction",
+            "api-item-consolidate": "ApiItemConsolidateFunction",
+            "api-store-list": "ApiStoreListFunction",
+            "api-store-purchase": "ApiStorePurchaseFunction",
         }
         return logical_id_map.get(function_name, function_name.replace("-", "").title() + "Function")
 

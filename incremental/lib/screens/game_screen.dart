@@ -7,9 +7,11 @@ import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/models/story.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/providers/character_provider.dart';
+import 'package:eidolon_incremental/repositories/character_repository.dart';
 import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
+import 'package:eidolon_incremental/services/indexeddb_service.dart';
 import 'package:eidolon_incremental/services/notification_service.dart';
 import 'package:eidolon_incremental/services/rate_limiter.dart';
 import 'package:eidolon_incremental/services/story_polling_service.dart';
@@ -46,6 +48,7 @@ enum StoryLifecycleState {
 class _GameScreenState extends State<GameScreen> {
   late ApiService _apiService;
   late StoryPollingService _runtime;
+  late CharacterRepository _characterRepository;
   final GlobalRateLimiter _rateLimiter = GlobalRateLimiter();
   Character? _character;
   CharacterInfo? _characterInfo;
@@ -90,6 +93,10 @@ class _GameScreenState extends State<GameScreen> {
     debugPrint('GameScreen: initState called');
     _apiService = ApiService(authService: AuthService.instance);
     _runtime = StoryPollingService(apiService: _apiService);
+    _characterRepository = CharacterRepository(
+      apiService: _apiService,
+      indexedDBService: IndexedDBService(),
+    );
     _decisionDebouncer = Debouncer(delay: const Duration(milliseconds: 300));
     _refreshDebouncer = Debouncer(delay: const Duration(milliseconds: 500));
   }
@@ -638,6 +645,48 @@ class _GameScreenState extends State<GameScreen> {
           }
         }
       },
+      onSegmentComplete: (segmentUpdates) async {
+        if (!mounted || _character == null) return;
+
+        debugPrint('GameScreen: Applying incremental character updates from segment');
+
+        try {
+          // Apply incremental updates using Character Repository
+          final updatedCharacter = await _characterRepository.updateCharacterFromSegment(
+            _character!.id,
+            segmentUpdates,
+          );
+
+          if (!mounted) return;
+
+          if (updatedCharacter != null) {
+            setState(() {
+              _character = updatedCharacter;
+              _error = null;
+            });
+            debugPrint('GameScreen: Character updated from segment incrementally');
+          }
+        } catch (e) {
+          debugPrint('GameScreen: Error applying incremental updates: $e');
+          // If incremental update fails, fall back to full character reload
+          try {
+            final character = await _apiService.getCharacterById(_character!.id);
+            if (!mounted) return;
+            if (character != null) {
+              setState(() {
+                _character = character;
+                _error = null;
+              });
+              debugPrint('GameScreen: Fell back to full character reload');
+            }
+          } catch (fallbackError) {
+            debugPrint('GameScreen: Fallback character reload also failed: $fallbackError');
+            setState(() {
+              _error = 'Failed to update character';
+            });
+          }
+        }
+      },
       onCharacterReload: (characterData) {
         if (!mounted) return;
 
@@ -737,8 +786,23 @@ class _GameScreenState extends State<GameScreen> {
         });
         debugPrint('GameScreen: Story lifecycle state changed to COMPLETED');
 
+        // Refresh character from server after story completion
+        try {
+          debugPrint('GameScreen: Refreshing character from server after story completion');
+          final refreshedCharacter = await _characterRepository.refreshCharacterFromServer(_character!.id);
+          if (!mounted) return;
+          if (refreshedCharacter != null) {
+            setState(() {
+              _character = refreshedCharacter;
+            });
+            debugPrint('GameScreen: Character refreshed from server');
+          }
+        } catch (e) {
+          debugPrint('GameScreen: Failed to refresh character from server: $e');
+        }
+
         // Handle completion
-        await _handleStoryCompletion(refreshCharacter: true, showMessage: true);
+        await _handleStoryCompletion(refreshCharacter: false, showMessage: true);
         _manageCharacterUpdateTimer();
       },
       onError: (err) {

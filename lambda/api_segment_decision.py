@@ -7,11 +7,9 @@ Lambda function to submit a decision for a story segment.
 Updates the active segment with the player's choice and returns the next segment.
 """
 
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.requests import parse_event_body
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.story_decision import submit_decision_for_character
 from eidolon.validation import validate_uuid
 
@@ -29,80 +27,40 @@ def submit_decision_business_logic(character_id: str, decision_id: str, player_i
         Response data with accepted status and optional next segment time
 
     Raises:
-        ValueError: If validation fails
+        ValueError: If validation fails (with status code prefix for 403/404/409)
         RuntimeError: If database operations fail
     """
     # Submit the decision using the eidolon library
     return submit_decision_for_character(character_id, decision_id, player_id)
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Lambda handler to submit a decision for a story segment.
 
     Args:
         event: API Gateway Lambda proxy event
         context: Lambda context
+        player_id: Authenticated player ID
 
     Returns:
-        API Gateway Lambda proxy response
+        Dict with status_code and body
     """
-    # Log invocation
-    log_lambda_statistics(event, context)
+    body = parse_event_body(event)
+    character_id = body.get("CharacterID")
+    decision_id = body.get("Decision")
 
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
+    if not character_id:
+        raise ValueError("Missing CharacterID")
+    if not decision_id:
+        raise ValueError("Missing Decision")
 
-    # Extract player ID from JWT
-    try:
-        player_id = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
-    try:
-        body = parse_event_body(event)
-        character_id = body.get("CharacterID")
-        decision_id = body.get("Decision")
-
-        if not character_id:
-            return lambda_response(400, {"Error": "Missing CharacterID"}, event)
-        if not decision_id:
-            return lambda_response(400, {"Error": "Missing Decision"}, event)
-
-        if not validate_uuid(character_id):
-            return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
-
-    except ValueError as err:
-        return lambda_response(400, {"Error": str(err)}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    if not validate_uuid(character_id):
+        raise ValueError("Invalid CharacterID format")
 
     logger.info(f"Processing decision submission for character={character_id}, Decision={decision_id}")
 
     # Call business logic
-    try:
-        response_data = submit_decision_business_logic(character_id, decision_id, player_id)
-        return lambda_response(200, response_data, event)
-    except ValueError as err:
-        logger.warning(f"Invalid request for {character_id} Error: {err}")
-        error_msg = str(err)
-        if "not found" in error_msg.lower():
-            return lambda_response(404, {"Error": error_msg}, event)
-        elif "already submitted" in error_msg.lower():
-            return lambda_response(409, {"Error": error_msg}, event)
-        elif "not owned" in error_msg.lower():
-            return lambda_response(403, {"Error": "Access denied"}, event)
-        return lambda_response(400, {"Error": error_msg}, event)
-    except RuntimeError as err:
-        logger.error(
-            f"Failed to submit decision for {character_id} Error: {err}",
-            exc_info=True,
-        )
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    response_data = submit_decision_business_logic(character_id, decision_id, player_id)
+    return {"status_code": 200, "body": response_data}

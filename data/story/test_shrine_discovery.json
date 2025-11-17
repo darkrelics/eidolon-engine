@@ -1,0 +1,154 @@
+{
+  "Story": {
+    "StoryID": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    "Title": "Discovery of the Forest Shrine",
+    "Description": "A mysterious legend speaks of an ancient shrine hidden deep within the Verdant Forest. Many have sought it, but few have found it.",
+    "NarrativeText": "Old tales whisper of a sacred shrine concealed somewhere in the Verdant Forest - a place of power and tranquility where the ancients once made offerings. The forest keeps its secrets well, but those with keen perception and respect for nature might discover this hallowed ground. The journey will test your ability to navigate the wilderness and recognize the subtle signs that lead to sacred places.",
+    "StoryType": "one-time",
+    "EstimatedDuration": 900,
+    "Prerequisites": {
+      "MinSkills": {},
+      "RequiredItems": [],
+      "RequiredRooms": []
+    },
+    "RewardTiers": {
+      "Death": {
+        "narrative": "Lost in the deep forest, you wander until exhaustion claims you",
+        "currency": 0,
+        "items": []
+      },
+      "Failure": {
+        "narrative": "Despite your search, the shrine's location remains a mystery",
+        "currency": 100,
+        "items": []
+      },
+      "Minimal": {
+        "narrative": "You catch glimpses of something sacred but cannot find the shrine itself",
+        "currency": 200,
+        "items": []
+      },
+      "Normal": {
+        "narrative": "Through careful observation, you discover the ancient shrine and pay your respects",
+        "currency": 500,
+        "items": []
+      },
+      "Exceptional": {
+        "narrative": "Not only do you find the shrine, but you sense its ancient power and receive its blessing",
+        "currency": 800,
+        "items": []
+      }
+    },
+    "FirstSegmentID": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+    "CreatedAt": "2025-01-24T16:00:00Z"
+  },
+  "Segments": [
+    {
+      "StoryID": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "SegmentID": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+      "SegmentType": "mechanical",
+      "SegmentActivity": "Searching for clues in the forest",
+      "SegmentTitle": "The Search Begins",
+      "SegmentDuration": 240,
+      "Challenges": [
+        {
+          "Attribute": "Perception",
+          "Skill": "Investigation",
+          "Difficulty": 4,
+          "Attempts": 3
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "While pushing through thick undergrowth in search of the shrine, you disturb a hibernating bear. The angry creature mauls you before you can escape.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "You wander the forest paths for hours, examining every grove and clearing, but find no sign of the legendary shrine. The dense trees seem to mock your efforts, their branches forming an impenetrable maze. Perhaps you missed something crucial - a hidden sign or subtle marker. You return to the forest path, determined to look more carefully.",
+          "Effects": {
+            "Room": 2
+          },
+          "NextSegmentID": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
+        },
+        "Minimal": {
+          "Narrative": "As you search through the whispering pines and mossy groves, you notice unusual stone markers - weathered and ancient, half-hidden by moss and ferns. They seem to form a pattern, perhaps pointing somewhere deeper in the forest. You follow the trail through the tangled thicket, excitement building.",
+          "Effects": {
+            "Room": 6
+          },
+          "NextSegmentID": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f"
+        },
+        "Normal": {
+          "Narrative": "Your trained eye catches details others would miss - moss growing predominantly on one side of trees, subtle worn paths through the fern gully, and ancient carvings barely visible on bark. The clues lead you through the whispering pines to the tangled thicket. Beyond the thorns, you sense something sacred waiting.",
+          "Effects": {
+            "Room": 6
+          },
+          "NextSegmentID": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f"
+        },
+        "Exceptional": {
+          "Narrative": "With exceptional perception, you recognize the forest itself is guiding you. The pattern of sunlight through the canopy, the arrangement of wildflowers in the clearings, the very birdsong overhead - all point the way. You move confidently through the mossy grove and whispering pines, navigating the tangled thicket as if following a map only you can see. The shrine is close now.",
+          "Effects": {
+            "Room": 6
+          },
+          "NextSegmentID": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f"
+        }
+      }
+    },
+    {
+      "StoryID": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "SegmentID": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+      "SegmentType": "mechanical",
+      "SegmentActivity": "Approaching the shrine location",
+      "SegmentTitle": "The Sacred Ground",
+      "SegmentDuration": 300,
+      "Challenges": [
+        {
+          "Attribute": "Presence",
+          "Skill": "Mythos",
+          "Difficulty": 3,
+          "Attempts": 2
+        }
+      ],
+      "Results": {
+        "Death": {
+          "Narrative": "As you approach what you believe to be the shrine, the ground gives way beneath you - a hidden sinkhole concealed by vegetation. You fall into darkness, your body broken on the rocks below.",
+          "Effects": {
+            "State": "dead",
+            "Room": 0
+          },
+          "NextSegmentID": null
+        },
+        "Failure": {
+          "Narrative": "You push through the tangled thicket, thorns tearing at your clothes and skin. On the other side, you find... nothing but more forest. The ancient markers led nowhere, or perhaps you misread them. Frustrated and scratched, you make your way back through the dense woods to the forest path, wondering if the shrine even exists.",
+          "Effects": {
+            "Room": 2
+          },
+          "NextSegmentID": null
+        },
+        "Minimal": {
+          "Narrative": "Beyond the thicket, you glimpse something through the trees - a structure, definitely crafted by hands, not nature. But as you approach, uncertainty fills you. Is this truly the legendary shrine, or just old ruins? You lack the knowledge of the sacred to be certain. Still, you've found something, and that's worth remembering.",
+          "Effects": {
+            "Room": 2
+          },
+          "NextSegmentID": null
+        },
+        "Normal": {
+          "Narrative": "Breaking through the final barrier of thorns, you emerge into a small hidden glade. There, bathed in a beam of sunlight, stands the Forest Shrine - a small stone structure adorned with moss, offerings of flowers and trinkets scattered at its base. The air feels unusually still, sacred. You've found it! You spend a moment in quiet contemplation before making your way back through the forest, your spirit lifted by the discovery.",
+          "Effects": {
+            "Room": 12
+          },
+          "NextSegmentID": null
+        },
+        "Exceptional": {
+          "Narrative": "The moment you push through the thicket, you feel it - a profound sense of peace and power. The Forest Shrine stands before you in perfect stillness, its ancient stones humming with spiritual energy. You understand instinctively the proper way to approach, the right words to speak, the offering to make. As you pay your respects, the shrine seems to acknowledge you, and you feel blessed by forces older than memory. You depart through an ornate archway that wasn't there before, finding yourself back on the familiar forest path, forever changed.",
+          "Effects": {
+            "Room": 12
+          },
+          "NextSegmentID": null
+        }
+      }
+    }
+  ]
+}

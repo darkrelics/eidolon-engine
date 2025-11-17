@@ -111,7 +111,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         raise RuntimeError(f"Failed to update active segment: {err}") from err
 
 
-def get_next_segment_id_from_decision(decision_options: dict, decision_id: str) -> str | None:
+def get_next_segment_id_from_decision(decision_options: dict, decision_id: str) -> str:
     """
     Extract next segment ID from decision options.
 
@@ -124,21 +124,21 @@ def get_next_segment_id_from_decision(decision_options: dict, decision_id: str) 
         decision_id: Chosen decision ID
 
     Returns:
-        Next segment ID or None
+        Next segment ID or empty string if not found
     """
     decision_value = decision_options.get(decision_id)
     if not decision_value:
-        return None
+        return ""
 
     # Check if it's rich format (dict with NextSegmentID)
     if isinstance(decision_value, dict):
-        return decision_value.get("NextSegmentID")
+        return decision_value.get("NextSegmentID", "")
 
     # Legacy format (direct segment ID string)
     if isinstance(decision_value, str):
         return decision_value
 
-    return None
+    return ""
 
 
 def get_next_segment_time(active_segment: dict, decision_id: str) -> int:

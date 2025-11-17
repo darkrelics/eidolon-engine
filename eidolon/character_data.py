@@ -103,6 +103,105 @@ def get_character(character_id: str) -> dict:
     return character
 
 
+def cleanup_expired_daily_stories(character: dict) -> dict:
+    """
+    Remove daily stories from CompletedStories where 24+ hours have passed.
+
+    Similar to wound healing, this automatically cleans up expired daily story cooldowns
+    using UTC time for consistency. One-time stories are kept permanently.
+
+    Expected CompletedStories structure:
+        [
+            {
+                "story-uuid-1": {
+                    "StoryType": "daily",
+                    "CompletedAt": 1234567890  # Unix timestamp
+                }
+            },
+            {
+                "story-uuid-2": {
+                    "StoryType": "one-time",
+                    "CompletedAt": 1234567890
+                }
+            }
+        ]
+
+    Each entry MUST be a dict with exactly one key (the story ID).
+    Malformed entries are skipped with a warning.
+
+    Args:
+        character: Character dict from database
+
+    Returns:
+        Updated character dict with expired daily stories removed
+
+    Raises:
+        RuntimeError: If database update fails
+    """
+    completed_stories = character.get("CompletedStories", [])
+    if not completed_stories:
+        return character
+
+    current_time = datetime.now(timezone.utc)
+    current_timestamp = int(current_time.timestamp())
+
+    # Filter out expired daily stories (24+ hours old)
+    filtered_stories = []
+    expired_count = 0
+
+    for entry in completed_stories:
+        # Each entry is {story_id: {"StoryType": "daily", "CompletedAt": timestamp}}
+        # Defensive: validate entry structure before accessing
+        if not isinstance(entry, dict) or len(entry) != 1:
+            logger.warning(f"Malformed CompletedStories entry (expected dict with 1 key): {entry}")
+            continue
+
+        story_id = list(entry.keys())[0]
+        story_data = entry[story_id]
+
+        # Validate story_data structure
+        if not isinstance(story_data, dict):
+            logger.warning(f"Malformed story data for {story_id}: {story_data}")
+            continue
+
+        story_type = story_data.get("StoryType", "")
+        completed_at = story_data.get("CompletedAt", 0)
+
+        # Keep one-time stories permanently
+        if story_type == "one-time":
+            filtered_stories.append(entry)
+            continue
+
+        # Check if daily story has expired (24 hours = 86400 seconds)
+        if story_type == "daily":
+            time_elapsed = current_timestamp - completed_at
+            if time_elapsed < 86400:
+                # Still on cooldown, keep it
+                filtered_stories.append(entry)
+            else:
+                # Expired, remove it
+                expired_count += 1
+                logger.debug(f"Removing expired daily story {story_id} from CompletedStories")
+
+    # Update database if any stories expired
+    if expired_count > 0:
+        character_id = character.get("CharacterID")
+        try:
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression="SET CompletedStories = :stories",
+                ExpressionAttributeValues={":stories": filtered_stories},
+            )
+            logger.info(f"Cleaned up {expired_count} expired daily story(ies) for character {character_id}")
+            character["CompletedStories"] = filtered_stories
+        except ClientError as err:
+            logger.error(f"Failed to cleanup expired daily stories for {character_id}: {err}")
+            raise RuntimeError(f"Failed to update character data: {err}") from err
+
+    return character
+
+
 def character_get(character_id: str, player_id: str) -> dict:
     """
     Get character by ID and verify ownership.
@@ -324,7 +423,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}
 
 
-def apply_character_updates(character_id: str, updates: dict, current_character: dict | None = None) -> None:
+def apply_character_updates(character_id: str, updates: dict, current_character=None) -> None:
     """
     Apply accumulated updates to character.
 

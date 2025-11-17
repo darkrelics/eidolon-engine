@@ -4,229 +4,331 @@ This guide explains how Cross-Origin Resource Sharing (CORS) is configured for t
 
 ## Overview
 
-CORS configuration is handled at two levels in the deployment system:
+CORS configuration is handled at two levels:
 
-1. **API Gateway**: Handles preflight OPTIONS requests with wildcard origins
-2. **Lambda Functions**: Validate actual request origins via environment variables
+1. **API Gateway**: Handles preflight OPTIONS requests with explicit origin
+2. **Lambda Functions**: Add CORS headers to all responses via centralized cors_handler utility
 
-## How CORS Currently Works
+All CORS logic is centralized in `eidolon/cors.py` with automatic header injection via `eidolon/responses.py`.
+
+## Current Implementation
 
 ### 1. API Gateway Configuration
 
-The API Gateway is configured with permissive CORS settings to handle preflight requests:
+The API Gateway is configured with explicit CORS settings based on deployment configuration:
 
 ```python
-# In api_stack.py
+# In deployment/stacks/api_stack.py:151-152
 default_cors_preflight_options=apigateway.CorsOptions(
-    allow_origins=["*"],  # Wildcard for preflight
+    allow_origins=[client_origin],  # Explicit origin from deployment config
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
     allow_credentials=True,
 )
 ```
 
-**Important**: The wildcard origin (`*`) is only for preflight OPTIONS requests. Actual origin validation happens in Lambda functions.
+Where `client_origin` is constructed during deployment as `https://{client_host}.{domain}`.
 
 ### 2. Lambda Function Configuration
 
 Each Lambda function receives CORS configuration via environment variables:
 
 ```python
-# Environment variables set in lambda_stack.py
-"ALLOWED_ORIGINS": f"https://{client_host}.{domain}",
+# Set in deployment/stacks/character_stack.py, player_stack.py, story_stack.py
+"ALLOWED_ORIGINS": cors_origin,  # e.g., "https://portal.darkrelics.net"
 "CORS_ALLOW_CREDENTIALS": "true",
 "CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
 "CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS",
 "CORS_MAX_AGE": "86400",
 ```
 
-### 3. Origin Validation Pattern
+### 3. Centralized CORS Handler
 
-The actual origin validation happens in Lambda functions, not at the API Gateway level. This allows for:
+All CORS logic is centralized in `eidolon/cors.py`:
 
-- Dynamic origin configuration without redeploying API Gateway
-- Different origins for different Lambda functions if needed
-- Proper credential support with specific origins
+**File:** `eidolon/cors.py`
 
-### 4. Domain-Based Configuration
+**Key Features:**
+- Single global instance: `cors_handler`
+- Reads configuration from environment variables
+- Supports multiple origins via comma-separated ALLOWED_ORIGINS
+- Handles preflight OPTIONS requests
+- Adds CORS headers to all responses automatically
 
-During deployment, CORS origins are configured based on your domain settings:
+**Fallback Logic:**
+1. If "*" in ALLOWED_ORIGINS: Always return "*" without credentials
+2. If ALLOWED_ORIGINS empty: Return "*" without credentials (permissive degradation)
+3. If origin in allowed list: Return origin with credentials if enabled
+4. If single origin configured: Return that origin with credentials (fallback for mismatched origin)
+5. If multiple origins configured and origin not in list: Return None (block request)
 
-```bash
-# During deployment, you'll be prompted for:
-Domain (e.g., darkrelics.net): yourdomain.com
-Client Host (e.g., portal): portal
+### 4. Lambda Handler Pattern
 
-# This results in ALLOWED_ORIGINS being set to:
-# https://portal.yourdomain.com
-```
-
-## Technical Implementation
-
-### CDK Stack Integration
-
-1. **Lambda Stack**: Sets CORS environment variables on all API Lambda functions
-2. **API Stack**: Configures API Gateway with CORS preflight options
-3. **Client Stack**: Deploys the portal to the configured client host domain
-
-### Environment Variable Structure
-
-All API Lambda functions receive these CORS-related environment variables:
-
-- `ALLOWED_ORIGINS`: The FQDN of the client (e.g., `https://portal.darkrelics.net`)
-- `CORS_ALLOW_CREDENTIALS`: Set to `"true"` for authenticated requests
-- `CORS_ALLOW_HEADERS`: Comma-separated list of allowed headers
-- `CORS_ALLOW_METHODS`: Comma-separated list of allowed HTTP methods
-- `CORS_MAX_AGE`: Preflight cache duration in seconds (86400 = 24 hours)
-
-### Lambda Handler Pattern
-
-Lambda functions should implement CORS handling like this:
+All API Lambda functions follow this pattern:
 
 ```python
-import os
-from eidolon import cors
+from eidolon.cors import cors_handler
+from eidolon.responses import lambda_response
 
-def lambda_handler(event, context):
-    # Get origin from request
-    origin = event.get('headers', {}).get('origin', '')
+def lambda_handler(event: dict, context: object) -> dict:
+    # Handle preflight OPTIONS requests
+    preflight_response = cors_handler.handle_preflight(event)
+    if preflight_response:
+        return preflight_response
 
-    # Validate origin
-    allowed_origins = os.environ.get('ALLOWED_ORIGINS', '').split(',')
-    if origin not in allowed_origins:
-        return {
-            'statusCode': 403,
-            'body': json.dumps({'error': 'Origin not allowed'})
-        }
+    # ... business logic ...
 
-    # Process request...
-
-    # Return with CORS headers
-    return {
-        'statusCode': 200,
-        'headers': {
-            'Access-Control-Allow-Origin': origin,
-            'Access-Control-Allow-Credentials': 'true'
-        },
-        'body': json.dumps(response_data)
-    }
+    # Return response (CORS headers added automatically)
+    return lambda_response(200, response_data, event)
 ```
 
-## Security Considerations
+**Key Points:**
+- No manual origin validation needed in handlers
+- No manual CORS header construction
+- `cors_handler.handle_preflight()` handles OPTIONS requests
+- `lambda_response()` automatically adds CORS headers via `cors_handler.add_cors_headers()`
 
-### Current Implementation Gaps
+### 5. Response Helper Integration
 
-1. **Wildcard in API Gateway**: The API Gateway uses `*` for preflight, which is less secure than explicit origins
-2. **Single Origin**: Only supports one client origin (portal.domain.com), not multiple environments
-3. **No Development Support**: Localhost origins aren't automatically added
+The `eidolon/responses.py` module automatically adds CORS headers:
 
-### Recommended Improvements
+```python
+def lambda_response(status_code: int, body: dict, event: dict) -> dict:
+    # Creates response then adds CORS headers
+    return cors_handler.add_cors_headers(create_response(status_code, body), event)
 
-1. Replace wildcard with explicit origins in API Gateway
-2. Support multiple origins (dev, staging, prod)
-3. Add localhost origins for development
-4. Implement origin validation at API Gateway level
+def lambda_error(event: dict, err: Exception) -> dict:
+    # Error responses also get CORS headers
+    return cors_handler.add_cors_headers(error_response("Internal server error", 500), event)
+```
 
-## Deployment
+**All responses** from Lambda functions include proper CORS headers automatically.
 
-CORS configuration is automatically applied during deployment:
+## Deployment Configuration
+
+### Domain-Based Configuration
+
+During deployment:
 
 ```bash
-cd deployment && python3 deploy.py
+cd deployment && python deploy.py
 ```
 
-The deployment will prompt for domain configuration:
+You will be prompted for:
+- Domain (e.g., `darkrelics.net`)
+- Client Host (e.g., `portal`)
 
-- Domain name (e.g., darkrelics.net)
-- Client host subdomain (e.g., portal)
+This constructs:
+- **API Gateway origin:** `https://portal.darkrelics.net`
+- **Lambda ALLOWED_ORIGINS:** `https://portal.darkrelics.net`
 
-These values are used to construct the ALLOWED_ORIGINS for Lambda functions.
+### Multiple Origins Support
+
+The system supports multiple origins via comma-separated list:
+
+**In deployment stack:**
+```python
+# Example: Support production and localhost
+allowed_origins = [
+    f"https://{client_host}.{domain}",
+    "http://localhost:3000",
+    "http://localhost:8080",
+]
+env_vars["ALLOWED_ORIGINS"] = ",".join(allowed_origins)
+```
+
+**cors_handler automatically:**
+- Splits on comma
+- Validates request origin against list
+- Returns matching origin in Access-Control-Allow-Origin header
+
+## Security Implementation
+
+### Origin Validation
+
+The cors_handler implements strict origin validation:
+
+**From eidolon/cors.py:78-88:**
+```python
+def is_origin_allowed(self, origin: str) -> bool:
+    return bool(origin and origin in self.allowed_origins)
+```
+
+**From eidolon/cors.py:90-126:**
+- Checks if origin is in allowed list
+- Falls back to single origin if only one configured
+- Blocks requests if multiple origins configured and origin not in list
+- Logs warnings for blocked origins
+
+### Credentials Handling
+
+When `CORS_ALLOW_CREDENTIALS="true"`:
+- Access-Control-Allow-Credentials header added
+- Origin must be explicit (not wildcard)
+- Required for authenticated requests with JWT tokens
+
+**Note:** Wildcard origin ("*") cannot be used with credentials. If "*" is in ALLOWED_ORIGINS, credentials are automatically disabled.
+
+### Preflight Caching
+
+Preflight responses are cached for 24 hours (86400 seconds) as configured in CORS_MAX_AGE environment variable.
+
+## Lambda Function Integration
+
+All 13 API Lambda functions use the same pattern:
+
+**Functions Using cors_handler:**
+- api-archetype-list
+- api-character-add
+- api-character-delete
+- api-character-get
+- api-character-list
+- api-item-brief
+- api-item-prototype
+- api-segment-decision
+- api-segment-history
+- api-segment-status
+- api-story-abandon
+- api-story-history
+- api-story-start
+
+**Pattern Consistency:** 100% of API functions use cors_handler with identical pattern.
 
 ## Troubleshooting
 
 ### CORS Errors in Browser Console
 
-1. Verify Lambda environment variables:
-
-   ```bash
-   aws lambda get-function-configuration --function-name api-character-list | jq '.Environment.Variables | .ALLOWED_ORIGINS'
-   ```
-
-2. Check API Gateway CORS configuration:
-
-   ```bash
-   aws apigateway get-rest-api --rest-api-id YOUR_API_ID | jq '.defaultCorsPreflightOptions'
-   ```
-
-3. Common issues and solutions:
-   - **Origin not allowed**: The request origin doesn't match ALLOWED_ORIGINS in Lambda
-   - **Credentials not supported**: Ensure CORS_ALLOW_CREDENTIALS is "true"
-   - **Preflight failing**: Check API Gateway has OPTIONS method configured
-   - **CloudFront blocking**: Ensure CloudFront forwards the Origin header
-
-### Testing CORS
-
-Test CORS configuration with curl:
+**1. Verify Lambda Environment Variables**
 
 ```bash
-# Test preflight request
-curl -X OPTIONS https://mud-api.yourdomain.com/characters \
-  -H "Origin: https://portal.yourdomain.com" \
-  -H "Access-Control-Request-Method: GET" \
-  -H "Access-Control-Request-Headers: Authorization" -v
-
-# Test actual request
-curl https://mud-api.yourdomain.com/characters \
-  -H "Origin: https://portal.yourdomain.com" \
-  -H "Authorization: Bearer YOUR_TOKEN" -v
+aws lambda get-function-configuration \
+  --function-name api-character-list \
+  --query 'Environment.Variables.ALLOWED_ORIGINS' \
+  --output text
 ```
 
-## Best Practices
+Expected output: `https://portal.yourdomain.com`
 
-1. **Domain-Based Origins**: Use the client's FQDN for production CORS
-2. **Use HTTPS**: Always use HTTPS origins in production
-3. **Validate in Lambda**: Perform actual origin validation in Lambda functions
-4. **Credentials with Specific Origins**: When using credentials, specify exact origins
-5. **Environment Variables**: Use environment variables for dynamic configuration
+**2. Test Preflight Request**
 
-## Key Lessons from Deployment
+```bash
+curl -X OPTIONS https://api.yourdomain.com/character/list \
+  -H "Origin: https://portal.yourdomain.com" \
+  -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: Authorization" \
+  -v
+```
 
-Based on production deployment experience:
+Expected response:
+- Status: 200
+- Access-Control-Allow-Origin: https://portal.yourdomain.com
+- Access-Control-Allow-Credentials: true
 
-1. **Custom Domain Required**: The system requires a custom domain for proper CORS configuration - this is collected during deployment to avoid circular dependencies
+**3. Test Actual Request**
 
-2. **FQDN Assembly**: The client FQDN (e.g., `https://portal.darkrelics.net`) is assembled at the deployment module level and passed as a complete value to stacks
+```bash
+curl https://api.yourdomain.com/character/list \
+  -H "Origin: https://portal.yourdomain.com" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -v
+```
 
-3. **Two-Layer CORS**: API Gateway handles preflight with wildcards, Lambda functions validate actual origins - this provides flexibility without compromising security
+Expected response headers:
+- Access-Control-Allow-Origin: https://portal.yourdomain.com
+- Access-Control-Allow-Credentials: true
 
-4. **Environment Variables Over Hard-Coding**: All CORS settings are passed via environment variables, allowing changes without code modifications
+### Common Issues
 
-## Adding Multiple Origins Support
+**"Origin not in allowed list" Warning in Logs:**
+- Request origin doesn't match ALLOWED_ORIGINS environment variable
+- Check Lambda environment variables
+- Verify request is from correct domain
 
-Currently, the system only supports a single origin. To add multiple origins:
+**"No CORS headers in response":**
+- Lambda function not using cors_handler pattern
+- Verify function imports cors_handler
+- Verify function uses lambda_response() helper
 
-1. Modify the Lambda stack to accept multiple client hosts
-2. Update ALLOWED_ORIGINS to be a comma-separated list
-3. Modify Lambda functions to split and validate against multiple origins
+**"Credentials not supported with wildcard":**
+- ALLOWED_ORIGINS contains "*"
+- Change to explicit origin for credential support
 
-Example enhancement:
+**CloudFront Blocking CORS:**
+- Ensure CloudFront distribution forwards Origin header
+- Check cache behavior settings
+
+## Development Configuration
+
+### Adding Localhost for Development
+
+Update deployment stack to include localhost:
 
 ```python
-# In lambda_stack.py
+# In deployment/stacks/character_stack.py (and others)
 allowed_origins = [
-    f"https://{client_host}.{domain}",
-    "http://localhost:3000",  # Development
-    "http://localhost:8080",  # Alternative dev port
+    cors_origin,  # Production: https://portal.domain.com
+    "http://localhost:3000",  # Flutter dev server
+    "http://localhost:8080",  # Alternative port
 ]
 env_vars["ALLOWED_ORIGINS"] = ",".join(allowed_origins)
 ```
 
-## Deployment Mode Considerations
+Then redeploy the Character, Player, and Story stacks.
 
-The deployment system supports three modes that affect CORS:
+### Testing Locally
 
-- **MUD Mode**: Traditional gameplay - client at `portal.domain.com`
-- **Incremental Mode**: Story-driven gameplay - client at `portal.domain.com`
-- **Hybrid Mode**: Both features - client at `portal.domain.com`
+Run Flutter with chrome web-security disabled:
 
-All modes currently use the same client host configuration for CORS.
+```bash
+cd incremental
+flutter run -d chrome --web-browser-flag="--disable-web-security"
+```
+
+Or configure ALLOWED_ORIGINS to include localhost as shown above.
+
+## Code Reference
+
+**CORS Implementation Files:**
+- `eidolon/cors.py` - CorsHandler class with all CORS logic
+- `eidolon/responses.py` - lambda_response() and lambda_error() helpers
+- `deployment/stacks/api_stack.py:151-152` - API Gateway CORS configuration
+- `deployment/stacks/character_stack.py:148-152` - Lambda environment variables
+- `deployment/stacks/player_stack.py:218-222` - Lambda environment variables
+- `deployment/stacks/story_stack.py:258-262` - Lambda environment variables
+
+**All Lambda Functions:** Import cors_handler and use standard pattern (13 API functions verified).
+
+## Best Practices
+
+1. **Use cors_handler Utility:** Never manually construct CORS headers
+2. **Use lambda_response() Helper:** Automatically adds CORS headers
+3. **Environment Variables:** Configure origins via ALLOWED_ORIGINS, never hardcode
+4. **Explicit Origins with Credentials:** Always use specific origins when credentials needed
+5. **Comma-Separated List:** Support multiple origins by separating with commas
+6. **HTTPS in Production:** Always use HTTPS origins for production deployments
+
+## Architecture Notes
+
+**Why Two-Layer CORS:**
+- API Gateway handles high-volume preflight requests efficiently
+- Lambda functions validate actual request origins with business logic
+- Environment variables allow dynamic configuration without API Gateway redeployment
+- Single origin configuration (cors_handler) ensures consistency
+
+**Security Model:**
+- API Gateway preflight uses explicit origin from deployment config
+- Lambda functions validate against ALLOWED_ORIGINS environment variable
+- Credentials only allowed with explicit origins (never wildcard)
+- Misconfiguration defaults to permissive mode (prevents service disruption)
+
+## Migration Notes
+
+If updating from previous implementation:
+
+1. Verify all API Lambda functions import cors_handler
+2. Verify all API Lambda functions call handle_preflight()
+3. Verify all API Lambda functions use lambda_response() or lambda_error()
+4. Remove any manual CORS header construction
+5. Remove any manual origin validation logic
+
+**Current Status:** All 13 API functions already follow this pattern.
