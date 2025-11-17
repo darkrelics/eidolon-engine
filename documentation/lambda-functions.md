@@ -12,33 +12,45 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 
 ## Current Implementation Status
 
-All 15 Lambda functions are fully implemented and operational in production:
+17 Lambda functions deployed (18 total, cognito-player-delete not deployed). All functions fully implemented and operational in production.
 
-### Character Management (5 functions)
+**Deployment Distribution:**
+- Character Stack: 7 functions
+- Story Stack: 9 functions
+- Player Stack: 1 function
+
+### Character Management (7 functions - Character Stack)
 
 - `api-archetype-list` - List available archetypes
 - `api-character-add` - Create new character with bloom filter validation
 - `api-character-delete` - Delete character
 - `api-character-get` - Get character details with inventory enrichment
 - `api-character-list` - List player's characters
+- `api-item-brief` - Get lightweight item metadata (ItemID + PrototypeID)
+- `api-item-prototype` - Get complete item prototype definition
 
-### Story Operations (6 functions)
+### Story Operations (9 functions - Story Stack)
 
+**API Functions (6 total):**
 - `api-story-start` - Begin new story
 - `api-story-abandon` - Exit active story
+- `api-story-history` - Get story history by instance IDs
 - `api-segment-decision` - Submit player choice
 - `api-segment-status` - Check segment readiness
 - `api-segment-history` - Retrieve past segments
 
-### Processing Functions (3 functions)
-
-- `ops-segment-poller` - EventBridge-triggered polling
+**Operational Functions (3 total):**
+- `ops-segment-poller` - EventBridge-triggered polling (1 minute)
 - `ops-segment-process` - SQS mechanical processing
 - `ops-story-advance` - SQS story advancement
 
-### Cognito Trigger (1 function)
+### Cognito Trigger (1 function - Player Stack)
 
 - `cognito-player-new` - PostConfirmation trigger
+
+### Not Deployed (1 function)
+
+- `cognito-player-delete` - Code exists, not deployed (awaiting API implementation)
 
 The bloom filter for restricted character names is properly loaded and functional.
 
@@ -46,37 +58,51 @@ The bloom filter for restricted character names is properly loaded and functiona
 
 ### Function Organization by Stack
 
-#### Lambda Stack Functions (All 16)
+#### Function Deployment
 
-All functions are deployed via the Lambda Stack with:
+Functions are deployed via Character, Player, and Story stacks (not Lambda Stack).
 
+**Lambda Stack provides:**
+- Shared execution role
+- Shared layer (eidolon dependencies)
+- No functions deployed directly in Lambda Stack
+
+**All functions use:**
 - **Runtime**: Python 3.12
 - **Memory**: 128MB
 - **Timeout**: 30 seconds
-- **Layer**: Shared `eidolon` library
+- **Layer**: Shared `eidolon-dependencies` layer
+- **Role**: Shared `eidolon-lambda-execution-role`
 
 #### Fixed Logical IDs
 
 Each function has a fixed logical ID to prevent recreation:
 
 ```python
-# From lambda_stack.py
+# From deployment/stacks/character_stack.py, player_stack.py, story_stack.py
 logical_id_map = {
+    # Character Stack (7 functions)
     "api-archetype-list": "ApiArchetypeListFunction",
     "api-character-add": "ApiCharacterAddFunction",
     "api-character-delete": "ApiCharacterDeleteFunction",
     "api-character-get": "ApiCharacterGetFunction",
     "api-character-list": "ApiCharacterListFunction",
+    "api-item-brief": "ApiItemBriefFunction",
+    "api-item-prototype": "ApiItemPrototypeFunction",
+    # Player Stack (1 function)
+    "cognito-player-new": "CognitoPlayerNewFunction",
+    # Story Stack (9 functions)
+    "api-story-start": "ApiStoryStartFunction",
+    "api-story-abandon": "ApiStoryAbandonFunction",
+    "api-story-history": "ApiStoryHistoryFunction",
     "api-segment-decision": "ApiSegmentDecisionFunction",
     "api-segment-history": "ApiSegmentHistoryFunction",
     "api-segment-status": "ApiSegmentStatusFunction",
-    "api-story-abandon": "ApiStoryAbandonFunction",
-    "api-story-start": "ApiStoryStartFunction",
-    "cognito-player-new": "CognitoPlayerNewFunction",
     "ops-segment-poller": "OpsSegmentPollerFunction",
     "ops-segment-process": "OpsSegmentProcessFunction",
     "ops-story-advance": "OpsStoryAdvanceFunction"
 }
+# Total: 17 deployed
 ```
 
 ## Shared Modules
@@ -177,11 +203,16 @@ Lambda functions are deployed through the modular CDK stack system:
 
    - Creates shared execution role
    - Deploys Lambda layer
-   - Creates 16 functions with fixed logical IDs
-   - Sets environment variables from stack outputs
-   - Attaches DynamoDB managed policy
+   - No functions deployed in Lambda Stack itself
 
-3. **Post-Deployment Updates**:
+3. **Character, Player, Story Stacks** (Stacks #4, #5, #6):
+
+   - Deploy 17 functions total with fixed logical IDs
+   - Import shared role and layer from Lambda Stack
+   - Set environment variables from stack outputs
+   - Use shared DynamoDB managed policy
+
+4. **Post-Deployment Updates** (Phase 11):
 
    ```python
    # Automatic update from S3 artifacts
@@ -192,22 +223,26 @@ Lambda functions are deployed through the modular CDK stack system:
    )
    ```
 
-4. **Layer Version Management**:
-   - New layer version published if changed
-   - All functions updated to use new layer
-   - Old layer versions automatically deleted
+5. **Layer Version Management**:
+   - Reuses most recent published layer version
+   - All functions updated to use latest layer
+   - Old layer versions must be deleted manually (not automated)
 
 ### Integration with Other Stacks
 
-- **Player Stack** (#4): Configures Cognito trigger
-- **Story Stack** (#5): Adds SQS/EventBridge permissions
-- **API Stack** (#8): Creates API Gateway integrations
+- **Lambda Stack** (#3): Provides shared role and layer
+- **Player Stack** (#4): Deploys cognito-player-new, configures Cognito trigger
+- **Character Stack** (#5): Deploys 7 character/item API functions
+- **Story Stack** (#6): Deploys 9 story/segment functions, adds SQS/EventBridge permissions
+- **API Stack** (#9): Creates API Gateway integrations for all functions
 
 ### Deployment Modes
 
-- **MUD Mode**: All 16 functions deployed (Story Stack excluded)
-- **Incremental Mode**: All 16 functions deployed with Story Stack
-- **Hybrid Mode**: All 16 functions deployed with all stacks
+- **MUD Mode**: All 17 functions deployed (Story Stack excluded for MUD, but all functions still deployed)
+- **Incremental Mode**: All 17 functions deployed with Story Stack
+- **Hybrid Mode**: All 17 functions deployed with all stacks
+
+**Note:** All deployment modes deploy the same Lambda functions. Mode selection affects which infrastructure stacks are deployed (SQS queues, EventBridge, S3 scripts), not which Lambda functions.
 
 ## Local Testing
 

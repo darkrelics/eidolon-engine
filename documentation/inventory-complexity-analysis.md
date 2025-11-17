@@ -1,19 +1,39 @@
 # Inventory System Complexity Analysis
 
-**Why SharedPreferences is Insufficient for Game Inventory Management**
+**Why IndexedDB is Required for Advanced Inventory Features**
 
 ## Overview
 
-This document analyzes the complexity of the Eidolon Engine's inventory system and demonstrates why the current SharedPreferences-based caching is architecturally inadequate for rich inventory features.
+This document describes planned advanced inventory features that require IndexedDB relational data management. These features are NOT yet implemented.
+
+**Current Implementation Status (2025-10-21):**
+- ✅ Basic IndexedDB caching implemented and working (items and item_prototypes stores)
+- ✅ Item Repository with three-tier caching (memory → IndexedDB → server)
+- ✅ Simple inventory display with item names and quantities (Equipped + Bag sections)
+- ✅ Prototype caching reduces API calls by 75%
+- ❌ No container navigation, search, optimization, or analytics features (future work)
+
+**Status Update:** The basic inventory display issue has been resolved (2025-10-21). Players now see "Bronze Coin x5" and "Iron Sword" instead of UUIDs.
+
+**This Document Describes:**
+- Planned container hierarchy navigation
+- Planned inventory search and filtering
+- Planned equipment optimization
+- Planned inventory analytics
+- Design justification for why IndexedDB (not SharedPreferences) enables these features
+
+For current inventory implementation, see incremental-implementation.md section 6.8.
 
 ## Current Inventory Architecture
 
-### Client Data Model (character.dart:17-18)
+### Client Data Model (character.dart:17-18) - Updated 2025-10-21
 
 ```dart
-final Map<String, String> inventory;        // slot -> itemId (UUID)
-final Map<String, dynamic> inventoryDetails; // Enriched item data
+final Map<String, dynamic> inventory;        // slot -> {"ItemID": "uuid", "Quantity": int}
+final Map<String, dynamic> inventoryDetails; // Enriched item data (enriched via ItemRepository)
 ```
+
+**Note:** The inventory format was updated to support quantity tracking for stackable items. Non-stackable items omit the Quantity field in storage but always include it (as 0) in API responses for interface consistency.
 
 ### Server Data Model (DynamoDB)
 
@@ -398,7 +418,7 @@ Total: 0 API calls, <50ms query time
 
 ## Conclusion
 
-The inventory system's complexity **requires relational data management capabilities** that SharedPreferences fundamentally cannot provide.
+The planned advanced inventory features require relational data management capabilities that SharedPreferences fundamentally cannot provide.
 
 The container hierarchies, equipment relationships, and item state management create a web of data dependencies that need:
 
@@ -409,4 +429,23 @@ The container hierarchies, equipment relationships, and item state management cr
 
 **IndexedDB is not over-engineering for this use case - it's the appropriate tool for managing complex relational game data that enables rich user experiences impossible with simple key-value storage.**
 
-The inventory complexity alone justifies the IndexedDB investment, with story preservation and character caching providing additional architectural benefits.
+## Current vs Planned
+
+**Current Implementation (Release 4):**
+- IndexedDB service implemented with basic item caching
+- Simple inventory display (equipped items + bag grid)
+- No container navigation
+- No search or filtering
+- No optimization features
+- No analytics
+
+**Planned Features (This Document):**
+- Container hierarchy navigation with breadcrumbs
+- Multi-criteria inventory search
+- Equipment optimization suggestions
+- Inventory analytics and insights
+- Drag-and-drop organization
+- All enabled by IndexedDB relational capabilities
+
+**Implementation Roadmap:**
+These features are lower priority than fixing core gameplay bugs (currency system, death mechanics, inventory UUID display). See INCREMENTAL-STATUS.md for current priorities.

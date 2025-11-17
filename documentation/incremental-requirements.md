@@ -24,7 +24,7 @@ This document defines the functional and non-functional requirements for the Inc
 
 ### 2.2 Segment Types
 
-**FR-004**: The system SHALL support three segment types:
+**FR-004**: The system SHALL support two segment types:
 
 1. **Decision Segments**
 
@@ -85,18 +85,40 @@ This document defines the functional and non-functional requirements for the Inc
 
 **FR-013**: Story completion SHALL provide rewards including:
 
-- Skill and attribute experience
-- Items and resources
-- New story unlocks
-- Room relocations
+- Skill and attribute experience (IMPLEMENTED)
+- Items and resources (PARTIALLY IMPLEMENTED - items work, currency broken)
+- New story unlocks (IMPLEMENTED via CompletedStories)
+- Room relocations (IMPLEMENTED)
+
+**Implementation Status:**
+- Skill/attribute XP: Fully working via segment processing
+- Item rewards: Work via segment Results field
+- Currency rewards: BROKEN - apply_story_rewards() is empty function, Resources field never populated
+- Story unlocks: Work via prerequisite system
 
 ### 2.6 Content Creation
 
 **FR-014**: Stories SHALL be authored using Twine for visual narrative design.
 
+**Implementation Status:**
+- Content writers use Twine for visual story authoring
+- Converter subproject transforms Twine to JSON format
+- Final JSON files stored in data/story/ directory
+- Validation via GitHub Actions workflow on generated JSON
+
 **FR-015**: The system SHALL convert Twine format to game-compatible structure.
 
+**Implementation Status:**
+- Formal converter subproject in development
+- Converts Twine visual narrative to JSON segment definitions
+- Output matches schema required by backend
+
 **FR-016**: Content updates SHALL not affect stories in progress.
+
+**Implementation Status:**
+- Story and segment definitions are immutable (separate tables)
+- ActiveSegments contain snapshot of segment data
+- Content updates only affect new story starts
 
 ## 3. Non-Functional Requirements
 
@@ -236,16 +258,36 @@ This document defines the functional and non-functional requirements for the Inc
 
 ### 5.1 Functional Acceptance
 
-- **Complete**: Successfully complete stories of all three types (one-time, daily, repeatable)
-- **Complete**: Seamless character transitions between game modes (GameMode field)
-- **Complete**: Proper timeout handling with default decisions (EventBridge polling)
-- **Complete**: Equipment and wound persistence across modes (shared tables)
+- **PARTIAL**: Successfully complete stories of all three types
+  - Only "repeatable" type tested (all 3 test stories are repeatable)
+  - "one-time" and "daily" types not verified
+- **COMPLETE**: Seamless character transitions between game modes (GameMode field)
+- **COMPLETE**: Proper timeout handling with default decisions (EventBridge polling)
+- **COMPLETE**: Equipment and wound persistence across modes (shared tables)
+- **BROKEN**: Currency rewards from story completion (apply_story_rewards empty)
+- **BROKEN**: Dead character prevention (story_eligibility doesn't check CharState)
 
 ### 5.2 Performance Acceptance
 
-- **Complete**: Support 10,000 concurrent users without degradation (serverless scaling)
-- **Complete**: Meet all response time requirements (sub-500ms average)
-- **Complete**: Achieve 99.9% availability over 30 days (AWS SLA guarantees)
+- **COMPLETE**: Support 10,000 concurrent users without degradation (serverless scaling)
+- **COMPLETE**: Meet all response time requirements (sub-500ms average)
+- **COMPLETE**: Achieve 99.9% availability over 30 days (AWS SLA guarantees)
+
+### 5.3 Known Implementation Gaps
+
+**Critical Gaps:**
+1. Currency/economy system non-functional (apply_story_rewards empty)
+2. Dead characters can start stories (story_eligibility bug)
+3. Inventory displays UUIDs (get_inventory or Items table issue)
+4. Flutter polling timing violates INITIAL_POLL_DELAY specification
+
+**Missing Features:**
+1. Store system (no endpoints)
+2. Item consumption (no api_item_use endpoint)
+3. Item discarding (no api_item_discard endpoint)
+4. Ghost state (health.md spec, not in Python constants)
+
+See INCREMENTAL-STATUS.md for complete bug tracking.
 
 ## 6. Frequently Asked Questions
 
@@ -260,7 +302,10 @@ A: Single region deployment (us-east-1) provides cost optimization and operation
 ### Client Implementation
 
 **Q: How should clients handle network failures during polling?**
-A: Use simple 30-second retry delays. Server-authoritative design means clients can always recover by requesting current state from server.
+A: Use simple 30-second retry delays with consecutive error counter (max 3). Server-authoritative design means clients can always recover by requesting current state from server.
+
+**Q: When should the first poll occur after segment starts?**
+A: Design specification: T+60 seconds after StartTime (INITIAL_POLL_DELAY constant). Current Flutter implementation polls immediately (T+0) - this is a known bug.
 
 **Q: What happens if a player force-closes their app during a story?**
 A: Stories continue server-side. Next `api-character-get` call automatically recovers GameMode state. No progress is lost.

@@ -63,7 +63,7 @@ graph TB
         end
 
         subgraph "Compute Layer"
-            APILambda[API Lambda Functions<br/>16 Functions]
+            APILambda[API Lambda Functions<br/>13 Functions]
             OpsLambda[Operational Lambdas<br/>Poller, Process, Advance]
         end
 
@@ -296,7 +296,7 @@ sequenceDiagram
     Lambda->>DDB: Get Character
     DDB-->>Lambda: Character Data
 
-    Lambda->>Lambda: Validate Prerequisites<br/>Check GameMode = None
+    Lambda->>Lambda: Validate Prerequisites<br/>Check GameMode = None<br/>(BUG: Should also check CharState)
 
     Lambda->>DDB: Get Story and First Segment
     DDB-->>Lambda: Story Definition
@@ -590,7 +590,7 @@ graph TB
 
     subgraph "AWS Account"
         subgraph "Compute"
-            Lambda[16 Lambda Functions<br/>Python 3.12]
+            Lambda[17 Lambda Functions<br/>Python 3.12]
             Layer[Lambda Layer<br/>eidolon Library]
         end
 

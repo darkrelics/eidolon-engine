@@ -830,7 +830,7 @@ class MyWidget extends StatelessWidget {
 
 All generated code must follow project coding standards:
 
-**Reference**: `documentation/flutter-style.md`, `CLAUDE.md`
+**Reference**: `documentation/flutter-style.md`
 
 **Key Rules**:
 

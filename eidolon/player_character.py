@@ -63,7 +63,7 @@ def remove_character_from_player_list(player_id: str, character_name: str) -> di
     Returns:
         Dict with:
             - Removed: bool - Whether the character was removed
-            - Error: str | None - Error message if removal failed
+            - Error: str - Error message if removal failed (None if successful)
     """
     result = {"Removed": False, "Error": None}
 
@@ -107,9 +107,11 @@ def delete_character_items(character: dict) -> dict:
 
     # Inventory items
     inventory = character.get("Inventory", {})
-    for _, item_id in inventory.items():
-        if item_id:
-            top_level_items.append(item_id)
+    for _, item_data in inventory.items():
+        if item_data and isinstance(item_data, dict):
+            item_id = item_data.get("ItemID")
+            if item_id:
+                top_level_items.append(item_id)
 
     # Equipped items
     left_id = character.get("LeftHandID")
@@ -402,7 +404,7 @@ def delete_character_record(character_id: str) -> dict:
     Returns:
         Dict with:
             - Deleted: bool - Whether the character was deleted
-            - Error: str | None - Error message if deletion failed
+            - Error: str - Error message if deletion failed (None if successful)
     """
     result = {"Deleted": False, "Error": None}
 
