@@ -183,7 +183,7 @@ def story_update_character(
     character_id: str,
     story_id: str,
     active_segment_id: str,
-    story_instance_id: str | None = None,
+    story_instance_id=None,
 ) -> dict:
     """
     Atomically update character to set GameMode, ActiveStoryID, and ActiveSegmentID.

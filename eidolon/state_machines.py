@@ -113,7 +113,7 @@ def set_character_game_mode(
 
     # Build update expression
     update_expression = "SET GameMode = :new_mode, UpdatedAt = :timestamp"
-    expression_values = {
+    expression_values: dict = {
         ":new_mode": new_game_mode.value,
         ":timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -140,9 +140,41 @@ def set_character_game_mode(
         expression_values[":segment_id"] = active_segment_id
 
         # Add to CompletedStories if story_instance_id provided
+        # Only track "one-time" and "daily" stories (not "repeatable")
         if story_instance_id:
-            update_expression += " ADD CompletedStories :story_instance"
-            expression_values[":story_instance"] = {story_instance_id}  # type: ignore
+            try:
+                # Fetch story to get StoryType
+                story = dynamo.get_item(TableName.STORY, {"StoryID": active_story_id})
+                story_type = story.get("StoryType", "repeatable") if story else "repeatable"
+
+                # Only add one-time and daily stories to CompletedStories
+                if story_type in ("one-time", "daily"):
+                    # Create entry: {story_id: {"StoryType": "daily", "CompletedAt": timestamp}}
+                    completed_entry = {
+                        active_story_id: {
+                            "StoryType": story_type,
+                            "CompletedAt": int(datetime.now(timezone.utc).timestamp()),
+                        }
+                    }
+
+                    # Append to CompletedStories list
+                    # Initialize as empty list if not exists
+                    update_expression += (
+                        " SET CompletedStories = list_append(if_not_exists(CompletedStories, :empty_list), :completed_entry)"
+                    )
+                    expression_values[":empty_list"] = []
+                    expression_values[":completed_entry"] = [completed_entry]
+
+                    logger.info(f"Adding story {active_story_id} ({story_type}) to CompletedStories for character {character_id}")
+                else:
+                    logger.debug(f"Story {active_story_id} is repeatable, not adding to CompletedStories")
+
+            except ClientError as err:
+                logger.warning(f"Failed to fetch story {active_story_id} for CompletedStories tracking: {err}")
+                # Continue without adding to CompletedStories - non-critical
+            except Exception as err:
+                logger.warning(f"Unexpected error checking story type for CompletedStories: {err}")
+                # Continue without adding to CompletedStories - non-critical
 
         # Require that current mode allows transition to Incremental
         if not expected_current:

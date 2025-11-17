@@ -2,7 +2,7 @@
   "Story": {
     "StoryID": "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
     "Title": "Forest Foraging Expedition",
-    "Description": "A peaceful journey through the Vedant Forest, gathering valuable plants, herbs, and other natural resources.",
+    "Description": "A peaceful journey through the Verdant Forest, gathering valuable plants, herbs, and other natural resources.",
     "NarrativeText": "The forest is rich with edible plants, medicinal herbs, and rare specimens. Armed with your knowledge of nature, you set out from the glade to gather what the forest has to offer. Your goal is to reach the old abandoned campsite while collecting valuable forage along the way.",
     "StoryType": "repeatable",
     "EstimatedDuration": 1260,
@@ -12,11 +12,31 @@
       "RequiredRooms": []
     },
     "RewardTiers": {
-      "Death": "Lost in the wilderness, you succumb to the elements",
-      "Failure": "You return with little to show for your efforts",
-      "Minimal": "You gather some basic supplies from the forest",
-      "Normal": "Your foraging expedition yields useful resources",
-      "Exceptional": "You discover rare and valuable forest treasures"
+      "Death": {
+        "narrative": "Lost in the wilderness, you succumb to the elements",
+        "currency": 0,
+        "items": []
+      },
+      "Failure": {
+        "narrative": "You return with little to show for your efforts",
+        "currency": 50,
+        "items": []
+      },
+      "Minimal": {
+        "narrative": "You gather some basic supplies from the forest",
+        "currency": 150,
+        "items": []
+      },
+      "Normal": {
+        "narrative": "Your foraging expedition yields useful resources",
+        "currency": 300,
+        "items": []
+      },
+      "Exceptional": {
+        "narrative": "You discover rare and valuable forest treasures",
+        "currency": 600,
+        "items": []
+      }
     },
     "FirstSegmentID": "3d8e9f0a-1b2c-4d5e-8f9a-0b1c2d3e4f56",
     "CreatedAt": "2025-01-24T14:00:00Z"
