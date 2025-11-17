@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.39.5
 	github.com/aws/aws-sdk-go-v2/config v1.31.13
 	github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue v1.20.20
-	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.51.4
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.52.0
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.58.2
 	github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider v1.57.9
 	github.com/aws/aws-sdk-go-v2/service/dynamodb v1.52.3
