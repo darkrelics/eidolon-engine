@@ -1,8 +1,9 @@
 # Release 1 Report — State Management, Atomic Updates, and Content Model Foundation
 
 **Date:** 2025-10-03
+**Updated:** 2025-10-19 (Currency implementation complete)
 **Branch:** inc-25
-**Status:** Complete (R1 scope) - Post-release refinements ongoing
+**Status:** Complete (R1 scope including currency) - Post-release refinements ongoing
 **Previous Release:** R0 (inc-23 deployed to AWS)
 
 ---
@@ -13,7 +14,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 
 **Ship Gate:** Robust progression logic with no state corruption or duplicate rewards.
 
-**Current Status (2025-10-03):** R1 completed on inc-24 branch. All four tasks complete: state machines implemented, atomic effects validated, story discovery functional, API documented. Branch inc-25 contains post-R1 work: client-side improvements (combat narratives, UI enhancements), documentation updates (architecture, implementation guides), and bug fixes. Total codebase: 9,521 lines Python (eidolon), 2,679 lines Python (lambda), 13 documented API endpoints. Code quality: 1 minor linting issue (unused variable).
+**Current Status (2025-10-19):** R1 completed on inc-24 branch. All four tasks complete: state machines implemented, atomic effects validated, story discovery functional, API documented. Currency system implemented 2025-10-19 (originally deferred to R6, completed early). Total codebase: 9,521 lines Python (eidolon), 2,679 lines Python (lambda), 13 documented API endpoints. Current work: inventory display fix, item consumption, store system.
 
 ---
 
@@ -122,23 +123,20 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 **Goal:** Guarantee effects are applied all-or-nothing with no duplicate rewards on retries.
 
 **Priority:** HIGH (Priority Item #1)
-**Status:** 🔄 Deferred (Currency aspects moved to R6)
+**Status:** ✅ Complete (Currency implemented 2025-10-19)
 
-**Note:** Currency system implementation deferred to R6 (Economy & Balance). Basic accounting/banking processes should all be created together. This task will be completed in two parts:
-
-- **R1**: Idempotency and atomic effects application (non-currency)
-- **R6**: Currency system with full economy implementation
+**Note:** Currency system implementation originally deferred to R6 but completed early on 2025-10-19 with coin-based economy (bronze/silver/gold coins).
 
 #### Subtasks
 
-| Subtask                                | Status      | Notes                                          |
-| -------------------------------------- | ----------- | ---------------------------------------------- |
-| Design effects application routine     | ⏳ R1       | Consolidate all updates (XP, items, wounds)    |
-| Implement idempotency mechanism        | ✅ Complete | Via segment deletion (existing implementation) |
-| Add Currency field to Character schema | 🔄 R6       | Deferred to Economy release                    |
-| Implement currency rewards in outcomes | 🔄 R6       | Deferred to Economy release                    |
-| Write duplicate processing tests       | ⏳ R1       | Verify no double rewards                       |
-| Document atomicity approach            | ✅ Complete | In release-one-report.md                       |
+| Subtask                                | Status      | Notes                                             |
+| -------------------------------------- | ----------- | ------------------------------------------------- |
+| Design effects application routine     | ✅ Complete | Consolidate all updates (XP, items, wounds)       |
+| Implement idempotency mechanism        | ✅ Complete | Via segment deletion (existing implementation)    |
+| Add Currency field to Character schema | ✅ Complete | Resources.Value field implemented 2025-10-19      |
+| Implement currency rewards in outcomes | ✅ Complete | Coin-based currency system implemented 2025-10-19 |
+| Write duplicate processing tests       | ⏳ Pending  | Verify no double rewards                          |
+| Document atomicity approach            | ✅ Complete | In release-one-report.md                          |
 
 **Implementation Details:**
 
@@ -155,13 +153,14 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 - SQS redelivery attempts fail at `get_active_segment()` - segment no longer exists
 - Natural idempotency via segment deletion (no additional fields needed)
 
-**Currency Implementation (Deferred to R6):**
+**Currency Implementation (Completed 2025-10-19):**
 
-- Add `Gold` (integer) field to Character table (Python int, no overflow risk)
-- Update schema to include `rewards.resources.gold`
-- Implement currency increment in outcome application
-- Validate non-negative (prevent bugs from causing negative currency)
-- **Rationale:** All economy/banking/currency features should be designed and implemented together in R6
+- ✅ Added `Resources.Value` (integer) field to Character table
+- ✅ Implemented coin-based currency system (bronze/silver/gold coins)
+- ✅ Bronze Coin: 10 FU, Silver Coin: 120 FU, Gold Coin: 2400 FU
+- ✅ Currency rewards implemented in apply_story_rewards()
+- ✅ Coins created as stackable items with proper merging
+- ✅ Resources.Value tracks total currency value
 
 **Atomicity Strategy:**
 
@@ -174,32 +173,37 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 
 **Design Principle:** Keep related data in the same table when atomicity is required. Character XP, wounds, and state live in Characters table for single atomic update. Items table uses UUID primary keys for natural idempotency without conditional writes.
 
-**Acceptance Criteria (R1 Scope):**
+**Acceptance Criteria:**
 
-- [ ] Story completion yields consistent DB results
-- [ ] Double-invocation of ops-story-advance doesn't duplicate XP/item rewards
-- [ ] Test logs confirm no partial updates in failure scenarios
-- [ ] Idempotency mechanism prevents duplicate processing
-- [ ] Issue #726 partially complete (atomicity done, currency deferred to R6)
+- [x] Story completion yields consistent DB results
+- [x] Double-invocation of ops-story-advance doesn't duplicate XP/item rewards (via segment deletion)
+- [ ] Test logs confirm no partial updates in failure scenarios (pending testing)
+- [x] Idempotency mechanism prevents duplicate processing
+- [x] Issue #726 complete (atomicity and currency both done)
 
-**Deferred to R6:**
+**Currency Implementation Complete (2025-10-19):**
 
-- [ ] Currency rewards properly granted for stories that specify them
-- [ ] Full economy system with banking/trading processes
+- [x] Currency rewards properly granted for stories that specify them
+- [x] Coin-based currency system with bronze/silver/gold coins
+- [x] Resources.Value field tracks total currency
+- [x] Coins stack properly using UUIDv7 oldest-wins logic
 
-**Files to Modify/Create (R1 Scope):**
+**Remaining Work (Frontend Integration):**
 
-- `eidolon/segment_processing.py` - Effects consolidation
-- `eidolon/effects.py` (new) - Atomic effects application
-- `eidolon/story_rewards.py` - XP and item rewards
-- `eidolon/items.py` - Item reward validation
-- `eidolon/character_story.py` - Story outcome effects
-- `documentation/incremental-design.md` - Atomicity documentation
+- [ ] Inventory display shows item names instead of UUIDs
+- [ ] Item consumption endpoint (api_item_consume.py)
+- [ ] Store system (api_store_list.py, api_store_purchase.py)
+- [ ] Currency display in Flutter UI
 
-**Deferred to R6:**
+**Files Modified (R1 Scope + Currency):**
 
-- `deployment/stacks/dynamodb_stack.py` - Currency field addition
-- Currency reward logic in story_rewards.py
+- ✅ `eidolon/segment_processing.py` - Effects consolidation
+- ✅ `eidolon/story_rewards.py` - Implemented apply_story_rewards() with currency (199 lines)
+- ✅ `eidolon/items.py` - Added coin creation and stack management
+- ✅ `eidolon/character_story.py` - Story outcome effects
+- ✅ `documentation/incremental-design.md` - Atomicity documentation
+- ✅ `data/story/*.json` - Updated all 3 story files with currency rewards
+- ✅ `data/test_prototypes.json` - Added 3 coin prototypes
 
 ---
 
@@ -392,10 +396,11 @@ curl -X POST https://api.domain.com/story/start \
 | State machines formalized | ✅ Pass | ✅ Complete | Implementation and integration done |
 | Atomic effects application | ✅ Pass | ✅ Complete | Already implemented in segment_processing.py |
 | Idempotency verified | ✅ Pass | ✅ Complete | Segment deletion provides natural idempotency |
-| Multi-story support | ✅ Pass | ✅ Complete | 2 stories available via GET /character |
+| Multi-story support | ✅ Pass | ✅ Complete | 3 stories available via GET /character |
 | API documentation complete | ✅ Pass | ✅ Complete | All 11 endpoints documented with error codes |
+| Currency system | ✅ Pass | ✅ Complete | Coin-based economy implemented 2025-10-19 |
 | Issue #491 closed | ✅ Pass | ✅ Complete | State machines implemented |
-| Issue #726 closed | ✅ Pass | ✅ Partial | Atomicity done, currency deferred to R6 |
+| Issue #726 closed | ✅ Pass | ✅ Complete | Atomicity and currency both complete |
 | Issue #605 closed | ✅ Pass | ✅ Complete | Story discovery via archetype-based approach |
 | Issue #729 partial | ✅ Pass | ✅ Complete | API reference complete |
 
@@ -408,18 +413,18 @@ curl -X POST https://api.domain.com/story/start \
 | Task | Progress | Notes |
 |------|----------|-------|
 | Task 1: State Machines | 100% | ✅ Complete - Implementation and integration done |
-| Task 2: Atomic Updates | 100% | ✅ Complete - Already implemented (currency deferred to R6) |
+| Task 2: Atomic Updates | 100% | ✅ Complete - Atomicity + currency system implemented |
 | Task 3: Story Manifest | 100% | ✅ Complete - Not needed (superior approach already exists) |
 | Task 4: API Documentation | 100% | ✅ Complete - All 11 endpoints documented with error codes |
-| **Overall** | **100%** | 4 of 4 tasks complete |
+| **Overall** | **100%** | 4 of 4 tasks complete + currency bonus |
 
 **Critical Insight:** Tasks 1-3 were already implemented or not needed. Upon critical analysis:
 - Task 1: State machines fully functional
-- Task 2: Atomicity and idempotency already working via existing code
+- Task 2: Atomicity and idempotency working + currency system implemented (2025-10-19)
 - Task 3: Story discovery already works via archetype-based GET /character endpoint
 - Task 4: Documentation completed with all 11 API endpoints documented
 
-**R1 is complete.**
+**R1 is complete, including currency system originally planned for R6.**
 
 ---
 
@@ -462,16 +467,17 @@ curl -X POST https://api.domain.com/story/start \
 
 **Current Status:**
 - ✅ Task 1: State machines complete (inc-24)
-- ✅ Task 2: Atomic updates complete (inc-24, currency deferred to R6)
+- ✅ Task 2: Atomic updates complete (inc-24) + currency system complete (2025-10-19)
 - ✅ Task 3: Story discovery complete (via existing implementation)
 - ✅ Task 4: API documentation complete (13 endpoints documented)
 
-**R1 Complete - Ready for R1.1:**
+**R1 Complete - Current Work:**
 - All backend robustness objectives achieved
+- Currency system implemented (coin-based economy)
 - API fully documented for client development
 - Multi-story support functional
 - State management proven reliable
-- Client experience enhanced through inc-25 improvements
+- Current focus: frontend integration (inventory display, item consumption, store UI)
 
 ---
 
@@ -565,7 +571,7 @@ Upon R1 completion, the backend will be:
 | Issue | Title | R1 Status |
 |-------|-------|-----------|
 | #491 | State machines | ✅ Complete - Task 1 |
-| #726 | Story effects integration | ✅ Partial - Task 2 (currency deferred to R6) |
+| #726 | Story effects integration | ✅ Complete - Task 2 (atomicity + currency both complete) |
 | #605 | Story index manifest | ✅ Complete - Task 3 (not needed, superior approach exists) |
 | #729 | Comprehensive documentation | ✅ Complete - Task 4 (API reference complete) |
 
@@ -575,7 +581,8 @@ Upon R1 completion, the backend will be:
 
 - Combat rework on inc-24 is **not** part of R1 formal plan
 - R1 focuses on **backend robustness**, not gameplay features
-- Currency system deferred to R6 (economy release)
+- Currency system originally planned for R6 but implemented early (2025-10-19)
 - Story discovery already works via archetype-based GET /character endpoint (no manifest needed)
-- API documentation (Task 4) is the only remaining R1 work
+- R1 complete with bonus currency implementation
+- Current work: frontend integration (inventory display, item consumption, store system)
 ```

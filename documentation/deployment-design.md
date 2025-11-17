@@ -94,6 +94,7 @@ Each stack has its own app file to prevent cross-contamination:
 - **app_cloudwatch.py**: Log group and metrics namespace
 - **app_lambda.py**: Layer, functions, and execution role
 - **app_player.py**: Cognito User Pool with triggers
+- **app_character.py**: Character-related Lambda functions (api-item-brief, api-item-prototype)
 - **app_story.py**: SSM, SQS, EventBridge integration
 - **app_api.py**: API Gateway with Lambda integrations
 - **app_client.py**: CloudFront, S3, and portal build
@@ -108,6 +109,7 @@ Modular deployment functions for each stack:
 - **cloudwatch.py**: Logging infrastructure
 - **lambda_functions.py**: Lambda deployment with post-deploy updates
 - **player.py**: Cognito setup with trigger configuration
+- **character.py**: Character stack deployment
 - **story.py**: Event-driven processing setup
 - **api.py**: API Gateway deployment
 - **client.py**: Portal infrastructure with automated build
@@ -182,7 +184,7 @@ This consolidation follows the codebase principle of "simplicity of code is high
   - Artifacts: `eidolon-engine-lambda-{account_id}`
   - Scripts: `eidolon-scripts-{account_id}`
   - Portal: `portal.{domain}` or custom
-- **Lambda Functions**: 15 functions with fixed logical IDs
+- **Lambda Functions**: 18 total (17 deployed, 1 not deployed)
 - **Cognito**: `eidolon-users` pool
 - **CloudWatch**: `/eidolon/server` log group
 - **API Gateway**: REST API at `api.{domain}`
@@ -270,7 +272,7 @@ During routine deployment checks:
 
 - **Module Size**: 94% under 300 lines, 100% under 1000 lines
 - **Stack Count**: 10 independent CDK stacks
-- **Lambda Functions**: 15 functions with shared execution role
+- **Lambda Functions**: 18 total (17 deployed, 1 not deployed)
 - **DynamoDB Tables**: 14 tables with managed policy
 - **Deployment Time**: Full deployment in under 15 minutes
 
@@ -286,7 +288,7 @@ During routine deployment checks:
 ### Build Artifact Validation
 
 - Lambda layer zip existence and size
-- All 15 Lambda function zips present
+- All Lambda function zips present (17 deployed functions)
 - Portal build output in S3
 - CloudFront distribution accessibility
 

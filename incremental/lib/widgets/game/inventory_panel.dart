@@ -1,14 +1,92 @@
 import 'package:flutter/material.dart';
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/utils/rpg_icons.dart';
+import 'package:eidolon_incremental/repositories/item_repository.dart';
+import 'package:eidolon_incremental/services/api_service.dart';
+import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:fluttericon/rpg_awesome_icons.dart';
 
-/// Right panel displaying character inventory
-class InventoryPanel extends StatelessWidget {
+/// Right panel displaying character inventory with enriched item data
+class InventoryPanel extends StatefulWidget {
   final Character character;
   final Function(String itemId)? onItemTap;
 
   const InventoryPanel({super.key, required this.character, this.onItemTap});
+
+  @override
+  State<InventoryPanel> createState() => _InventoryPanelState();
+}
+
+class _InventoryPanelState extends State<InventoryPanel> {
+  ItemRepository? _itemRepository;
+  Map<String, Map<String, dynamic>> _enrichedInventory = {};
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeRepository();
+  }
+
+  void _initializeRepository() async {
+    try {
+      final authService = AuthService.instance;
+      final apiService = ApiService(authService: authService);
+      _itemRepository = ItemRepository(apiService: apiService);
+
+      // Load enriched inventory
+      await _loadInventoryDetails();
+    } catch (e) {
+      debugPrint('InventoryPanel: Error initializing repository: $e');
+      setState(() {
+        _errorMessage = 'Failed to initialize inventory';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadInventoryDetails() async {
+    if (_itemRepository == null) {
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final enriched = await _itemRepository!.loadInventoryDetails(widget.character.inventory);
+      setState(() {
+        _enrichedInventory = enriched;
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('InventoryPanel: Error loading inventory details: $e');
+      setState(() {
+        _errorMessage = 'Failed to load item details';
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Extract ItemID from inventory value
+  String _getItemId(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value['ItemID'] as String? ?? '';
+    }
+    return '';
+  }
+
+  /// Get quantity from inventory value
+  /// Returns the actual quantity for stackable items, or 0 for non-stackable items (no Quantity field)
+  int _getQuantity(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      // If Quantity field exists, use it (stackable item)
+      // If Quantity field missing, return 0 (non-stackable item)
+      return value['Quantity'] as int? ?? 0;
+    }
+    return 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +120,18 @@ class InventoryPanel extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                if (character.inventory.isNotEmpty)
+                if (_isLoading)
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  )
+                else if (widget.character.inventory.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -55,7 +144,7 @@ class InventoryPanel extends StatelessWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${character.inventory.length} items',
+                      '${widget.character.inventory.length} items',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onPrimaryContainer,
                       ),
@@ -67,9 +156,57 @@ class InventoryPanel extends StatelessWidget {
 
           // Content
           Expanded(
-            child: character.inventory.isEmpty
-                ? _buildEmptyInventory(context)
-                : _buildInventoryGrid(context),
+            child: _isLoading
+                ? _buildLoadingState(context)
+                : _errorMessage != null
+                    ? _buildErrorState(context)
+                    : widget.character.inventory.isEmpty
+                        ? _buildEmptyInventory(context)
+                        : _buildInventoryGrid(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoadingState(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(),
+          SizedBox(height: 16),
+          Text('Loading inventory...'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 64,
+            color: colorScheme.error,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            _errorMessage ?? 'Failed to load inventory',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.error,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _loadInventoryDetails,
+            child: const Text('Retry'),
           ),
         ],
       ),
@@ -110,10 +247,10 @@ class InventoryPanel extends StatelessWidget {
 
   Widget _buildInventoryGrid(BuildContext context) {
     // Group items by slot type
-    final equippedItems = <String, MapEntry<String, String>>{};
-    final unequippedItems = <MapEntry<String, String>>[];
+    final equippedItems = <String, MapEntry<String, dynamic>>{};
+    final unequippedItems = <MapEntry<String, dynamic>>[];
 
-    for (final entry in character.inventory.entries) {
+    for (final entry in widget.character.inventory.entries) {
       if (_isEquipmentSlot(entry.key)) {
         equippedItems[entry.key] = entry;
       } else {
@@ -131,18 +268,22 @@ class InventoryPanel extends StatelessWidget {
             _SectionHeader(title: 'Equipped'),
             const SizedBox(height: 12),
             ...equippedItems.entries.map(
-              (equipped) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _InventorySlot(
-                  slot: equipped.key,
-                  itemId: equipped.value.value,
-                  itemDetails: _getItemDetails(equipped.value.value),
-                  isEquipped: true,
-                  onTap: onItemTap != null
-                      ? () => onItemTap!(equipped.value.value)
-                      : null,
-                ),
-              ),
+              (equipped) {
+                final itemId = _getItemId(equipped.value.value);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _InventorySlot(
+                    slot: equipped.key,
+                    itemId: itemId,
+                    itemDetails: _getEnrichedItemDetails(equipped.key),
+                    quantity: _getQuantity(equipped.value.value),
+                    isEquipped: true,
+                    onTap: widget.onItemTap != null
+                        ? () => widget.onItemTap!(itemId)
+                        : null,
+                  ),
+                );
+              },
             ),
             const SizedBox(height: 20),
           ],
@@ -163,11 +304,13 @@ class InventoryPanel extends StatelessWidget {
               itemCount: unequippedItems.length,
               itemBuilder: (context, index) {
                 final item = unequippedItems[index];
+                final itemId = _getItemId(item.value);
                 return _InventoryGridItem(
-                  itemId: item.value,
-                  itemDetails: _getItemDetails(item.value),
-                  onTap: onItemTap != null
-                      ? () => onItemTap!(item.value)
+                  itemId: itemId,
+                  itemDetails: _getEnrichedItemDetails(item.key),
+                  quantity: _getQuantity(item.value),
+                  onTap: widget.onItemTap != null
+                      ? () => widget.onItemTap!(itemId)
                       : null,
                 );
               },
@@ -176,6 +319,11 @@ class InventoryPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Get enriched item details from loaded inventory
+  Map<String, dynamic>? _getEnrichedItemDetails(String slot) {
+    return _enrichedInventory[slot];
   }
 
   bool _isEquipmentSlot(String slot) {
@@ -208,18 +356,6 @@ class InventoryPanel extends StatelessWidget {
       'cape',
     ];
     return equipmentSlots.contains(slot.toLowerCase());
-  }
-
-  Map<String, dynamic>? _getItemDetails(String itemId) {
-    // Get item details from inventoryDetails if available
-    if (character.inventoryDetails.isNotEmpty) {
-      for (final details in character.inventoryDetails.values) {
-        if (details is Map<String, dynamic> && details['ItemID'] == itemId) {
-          return details;
-        }
-      }
-    }
-    return null;
   }
 }
 
@@ -254,6 +390,7 @@ class _InventorySlot extends StatelessWidget {
   final String slot;
   final String itemId;
   final Map<String, dynamic>? itemDetails;
+  final int quantity;
   final bool isEquipped;
   final VoidCallback? onTap;
 
@@ -261,6 +398,7 @@ class _InventorySlot extends StatelessWidget {
     required this.slot,
     required this.itemId,
     this.itemDetails,
+    this.quantity = 1,
     this.isEquipped = false,
     this.onTap,
   });
@@ -272,6 +410,12 @@ class _InventorySlot extends StatelessWidget {
 
     final itemName = itemDetails?['Name'] ?? itemId;
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
+    final isStackable = itemDetails?['Stackable'] == true;
+
+    // Format: "Item Name" or "Item Name x5" for stackable items
+    final displayName = (isStackable && quantity > 1)
+        ? '$itemName x$quantity'
+        : itemName;
 
     return InkWell(
       onTap: onTap,
@@ -305,7 +449,7 @@ class _InventorySlot extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: Text(
-                itemName,
+                displayName,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: _getRarityColor(itemRarity),
@@ -353,11 +497,13 @@ class _InventorySlot extends StatelessWidget {
 class _InventoryGridItem extends StatelessWidget {
   final String itemId;
   final Map<String, dynamic>? itemDetails;
+  final int quantity;
   final VoidCallback? onTap;
 
   const _InventoryGridItem({
     required this.itemId,
     this.itemDetails,
+    this.quantity = 1,
     this.onTap,
   });
 
@@ -367,7 +513,7 @@ class _InventoryGridItem extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
-    final itemQuantity = itemDetails?['Quantity'] ?? 1;
+    final isStackable = itemDetails?['Stackable'] == true;
 
     return InkWell(
       onTap: onTap,
@@ -391,9 +537,9 @@ class _InventoryGridItem extends StatelessWidget {
               color: _getRarityColor(itemRarity),
             ),
             const SizedBox(height: 4),
-            if (itemQuantity > 1)
+            if (isStackable && quantity > 1)
               Text(
-                'x$itemQuantity',
+                'x$quantity',
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),

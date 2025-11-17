@@ -1,9 +1,12 @@
 # Release 3 Report — Honest Beta Readiness
 
 **Date:** 2025-10-07 (In Progress)
+**Reviewed:** 2025-10-19 (currency system update)
 **Branch:** inc-26 (branched from develop)
-**Status:** [IN PROGRESS] — R3-T7 complete, R3-T1 instrumentation complete
+**Status:** [IN PROGRESS] — R3-T6 complete, R3-T1 instrumentation complete
 **Previous Release:** R2 (inc-25 - Security hardening and production readiness)
+
+**Note (2025-10-19):** Currency system deferred to R4-T1 was subsequently completed ahead of schedule on 2025-10-19. See release-four-report.md and release-one-report.md for details.
 
 ---
 
@@ -15,7 +18,7 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 **Ship Gate:** Client polling reduced to design intent, performance baseline documented, idempotency proven, authors can create content, security sanity checks complete.
 
-**Note:** Currency persistence (R3-T1) moved to Release 4 to focus on core beta readiness blockers.
+**Note:** Currency rewards originally deferred to R4-T1, subsequently completed ahead of schedule on 2025-10-19.
 
 ---
 
@@ -91,17 +94,20 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ## Task Details
 
-### ~~R3-T1: Fix Currency Reward Application~~ → Moved to R4-T1
+### ~~R3-T1: Fix Currency Reward Application~~ → Moved to R4-T1, then completed 2025-10-19
 
-**Decision:** This task has been **moved to Release 4** to focus R3 on critical beta readiness blockers (client polling, performance, testing, content).
+**Decision:** This task was **moved to Release 4** to focus R3 on critical beta readiness blockers (client polling, performance, testing, content).
 
-**Rationale:**
-- Currency rewards are a progression feature, not a beta blocker
-- R4 will focus on complete economy system (currency + store + inventory)
-- Allows R3 to ship faster with core functionality stable
-- Better grouped with inventory management features
+**Update (2025-10-19):** Currency system was subsequently **completed ahead of schedule** on 2025-10-19, including:
+- Coin-based currency system (bronze/silver/gold coins)
+- Resources.Value field tracking total currency
+- apply_story_rewards() fully implemented (199 lines)
+- All 3 story JSON files updated with currency rewards
+- Stack management for coins
 
-**See:** `documentation/release-four-report.md` for full R4-T1 specification
+**Status:** ✅ COMPLETE (ahead of R4 schedule)
+
+**See:** `documentation/release-one-report.md` Task 2 for full implementation details
 
 ---
 
@@ -1706,11 +1712,12 @@ See the three story files for complete updated metadata on all segments.
 
 ---
 
-**Document Version:** 1.3
-**Last Updated:** 2025-10-14
+**Document Version:** 1.4
+**Last Updated:** 2025-10-19
 **Next Review:** Upon R3 completion
 
 **Revision History:**
+- v1.4 (2025-10-19): Updated to reflect currency system completion (R4-T1 completed ahead of schedule)
 - v1.3 (2025-10-14): Added Appendix C documenting story content improvements (probabilistic items, environmental narratives, segment metadata)
 - v1.2 (2025-10-12): Corrected exit criteria and dependencies after task renumbering, added explicit 5-stage plan for R3-T1
 - v1.1 (2025-10-07): Moved R3-T1 (Currency Rewards) to R4-T1, renumbered remaining tasks

@@ -176,7 +176,20 @@ void main() {
       WidgetTester tester,
     ) async {
       final characterWithHistory = mockCharacter.copyWith(
-        completedStories: ['completed-story-1', 'completed-story-2'],
+        completedStories: [
+          {
+            'completed-story-1': {
+              'StoryType': 'one-time',
+              'CompletedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            }
+          },
+          {
+            'completed-story-2': {
+              'StoryType': 'daily',
+              'CompletedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            }
+          },
+        ],
       );
 
       await tester.pumpWidget(
