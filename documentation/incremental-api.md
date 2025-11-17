@@ -202,8 +202,12 @@ Retrieves complete character data including active story and segment information
     "Essence": 3,
     "MaxHealth": 12,
     "Wounds": [],
-    "CharState": "standing",
+    "Resources": {},
     "AvailableStories": ["story_1", "story_2"],
+    "CompletedStories": [
+      {"story-uuid-3": {"StoryType": "one-time", "CompletedAt": 1729468900}},
+      {"story-uuid-4": {"StoryType": "daily", "CompletedAt": 1729555200}}
+    ],
     "ActiveStoryID": "story_current_uuid",
     "ActiveSegmentID": "segment_current_uuid",
     "Archetype": "Knight",
@@ -308,7 +312,7 @@ Starts a new story for the specified character.
 
 **Error Responses:**
 
-- `400 Bad Request` - Missing CharacterID or StoryID, invalid UUID format
+- `400 Bad Request` - Missing CharacterID or StoryID, invalid UUID format, dead characters cannot start new stories
 - `401 Unauthorized` - Missing or invalid authentication token
 - `403 Forbidden` - Story not available to character (prerequisites not met), character not owned by player
 - `409 Conflict` - Character already in an active story
@@ -551,10 +555,136 @@ Retrieves completed segment history for a character's active or most recent stor
 - `404 Not Found` - Character does not exist
 - `500 Internal Server Error` - Database operation failed
 
-## Client Cadence (Incremental mode)
+### Get Item Brief
 
-- After `POST /story/start`, the client updates the UI with the first segment immediately.
-- First `GET /segment/status` occurs 60 seconds after `StartTime`.
-- If the segment is still unprocessed, the client calls `GET /segment/status` every 30 seconds until processed.
-- At `EndTime`, the client calls `GET /character` to load the next segment or completion state.
-- Only if segments fail to process are there additional status calls beyond the first.
+Retrieves lightweight item metadata for IndexedDB caching. Returns ItemID, PrototypeID, and Quantity.
+
+**Endpoint:** `GET /item/brief`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+- `ItemID` (required): UUID of the item instance
+
+**Response (200 OK):**
+
+```json
+{
+  "ItemID": "550e8400-e29b-41d4-a716-446655440000",
+  "PrototypeID": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "Quantity": 5
+}
+```
+
+**Note:** For stackable items, `Quantity` contains the actual count (1+). For non-stackable items, `Quantity` is 0. This provides a consistent interface regardless of item type.
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing ItemID parameter, invalid UUID format
+- `401 Unauthorized` - Missing or invalid authentication token
+- `404 Not Found` - Item does not exist
+- `500 Internal Server Error` - Database operation failed
+
+### Get Item Prototype
+
+Retrieves complete item prototype definition for client-side caching.
+
+**Endpoint:** `GET /item/prototype`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+- `PrototypeID` (required): UUID of the item prototype
+
+**Response (200 OK):**
+
+```json
+{
+  "PrototypeID": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+  "PrototypeName": "Iron Sword",
+  "Description": "A well-crafted iron sword with a leather-wrapped hilt.",
+  "Mass": 3.5,
+  "Value": 150,
+  "Stackable": false,
+  "MaxStack": 1,
+  "Quantity": 1,
+  "Wearable": true,
+  "WornOn": ["right_hand", "left_hand"],
+  "Verbs": {
+    "examine": "You examine the iron sword closely.",
+    "swing": "You swing the sword through the air."
+  },
+  "Overrides": {},
+  "TraitMods": {
+    "Melee": 1.0,
+    "Damage": 3
+  },
+  "Container": false,
+  "Contents": [],
+  "IsWorn": false,
+  "CanPickUp": true,
+  "Metadata": {
+    "WeaponType": "sword",
+    "DamageType": "lethal"
+  }
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing PrototypeID parameter, invalid UUID format
+- `401 Unauthorized` - Missing or invalid authentication token
+- `404 Not Found` - Prototype does not exist
+- `500 Internal Server Error` - Database operation failed
+
+### Stack Operations (Future)
+
+These endpoints will manage stackable item operations when implemented:
+
+**Stack Merging:** Automatic during inventory updates
+- When picking up stackable items, system automatically merges with existing stacks
+- Uses UUIDv7 comparison - older stack keeps its ItemID
+- Updates Quantity field on the surviving stack
+
+**Stack Splitting (Planned):** `POST /item/split`
+- Split a stack into two separate stacks
+- Required for trade, dropping partial stacks
+- Body: `{"ItemID": "uuid", "Quantity": 50}`
+- Returns: New stack ItemID
+
+**Inventory Consolidation (Planned):** `POST /inventory/consolidate`
+- Merges all matching stackable items in inventory
+- Reduces inventory slots used
+- Returns: Updated inventory with consolidated stacks
+
+**Stack Rules:**
+- Stackable items: Immutable except for Quantity field
+- Non-stackable items: Mutable, no Quantity field
+- Stack merging: Oldest ItemID (UUIDv7) wins
+- All coins are stackable with unlimited stack size
+
+## Client Polling Pattern (Incremental mode)
+
+The designed polling pattern (from backend constants):
+
+1. **After `POST /story/start`**: Client displays first segment immediately
+2. **Initial Delay**: Wait 60 seconds after `StartTime` before first poll (INITIAL_POLL_DELAY)
+3. **First Status Check**: `GET /segment/status` at T+60 seconds
+4. **Server-Guided Polling**: Uses `PollAfter` field from response for subsequent checks
+5. **Processing States**:
+   - If `ProcessingStatus="pending"`: Wait until `PollAfter` time, then poll again
+   - If `ProcessingStatus="processed"` with `TimeRemaining > 0`: Wait for timer to expire
+   - If `ProcessingStatus="processed"` with `TimeRemaining = 0`: Segment complete
+6. **Incremental Updates**: When segment completes, apply `CharacterUpdates` from segment response to local cache via CharacterRepository
+7. **Story Completion**: When `ActiveSegmentID` becomes null, fetch fresh character from server
+8. **No Periodic Character Fetches**: Character only fetched at selection and story completion
+
+**Current Implementation Note:**
+- Flutter client currently polls immediately (T+0), not T+60
+- This is inconsistent with backend INITIAL_POLL_DELAY constant
+- Single polling source in GameScreen (no dual-polling)
+- Respects server PollAfter guidance for subsequent polls
+- Uses incremental character updates (not full reloads between segments)
+- Falls back to full character fetch on error

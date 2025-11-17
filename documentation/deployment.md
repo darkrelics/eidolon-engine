@@ -34,7 +34,10 @@ This section is the canonical infrastructure overview referenced by other docume
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **15 Lambda Functions**: API handlers and operational functions
+- **23 Lambda Functions Total**: 22 deployed, 1 not deployed (cognito-player-delete reserved for future API)
+  - 12 Character Stack functions (character, archetype, item, store management)
+  - 9 Story Stack functions (story, segment, decision processing)
+  - 1 Player Stack function (cognito-player-new)
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **Fixed Logical IDs**: Preventing resource recreation on updates
 - **Post-Deploy Updates**: Lambda functions automatically updated from S3
@@ -82,10 +85,10 @@ Stacks deploy in a specific order based on dependencies:
 
 1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
 2. **DynamoDB Stack**: 14 tables with managed IAM policy
-3. **Lambda Stack**: Layer, 15 functions, shared execution role
-4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
-5. **Character Stack**: Character-related Lambda resources
-6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
+3. **Lambda Stack**: Shared layer and execution role (no functions deployed here)
+4. **Player Stack**: Cognito User Pool, 1 Lambda function (cognito-player-new)
+5. **Character Stack**: 7 Lambda functions (character APIs, item APIs, archetype)
+6. **Story Stack** (Incremental/Hybrid only): 9 Lambda functions (story APIs, segment APIs, operations), SSM, SQS, EventBridge
 7. **S3 Stack** (MUD/Hybrid only): Scripts bucket with Lua upload
 8. **CloudWatch Stack** (MUD/Hybrid only): Logging infrastructure
 9. **API Stack**: API Gateway with Lambda integrations
@@ -107,12 +110,13 @@ Follow the command sequence in [Quick Start](#quick-start); the CLI then prompts
 
 ### Parameter Priority
 
-The system loads parameters in this order:
+The system loads parameters in this order (highest to lowest priority):
 
-1. Hardcoded defaults in code
-2. Saved values from `cdk.json`
-3. Existing `config.yml` values
-4. User prompts (override all)
+1. **Environment variables** (e.g., `AWS_REGION`, `EIDOLON_S3_BUCKET`)
+2. **`config.yml` values** (persistent configuration)
+3. **`cdk.json` context values** (saved from previous runs)
+4. **Interactive prompts** (only if TTY available)
+5. **Hardcoded defaults** (fallback values)
 
 ### CDK Context Configuration
 
@@ -130,6 +134,76 @@ context_args = [
 ```
 
 Each stack has its own app file (`app_*.py`) to prevent output contamination.
+
+## CI/CD and Non-Interactive Deployment
+
+The deployment script automatically detects interactive vs. non-interactive mode using `sys.stdin.isatty()`. In CI/CD environments without a TTY, all parameters must be provided via environment variables or configuration files.
+
+### Environment Variables
+
+All deployment parameters can be set via environment variables to enable automated deployments:
+
+| Environment Variable | Description | Required | Example |
+|---------------------|-------------|----------|---------|
+| `AWS_REGION` | AWS region to deploy to | Yes | `us-east-1` |
+| `EIDOLON_DEPLOYMENT_MODE` | Deployment mode | No | `incremental` |
+| `EIDOLON_S3_BUCKET` | S3 artifacts bucket name | Yes | `eidolon-artifacts-prod` |
+| `EIDOLON_SCRIPTS_BUCKET` | S3 scripts bucket (mud/hybrid only) | Conditional | `eidolon-scripts-prod` |
+| `EIDOLON_CLIENT_BUCKET` | S3 client bucket for portal | Yes | `eidolon-portal-prod` |
+| `GITHUB_OWNER` | GitHub repository owner | No | `robinje` |
+| `GITHUB_REPO` | GitHub repository name | No | `eidolon-engine` |
+| `GITHUB_BRANCH` | GitHub branch to deploy | No | `develop` |
+| `EIDOLON_DOMAIN` | Base domain for services | Yes | `darkrelics.net` |
+| `EIDOLON_HOSTED_ZONE_ID` | Route53 hosted zone ID | Yes | `Z1234567890ABC` |
+| `EIDOLON_API_HOST` | API subdomain | Yes | `api` |
+| `EIDOLON_CLIENT_HOST` | Client subdomain | Yes | `portal` |
+| `EIDOLON_REPLY_EMAIL` | Cognito reply email | No | `contact@darkrelics.net` |
+
+### Non-Interactive Mode Behavior
+
+When running without a TTY (e.g., in CI/CD pipelines):
+
+- **No prompts**: All parameters must be provided via environment variables or config files
+- **No confirmations**: Deployment proceeds automatically (no "Proceed? [Y/n]" prompts)
+- **Clear errors**: Missing required parameters raise `ValueError` with helpful messages
+- **Logging**: Deployment logs indicate "non-interactive mode" for observability
+
+### CI/CD Usage Example
+
+Complete deployment in GitHub Actions, GitLab CI, or AWS CodePipeline:
+
+```bash
+# Set required environment variables
+export AWS_REGION=us-east-1
+export EIDOLON_S3_BUCKET=eidolon-artifacts-prod
+export EIDOLON_CLIENT_BUCKET=eidolon-portal-prod
+export EIDOLON_DOMAIN=darkrelics.net
+export EIDOLON_HOSTED_ZONE_ID=Z1234567890ABC
+export EIDOLON_API_HOST=api
+export EIDOLON_CLIENT_HOST=portal
+export EIDOLON_DEPLOYMENT_MODE=incremental
+
+# Force non-interactive mode (optional - auto-detected)
+python3 deployment/deploy.py < /dev/null
+```
+
+### Lambda-Only Updates in CI/CD
+
+For faster deployments that only update Lambda function code:
+
+```bash
+export EIDOLON_S3_BUCKET=eidolon-artifacts-prod
+python3 deployment/deploy.py --update-lambdas < /dev/null
+```
+
+### Backward Compatibility
+
+The deployment script remains 100% backward compatible with manual workflows:
+
+- Interactive mode works exactly as before
+- All prompts still show default values
+- Confirmation prompts still appear
+- No behavior changes for existing users
 
 ## Post-Deployment Operations
 
@@ -232,11 +306,12 @@ API:
   HostedZoneId: Z1234567890ABC
   Subdomain: api # api.darkrelics.net
 
-# CORS configuration for API Gateway
-allowed_cors_origins:
-  [] # Optional list; when empty, API preflight defaults to "*" without credentials
-  # When set, API Gateway preflight uses this explicit list and allows credentials
-  # ALLOWED_ORIGINS env var is passed to Lambdas as a comma-separated string
+# Client configuration (for CORS)
+Client:
+  Host: portal # Client subdomain (portal.darkrelics.net)
+  # CORS origin is constructed as https://{Host}.{Domain}
+  # API Gateway preflight uses this explicit origin
+  # Lambda ALLOWED_ORIGINS env var set to this value
 
 CloudFront:
   distribution_id: E1234567890ABC
@@ -292,7 +367,7 @@ Tracks deployed resources and outputs (gitignored).
 ## Resource Naming
 
 - **DynamoDB Tables** (14): `players`, `characters`, `rooms`, `exits`, `items`, `prototypes`, `archetypes`, `motd`, `story`, `segments`, `active_segments`, `story_history`, `segment_history`, `opponents`
-- **Lambda Functions** (15): `api-*` and `ops-*` prefixed names
+- **Lambda Functions** (17 deployed, 18 total): `api-*`, `ops-*`, and `cognito-*` prefixed names (cognito-player-delete not deployed)
 - **S3 Buckets**: `eidolon-engine-lambda-{account}`, `eidolon-scripts-{account}`, portal bucket
 - **Cognito Pool**: `eidolon-users`
 - **CloudWatch**: `/eidolon/server` log group
@@ -376,7 +451,7 @@ if current_trigger == lambda_arn:
 ### Deployment Statistics
 
 - **Total Stacks**: 10 independent CDK stacks
-- **Lambda Functions**: 15 with shared execution role
+- **Lambda Functions**: 17 deployed (18 total, cognito-player-delete not deployed)
 - **DynamoDB Tables**: 14 with RemovalPolicy.RETAIN
 - **Module Size**: 94% under 300 lines, 100% under 1000 lines
 - **Deployment Time**: Full deployment in under 15 minutes
@@ -445,15 +520,18 @@ Each stack has its own app file:
 graph LR
     CodeBuild -->|provides artifacts for| Lambda
     DynamoDB -->|policy attached to| Lambda
-    Lambda -->|functions used by| Player
-    Lambda -->|functions used by| Story
-    Lambda -->|functions used by| API
-    Player -->|authorizer for| API
+    Lambda -->|layer and role used by| Character
+    Lambda -->|layer and role used by| Player
+    Lambda -->|layer and role used by| Story
+    Character -->|functions used by| API
+    Player -->|function and authorizer for| API
+    Story -->|functions used by| API
     API -->|URL passed to| Client
 
     style CodeBuild fill:#e1f5ff
     style DynamoDB fill:#fff3cd
     style Lambda fill:#d4edda
+    style Character fill:#f8d7da
     style Player fill:#f8d7da
     style Story fill:#f8d7da
     style API fill:#d1ecf1
@@ -615,7 +693,7 @@ const String apiDomain = String.fromEnvironment(
 
 The Eidolon Engine deployment system represents a complete transformation from a monolithic 1800+ line class to a clean, modular architecture with:
 
-- **9 Independent CDK Stacks**: Each with focused responsibility
+- **10 Independent CDK Stacks**: Each with focused responsibility
 - **3 Deployment Modes**: MUD, Incremental, and Hybrid
 - **Automated End-to-End**: Infrastructure to portal deployment
 - **Production Tested**: All components operational

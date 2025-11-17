@@ -45,13 +45,15 @@ class StoryPollingService {
   ///
   /// Callbacks:
   /// - onStatusUpdate: Called with segment status data from GET /segment/status
-  /// - onCharacterReload: Called with updated character from GET /character (at segment boundaries)
+  /// - onCharacterReload: Called with updated character from GET /character (story completion only)
+  /// - onSegmentComplete: Called with segment updates for incremental cache updates
   /// - onStoryComplete: Called when ActiveSegmentID becomes null
   /// - onError: Called when API errors occur
   void startPolling({
     required String characterId,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
     required void Function(Map<String, dynamic> character) onCharacterReload,
+    required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
     required void Function() onStoryComplete,
     void Function(Object error)? onError,
   }) {
@@ -72,6 +74,7 @@ class StoryPollingService {
       characterId: characterId,
       onStatusUpdate: onStatusUpdate,
       onCharacterReload: onCharacterReload,
+      onSegmentComplete: onSegmentComplete,
       onStoryComplete: onStoryComplete,
       onError: onError,
     );
@@ -82,6 +85,7 @@ class StoryPollingService {
     required String characterId,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
     required void Function(Map<String, dynamic> character) onCharacterReload,
+    required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
     required void Function() onStoryComplete,
     void Function(Object error)? onError,
   }) async {
@@ -147,30 +151,27 @@ class StoryPollingService {
           characterId: characterId,
           onStatusUpdate: onStatusUpdate,
           onCharacterReload: onCharacterReload,
+          onSegmentComplete: onSegmentComplete,
           onStoryComplete: onStoryComplete,
           onError: onError,
         );
       } else if (processingStatus == 'processed' && timeRemaining > 0) {
-        // Segment processed but timer not expired - wait for timer then reload character
-        debugPrint('StoryPollingService: Segment processed, waiting $timeRemaining seconds then reloading character');
+        // Segment processed but timer not expired - wait for timer then apply incremental updates
+        debugPrint('StoryPollingService: Segment processed, waiting $timeRemaining seconds then applying updates');
 
-        // Schedule character reload at segment end
+        // Schedule segment completion at segment end
         final pendingSegmentId = activeSegmentId;
         Timer(Duration(seconds: timeRemaining), () async {
           if (!_isPolling || _characterId != characterId) return;
 
           try {
             if (_lastReloadedSegmentId == pendingSegmentId) {
-              debugPrint('StoryPollingService: Skipping character reload for segment $pendingSegmentId - already synchronized');
+              debugPrint('StoryPollingService: Skipping segment updates for segment $pendingSegmentId - already synchronized');
             } else {
-              // Reload character to get updated state (wounds, XP, attributes)
-              debugPrint('StoryPollingService: Reloading character at segment boundary');
-              final character = await _apiService.getCharacterById(characterId);
-
-              if (character != null) {
-                onCharacterReload(character.toJson());
-                _lastReloadedSegmentId = pendingSegmentId;
-              }
+              // Apply incremental updates from segment response
+              debugPrint('StoryPollingService: Applying incremental character updates from segment');
+              onSegmentComplete(segmentStatus);
+              _lastReloadedSegmentId = pendingSegmentId;
             }
 
             // Brief delay then check for next segment
@@ -179,11 +180,12 @@ class StoryPollingService {
               characterId: characterId,
               onStatusUpdate: onStatusUpdate,
               onCharacterReload: onCharacterReload,
+              onSegmentComplete: onSegmentComplete,
               onStoryComplete: onStoryComplete,
               onError: onError,
             );
           } catch (e) {
-            debugPrint('StoryPollingService: Error reloading character: $e');
+            debugPrint('StoryPollingService: Error applying segment updates: $e');
             onError?.call(e);
 
             // Retry with backoff
@@ -199,28 +201,27 @@ class StoryPollingService {
               characterId: characterId,
               onStatusUpdate: onStatusUpdate,
               onCharacterReload: onCharacterReload,
+              onSegmentComplete: onSegmentComplete,
               onStoryComplete: onStoryComplete,
               onError: onError,
             );
           }
         });
       } else {
-        // Segment complete (TimeRemaining = 0) - reload character and check for next segment
-        debugPrint('StoryPollingService: Segment complete, reloading character');
+        // Segment complete (TimeRemaining = 0) - apply incremental updates and check for next segment
+        debugPrint('StoryPollingService: Segment complete, applying incremental updates');
 
         final segmentIdForReload = activeSegmentId;
 
         if (_lastReloadedSegmentId == segmentIdForReload) {
-          debugPrint('StoryPollingService: Skipping character reload for segment $segmentIdForReload - already synchronized');
+          debugPrint('StoryPollingService: Skipping segment updates for segment $segmentIdForReload - already synchronized');
         } else {
           try {
-            final character = await _apiService.getCharacterById(characterId);
-            if (character != null) {
-              onCharacterReload(character.toJson());
-              _lastReloadedSegmentId = segmentIdForReload;
-            }
+            // Apply incremental updates from segment response
+            onSegmentComplete(segmentStatus);
+            _lastReloadedSegmentId = segmentIdForReload;
           } catch (e) {
-            debugPrint('StoryPollingService: Error reloading character: $e');
+            debugPrint('StoryPollingService: Error applying segment updates: $e');
             onError?.call(e);
           }
         }
@@ -231,6 +232,7 @@ class StoryPollingService {
           characterId: characterId,
           onStatusUpdate: onStatusUpdate,
           onCharacterReload: onCharacterReload,
+          onSegmentComplete: onSegmentComplete,
           onStoryComplete: onStoryComplete,
           onError: onError,
         );
@@ -265,6 +267,7 @@ class StoryPollingService {
         characterId: characterId,
         onStatusUpdate: onStatusUpdate,
         onCharacterReload: onCharacterReload,
+        onSegmentComplete: onSegmentComplete,
         onStoryComplete: onStoryComplete,
         onError: onError,
       );
@@ -277,6 +280,7 @@ class StoryPollingService {
     required String characterId,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
     required void Function(Map<String, dynamic> character) onCharacterReload,
+    required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
     required void Function() onStoryComplete,
     void Function(Object error)? onError,
   }) {
@@ -286,6 +290,7 @@ class StoryPollingService {
         characterId: characterId,
         onStatusUpdate: onStatusUpdate,
         onCharacterReload: onCharacterReload,
+        onSegmentComplete: onSegmentComplete,
         onStoryComplete: onStoryComplete,
         onError: onError,
       );

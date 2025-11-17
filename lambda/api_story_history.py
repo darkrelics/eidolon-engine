@@ -10,13 +10,11 @@ from typing import Iterable, List
 
 from botocore.exceptions import ClientError
 
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter, parse_event_body
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_uuid
 
 MAX_HISTORY_IDS = 10
@@ -97,21 +95,9 @@ def get_story_history_entries(character_id: str, story_instance_ids: List[str]) 
     }
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """Lambda handler for GET /story/history."""
-    log_lambda_statistics(event, context)
-
-    preflight_response = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    try:
-        player_id = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
 
     character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
@@ -124,40 +110,27 @@ def lambda_handler(event: dict, context: object) -> dict:
             character_id = body.get("CharacterID") or body.get("characterId")
 
     if not character_id:
-        return lambda_response(400, {"Error": "Missing CharacterID"}, event)
+        raise ValueError("Missing CharacterID")
 
     if not validate_uuid(character_id):
-        return lambda_response(400, {"Error": "Invalid CharacterID"}, event)
+        raise ValueError("Invalid CharacterID")
 
     story_instance_ids = _extract_story_instance_ids(event)
 
     if not story_instance_ids:
         logger.info(f"No StoryInstanceIDs provided in request for {character_id}")
-        return lambda_response(
-            200,
-            {"CharacterID": character_id, "Stories": [], "Missing": []},
-            event,
-        )
+        return {
+            "status_code": 200,
+            "body": {"CharacterID": character_id, "Stories": [], "Missing": []},
+        }
 
     if not verify_character_ownership(character_id, player_id):
-        return lambda_response(403, {"Error": "Access denied"}, event)
+        raise ValueError("403:Access denied")
 
     # Validate UUID format for each requested story instance
     invalid_ids = [sid for sid in story_instance_ids if not validate_uuid(sid)]
     if invalid_ids:
-        return lambda_response(
-            400,
-            {"Error": "Invalid StoryInstanceID values", "Invalid": invalid_ids},
-            event,
-        )
+        raise ValueError(f"Invalid StoryInstanceID values: {', '.join(invalid_ids)}")
 
-    try:
-        result = get_story_history_entries(character_id, story_instance_ids)
-        return lambda_response(200, result, event)
-    except ValueError as err:
-        return lambda_response(400, {"Error": str(err)}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to retrieve story history for {character_id} Error: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    result = get_story_history_entries(character_id, story_instance_ids)
+    return {"status_code": 200, "body": result}

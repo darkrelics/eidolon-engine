@@ -8,12 +8,10 @@ Ensures the character belongs to the player before deletion.
 """
 
 from eidolon.character_data import character_get
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.player_character import delete_character
 from eidolon.requests import get_query_parameter
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_uuid
 
 
@@ -60,72 +58,38 @@ def character_deletion(player_id: str, character_id: str) -> dict:
     return {"success": True, "character_name": character_name, "deletion_result": deletion_result}
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Lambda handler for character deletion API.
 
     Args:
         event: API Gateway event with Cognito authorizer
         context: Lambda context
+        player_id: Authenticated player ID
 
     Returns:
-        API Gateway response
+        Dict with status_code and body
     """
-    # Log invocation
-    log_lambda_statistics(event, context)
-
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    # Extract player ID from JWT
-    try:
-        player_id: str = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
     # Get character ID from query parameters
     character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
-        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+        raise ValueError("Missing CharacterID parameter")
 
     if not validate_uuid(character_id):
-        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
+        raise ValueError("Invalid CharacterID format")
 
     # Call business logic
-    try:
-        result: dict = character_deletion(player_id, character_id)  # type: ignore
-        return lambda_response(
-            200,
-            {
-                "Message": "Character deleted successfully",
-                "CharacterID": character_id,
-                "CharacterName": result.get("character_name", "Unknown"),
-                "ItemsDeleted": result.get("deletion_result", {}).get("ItemsDeleted", 0),
-                "ActiveSegmentsDeleted": result.get("deletion_result", {}).get("ActiveSegmentsDeleted", 0),
-            },
-            event,
-        )
-    except ValueError as err:
-        # Character not found or not owned by player
-        logger.warning(f"Character deletion validation failed for {character_id} Error: {err}")
-        error_msg: str = str(err).lower()
-        if "not found" in error_msg:
-            return lambda_response(404, {"Error": "Character not found"}, event)
-        elif "not owned" in error_msg or "ownership" in error_msg:
-            return lambda_response(403, {"Error": "Access denied"}, event)
-        else:
-            return lambda_response(400, {"Error": "Unexpected Event"}, event)
-    except RuntimeError as err:
-        # Database or deletion failures
-        logger.error(
-            f"Character deletion system error for {character_id} Error: {err}",
-            exc_info=True,
-        )
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    result: dict = character_deletion(player_id, character_id)
+    logger.info(f"Deleted character {character_id} for player {player_id}")
+
+    return {
+        "status_code": 200,
+        "body": {
+            "Message": "Character deleted successfully",
+            "CharacterID": character_id,
+            "CharacterName": result.get("character_name", "Unknown"),
+            "ItemsDeleted": result.get("deletion_result", {}).get("ItemsDeleted", 0),
+            "ActiveSegmentsDeleted": result.get("deletion_result", {}).get("ActiveSegmentsDeleted", 0),
+        },
+    }

@@ -24,6 +24,8 @@ tags:
     description: Story lifecycle operations
   - name: Segments
     description: Segment processing and polling operations
+  - name: Items
+    description: Item and prototype retrieval for client caching
 
 paths:
   /archetype:
@@ -516,55 +518,6 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /segment/outcome:
-    get:
-      tags:
-        - Segments
-      summary: Get segment outcome
-      description: Retrieves outcome narrative and effects for a completed or processed segment.
-      operationId: getSegmentOutcome
-      parameters:
-        - in: query
-          name: CharacterID
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - in: query
-          name: SegmentID
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: Outcome data
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SegmentOutcomeResponse"
-        "400":
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "404":
-          description: Character or segment not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "409":
-          description: Segment not yet completed
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-        "500":
-          $ref: "#/components/responses/InternalServerError"
-
   /segment/status:
     get:
       tags:
@@ -632,6 +585,797 @@ paths:
                 $ref: "#/components/schemas/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /story/history:
+    get:
+      tags:
+        - Stories
+      summary: Get story history
+      description: Retrieves story history entries by story instance IDs. Accepts up to 10 instance IDs and returns them in requested order with Missing array for not found.
+      operationId: getStoryHistory
+      parameters:
+        - in: query
+          name: CharacterID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the character
+        - in: query
+          name: StoryInstanceIDs
+          required: false
+          schema:
+            type: string
+          description: Comma-separated list of story instance UUIDs (max 10)
+          example: "uuid1,uuid2,uuid3"
+      responses:
+        "200":
+          description: Story history entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoryHistoryResponse"
+              example:
+                CharacterID: "550e8400-e29b-41d4-a716-446655440000"
+                Stories:
+                  - CharacterID: "550e8400-e29b-41d4-a716-446655440000"
+                    StoryInstanceID: "uuid1"
+                    StoryID: "story_uuid"
+                    StoryTitle: "The Goblin's Ambush"
+                    StartedAt: 1705329900
+                    CompletedAt: 1705330800
+                    FinalOutcome: "normal"
+                    SegmentHistory: ["seg1", "seg2", "seg3"]
+                    SkillXPAwarded:
+                      Investigation: 15
+                    AttributeXPAwarded:
+                      Perception: 5
+                Missing: ["uuid3"]
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingCharacterID:
+                  summary: Missing CharacterID
+                  value:
+                    Error: "Missing CharacterID"
+                invalidStoryInstanceID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid StoryInstanceID values"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Access denied"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /item/brief:
+    get:
+      tags:
+        - Items
+      summary: Get item brief
+      description: Retrieves lightweight item metadata (ItemID and PrototypeID only) for IndexedDB caching strategy.
+      operationId: getItemBrief
+      parameters:
+        - in: query
+          name: ItemID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the item instance
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Successfully retrieved item brief
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemBriefResponse"
+              example:
+                ItemID: 550e8400-e29b-41d4-a716-446655440000
+                PrototypeID: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingItemID:
+                  summary: Missing ItemID parameter
+                  value:
+                    Error: "Missing ItemID parameter"
+                invalidUUID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid ItemID format"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Item not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /item/prototype:
+    get:
+      tags:
+        - Items
+      summary: Get item prototype
+      description: Retrieves complete item prototype definition for client-side caching. Prototypes are shared across all item instances.
+      operationId: getItemPrototype
+      parameters:
+        - in: query
+          name: PrototypeID
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: UUID of the item prototype
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+      responses:
+        "200":
+          description: Successfully retrieved item prototype
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ItemPrototypeResponse"
+              example:
+                PrototypeID: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                PrototypeName: Iron Sword
+                Description: A well-crafted iron sword with a leather-wrapped hilt.
+                Mass: 3.5
+                Value: 150
+                Stackable: false
+                MaxStack: 1
+                Quantity: 1
+                Wearable: true
+                WornOn:
+                  - right_hand
+                  - left_hand
+                Verbs:
+                  examine: You examine the iron sword closely.
+                  swing: You swing the sword through the air.
+                Overrides: {}
+                TraitMods:
+                  Melee: 1.0
+                  Damage: 3
+                Container: false
+                Contents: []
+                IsWorn: false
+                CanPickUp: true
+                Metadata:
+                  WeaponType: sword
+                  DamageType: lethal
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingPrototypeID:
+                  summary: Missing PrototypeID parameter
+                  value:
+                    Error: "Missing PrototypeID parameter"
+                invalidUUID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid PrototypeID format"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Prototype not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Prototype not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /item/use:
+    post:
+      tags:
+        - Items
+      summary: Use consumable item
+      description: Uses (consumes) an item from character inventory, applying effects and removing/decrementing the item.
+      operationId: useItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - CharacterID
+                - ItemID
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                  description: Character UUID
+                ItemID:
+                  type: string
+                  format: uuid
+                  description: Item UUID to use
+                InventorySlot:
+                  type: string
+                  description: Optional inventory slot for faster lookup
+            example:
+              CharacterID: 550e8400-e29b-41d4-a716-446655440000
+              ItemID: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+              InventorySlot: "1"
+      responses:
+        "200":
+          description: Successfully used item
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - Success
+                  - ItemUsed
+                  - Effects
+                  - Message
+                  - ItemConsumed
+                properties:
+                  Success:
+                    type: boolean
+                    example: true
+                  ItemUsed:
+                    type: object
+                    properties:
+                      ItemID:
+                        type: string
+                        format: uuid
+                      PrototypeID:
+                        type: string
+                        format: uuid
+                      PrototypeName:
+                        type: string
+                        example: Healing Potion
+                  Effects:
+                    type: array
+                    items:
+                      type: string
+                    description: List of effects applied
+                    example:
+                      - "Healed 3 wound(s) (7/10 HP)"
+                  Message:
+                    type: string
+                    description: Flavor text from item's Use verb
+                    example: "You drink the healing potion, feeling a warm sensation spread through your body."
+                  ItemConsumed:
+                    type: boolean
+                    description: Whether item was completely consumed (removed from inventory)
+                    example: false
+                  Healing:
+                    type: object
+                    description: Healing details if healing occurred
+                    properties:
+                      wounds_healed:
+                        type: integer
+                        example: 3
+                      remaining_wounds:
+                        type: integer
+                        example: 3
+                      current_health:
+                        type: integer
+                        example: 7
+                      max_health:
+                        type: integer
+                        example: 10
+                      was_dead:
+                        type: boolean
+                        example: false
+                  RemainingQuantity:
+                    type: integer
+                    description: Quantity remaining if not consumed (stackable items only)
+                    example: 4
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingCharacterID:
+                  summary: Missing CharacterID
+                  value:
+                    Error: "CharacterID is required"
+                invalidUUID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid ItemID format"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Character access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not owned by player"
+        "404":
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                itemNotInInventory:
+                  summary: Item not in inventory
+                  value:
+                    Error: "Item not found in character inventory"
+                itemDataNotFound:
+                  summary: Item data missing
+                  value:
+                    Error: "Item data not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /item/discard:
+    post:
+      tags:
+        - Items
+      summary: Discard item from inventory
+      description: Removes an item from character inventory permanently without applying any effects. Supports partial discarding for stackable items.
+      operationId: discardItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - CharacterID
+                - ItemID
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                  description: Character UUID
+                ItemID:
+                  type: string
+                  format: uuid
+                  description: Item UUID to discard
+                InventorySlot:
+                  type: string
+                  description: Optional inventory slot for faster lookup
+                Quantity:
+                  type: integer
+                  minimum: 1
+                  description: Quantity to discard (defaults to all if not specified)
+            example:
+              CharacterID: 550e8400-e29b-41d4-a716-446655440000
+              ItemID: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+              Quantity: 2
+      responses:
+        "200":
+          description: Successfully discarded item
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - Success
+                  - ItemDiscarded
+                  - QuantityDiscarded
+                  - ItemFullyDiscarded
+                properties:
+                  Success:
+                    type: boolean
+                    example: true
+                  ItemDiscarded:
+                    type: object
+                    properties:
+                      ItemID:
+                        type: string
+                        format: uuid
+                      PrototypeID:
+                        type: string
+                        format: uuid
+                  QuantityDiscarded:
+                    type: integer
+                    example: 2
+                  ItemFullyDiscarded:
+                    type: boolean
+                    description: Whether item was completely removed from inventory
+                    example: false
+                  RemainingQuantity:
+                    type: integer
+                    description: Quantity remaining if not fully discarded
+                    example: 3
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingCharacterID:
+                  summary: Missing CharacterID
+                  value:
+                    Error: "CharacterID is required"
+                invalidQuantity:
+                  summary: Invalid quantity value
+                  value:
+                    Error: "Quantity must be at least 1"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Character access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not owned by player"
+        "404":
+          description: Item not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Item not found in character inventory"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /item/consolidate:
+    post:
+      tags:
+        - Items
+      summary: Consolidate item stacks
+      description: Merges multiple separate stacks of the same stackable item into single stacks, freeing up inventory space.
+      operationId: consolidateItems
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - CharacterID
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                  description: Character UUID
+                PrototypeID:
+                  type: string
+                  format: uuid
+                  description: Optional - consolidate only this item type
+                ConsolidateAll:
+                  type: boolean
+                  description: Consolidate all stackable items (default true if PrototypeID not specified)
+            examples:
+              consolidateAll:
+                summary: Consolidate all stackable items
+                value:
+                  CharacterID: 550e8400-e29b-41d4-a716-446655440000
+                  ConsolidateAll: true
+              consolidateSpecific:
+                summary: Consolidate specific item type
+                value:
+                  CharacterID: 550e8400-e29b-41d4-a716-446655440000
+                  PrototypeID: b47ac10b-58cc-4372-a567-0e02b2c3d483
+      responses:
+        "200":
+          description: Successfully consolidated stacks
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - Success
+                  - Message
+                  - ConsolidatedStacks
+                  - TotalStacksRemoved
+                properties:
+                  Success:
+                    type: boolean
+                    example: true
+                  Message:
+                    type: string
+                    example: "Successfully consolidated 2 item type(s)"
+                  ConsolidatedStacks:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        PrototypeID:
+                          type: string
+                          format: uuid
+                        KeptSlot:
+                          type: string
+                          description: Inventory slot that was kept
+                        KeptItemID:
+                          type: string
+                          format: uuid
+                        TotalQuantity:
+                          type: integer
+                          description: Total quantity after consolidation
+                        StacksConsolidated:
+                          type: integer
+                          description: Number of stacks merged
+                        RemovedSlots:
+                          type: array
+                          items:
+                            type: string
+                          description: Inventory slots that were freed
+                    example:
+                      - PrototypeID: b47ac10b-58cc-4372-a567-0e02b2c3d483
+                        KeptSlot: "1"
+                        KeptItemID: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+                        TotalQuantity: 15
+                        StacksConsolidated: 3
+                        RemovedSlots: ["3", "7"]
+                  TotalStacksRemoved:
+                    type: integer
+                    description: Total number of inventory slots freed
+                    example: 2
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingCharacterID:
+                  summary: Missing CharacterID
+                  value:
+                    Error: "CharacterID is required"
+                invalidUUID:
+                  summary: Invalid UUID format
+                  value:
+                    Error: "Invalid PrototypeID format"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Character access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not owned by player"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /store/list:
+    get:
+      tags:
+        - Store
+      summary: List store items
+      description: Retrieves available items for purchase from the store, filtered by character level if CharacterID provided.
+      operationId: getStoreList
+      parameters:
+        - in: query
+          name: StoreID
+          required: false
+          schema:
+            type: string
+          description: Store identifier (defaults to "general-store")
+          example: general-store
+        - in: query
+          name: CharacterID
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Character UUID for level-based filtering
+          example: 550e8400-e29b-41d4-a716-446655440000
+      responses:
+        "200":
+          description: Successfully retrieved store inventory
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - StoreID
+                  - StoreName
+                  - Description
+                  - Items
+                properties:
+                  StoreID:
+                    type: string
+                    example: general-store
+                  StoreName:
+                    type: string
+                    example: General Merchant
+                  Description:
+                    type: string
+                    example: A traveling merchant offering essential supplies and equipment for adventurers.
+                  Items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        PrototypeID:
+                          type: string
+                          format: uuid
+                        PrototypeName:
+                          type: string
+                        Price:
+                          type: integer
+                          description: Item price in fundamental units (FU)
+                        Stock:
+                          type: integer
+                          description: Available stock (-1 = unlimited)
+                        Category:
+                          type: string
+                          example: consumable
+                        Featured:
+                          type: boolean
+                        Prototype:
+                          type: object
+                          description: Full item prototype details
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Character access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not owned by player"
+        "404":
+          description: Store not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Store 'unknown-store' not found"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /store/purchase:
+    post:
+      tags:
+        - Store
+      summary: Purchase store item
+      description: Purchase an item from the store with atomic currency deduction and inventory update.
+      operationId: purchaseStoreItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - CharacterID
+                - PrototypeID
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
+                  description: Character UUID making the purchase
+                PrototypeID:
+                  type: string
+                  format: uuid
+                  description: Item prototype UUID to purchase
+                Quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 99
+                  default: 1
+                  description: Number of items to purchase
+            example:
+              CharacterID: 550e8400-e29b-41d4-a716-446655440000
+              PrototypeID: b47ac10b-58cc-4372-a567-0e02b2c3d483
+              Quantity: 3
+      responses:
+        "200":
+          description: Successfully purchased item
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - Success
+                  - ItemIDs
+                  - Quantity
+                  - TotalCost
+                  - CurrencyRemaining
+                  - Message
+                properties:
+                  Success:
+                    type: boolean
+                    example: true
+                  ItemIDs:
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                    description: UUID(s) of created/updated items
+                  Quantity:
+                    type: integer
+                    example: 3
+                  TotalCost:
+                    type: integer
+                    description: Total cost in fundamental units
+                    example: 750
+                  CurrencyRemaining:
+                    type: integer
+                    description: Character's remaining currency after purchase
+                    example: 250
+                  Message:
+                    type: string
+                    example: Successfully purchased 3 item(s)
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                missingCharacterID:
+                  summary: Missing CharacterID
+                  value:
+                    Error: "CharacterID is required"
+                invalidQuantity:
+                  summary: Invalid quantity
+                  value:
+                    Error: "Quantity must be a positive integer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "402":
+          description: Insufficient funds
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Insufficient funds: need 750, have 250"
+        "403":
+          description: Character access denied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Character not owned by player"
+        "404":
+          description: Item not found in store
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Item not available in store"
+        "409":
+          description: Insufficient stock
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                Error: "Insufficient stock: only 1 available"
         "500":
           $ref: "#/components/responses/InternalServerError"
 
@@ -941,7 +1685,6 @@ components:
         - Essence
         - MaxEssence
         - Wounds
-        - CharState
         - AvailableStories
         - AbandonedStories
         - CompletedStories
@@ -1000,8 +1743,9 @@ components:
           description: List of current wounds
         CharState:
           type: string
-          description: Current character state
+          description: Current character state (not returned in API response - use Dead flag from character list)
           enum: [standing, unconscious, dead]
+          nullable: true
         LeftHandID:
           type: string
           format: uuid
@@ -1550,3 +2294,204 @@ components:
         Message:
           type: string
       required: [CharacterID, StoryID, Abandoned]
+
+    StoryHistoryResponse:
+      type: object
+      required:
+        - CharacterID
+        - Stories
+        - Missing
+      properties:
+        CharacterID:
+          type: string
+          format: uuid
+          description: UUID of the character
+        Stories:
+          type: array
+          description: Story history entries in requested order
+          items:
+            $ref: "#/components/schemas/StoryHistoryEntry"
+        Missing:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Story instance IDs that were not found
+
+    StoryHistoryEntry:
+      type: object
+      required:
+        - CharacterID
+        - StoryInstanceID
+        - StoryID
+        - StoryTitle
+        - StartedAt
+      properties:
+        CharacterID:
+          type: string
+          format: uuid
+          description: Character who played the story
+        StoryInstanceID:
+          type: string
+          format: uuid
+          description: Unique instance of this story playthrough
+        StoryID:
+          type: string
+          description: Story definition UUID
+        StoryTitle:
+          type: string
+          description: Story title for display
+        StartedAt:
+          type: integer
+          description: Unix timestamp when story started
+        CompletedAt:
+          type: integer
+          nullable: true
+          description: Unix timestamp when story completed (null if abandoned)
+        FinalOutcome:
+          type: string
+          enum: [death, failure, minimal, normal, exceptional, abandoned]
+          nullable: true
+          description: Final outcome of the story
+        SegmentHistory:
+          type: array
+          items:
+            type: string
+          description: Array of segment IDs completed in order
+        SkillXPAwarded:
+          type: object
+          additionalProperties:
+            type: number
+          description: Total skill XP earned from this story
+        AttributeXPAwarded:
+          type: object
+          additionalProperties:
+            type: number
+          description: Total attribute XP earned from this story
+
+    ItemBriefResponse:
+      type: object
+      required:
+        - ItemID
+        - PrototypeID
+      properties:
+        ItemID:
+          type: string
+          format: uuid
+          description: UUID of the item instance
+          example: 550e8400-e29b-41d4-a716-446655440000
+        PrototypeID:
+          type: string
+          format: uuid
+          description: UUID of the item's prototype
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+
+    ItemPrototypeResponse:
+      type: object
+      required:
+        - PrototypeID
+        - PrototypeName
+        - Description
+        - Mass
+        - Value
+        - Stackable
+        - MaxStack
+        - Quantity
+        - Wearable
+        - Container
+        - CanPickUp
+      properties:
+        PrototypeID:
+          type: string
+          format: uuid
+          description: UUID of the prototype
+          example: 7c9e6679-7425-40de-944b-e07fc1f90ae7
+        PrototypeName:
+          type: string
+          description: Display name of the item
+          example: Iron Sword
+        Description:
+          type: string
+          description: Item description text
+          example: A well-crafted iron sword with a leather-wrapped hilt.
+        Mass:
+          type: number
+          description: Weight of the item
+          minimum: 0
+          example: 3.5
+        Value:
+          type: integer
+          description: Monetary value of the item
+          minimum: 0
+          example: 150
+        Stackable:
+          type: boolean
+          description: Whether multiple items can stack
+          example: false
+        MaxStack:
+          type: integer
+          description: Maximum stack size
+          minimum: 1
+          example: 1
+        Quantity:
+          type: integer
+          description: Default quantity when created
+          minimum: 1
+          example: 1
+        Wearable:
+          type: boolean
+          description: Whether the item can be worn/equipped
+          example: true
+        WornOn:
+          type: array
+          items:
+            type: string
+          description: Body slots where item can be worn
+          example:
+            - right_hand
+            - left_hand
+        Verbs:
+          type: object
+          additionalProperties:
+            type: string
+          description: Actions available for this item
+          example:
+            examine: You examine the iron sword closely.
+            swing: You swing the sword through the air.
+        Overrides:
+          type: object
+          description: Behavior overrides for this item
+          example: {}
+        TraitMods:
+          type: object
+          additionalProperties:
+            type: number
+          description: Skill/attribute modifiers when equipped
+          example:
+            Melee: 1.0
+            Damage: 3
+        Container:
+          type: boolean
+          description: Whether item can contain other items
+          example: false
+        Contents:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Default contents when created
+          example: []
+        IsWorn:
+          type: boolean
+          description: Default worn state when created
+          example: false
+        CanPickUp:
+          type: boolean
+          description: Whether the item can be picked up
+          example: true
+        Metadata:
+          type: object
+          description: Additional custom properties
+          example:
+            WeaponType: sword
+            DamageType: lethal

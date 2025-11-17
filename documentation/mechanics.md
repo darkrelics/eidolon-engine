@@ -2,7 +2,15 @@
 
 ## Overview
 
-This document describes the complete game mechanics and experience system for the Eidolon Engine. The system provides two primary resolution methods (opposed checks and static checks) integrated with a continuous skill progression system that rewards character development through actual use rather than abstract point allocation.
+This document describes the complete game mechanics and experience system specification for the Eidolon Engine. This specification applies to both MUD and Incremental game modes.
+
+**Implementation:**
+- MUD Server (Go): server/experience.go - ResolveOpposedCheckWithXP, ResolveStaticCheckWithXP
+- Incremental (Python): eidolon/mechanics.py - resolve_opposed_check_with_xp, calculate_skill_increase
+
+**Code Examples:** This document uses Go syntax from MUD server. Python implementation follows same mathematical formulas and constants.
+
+The system provides two primary resolution methods (opposed checks and static checks) integrated with a continuous skill progression system that rewards character development through actual use rather than abstract point allocation.
 
 ## Core Components
 
@@ -58,13 +66,12 @@ The system uses a normal distribution with two key transformations:
 
 ## Integration with Experience System
 
-The mechanics system integrates with the experience system to provide character progression. For detailed information about:
+The mechanics system integrates with the experience system to provide character progression. Mathematical formulas, experience calculations, and implementation constants are documented in the sections below.
 
-- **Mathematical formulas** and tuning parameters
-- **Experience calculation** and skill progression
-- **Implementation details** and constants
-
-See [Experience System Documentation](experience.md).
+**Implementation Files:**
+- Go (MUD): server/experience.go
+- Python (Incremental): eidolon/mechanics.py
+- Constants: eidolon/constants.py (shared values)
 
 ## Core Process Flow
 
