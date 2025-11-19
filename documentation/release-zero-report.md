@@ -701,15 +701,14 @@ Deployment complete with all core infrastructure tested and operational. R1 work
 - ✅ Death mechanics fixed (dead characters blocked from starting stories)
 - ✅ Combat opponent defeat logic simplified
 - ⚠️ Inventory display shows UUIDs (get_inventory issue)
-- ❌ Item consumption not implemented (no api_item_consume.py)
+- ✅ Item consumption implemented via `api_item_consume.py`
 - ❌ Store system not implemented
 
 **Current Focus:**
 
 1. Inventory display fix (investigate get_inventory)
-2. Item consumption implementation
-3. Store system implementation
-4. Currency display in Flutter
+2. Store system implementation
+3. Currency display in Flutter
 
 ---
 
@@ -725,6 +724,7 @@ Deployment complete with all core infrastructure tested and operational. R1 work
 - ✅ Combat system fixes (opponent defeat logic simplified)
 - ✅ Currency system implementation (coin-based economy)
 - ✅ Death mechanics (dead characters blocked)
+- ✅ Item consumption flow (api_item_consume, consumable schema, Flutter use action)
 
 **In Progress:**
 
@@ -733,17 +733,12 @@ Deployment complete with all core infrastructure tested and operational. R1 work
    - Implement item_repository.dart in Flutter
    - Display item names instead of UUIDs
 
-2. **Item Consumption**
-   - Create api_item_consume.py endpoint
-   - Add consumption effects (healing, essence)
-   - Add "Use" button in Flutter inventory
-
-3. **Store System**
+2. **Store System**
    - Implement store endpoints (list, purchase)
    - Create Flutter store UI
    - Complete economy loop (earn → buy → use)
 
-4. **Currency Display Integration**
+3. **Currency Display Integration**
    - Flutter integration for Resources.Value display
    - Backend sends data, needs frontend implementation
 

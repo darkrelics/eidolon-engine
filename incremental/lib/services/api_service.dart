@@ -349,6 +349,22 @@ class ApiService extends BaseApiService {
       queryParams: {'PrototypeID': prototypeId},
     );
   }
+
+  /// Consume an inventory item.
+  ///
+  /// Uses a consumable item and applies its effects server-side.
+  /// Returns effect summary and remaining quantity.
+  Future<Map<String, dynamic>> consumeItem({
+    required String characterId,
+    required String itemId,
+  }) async {
+    ApiMetrics.recordCall('POST /item/consume', details: 'characterId=$characterId, itemId=$itemId');
+
+    return post<Map<String, dynamic>>(
+      '/item/consume',
+      body: {'CharacterID': characterId, 'ItemID': itemId},
+    );
+  }
 }
 
 /// Archetype info for character creation

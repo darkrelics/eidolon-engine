@@ -130,6 +130,7 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 - `api-character-list`: List player's characters
 - `api-item-brief`: Get lightweight item metadata for IndexedDB caching
 - `api-item-prototype`: Get complete item prototype definition
+- `api-item-consume`: Consume inventory items and apply effects
 - `api-segment-decision`: Record player choice in decision segment
 - `api-segment-history`: Get segment history
 - `api-segment-status`: Get current segment status

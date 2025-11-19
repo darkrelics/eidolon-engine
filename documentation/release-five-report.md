@@ -26,7 +26,7 @@ Release 4 establishes the **economy and inventory management system** by impleme
 
 ### Inventory Operations — 3 Tasks
 
-- R5-T2: Item consumption system (use items, apply effects) ❌ NOT IMPLEMENTED
+- R5-T2: Item consumption system (use items, apply effects) ✅ COMPLETE
 - R5-T3: Inventory management (discard items, stack consolidation) ❌ NOT IMPLEMENTED
 - R5-T4: Item visual assets (icons, enhanced descriptions) ❌ NOT IMPLEMENTED
 
@@ -64,7 +64,6 @@ Release 4 establishes the **economy and inventory management system** by impleme
 
 **Critical Gaps:**
 - ❌ Currency rewards calculated but not persisted (R4-T1)
-- ❌ No item consumption mechanics (potions, scrolls)
 - ❌ Cannot discard/delete unwanted items
 - ❌ No stack consolidation (5 individual potions instead of "x5")
 - ❌ No item icons (text-only inventory)

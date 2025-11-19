@@ -703,6 +703,7 @@ Both functions follow standard patterns:
 **API Gateway Routes:** ✓ **Completed**
 - `GET /item/brief` → `api-item-brief` Lambda (handler: `api_item_brief.lambda_handler`)
 - `GET /item/prototype` → `api-item-prototype` Lambda (handler: `api_item_prototype.lambda_handler`)
+- `POST /item/consume` → `api-item-consume` Lambda (handler: `api_item_consume.lambda_handler`)
 
 ### Existing Endpoints
 

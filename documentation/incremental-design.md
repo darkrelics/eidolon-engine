@@ -905,6 +905,7 @@ lambda_configs = [
     ("api-character-list", "api_character_list.lambda_handler"),
     ("api-item-brief", "api_item_brief.lambda_handler"),
     ("api-item-prototype", "api_item_prototype.lambda_handler"),
+    ("api-item-consume", "api_item_consume.lambda_handler"),
     # Player Stack (1 function)
     ("cognito-player-new", "cognito_player_new.lambda_handler"),
     # Story Stack (9 functions)

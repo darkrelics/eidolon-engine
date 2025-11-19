@@ -336,16 +336,16 @@ Backend changes:
 
 **Impact:** Even if currency worked, players would have nothing to spend it on. Economy loop incomplete.
 
-### MEDIUM PRIORITY: Item Consumption - MISSING
+### ✅ Item Consumption - IMPLEMENTED (2025-10-22)
 
-**Missing Components:**
+**Components Implemented:**
 
-- ❌ `lambda/api_item_use.py` - Not implemented
-- ❌ Effects application system - Not implemented
-- ❌ Quantity decrement logic - Not implemented
-- ❌ Flutter "Use Item" UI - Not implemented
+- ✅ `lambda/api_item_consume.py` - Validates ownership, applies consumable effects, and updates inventory records
+- ✅ `eidolon/items.py::consume_item` - Handles wound removal, essence restoration, and character state sync (including player list revive)
+- ✅ Prototype schema updates - Added `Consumable` flag and `ConsumableEffects` map for healing foods, herbs, and potions
+- ✅ Flutter inventory UI - Adds "Use" action with optimistic updates, snackbars, and refresh handoff to character provider
 
-**Impact:** Healing potions drop from segments but cannot be consumed. Items are decorative only.
+**Result:** Players can drink potions and consume forage items. Quantities decrement (or stacks disappear), wounds/essence update server-side, and the UI refreshes to reflect new stats.
 
 ### ✅ RESOLVED: Inventory Display - WORKING (2025-10-21)
 
@@ -472,38 +472,19 @@ class _InventoryPanelState extends State<InventoryPanel> {
 
 **Result:** Players see "Bronze Coin x5" and "Iron Sword" instead of UUIDs.
 
-### Implement Item Consumption
+### ✅ Implement Item Consumption
 
-**Priority:** HIGH (completes item utility)
+**Status:** COMPLETE (2025-10-22)
 
-**Why:** Players have items but can't use them. Makes items functional.
+**Highlights:**
 
-**Implementation:**
+- Added `Consumable` metadata and structured `ConsumableEffects` to item prototypes (berries, herbs, potions, roots)
+- Implemented `eidolon/items.py::consume_item()` with wound removal, essence restoration, inventory updates, and player revive sync
+- Delivered `lambda/api_item_consume.py` with ownership validation, effect guards (active story, wasted heal), and structured responses
+- Updated deployment wiring (CDK stacks, CodeBuild validation, API Gateway integration) to include the new endpoint
+- Enhanced Flutter `InventoryPanel` with use buttons, optimistic UI updates, snackbars, and character refresh handoff
 
-1. Add consumption classification to prototypes
-   - Update prototype schema with Consumable field
-   - Define consumption effect types: Healing, Essence, Buff
-
-2. Create `lambda/api_item_consume.py`
-   - Endpoint: `POST /item/consume`
-   - Body: `{"CharacterID": "...", "ItemID": "..."}`
-   - Validate character owns item and item is consumable
-
-3. Implement consumption effects in `eidolon/items.py`
-   - Function: `apply_item_effects(character: dict, item: dict) -> dict`
-   - Healing: Remove wounds (up to item healing amount)
-   - Essence: Restore essence points
-   - Remove item from inventory after use
-
-4. Add consumption restrictions
-   - Cannot consume during active story
-   - Cannot consume if effect wasted (full health)
-
-**Files to Create:** `lambda/api_item_consume.py`
-
-**Files to Modify:** `eidolon/items.py`, `eidolon/character_data.py`, `deployment/api.py`
-
-**Result:** Items become useful tools, not decorations. Healing potions work.
+**Result:** Consumables now function end-to-end—players can heal wounds or restore essence, stack counts decrement correctly, and the UI reflects changes immediately.
 
 ### Create Store System
 
@@ -628,9 +609,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
 - ✅ Opponent death persistence (FIXED 2025-10-19: proper defeat logic)
 - ✅ Currency rewards (FIXED 2025-10-19: coins added to inventory with proper stacking)
 - ❌ Store purchases (missing)
-- ❌ Item consumption (missing)
+- ✅ Item consumption (FIXED 2025-10-22: consumables usable via POST /item/consume)
 - ❌ Item discarding (missing)
-- ❌ Economy loop (partially functional: earn ✅ / buy ❌ / use ❌)
+- ❌ Economy loop (partially functional: earn ✅ / buy ❌ / use ✅)
 
 ---
 

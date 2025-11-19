@@ -268,6 +268,9 @@ def validate_build_artifacts(bucket_name: str, region: str) -> bool:
         "api-character-delete.zip",
         "api-character-get.zip",
         "api-character-list.zip",
+        "api-item-brief.zip",
+        "api-item-prototype.zip",
+        "api-item-consume.zip",
         # Story Lambda functions
         "api-segment-decision.zip",
         "api-segment-history.zip",

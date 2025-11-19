@@ -6,6 +6,7 @@
 **Owner**: Development Team
 
 **REVISION NOTES**:
+- 2025-10-22: Task 6 completed - consumable schema, backend API, Flutter use action
 - 2025-10-21: Task 5 completed - IndexedDB integration, item repository, inventory management
 - 2025-10-20 (Evening): Task 10 completed with implementation, testing, and documentation
 - 2025-10-20 (Morning): Added Task 10 (Story Tracking for Repeatables), updated Task 5 (item quantity tracking)
@@ -241,7 +242,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 
 **Validation Completed**: All code verified via code review per project validation strategy
 
-**Next Steps**: Proceed to Task 6 (Item Consumption) to complete the economy loop.
+**Next Steps**: Proceed to Task 7 (Store System) to close the economy loop.
 
 ---
 
@@ -367,60 +368,28 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 
 ---
 
-### Task 6: Implement Item Consumption 🔨 HIGH
+### Task 6: Implement Item Consumption ✅ COMPLETED (2025-10-22)
 
-**Priority**: High (completes "use items" part of economy loop)
+**Problem (Resolved):** Consumable items were decorative; players could not heal or restore resources outside of story rewards.
 
-**Problem**: Players cannot use consumable items (potions, scrolls, etc.)
+**Deliverables:**
 
-**Current State**: No consumption endpoint or logic exists
+1. ✅ Prototype schema extended with `Consumable` flag and structured `ConsumableEffects` for healing/essence items (`data/test_prototypes.json`)
+2. ✅ Backend execution path
+   - `eidolon/items.py::consume_item()` applies effects, updates inventory stacks, and syncs character/player state
+   - `lambda/api_item_consume.py` exposes `POST /item/consume` with validation and descriptive error handling
+   - Deployment tooling updated (`deployment/api.py`, `deployment/stacks/api_stack.py`, `deployment/stacks/character_stack.py`, `deployment/codebuild.py`, `deployment/lambda_functions.py`)
+3. ✅ Flutter integration
+   - `ApiService.consumeItem()` surfaces the new endpoint
+   - `InventoryPanel` adds per-item "Use" actions with optimistic updates, busy indicators, snackbars, and parent refresh callback
 
-**Implementation**:
+**Acceptance Criteria (Met):**
+- Consumable items usable via API/UI
+- Healing effects remove wounds (with damage-type prioritization) and restore essence
+- Inventory slots decrement/remove correctly for stackable items
+- Active story guard returns 409 Conflict; wasted effects blocked with friendly messaging
 
-1. **Add consumption classification to prototypes**
-   - Update prototype schema with Consumable field
-   - Define consumption effect types: Healing, Essence, Buff
-   - Update test item prototypes
-
-2. **Create consumption API endpoint**
-   - Create `lambda/api_item_consume.py`
-   - Endpoint: `POST /item/consume`
-   - Body: `{"CharacterID": "...", "ItemID": "..."}`
-   - Validate character owns item
-   - Validate item is consumable
-
-3. **Implement consumption effects**
-   - Location: `eidolon/items.py`
-   - Function: `apply_item_effects(character: dict, item: dict) -> dict`
-   - Healing: Remove wounds (up to item healing amount)
-   - Essence: Restore essence points
-   - Remove item from inventory after use
-
-4. **Add consumption restrictions**
-   - Cannot consume during active story
-   - Cannot consume if effect wasted (full health)
-
-5. **Deploy and test**
-   - Update API Gateway routes
-   - Test consumption with various item types
-
-**Acceptance Criteria**:
-- ✅ Consumable items can be used via API
-- ✅ Healing items restore health correctly
-- ✅ Items removed from inventory after use
-- ✅ Cannot consume during active story
-- ✅ Proper error handling
-
-**Files to Create**:
-- `lambda/api_item_consume.py`
-
-**Files to Modify**:
-- `eidolon/items.py`
-- `eidolon/character_data.py`
-- `deployment/api.py`
-- `documentation/incremental-api.md`
-
-**Dependencies**: Task 5 (inventory management must work for consumption)
+**Next Steps:** Extend to additional effect types (buffs) and add discard/store flows in Task 7/Inventory Management.
 
 ---
 
@@ -755,7 +724,7 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
 
 ### Economy Loop Complete (Tasks 6, 7)
 - ⬜ Players can purchase items from store *(Task 7 pending)*
-- ⬜ Players can consume items for effects *(Task 6 pending)*
+- ✅ Players can consume items for effects *(Task 6 completed 2025-10-22)*
 - ⬜ Complete economy loop functional: earn → buy → use
 
 ### Quality & Production Ready (Task 8)
@@ -791,8 +760,8 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
    - Mitigation: Test with small currency amounts first, verify Resources field handling
 2. **Store transactions must be atomic**
    - Mitigation: Use DynamoDB transactions, add comprehensive error handling
-3. **Item consumption during active story could break state**
-   - Mitigation: Block consumption during active story, add state validation
+3. **Item consumption during active story could break state** *(Task 6 - RESOLVED)*
+   - Resolution: `api_item_consume` enforces active-story guard (409 Conflict) and validates effect applicability
 
 ### Medium Risk Items
 1. **Item inventory structure change may require migration** *(Task 5)*
@@ -815,7 +784,7 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
 
 **Current Status**: Tasks 1-5 and Task 10 completed (2025-10-21)
 
-1. Proceed to Task 6 (Item Consumption - high priority)
+1. Proceed to Task 7 (Store System - high priority)
    - Completes the "use items" part of economy loop
    - Enables consumable items (potions, scrolls, etc.)
    - Depends on Task 5 inventory management (now complete)
@@ -844,7 +813,7 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
   - Bug fixes in character_repository.dart (type handling)
   - Quantity semantics documented: storage omits field for non-stackable, API always includes it
 - Updated success criteria to reflect Task 5 completion
-- Updated next steps: Tasks 1-5 and 10 now complete, Task 6 next priority
+- Updated next steps: Tasks 1-6 and 10 complete, Task 7 next priority
 - Performance improvement: 75% reduction in API calls (20 items = 5 prototype fetches)
 
 **Revision: 2025-10-20 (Evening)**

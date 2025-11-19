@@ -12,14 +12,14 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 
 ## Current Implementation Status
 
-17 Lambda functions deployed (18 total, cognito-player-delete not deployed). All functions fully implemented and operational in production.
+18 Lambda functions deployed (19 total, cognito-player-delete not deployed). All functions fully implemented and operational in production.
 
 **Deployment Distribution:**
 - Character Stack: 7 functions
 - Story Stack: 9 functions
 - Player Stack: 1 function
 
-### Character Management (7 functions - Character Stack)
+### Character Management (8 functions - Character Stack)
 
 - `api-archetype-list` - List available archetypes
 - `api-character-add` - Create new character with bloom filter validation
@@ -28,6 +28,7 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 - `api-character-list` - List player's characters
 - `api-item-brief` - Get lightweight item metadata (ItemID + PrototypeID)
 - `api-item-prototype` - Get complete item prototype definition
+- `api-item-consume` - Consume inventory item and apply effects
 
 ### Story Operations (9 functions - Story Stack)
 
@@ -81,7 +82,7 @@ Each function has a fixed logical ID to prevent recreation:
 ```python
 # From deployment/stacks/character_stack.py, player_stack.py, story_stack.py
 logical_id_map = {
-    # Character Stack (7 functions)
+    # Character Stack (8 functions)
     "api-archetype-list": "ApiArchetypeListFunction",
     "api-character-add": "ApiCharacterAddFunction",
     "api-character-delete": "ApiCharacterDeleteFunction",
@@ -89,6 +90,7 @@ logical_id_map = {
     "api-character-list": "ApiCharacterListFunction",
     "api-item-brief": "ApiItemBriefFunction",
     "api-item-prototype": "ApiItemPrototypeFunction",
+    "api-item-consume": "ApiItemConsumeFunction",
     # Player Stack (1 function)
     "cognito-player-new": "CognitoPlayerNewFunction",
     # Story Stack (9 functions)
@@ -102,7 +104,7 @@ logical_id_map = {
     "ops-segment-process": "OpsSegmentProcessFunction",
     "ops-story-advance": "OpsStoryAdvanceFunction"
 }
-# Total: 17 deployed
+# Total: 18 deployed
 ```
 
 ## Shared Modules

@@ -94,7 +94,7 @@ Each stack has its own app file to prevent cross-contamination:
 - **app_cloudwatch.py**: Log group and metrics namespace
 - **app_lambda.py**: Layer, functions, and execution role
 - **app_player.py**: Cognito User Pool with triggers
-- **app_character.py**: Character-related Lambda functions (api-item-brief, api-item-prototype)
+- **app_character.py**: Character-related Lambda functions (api-item-brief, api-item-prototype, api-item-consume)
 - **app_story.py**: SSM, SQS, EventBridge integration
 - **app_api.py**: API Gateway with Lambda integrations
 - **app_client.py**: CloudFront, S3, and portal build

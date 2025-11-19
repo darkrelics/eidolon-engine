@@ -96,6 +96,7 @@ class CharacterStack(Stack):
             ("api-archetype-list", "api_archetype_list.lambda_handler"),
             ("api-item-brief", "api_item_brief.lambda_handler"),
             ("api-item-prototype", "api_item_prototype.lambda_handler"),
+            ("api-item-consume", "api_item_consume.lambda_handler"),
         ]
 
         # Get common environment variables
@@ -134,6 +135,7 @@ class CharacterStack(Stack):
             "api-archetype-list": "ApiArchetypeListFunction",
             "api-item-brief": "ApiItemBriefFunction",
             "api-item-prototype": "ApiItemPrototypeFunction",
+            "api-item-consume": "ApiItemConsumeFunction",
         }
         return logical_id_map.get(function_name, function_name.replace("-", "").title() + "Function")
 

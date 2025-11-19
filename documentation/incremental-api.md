@@ -639,6 +639,52 @@ Retrieves complete item prototype definition for client-side caching.
 - `404 Not Found` - Prototype does not exist
 - `500 Internal Server Error` - Database operation failed
 
+### Consume Item
+
+Consumes an inventory item and applies its effects server-side. Supports stackable consumables (e.g., potions, food) and updates the character's wounds/essence along with inventory quantities.
+
+**Endpoint:** `POST /item/consume`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "ItemID": "8f14e45f-e29b-41d4-a716-446655880000"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "You drink the healing potion, feeling a warm sensation spread through your body.",
+  "itemName": "Healing Potion",
+  "effects": {
+    "healWounds": {
+      "requested": 6,
+      "removed": 4,
+      "damageTypes": ["lethal", "bashing"]
+    }
+  },
+  "remainingQuantity": 1,
+  "itemRemoved": false,
+  "characterState": "standing"
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing parameters, invalid UUID format, or item not consumable
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `404 Not Found` - Item not found or not in character inventory
+- `409 Conflict` - Item has no effect in current state (e.g., no wounds, active story in progress)
+- `500 Internal Server Error` - Database update failed
+
 ### Stack Operations (Future)
 
 These endpoints will manage stackable item operations when implemented:

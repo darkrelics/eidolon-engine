@@ -736,11 +736,10 @@ The incremental subsystem is **substantially more complete than initially assess
 ### What's Missing ❌
 
 1. **Inventory Display** - get_inventory() returns empty InventoryDetails (players see UUIDs instead of item names)
-2. **Item Consumption** - No api_item_consume.py endpoint (healing potions don't work)
-3. **Store System** - No store endpoints to spend currency
-4. **Currency Display in Flutter** - Backend sends Resources.Value but Flutter needs integration
-5. **User-Facing Documentation** - Author guides and operations runbooks
-6. **State Machine Tests** - Unit/integration tests for concurrent operations
+2. **Store System** - No store endpoints to spend currency
+3. **Currency Display in Flutter** - Backend sends Resources.Value but Flutter needs integration
+4. **User-Facing Documentation** - Author guides and operations runbooks
+5. **State Machine Tests** - Unit/integration tests for concurrent operations
 
 **Note:** Currency backend is complete. Item rewards are fully implemented via `items.py:add_items_to_inventory()`.
 
@@ -758,13 +757,12 @@ The incremental subsystem is **substantially more complete than initially assess
 ### Recommended Focus (Updated October 19, 2025)
 
 1. **Inventory Display Fix** - Investigate get_inventory() issue, implement item_repository.dart in Flutter
-2. **Item Consumption** - Implement api_item_consume.py and Flutter UI
-3. **Store System** - Implement store endpoints and Flutter store UI
-4. **Currency Display** - Integrate currency display in Flutter (backend ready)
-5. **User-Facing Documentation** - Author guides, operations runbooks
-6. **Testing** - Integration tests for currency system, store, and item consumption
-7. **Code Quality** - Refactor large Lambda functions (api_segment_status.py 359 lines, ops_story_advance.py 315 lines)
+2. **Store System** - Implement store endpoints and Flutter store UI
+3. **Currency Display** - Integrate currency display in Flutter (backend ready)
+4. **User-Facing Documentation** - Author guides, operations runbooks
+5. **Testing** - Integration tests for currency system, store, and item discard
+6. **Code Quality** - Refactor large Lambda functions (api_segment_status.py 359 lines, ops_story_advance.py 315 lines)
 
-**Update:** System deployed to AWS. Currency backend implemented 2025-10-19. Core gameplay loop functional (earn currency, accumulate items). Missing: inventory display, item usage, store system.
+**Update:** System deployed to AWS. Currency backend implemented 2025-10-19. Item consumption delivered 2025-10-22 (earn → heal). Remaining: inventory polish, store system, currency UI.
 
 The system is **deployment-ready** for core story gameplay. Currency and death mechanics fixed. Now focusing on completing the economy loop (inventory display, item consumption, store system) and operational tooling.

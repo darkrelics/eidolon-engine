@@ -191,7 +191,7 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 **Remaining Work (Frontend Integration):**
 
 - [ ] Inventory display shows item names instead of UUIDs
-- [ ] Item consumption endpoint (api_item_consume.py)
+- [x] Item consumption endpoint (api_item_consume.py)
 - [ ] Store system (api_store_list.py, api_store_purchase.py)
 - [ ] Currency display in Flutter UI
 

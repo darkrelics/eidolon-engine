@@ -1,17 +1,25 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/utils/rpg_icons.dart';
 import 'package:eidolon_incremental/repositories/item_repository.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
+import 'package:eidolon_incremental/services/base_api_service.dart';
 import 'package:fluttericon/rpg_awesome_icons.dart';
 
 /// Right panel displaying character inventory with enriched item data
 class InventoryPanel extends StatefulWidget {
   final Character character;
   final Function(String itemId)? onItemTap;
+  final Future<void> Function()? onRefresh;
 
-  const InventoryPanel({super.key, required this.character, this.onItemTap});
+  const InventoryPanel({
+    super.key,
+    required this.character,
+    this.onItemTap,
+    this.onRefresh,
+  });
 
   @override
   State<InventoryPanel> createState() => _InventoryPanelState();
@@ -19,9 +27,11 @@ class InventoryPanel extends StatefulWidget {
 
 class _InventoryPanelState extends State<InventoryPanel> {
   ItemRepository? _itemRepository;
+  ApiService? _apiService;
   Map<String, Map<String, dynamic>> _enrichedInventory = {};
   bool _isLoading = true;
   String? _errorMessage;
+  final Set<String> _processingItems = <String>{};
 
   @override
   void initState() {
@@ -33,6 +43,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
     try {
       final authService = AuthService.instance;
       final apiService = ApiService(authService: authService);
+      _apiService = apiService;
       _itemRepository = ItemRepository(apiService: apiService);
 
       // Load enriched inventory
@@ -46,6 +57,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
   }
 
+  @override
+  void didUpdateWidget(covariant InventoryPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!mapEquals(widget.character.inventory, oldWidget.character.inventory)) {
+      _loadInventoryDetails();
+    }
+  }
+
   Future<void> _loadInventoryDetails() async {
     if (_itemRepository == null) {
       setState(() {
@@ -55,6 +74,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
 
     try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
       final enriched = await _itemRepository!.loadInventoryDetails(widget.character.inventory);
       setState(() {
         _enrichedInventory = enriched;
@@ -305,10 +328,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
               itemBuilder: (context, index) {
                 final item = unequippedItems[index];
                 final itemId = _getItemId(item.value);
+                final slotKey = item.key;
+                final itemDetails = _getEnrichedItemDetails(slotKey);
+                final isConsumable = _isConsumable(itemDetails);
                 return _InventoryGridItem(
+                  slot: slotKey,
                   itemId: itemId,
-                  itemDetails: _getEnrichedItemDetails(item.key),
+                  itemDetails: itemDetails,
                   quantity: _getQuantity(item.value),
+                  isConsumable: isConsumable,
+                  isProcessing: _isItemProcessing(itemId),
+                  onUse: isConsumable ? () => _handleUseItem(slotKey, itemId) : null,
                   onTap: widget.onItemTap != null
                       ? () => widget.onItemTap!(itemId)
                       : null,
@@ -324,6 +354,110 @@ class _InventoryPanelState extends State<InventoryPanel> {
   /// Get enriched item details from loaded inventory
   Map<String, dynamic>? _getEnrichedItemDetails(String slot) {
     return _enrichedInventory[slot];
+  }
+
+  bool _isConsumable(Map<String, dynamic>? details) {
+    if (details == null) {
+      return false;
+    }
+    final consumable = details['Consumable'];
+    if (consumable is bool) {
+      return consumable;
+    }
+    return false;
+  }
+
+  bool _isItemProcessing(String itemId) => _processingItems.contains(itemId);
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _handleUseItem(String slot, String itemId) async {
+    if (_apiService == null || _processingItems.contains(itemId)) {
+      return;
+    }
+
+    setState(() {
+      _processingItems.add(itemId);
+    });
+
+    try {
+      final result = await _apiService!.consumeItem(
+        characterId: widget.character.id,
+        itemId: itemId,
+      );
+
+      final remainingQuantity = (result['remainingQuantity'] as num?)?.toInt() ?? 0;
+      final itemRemoved = result['itemRemoved'] as bool? ?? remainingQuantity <= 0;
+      final message = result['message'] as String? ?? 'Item consumed.';
+
+      final slotsToUpdate = widget.character.inventory.entries
+          .where((entry) => entry.value is Map && entry.value['ItemID'] == itemId)
+          .map((entry) => entry.key)
+          .toList();
+
+      if (slotsToUpdate.isEmpty) {
+        slotsToUpdate.add(slot);
+      }
+
+      for (final slotKey in slotsToUpdate) {
+        if (itemRemoved) {
+          widget.character.inventory.remove(slotKey);
+          widget.character.inventoryDetails.remove(slotKey);
+          _enrichedInventory.remove(slotKey);
+        } else {
+          final slotValue = widget.character.inventory[slotKey];
+          if (slotValue is Map<String, dynamic>) {
+            slotValue['Quantity'] = remainingQuantity;
+          } else {
+            widget.character.inventory[slotKey] = {'ItemID': itemId, 'Quantity': remainingQuantity};
+          }
+
+          final details = _enrichedInventory[slotKey];
+          if (details != null) {
+            details['Quantity'] = remainingQuantity;
+          }
+
+          final detailInventory = widget.character.inventoryDetails[slotKey];
+          if (detailInventory is Map<String, dynamic>) {
+            detailInventory['Quantity'] = remainingQuantity;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        _showSnackBar(message);
+      }
+
+      if (widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } on ApiException catch (err) {
+      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to consume item.';
+      _showSnackBar(errorMessage, isError: true);
+    } catch (err) {
+      _showSnackBar('Unexpected error: $err', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingItems.remove(itemId);
+        });
+      }
+    }
   }
 
   bool _isEquipmentSlot(String slot) {
@@ -495,16 +629,24 @@ class _InventorySlot extends StatelessWidget {
 }
 
 class _InventoryGridItem extends StatelessWidget {
+  final String slot;
   final String itemId;
   final Map<String, dynamic>? itemDetails;
   final int quantity;
   final VoidCallback? onTap;
+  final VoidCallback? onUse;
+  final bool isConsumable;
+  final bool isProcessing;
 
   const _InventoryGridItem({
+    required this.slot,
     required this.itemId,
     this.itemDetails,
     this.quantity = 1,
     this.onTap,
+    this.onUse,
+    this.isConsumable = false,
+    this.isProcessing = false,
   });
 
   @override
@@ -514,37 +656,75 @@ class _InventoryGridItem extends StatelessWidget {
 
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
     final isStackable = itemDetails?['Stackable'] == true;
+    final itemName = itemDetails?['Name'] as String? ?? itemId;
+    final tooltipText = slot.isNotEmpty ? '$itemName ($slot)' : itemName;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: _getRarityColor(itemRarity).withValues(alpha: 0.5),
-            width: 2,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _getItemIcon(itemDetails?['Type'] ?? 'item'),
-              size: 24,
-              color: _getRarityColor(itemRarity),
+    return Tooltip(
+      message: tooltipText,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _getRarityColor(itemRarity).withValues(alpha: 0.5),
+              width: 2,
             ),
-            const SizedBox(height: 4),
-            if (isStackable && quantity > 1)
-              Text(
-                'x$quantity',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _getItemIcon(itemDetails?['Type'] ?? 'item'),
+                      size: 24,
+                      color: _getRarityColor(itemRarity),
+                    ),
+                    const SizedBox(height: 4),
+                    if (isStackable && quantity > 1)
+                      Text(
+                        'x$quantity',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-          ],
+              if (isConsumable)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: IconButton(
+                    tooltip: 'Use $itemName',
+                    onPressed: isProcessing ? null : onUse,
+                    style: IconButton.styleFrom(
+                      backgroundColor: colorScheme.primaryContainer,
+                      foregroundColor: colorScheme.onPrimaryContainer,
+                      padding: const EdgeInsets.all(4),
+                      minimumSize: const Size(28, 28),
+                    ),
+                    icon: isProcessing
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.play_arrow_rounded, size: 16),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

@@ -3,12 +3,17 @@
 import random
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from functools import cache
+from typing import Any
 
 from botocore.exceptions import ClientError
 
+from eidolon.constants import CharState
 from eidolon.dynamo import TableName, dynamo
+from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
 from eidolon.logger import logger
+from eidolon.mechanics import determine_character_state_from_wounds
 
 
 def merge_stacks(item1: dict, item2: dict) -> dict:
@@ -239,10 +244,21 @@ def build_item_payload(
     *,
     is_worn: bool = False,
     contents=None,
+    quantity_override: int | None = None,
+    owner_id: str | None = None,
 ) -> dict:
-    """Construct item payload from a prototype definition."""
+    """Construct item payload from a prototype definition.
 
-    return {
+    Args:
+        prototype: Prototype definition from DynamoDB
+        item_id: UUID assigned to the instance
+        is_worn: Whether the item starts worn
+        contents: Optional contents list for containers
+        quantity_override: Explicit quantity to persist (primarily for stackable rewards)
+        owner_id: Optional character UUID to persist as OwnerID
+    """
+
+    payload = {
         "ItemID": item_id,
         "PrototypeID": prototype.get("PrototypeID", ""),
         "Name": prototype.get("Name", "Unknown Item"),
@@ -264,7 +280,17 @@ def build_item_payload(
         "Equipped": is_worn,
         "CanPickUp": prototype.get("CanPickUp", True),
         "Metadata": prototype.get("Metadata", {}),
+        "Consumable": prototype.get("Consumable", False),
+        "ConsumableEffects": prototype.get("ConsumableEffects", {}),
     }
+
+    if quantity_override is not None:
+        payload["Quantity"] = quantity_override
+
+    if owner_id:
+        payload["OwnerID"] = owner_id
+
+    return payload
 
 
 def create_item_from_prototype(
@@ -272,6 +298,8 @@ def create_item_from_prototype(
     *,
     is_worn: bool = False,
     initial_contents=None,
+    quantity: int | None = None,
+    owner_id: str | None = None,
 ) -> dict:
     """Create a single item instance from a prototype and persist it."""
 
@@ -290,6 +318,8 @@ def create_item_from_prototype(
         item_id,
         is_worn=is_worn,
         contents=initial_contents,
+        quantity_override=quantity,
+        owner_id=owner_id,
     )
 
     try:
@@ -402,7 +432,7 @@ def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[
             logger.warning("Skipping invalid prototype ID in story rewards for %s: %s", character_id, prototype_id)
             continue
 
-        item_payload = create_item_from_prototype(prototype_id)
+        item_payload = create_item_from_prototype(prototype_id, owner_id=character_id)
         if not item_payload:
             continue
 
@@ -479,6 +509,7 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
                 prototype,
                 item_id,
                 is_worn=is_worn,
+                owner_id=character_id,
             )
 
             # Track first container
@@ -669,3 +700,377 @@ def get_inventory(inventory: dict) -> dict:
                     }
 
     return enriched_inventory
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    """Convert DynamoDB numeric values to int safely."""
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, Decimal):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+    return default
+
+
+def _normalize_effect_config(effects: dict | None) -> dict:
+    """Normalize consumable effect configuration keys."""
+    if not isinstance(effects, dict):
+        return {}
+
+    normalized = {}
+    for key, value in effects.items():
+        if not isinstance(key, str):
+            continue
+        normalized[key.lower()] = value
+    return normalized
+
+
+def _remove_wounds(wounds: list, amount: int, priority: list[str] | None = None) -> tuple[list, list]:
+    """Remove up to `amount` wounds following optional priority ordering."""
+    if amount <= 0 or not isinstance(wounds, list) or not wounds:
+        return wounds or [], []
+
+    # Copy wounds to avoid mutating original objects
+    remaining: list = []
+    for wound in wounds:
+        if isinstance(wound, dict):
+            remaining.append(dict(wound))
+        else:
+            logger.warning("Encountered malformed wound entry while applying healing: %s", wound)
+
+    if not remaining:
+        return [], []
+
+    removal_order: list[str] = []
+    if priority:
+        seen: set[str] = set()
+        for entry in priority:
+            entry_lower = str(entry).lower()
+            if entry_lower not in seen:
+                seen.add(entry_lower)
+                removal_order.append(entry_lower)
+
+    if "any" not in removal_order:
+        removal_order.append("any")
+
+    removed: list = []
+
+    def pop_match(target: str) -> bool:
+        for index, wound in enumerate(remaining):
+            damage_type = str(wound.get("DamageType", "")).lower()
+            if target == "any" or damage_type == target:
+                removed.append(remaining.pop(index))
+                return True
+        return False
+
+    for target in removal_order:
+        while len(removed) < amount and pop_match(target):
+            continue
+        if len(removed) >= amount:
+            break
+
+    while len(removed) < amount and remaining:
+        removed.append(remaining.pop(0))
+
+    return remaining, removed
+
+
+def consume_item(character_id: str, item_id: str) -> dict:
+    """
+    Consume an item from a character's inventory and apply its effects.
+
+    Args:
+        character_id: Character UUID
+        item_id: Item UUID
+
+    Returns:
+        Dict describing the applied effects and inventory changes.
+
+    Raises:
+        ValueError: If validation fails (missing item, not consumable, effect wasted)
+        RuntimeError: If database operations fail
+    """
+
+    if not character_id or not item_id:
+        raise ValueError("CharacterID and ItemID are required")
+
+    try:
+        character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
+    except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
+        logger.error("Failed to load character %s Error: %s", character_id, err, exc_info=True)
+        raise RuntimeError("Failed to load character") from err
+
+    if not character:
+        raise ValueError("Character not found")
+
+    if character.get("ActiveStoryID"):
+        raise ValueError("Cannot consume items during an active story")
+
+    inventory_raw = character.get("Inventory", {})
+    if not isinstance(inventory_raw, dict):
+        inventory_raw = {}
+
+    inventory: dict = {str(key): value for key, value in inventory_raw.items()}
+    slot_key = None
+    slot_entry = None
+    for key, value in inventory.items():
+        if isinstance(value, dict) and value.get("ItemID") == item_id:
+            slot_key = key
+            slot_entry = value
+            break
+
+    if slot_key is None or slot_entry is None:
+        raise ValueError("Item is not in character inventory")
+
+    try:
+        item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+    except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
+        logger.error("Failed to load item %s Error: %s", item_id, err, exc_info=True)
+        raise RuntimeError("Failed to load item") from err
+
+    if not item:
+        raise ValueError("Item not found")
+
+    prototype_id = item.get("PrototypeID")
+    if not prototype_id:
+        raise ValueError("Item prototype reference missing")
+
+    prototype = get_prototype(prototype_id)
+    if not prototype:
+        raise ValueError("Item prototype not found")
+
+    consumable_flag = bool(prototype.get("Consumable", item.get("Consumable", False)))
+    if not consumable_flag:
+        raise ValueError("Item is not consumable")
+
+    effects_config = (
+        prototype.get("ConsumableEffects")
+        or item.get("ConsumableEffects")
+        or prototype.get("Effects")
+        or item.get("Effects")
+    )
+    effects = _normalize_effect_config(effects_config)
+    if not effects:
+        raise ValueError("Consumable item is missing effects configuration")
+
+    wounds: list = character.get("Wounds") or []
+    if not isinstance(wounds, list):
+        wounds = []
+    max_health = _coerce_int(character.get("MaxHealth"), DEFAULT_HEALTH)
+
+    updated_wounds = list(wounds)
+    removed_wounds: list = []
+
+    essence_changed = False
+    new_essence = None
+
+    effect_summary: dict = {}
+    effect_applied = False
+
+    heal_config = effects.get("healwounds") or effects.get("heal") or effects.get("health")
+    if heal_config is not None:
+        heal_amount = 0
+        damage_priority: list[str] | None = None
+        if isinstance(heal_config, dict):
+            heal_amount = _coerce_int(heal_config.get("Amount"), 0)
+            priority_raw = heal_config.get("DamageTypes")
+            if isinstance(priority_raw, list):
+                damage_priority = [str(entry).lower() for entry in priority_raw]
+        else:
+            heal_amount = _coerce_int(heal_config, 0)
+
+        if heal_amount > 0:
+            updated_wounds, removed_wounds = _remove_wounds(updated_wounds, heal_amount, damage_priority)
+            removed_count = len(removed_wounds)
+            damage_types = [w.get("DamageType") for w in removed_wounds if isinstance(w, dict)]
+
+            effect_summary["healWounds"] = {"requested": heal_amount, "removed": removed_count, "damageTypes": damage_types}
+
+            if removed_count > 0:
+                effect_applied = True
+        else:
+            logger.warning("Heal effect defined for %s but no positive amount provided", prototype_id)
+
+    essence_config = effects.get("restoreessence") or effects.get("essence")
+    if essence_config is not None:
+        essence_amount = 0
+        if isinstance(essence_config, dict):
+            essence_amount = _coerce_int(essence_config.get("Amount"), 0)
+        else:
+            essence_amount = _coerce_int(essence_config, 0)
+
+        current_essence = _coerce_int(character.get("Essence"), DEFAULT_ESSENCE)
+        max_essence = _coerce_int(character.get("MaxEssence"), DEFAULT_ESSENCE)
+
+        if max_essence <= 0:
+            max_essence = DEFAULT_ESSENCE
+
+        if essence_amount > 0 and current_essence < max_essence:
+            new_essence = min(max_essence, current_essence + essence_amount)
+            essence_delta = new_essence - current_essence
+            if essence_delta > 0:
+                essence_changed = True
+                effect_applied = True
+                effect_summary["restoreEssence"] = {
+                    "requested": essence_amount,
+                    "restored": essence_delta,
+                    "result": new_essence,
+                    "max": max_essence,
+                }
+        else:
+            effect_summary["restoreEssence"] = {
+                "requested": essence_amount,
+                "restored": 0,
+                "result": current_essence,
+                "max": max_essence,
+            }
+
+    if not effect_applied:
+        raise ValueError("The item has no effect right now")
+
+    # Update wounds and character state
+    character_state_before = character.get("CharState", CharState.STANDING.value)
+    new_char_state = character_state_before
+    wounds_changed = False
+
+    if removed_wounds:
+        wounds_changed = True
+        new_wounds = updated_wounds
+        new_char_state = determine_character_state_from_wounds(max_health, new_wounds)
+    else:
+        new_wounds = wounds
+
+    inventory_changed = False
+    stackable = bool(item.get("Stackable"))
+    current_quantity = _coerce_int(slot_entry.get("Quantity", item.get("Quantity", 1)), 1)
+    remaining_quantity = 0
+    item_removed = False
+
+    if stackable:
+        new_quantity = max(0, current_quantity - 1)
+        remaining_quantity = new_quantity
+        if new_quantity > 0:
+            # Update all inventory slots referencing this item
+            for key, value in inventory.items():
+                if isinstance(value, dict) and value.get("ItemID") == item_id:
+                    existing = dict(value)
+                    existing["Quantity"] = new_quantity
+                    inventory[key] = existing
+            inventory_changed = True
+        else:
+            inventory.pop(slot_key, None)
+            inventory_changed = True
+            item_removed = True
+    else:
+        inventory.pop(slot_key, None)
+        item_removed = True
+        inventory_changed = True
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    update_expression_parts = ["UpdatedAt = :updated_at"]
+    expression_values: dict[str, Any] = {":updated_at": timestamp}
+    expression_names: dict[str, str] = {}
+
+    if inventory_changed:
+        update_expression_parts.append("Inventory = :inventory")
+        expression_values[":inventory"] = inventory
+    if wounds_changed:
+        update_expression_parts.append("Wounds = :wounds")
+        expression_values[":wounds"] = new_wounds
+    if essence_changed and new_essence is not None:
+        update_expression_parts.append("Essence = :essence")
+        expression_values[":essence"] = Decimal(str(new_essence))
+    if new_char_state != character_state_before:
+        update_expression_parts.append("CharState = :char_state")
+        expression_values[":char_state"] = new_char_state
+
+    try:
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET " + ", ".join(update_expression_parts),
+            ExpressionAttributeValues=expression_values,
+            ExpressionAttributeNames=expression_names if expression_names else None,
+        )
+    except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
+        logger.error("Failed to update character %s after consumption Error: %s", character_id, err, exc_info=True)
+        raise RuntimeError("Failed to update character after consumption") from err
+
+    # Keep player metadata in sync if character is no longer dead
+    if character_state_before == CharState.DEAD.value and new_char_state != CharState.DEAD.value:
+        player_id = character.get("PlayerID")
+        character_name = character.get("CharacterName")
+        if player_id and character_name:
+            try:
+                dynamo.update_item(
+                    TableName.PLAYERS,
+                    Key={"PlayerID": player_id},
+                    UpdateExpression="SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
+                    ExpressionAttributeNames={"#name": character_name},
+                    ExpressionAttributeValues={":dead": False, ":updated_at": timestamp},
+                )
+            except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
+                logger.error(
+                    "Failed to update player record for revived character %s Error: %s",
+                    character_id,
+                    err,
+                    exc_info=True,
+                )
+
+    # Update or delete the item instance
+    try:
+        if stackable and not item_removed:
+            dynamo.update_item(
+                TableName.ITEMS,
+                Key={"ItemID": item_id},
+                UpdateExpression="SET Quantity = :quantity, UpdatedAt = :updated_at",
+                ExpressionAttributeValues={":quantity": Decimal(str(remaining_quantity)), ":updated_at": timestamp},
+            )
+        else:
+            dynamo.delete_item(TableName.ITEMS, {"ItemID": item_id})
+    except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
+        logger.error("Failed to update item %s after consumption Error: %s", item_id, err, exc_info=True)
+        raise RuntimeError("Failed to update item after consumption") from err
+
+    item_name = (
+        prototype.get("PrototypeName")
+        or prototype.get("Name")
+        or item.get("Name")
+        or "item"
+    )
+
+    use_message = "You consume the item."
+    verbs = prototype.get("Verbs", {})
+    if isinstance(verbs, dict):
+        use_value = verbs.get("Use")
+        if isinstance(use_value, str):
+            use_message = use_value
+        elif isinstance(use_value, dict):
+            use_message = use_value.get("Message", use_message)
+
+    logger.info(
+        "Character %s consumed %s (item %s). Effects: %s",
+        character_id,
+        prototype_id,
+        item_id,
+        effect_summary,
+    )
+
+    return {
+        "success": True,
+        "message": use_message or f"You consume {item_name}.",
+        "itemName": item_name,
+        "effects": effect_summary,
+        "remainingQuantity": remaining_quantity,
+        "itemRemoved": item_removed,
+        "characterState": new_char_state,
+    }

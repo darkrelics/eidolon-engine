@@ -218,6 +218,139 @@ def get_character_list(player_id: str) -> list:
     return characters
 
 
+def _character_contains_item(character: dict, item_id: str, *, character_id: str | None = None) -> bool:
+    """
+    Determine whether the provided character owns the supplied item ID.
+
+    Inspects inventory slots, equipped hand slots, and recursively traverses container contents.
+    """
+    if not character or not item_id:
+        return False
+
+    top_level_items: list[str] = []
+
+    inventory = character.get("Inventory", {})
+    for slot_data in inventory.values():
+        if slot_data and isinstance(slot_data, dict):
+            slot_item_id = slot_data.get("ItemID")
+            if slot_item_id:
+                if slot_item_id == item_id:
+                    return True
+                top_level_items.append(slot_item_id)
+
+    left_id = character.get("LeftHandID")
+    if left_id:
+        if left_id == item_id:
+            return True
+        top_level_items.append(left_id)
+
+    right_id = character.get("RightHandID")
+    if right_id:
+        if right_id == item_id:
+            return True
+        top_level_items.append(right_id)
+
+    processed: set[str] = set()
+    items_to_process = list(top_level_items)
+
+    while items_to_process:
+        current_id = items_to_process.pop()
+        if not current_id or current_id in processed:
+            continue
+
+        processed.add(current_id)
+
+        try:
+            item_record = dynamo.get_item(
+                TableName.ITEMS,
+                {"ItemID": current_id},
+                ProjectionExpression="Container, Contents",
+            )
+        except ClientError as err:
+            logger.error(
+                "Failed to inspect item %s for ownership check (character=%s) Error: %s",
+                current_id,
+                character_id,
+                err,
+                exc_info=True,
+            )
+            raise RuntimeError(f"Failed to verify item ownership: {err}") from err
+
+        if not item_record or not item_record.get("Container"):
+            continue
+
+        contents = item_record.get("Contents", [])
+        for nested_id in contents:
+            if not nested_id:
+                continue
+            if nested_id == item_id:
+                return True
+            if nested_id not in processed:
+                items_to_process.append(nested_id)
+
+    return False
+
+
+def player_owns_item(player_id: str, item_id: str) -> bool:
+    """
+    Verify that the specified item ID belongs to one of the player's characters.
+
+    Raises:
+        ValueError: If the player record cannot be found
+        RuntimeError: If ownership verification fails due to a database error
+    """
+    if not player_id or not item_id:
+        return False
+
+    try:
+        player = dynamo.get_item(
+            TableName.PLAYERS,
+            {"PlayerID": player_id},
+            ProjectionExpression="CharacterList",
+        )
+    except ClientError as err:
+        logger.error(
+            "Failed to load player %s while verifying item ownership Error: %s",
+            player_id,
+            err,
+            exc_info=True,
+        )
+        raise RuntimeError(f"Failed to verify item ownership: {err}") from err
+
+    if not player:
+        logger.warning(f"Player not found for ownership check: {player_id}")
+        raise ValueError(f"Player {player_id} not found")
+
+    character_list = player.get("CharacterList", {})
+    for char_info in character_list.values():
+        char_id = char_info.get("UUID")
+        if not char_id:
+            continue
+
+        try:
+            character = dynamo.get_item(
+                TableName.CHARACTERS,
+                {"CharacterID": char_id},
+                ProjectionExpression="Inventory, LeftHandID, RightHandID",
+            )
+        except ClientError as err:
+            logger.error(
+                "Failed to load character %s while verifying item ownership Error: %s",
+                char_id,
+                err,
+                exc_info=True,
+            )
+            raise RuntimeError(f"Failed to verify item ownership: {err}") from err
+
+        if not character:
+            continue
+
+        if _character_contains_item(character, item_id, character_id=char_id):
+            return True
+
+    return False
+
+
 def verify_character_ownership(character_id: str, player_id: str) -> bool:
     """
     Verify that a character belongs to a player by checking the player record.

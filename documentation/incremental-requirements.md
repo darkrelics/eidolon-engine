@@ -283,7 +283,7 @@ This document defines the functional and non-functional requirements for the Inc
 
 **Missing Features:**
 1. Store system (no endpoints)
-2. Item consumption (no api_item_use endpoint)
+2. Store system (pending)
 3. Item discarding (no api_item_discard endpoint)
 4. Ghost state (health.md spec, not in Python constants)
 

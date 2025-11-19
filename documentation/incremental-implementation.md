@@ -137,6 +137,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 - api-character-list: GET /character/list
 - api-item-brief: GET /item/brief
 - api-item-prototype: GET /item/prototype
+- api-item-consume: POST /item/consume
 
 **Story Stack (6 functions):**
 
@@ -1030,9 +1031,7 @@ Per project policy (unit-tests.md): Focus on integration testing, not unit tests
 
 **Cannot Test (Remaining Issues):**
 
-- Inventory item names (see UUIDs)
 - Store purchases (no endpoints)
-- Item consumption (no endpoint)
 - Item discarding (no endpoint)
 
 **Fixed Issues (2025-10-19):**

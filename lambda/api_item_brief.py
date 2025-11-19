@@ -14,7 +14,7 @@ from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
 from eidolon.items import get_item_brief
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.player import validate_player
+from eidolon.player import player_owns_item, validate_player
 from eidolon.requests import get_query_parameter
 from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_uuid
@@ -66,8 +66,6 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     try:
         result = get_item_brief(item_id)
-        logger.info(f"Retrieved item brief for {item_id} for player {player_id}")
-        return lambda_response(200, result, event)
     except ValueError as err:
         logger.warning(f"Item brief request failed: {err}")
         return lambda_response(404, {"Error": str(err)}, event)
@@ -76,3 +74,17 @@ def lambda_handler(event: dict, context: object) -> dict:
         return lambda_response(500, {"Error": "Internal server error"}, event)
     except Exception as err:
         return lambda_error(event, err)
+
+    try:
+        if not player_owns_item(player_id, item_id):
+            logger.warning(f"Player {player_id} attempted to access item {item_id} they do not own")
+            return lambda_response(404, {"Error": "Item not found"}, event)
+    except ValueError as err:
+        logger.error(f"Ownership validation failed for player {player_id} Error: {err}", exc_info=True)
+        return lambda_response(403, {"Error": "Access denied"}, event)
+    except RuntimeError as err:
+        logger.error(f"Ownership verification error for player {player_id} Error: {err}", exc_info=True)
+        return lambda_response(500, {"Error": "Internal server error"}, event)
+
+    logger.info(f"Retrieved item brief for {item_id} for player {player_id}")
+    return lambda_response(200, result, event)

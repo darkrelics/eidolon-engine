@@ -1697,6 +1697,7 @@ class _GameScreenState extends State<GameScreen> {
           child: InventoryPanel(
             key: ValueKey('inventory_panel_${_character!.id}'),
             character: _character!,
+            onRefresh: _refreshCharacterImmediate,
           ),
         ),
       ],
@@ -1741,6 +1742,7 @@ class _GameScreenState extends State<GameScreen> {
             child: InventoryPanel(
               key: ValueKey('inventory_panel_${_character!.id}'),
               character: _character!,
+              onRefresh: _refreshCharacterImmediate,
             ),
           ),
       ],
@@ -1776,6 +1778,7 @@ class _GameScreenState extends State<GameScreen> {
         return InventoryPanel(
           key: ValueKey('inventory_panel_${_character!.id}'),
           character: _character!,
+          onRefresh: _refreshCharacterImmediate,
         );
       default:
         return const SizedBox();

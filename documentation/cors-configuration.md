@@ -185,6 +185,7 @@ All 13 API Lambda functions use the same pattern:
 - api-character-list
 - api-item-brief
 - api-item-prototype
+- api-item-consume
 - api-segment-decision
 - api-segment-history
 - api-segment-status

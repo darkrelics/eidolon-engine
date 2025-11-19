@@ -3,15 +3,13 @@ Story reward calculation and application.
 
 Provides functions for calculating and applying story rewards.
 """
-
-import uuid
 from decimal import Decimal
 
 from botocore.exceptions import ClientError
 
-from eidolon.logger import logger
 from eidolon.dynamo import TableName, dynamo
-from eidolon.items import create_coins_from_value, find_matching_stack
+from eidolon.items import create_coins_from_value, create_item_from_prototype, find_matching_stack
+from eidolon.logger import logger
 
 
 def find_next_available_slot(inventory: dict) -> str:
@@ -34,28 +32,25 @@ def find_next_available_slot(inventory: dict) -> str:
 
 def create_reward_item(prototype_id: str, quantity=None, owner_id=None) -> dict:
     """
-    Create an item structure for rewards without database operations.
+    Create and persist an item for rewards using the shared item creation helper.
 
     Args:
         prototype_id: The prototype ID for the item
-        quantity: Quantity for stackable items (None for non-stackable)
+        quantity: Quantity for stackable items (None for default prototype quantity)
         owner_id: The owner's character ID
 
     Returns:
-        Dict with item structure ready for inventory
+        Persisted item payload dict or empty dict on failure
     """
-    item_id = str(uuid.uuid4())
-
-    # Build item dict with proper types from the start
-    item_dict = {"ItemID": item_id, "PrototypeID": prototype_id}
-
-    if quantity is not None:
-        item_dict["Quantity"] = quantity
-
-    if owner_id:
-        item_dict["OwnerID"] = owner_id
-
-    return item_dict
+    try:
+        return create_item_from_prototype(
+            prototype_id,
+            quantity=quantity,
+            owner_id=owner_id,
+        )
+    except Exception as err:
+        logger.error(f"Failed to create reward item for prototype {prototype_id} Error: {err}", exc_info=True)
+        return {}
 
 
 def calculate_story_rewards(story_metadata: dict, outcome: str, segments_completed: int) -> dict:
@@ -141,19 +136,53 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                 if existing_stack:
                     # Merge with existing stack
                     stack_slot, stack_data = existing_stack
-                    new_quantity = stack_data.get("Quantity", 1) + quantity
+                    item_id = stack_data.get("ItemID")
+                    current_quantity = stack_data.get("Quantity", 0) or 0
+                    new_quantity = current_quantity + quantity
 
-                    # Update the existing stack with new quantity
-                    inventory[stack_slot]["Quantity"] = new_quantity
+                    # Update the existing stack with new quantity locally
+                    if isinstance(inventory.get(stack_slot), dict):
+                        inventory[stack_slot]["Quantity"] = new_quantity
+                    else:
+                        inventory[stack_slot] = {"ItemID": item_id, "Quantity": new_quantity}
+
+                    # Persist quantity (and owner if missing) on the item record
+                    if item_id:
+                        try:
+                            update_expression = "SET Quantity = :quantity"
+                            expression_values = {":quantity": new_quantity}
+                            if character_id:
+                                update_expression += ", OwnerID = if_not_exists(OwnerID, :owner)"
+                                expression_values[":owner"] = character_id
+                            dynamo.update_item(
+                                TableName.ITEMS,
+                                Key={"ItemID": item_id},
+                                UpdateExpression=update_expression,
+                                ExpressionAttributeValues=expression_values,
+                            )
+                        except ClientError as err:
+                            logger.error(
+                                "Failed to update quantity for coin stack %s Error: %s",
+                                item_id,
+                                err,
+                                exc_info=True,
+                            )
                     logger.info(f"Updated existing coin stack in slot {stack_slot}: +{quantity} (total: {new_quantity})")
                 else:
                     # Create new coin stack in next available slot
                     new_item = create_reward_item(prototype_id=prototype_id, quantity=quantity, owner_id=character_id)
+                    if not new_item:
+                        continue
                     item_id = new_item["ItemID"]
                     next_slot = find_next_available_slot(inventory)
-                    inventory[next_slot] = {"ItemID": item_id, "Quantity": quantity}
+                    slot_entry = {"ItemID": item_id}
+                    if new_item.get("Stackable", False):
+                        slot_entry["Quantity"] = new_item.get("Quantity", quantity)
+                    inventory[next_slot] = slot_entry
                     items_created.append(item_id)
-                    logger.info(f"Created new coin stack in slot {next_slot}: {item_id} (Quantity: {quantity})")
+                    logger.info(
+                        f"Created new coin stack in slot {next_slot}: {item_id} (Quantity: {slot_entry.get('Quantity', 0)})"
+                    )
 
             # Update character's total currency value
             current_value = character.get("Resources", {}).get("Value", 0)
@@ -176,25 +205,56 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                 if prototype_id:
                     # For stackable items, check if we can merge
                     existing_stack = find_matching_stack(inventory, prototype_id)
-                    if existing_stack and item_reward.get("Stackable"):
+                    is_stackable = item_reward.get("Stackable", False)
+
+                    if existing_stack:
                         # Merge with existing stack
                         stack_slot, stack_data = existing_stack
-                        new_quantity = stack_data.get("Quantity", 1) + quantity
-                        inventory[stack_slot]["Quantity"] = new_quantity
+                        item_id = stack_data.get("ItemID")
+                        current_quantity = stack_data.get("Quantity", 0) or 0
+                        new_quantity = current_quantity + quantity
+
+                        if isinstance(inventory.get(stack_slot), dict):
+                            inventory[stack_slot]["Quantity"] = new_quantity
+                        else:
+                            inventory[stack_slot] = {"ItemID": item_id, "Quantity": new_quantity}
+
+                        if item_id:
+                            try:
+                                update_expression = "SET Quantity = :quantity"
+                                expression_values = {":quantity": new_quantity}
+                                if character_id:
+                                    update_expression += ", OwnerID = if_not_exists(OwnerID, :owner)"
+                                    expression_values[":owner"] = character_id
+                                dynamo.update_item(
+                                    TableName.ITEMS,
+                                    Key={"ItemID": item_id},
+                                    UpdateExpression=update_expression,
+                                    ExpressionAttributeValues=expression_values,
+                                )
+                            except ClientError as err:
+                                logger.error(
+                                    "Failed to update quantity for reward stack %s Error: %s",
+                                    item_id,
+                                    err,
+                                    exc_info=True,
+                                )
                         logger.info(f"Merged reward item with existing stack in slot {stack_slot}: +{quantity}")
                     else:
                         # Create as new item in next available slot
                         new_item = create_reward_item(
                             prototype_id=prototype_id,
-                            quantity=quantity if item_reward.get("Stackable") else None,
+                            quantity=quantity if is_stackable else None,
                             owner_id=character_id
                         )
+                        if not new_item:
+                            continue
                         item_id = new_item["ItemID"]
                         next_slot = find_next_available_slot(inventory)
 
                         # Stackable: include Quantity field, Non-stackable: omit Quantity
-                        if item_reward.get("Stackable"):
-                            inventory[next_slot] = {"ItemID": item_id, "Quantity": quantity}
+                        if new_item.get("Stackable", False):
+                            inventory[next_slot] = {"ItemID": item_id, "Quantity": new_item.get("Quantity", quantity)}
                         else:
                             inventory[next_slot] = {"ItemID": item_id}
 
@@ -209,13 +269,16 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
         if update_expressions:
             update_expression = "SET " + ", ".join(update_expressions)
 
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                {"CharacterID": character_id},
-                update_expression,
-                expression_names if expression_names else None,
-                expression_values,
-            )
+            update_kwargs = {
+                "Key": {"CharacterID": character_id},
+                "UpdateExpression": update_expression,
+                "ExpressionAttributeValues": expression_values,
+            }
+
+            if expression_names:
+                update_kwargs["ExpressionAttributeNames"] = expression_names
+
+            dynamo.update_item(TableName.CHARACTERS, **update_kwargs)
 
         logger.info(
             f"Applied story rewards for {character_id}: " f"{currency_value} currency value, " f"{len(items_created)} items created"
