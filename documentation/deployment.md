@@ -34,7 +34,10 @@ This section is the canonical infrastructure overview referenced by other docume
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **18 Lambda Functions Total**: 17 deployed, 1 not deployed (cognito-player-delete reserved for future API)
+- **23 Lambda Functions Total**: 22 deployed, 1 not deployed (cognito-player-delete reserved for future API)
+  - 12 Character Stack functions (character, archetype, item, store management)
+  - 9 Story Stack functions (story, segment, decision processing)
+  - 1 Player Stack function (cognito-player-new)
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **Fixed Logical IDs**: Preventing resource recreation on updates
 - **Post-Deploy Updates**: Lambda functions automatically updated from S3
@@ -107,12 +110,13 @@ Follow the command sequence in [Quick Start](#quick-start); the CLI then prompts
 
 ### Parameter Priority
 
-The system loads parameters in this order:
+The system loads parameters in this order (highest to lowest priority):
 
-1. Hardcoded defaults in code
-2. Saved values from `cdk.json`
-3. Existing `config.yml` values
-4. User prompts (override all)
+1. **Environment variables** (e.g., `AWS_REGION`, `EIDOLON_S3_BUCKET`)
+2. **`config.yml` values** (persistent configuration)
+3. **`cdk.json` context values** (saved from previous runs)
+4. **Interactive prompts** (only if TTY available)
+5. **Hardcoded defaults** (fallback values)
 
 ### CDK Context Configuration
 
@@ -130,6 +134,76 @@ context_args = [
 ```
 
 Each stack has its own app file (`app_*.py`) to prevent output contamination.
+
+## CI/CD and Non-Interactive Deployment
+
+The deployment script automatically detects interactive vs. non-interactive mode using `sys.stdin.isatty()`. In CI/CD environments without a TTY, all parameters must be provided via environment variables or configuration files.
+
+### Environment Variables
+
+All deployment parameters can be set via environment variables to enable automated deployments:
+
+| Environment Variable | Description | Required | Example |
+|---------------------|-------------|----------|---------|
+| `AWS_REGION` | AWS region to deploy to | Yes | `us-east-1` |
+| `EIDOLON_DEPLOYMENT_MODE` | Deployment mode | No | `incremental` |
+| `EIDOLON_S3_BUCKET` | S3 artifacts bucket name | Yes | `eidolon-artifacts-prod` |
+| `EIDOLON_SCRIPTS_BUCKET` | S3 scripts bucket (mud/hybrid only) | Conditional | `eidolon-scripts-prod` |
+| `EIDOLON_CLIENT_BUCKET` | S3 client bucket for portal | Yes | `eidolon-portal-prod` |
+| `GITHUB_OWNER` | GitHub repository owner | No | `robinje` |
+| `GITHUB_REPO` | GitHub repository name | No | `eidolon-engine` |
+| `GITHUB_BRANCH` | GitHub branch to deploy | No | `develop` |
+| `EIDOLON_DOMAIN` | Base domain for services | Yes | `darkrelics.net` |
+| `EIDOLON_HOSTED_ZONE_ID` | Route53 hosted zone ID | Yes | `Z1234567890ABC` |
+| `EIDOLON_API_HOST` | API subdomain | Yes | `api` |
+| `EIDOLON_CLIENT_HOST` | Client subdomain | Yes | `portal` |
+| `EIDOLON_REPLY_EMAIL` | Cognito reply email | No | `contact@darkrelics.net` |
+
+### Non-Interactive Mode Behavior
+
+When running without a TTY (e.g., in CI/CD pipelines):
+
+- **No prompts**: All parameters must be provided via environment variables or config files
+- **No confirmations**: Deployment proceeds automatically (no "Proceed? [Y/n]" prompts)
+- **Clear errors**: Missing required parameters raise `ValueError` with helpful messages
+- **Logging**: Deployment logs indicate "non-interactive mode" for observability
+
+### CI/CD Usage Example
+
+Complete deployment in GitHub Actions, GitLab CI, or AWS CodePipeline:
+
+```bash
+# Set required environment variables
+export AWS_REGION=us-east-1
+export EIDOLON_S3_BUCKET=eidolon-artifacts-prod
+export EIDOLON_CLIENT_BUCKET=eidolon-portal-prod
+export EIDOLON_DOMAIN=darkrelics.net
+export EIDOLON_HOSTED_ZONE_ID=Z1234567890ABC
+export EIDOLON_API_HOST=api
+export EIDOLON_CLIENT_HOST=portal
+export EIDOLON_DEPLOYMENT_MODE=incremental
+
+# Force non-interactive mode (optional - auto-detected)
+python3 deployment/deploy.py < /dev/null
+```
+
+### Lambda-Only Updates in CI/CD
+
+For faster deployments that only update Lambda function code:
+
+```bash
+export EIDOLON_S3_BUCKET=eidolon-artifacts-prod
+python3 deployment/deploy.py --update-lambdas < /dev/null
+```
+
+### Backward Compatibility
+
+The deployment script remains 100% backward compatible with manual workflows:
+
+- Interactive mode works exactly as before
+- All prompts still show default values
+- Confirmation prompts still appear
+- No behavior changes for existing users
 
 ## Post-Deployment Operations
 

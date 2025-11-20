@@ -36,7 +36,7 @@ The system features a complete end-to-end deployment pipeline that provisions al
 
 ### Technical Features
 
-- AWS Lambda backend for all game logic (18 functions)
+- AWS Lambda backend for all game logic (23 functions)
 - DynamoDB for data persistence (14 tables)
 - Infrastructure as Code using AWS CDK (9 stacks)
 - Fully automated deployment with portal build

@@ -48,7 +48,7 @@ jobs:
           cd ..
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.2.1
           working-directory: ./server

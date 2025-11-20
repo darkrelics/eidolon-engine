@@ -78,6 +78,13 @@ def validate_character_functions(region: str) -> dict:
         "api-character-get",
         "api-character-list",
         "api-archetype-list",
+        "api-item-brief",
+        "api-item-prototype",
+        "api-item-use",
+        "api-item-discard",
+        "api-item-consolidate",
+        "api-store-list",
+        "api-store-purchase",
     ]
 
     lambda_client = boto3.client("lambda", region_name=region)

@@ -9,14 +9,12 @@ Returns the full character data including active segments if any.
 
 from eidolon.character_data import character_get, cleanup_expired_daily_stories
 from eidolon.character_story import get_active_story_and_segment, get_stories_with_character
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
 from eidolon.dynamo import decimal_to_float
 from eidolon.items import get_inventory
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.player import validate_player
 from eidolon.requests import get_query_parameter
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.story_retrieval import enrich_segment_with_narrative
 from eidolon.validation import validate_uuid
 
@@ -30,26 +28,14 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         player_id: Authenticated player ID
 
     Returns:
-        Dict containing:
-            - success: bool
-            - data: dict (if success)
-            - error: str (if failed)
-            - status_code: int (if failed)
-    """
+        Dict containing character data, active story/segment, and available stories
 
+    Raises:
+        ValueError: With status code prefix for 400/403/404 errors
+        RuntimeError: For system errors
+    """
     # Get character and validate ownership
-    try:
-        character: dict = character_get(character_id, player_id)
-    except ValueError as err:
-        error_msg = str(err).lower()
-        if "not found" in error_msg:
-            return {"success": False, "error": "Character not found", "status_code": 404}
-        elif "not owned" in error_msg:
-            return {"success": False, "error": "Access denied", "status_code": 403}
-        return {"success": False, "error": str(err), "status_code": 400}
-    except RuntimeError as err:
-        logger.error(f"Failed to get character: {err}")
-        return {"success": False, "error": "Failed to retrieve character data", "status_code": 500}
+    character: dict = character_get(character_id, player_id)
 
     # Clean up expired daily stories (24+ hours old)
     try:
@@ -105,69 +91,39 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
 
         response_data["AvailableStories"] = stories
 
-    return {"success": True, "data": response_data}
+    return response_data
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Lambda handler for getting incremental character data.
 
     Args:
         event: API Gateway Lambda proxy event
         context: Lambda context
+        player_id: Authenticated player ID
 
     Returns:
-        API Gateway Lambda proxy response
+        Dict with status_code and body
     """
-    # Log invocation
-    log_lambda_statistics(event, context)
-
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    # Extract player ID from JWT
-    try:
-        player_id: str = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        logger.error(f"Failed to extract player ID: {err}", exc_info=True)
-        return lambda_error(event, err)
-
     # Validate player exists
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player: {player_id} not found in database")
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    if not validate_player(player_id):
+        logger.error(f"Player: {player_id} not found in database")
+        raise ValueError("401:Unauthorized")
 
     # Get character ID from query parameters
     character_id = get_query_parameter(event, "CharacterID")
 
     if not character_id:
-        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+        raise ValueError("Missing CharacterID parameter")
 
     if not validate_uuid(character_id):
-        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
+        raise ValueError("Invalid CharacterID format")
 
     # Call business logic
-    try:
-        result: dict = get_character_logic(character_id, player_id)
+    result: dict = get_character_logic(character_id, player_id)
+    character_name = result.get("Character", {}).get("CharacterName", "unknown")
+    logger.info(f"Retrieved character '{character_name}' ({character_id}) for player {player_id}")
 
-        if result.get("success"):
-            character_name = result.get("data", {}).get("Character", {}).get("CharacterName", "unknown")
-            logger.info(f"Retrieved character '{character_name}' ({character_id}) for player {player_id}")
-            return lambda_response(200, result.get("data", {}), event)
-        else:
-            # Log the error if it's a server error
-            status_code = result.get("status_code", 500)
-            return lambda_response(status_code, {"Error": result.get("error", "Unknown error")}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    return {"status_code": 200, "body": result}

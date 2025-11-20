@@ -1,9 +1,9 @@
 # Release 5 Report — Economy & Inventory System
 
 **Date:** 2025-10-07 (Planning)
-**Updated:** 2025-10-19 (status review)
-**Branch:** TBD (will branch from develop after R4 merge)
-**Status:** 📋 PLANNING (R5-T1 complete, remaining tasks pending)
+**Updated:** 2025-11-07 (major progress update - 4 of 6 tasks complete)
+**Branch:** claude/comprehensive-project-review-011CUoVMYwK51TwGj6HQfC72
+**Status:** 🚀 IN PROGRESS (R5-T1,T2,T3,T5 complete - 67% complete)
 **Previous Release:** R4 (IndexedDB caching layer)
 
 ---
@@ -26,19 +26,20 @@ Release 4 establishes the **economy and inventory management system** by impleme
 
 ### Inventory Operations — 3 Tasks
 
-- R5-T2: Item consumption system (use items, apply effects) ✅ COMPLETE
-- R5-T3: Inventory management (discard items, stack consolidation) ❌ NOT IMPLEMENTED
+- R5-T2: Item consumption system (use items, apply effects) ✅ COMPLETE (2025-11-06)
+- R5-T3: Inventory management (discard items, stack consolidation) ✅ COMPLETE (2025-11-06)
 - R5-T4: Item visual assets (icons, enhanced descriptions) ❌ NOT IMPLEMENTED
 
 ### Player Economy — 1 Task
 
-- R5-T5: Store/shop implementation (purchase items with currency) ❌ NOT IMPLEMENTED
+- R5-T5: Store/shop implementation (purchase items with currency) ✅ COMPLETE (2025-11-06)
 
 ### Content Enablement — 1 Task
 
 - R5-T6: Author Quick-Start documentation (moved from R3) ❌ NOT IMPLEMENTED
 
-**Total:** 6 tasks (economy foundation → inventory operations → player store → content enablement)
+**Total:** 6 tasks — **4 complete (67%), 2 remaining**
+**Economy Loop:** ✅ FUNCTIONAL (earn → buy → use → discard)
 
 ---
 
@@ -62,13 +63,17 @@ Release 4 establishes the **economy and inventory management system** by impleme
 
 ### What's Broken or Missing
 
-**Critical Gaps:**
-- ❌ Currency rewards calculated but not persisted (R4-T1)
-- ❌ Cannot discard/delete unwanted items
-- ❌ No stack consolidation (5 individual potions instead of "x5")
-- ❌ No item icons (text-only inventory)
-- ❌ No store/shop to spend currency
-- ❌ Item descriptions exist but not prominently displayed
+**Completed Features:**
+- ✅ Currency rewards calculated and persisted (R5-T1)
+- ✅ Item consumption mechanics implemented (potions, healing) (R5-T2)
+- ✅ Can discard/delete unwanted items with partial quantity support (R5-T3)
+- ✅ Stack consolidation available (merges duplicate stacks) (R5-T3)
+- ✅ Store/shop implemented with purchase transactions (R5-T5)
+
+**Remaining Gaps:**
+- ❌ No item icons (text-only inventory) (R5-T4)
+- ❌ Item descriptions exist but not prominently displayed (R5-T4)
+- ❌ Author documentation not yet written (R5-T6)
 
 ---
 
@@ -267,24 +272,41 @@ def test_apply_currency_new_character():
 
 ### R5-T2: Item Consumption System
 
-**Status:** ❌ NOT IMPLEMENTED
+**Status:** ✅ COMPLETE (2025-11-06)
 **Priority:** P1 - Required for meaningful item usage
-**Issues:** New - "Implement item consumption mechanics"
+**Commit:** 5111c5a - "Implement Task 6: Item Consumption System (R5-T2)"
 
-#### Current State
+#### Implementation Complete
 
-**What Exists:**
+**What Was Implemented:**
 
-- Items have `Verbs` field for custom actions (schema supports this)
-- Item prototype system allows defining item types
-- Frontend can display item lists
+- ✅ Complete item effect system with dice notation parsing ("2d4+2")
+- ✅ Healing mechanics that remove wounds from character
+- ✅ Character revival system (dead → alive when healed)
+- ✅ Stackable item quantity management (decrement on use)
+- ✅ Item removal when quantity reaches zero
+- ✅ Full ownership validation and error handling
+- ✅ Extensible design for future effect types (buffs, essence, etc.)
 
-**What's Missing:**
+**Files Created:**
 
-- No "Use Item" action in UI or backend
-- No consumable item effects (healing, buffs, etc.)
-- No item quantity decrement on use
-- No validation that item is consumable
+- `lambda/api_item_use.py` (185 lines) - API endpoint for item consumption
+- `eidolon/item_effects.py` (225 lines) - Effect application system
+
+**API Endpoint:**
+
+- `POST /item/use`
+- Body: `{"CharacterID": "uuid", "ItemID": "uuid", "InventorySlot": "optional"}`
+- Returns: Effects applied, healing details, remaining quantity
+- Errors: 400, 401, 403, 404
+
+**Key Features:**
+
+1. **Dice Notation Parser**: Supports "2d4+2", "1d6", "3d8-1" formats
+2. **Wound Healing**: Removes wounds from character's wound list
+3. **Revival**: Dead characters revived if healed above 0 HP
+4. **Stack Management**: Stackable items decrement; non-stackable removed immediately
+5. **Extensible Effects**: Ready for buffs, essence restoration, nutrition
 
 #### Implementation Requirements
 
@@ -556,25 +578,50 @@ def test_use_decrements_quantity():
 
 ### R5-T3: Inventory Management (Discard & Stack Consolidation)
 
-**Status:** ❌ NOT IMPLEMENTED
+**Status:** ✅ COMPLETE (2025-11-06)
 **Priority:** P1 - Quality of life feature
-**Issues:** New - "Add inventory discard functionality"
+**Commits:**
+- a40cd44 - "Implement Task 3: Inventory Management (R5-T3)"
+- 2a36366 - "Fix deployment configuration for new inventory/store Lambda functions"
 
-**Note:** Coin stacking is already implemented server-side in `apply_story_rewards()`. This task focuses on UI-driven stack consolidation and item discard functionality.
+**Note:** Coin stacking was already implemented server-side in `apply_story_rewards()`. This task added player-driven discard and consolidation.
 
-#### Current State
+#### Implementation Complete
 
-**What Exists:**
+**What Was Implemented:**
 
-- Items can be added to inventory via story rewards
-- Frontend displays inventory items
-- Backend has `add_items_to_inventory()` function
+- ✅ Item discard with partial quantity support
+- ✅ Stack consolidation for all stackable items or specific prototype
+- ✅ Atomic inventory updates with proper error handling
+- ✅ Full ownership validation
+- ✅ Inventory slot optimization (frees up slots by merging stacks)
+- ✅ Critical deployment fix (added functions to CDK configuration)
 
-**What's Missing:**
+**Files Created:**
 
-- No way to remove/discard unwanted items
-- Multiple stacks of same item not consolidated
-- No inventory organization tools
+- `lambda/api_item_discard.py` (185 lines) - Discard items endpoint
+- `lambda/api_item_consolidate.py` (211 lines) - Stack consolidation endpoint
+
+**API Endpoints:**
+
+1. **Discard**: `POST /item/discard`
+   - Body: `{"CharacterID": "uuid", "ItemID": "uuid", "Quantity": 2 (optional)}`
+   - Returns: Item discarded, quantity removed, remaining quantity
+   - Supports partial discard (e.g., discard 2 of 5 potions)
+
+2. **Consolidate**: `POST /item/consolidate`
+   - Body: `{"CharacterID": "uuid", "PrototypeID": "uuid" (optional), "ConsolidateAll": true}`
+   - Returns: Stacks consolidated, slots freed, total quantities
+   - Merges duplicate stacks (keeps lowest slot number, sums quantities)
+
+**Key Features:**
+
+1. **Partial Discard**: Remove specific quantity from stackable items
+2. **Full Discard**: Remove entire item stack at once
+3. **Consolidate All**: Merge all stackable items with one API call
+4. **Selective Consolidation**: Target specific prototype for consolidation
+5. **Slot Optimization**: Frees inventory space by removing duplicate slots
+6. **Detailed Reporting**: Shows what was merged, quantities, and slots freed
 
 #### Implementation Requirements
 
@@ -1118,24 +1165,73 @@ Minimum viable icon set (can use placeholder icons initially):
 
 ### R5-T5: Store/Shop Implementation
 
-**Status:** ❌ NOT IMPLEMENTED
+**Status:** ✅ COMPLETE (2025-11-06)
 **Priority:** P1 - Required for meaningful currency usage
-**Issues:** New - "Implement item shop/store"
+**Commit:** 09de080 - "Implement Task 7: Store System (R5-T5)"
 **Blocked By:** R5-T1 (✅ complete - currency system operational)
 
-#### Current State
+#### Implementation Complete
 
-**What Exists:**
+**What Was Implemented:**
 
-- Currency calculation (R4-T1 will persist it)
+- ✅ Complete store system with JSON-based inventory
+- ✅ Character level-based item filtering
+- ✅ Atomic purchase transactions (currency deduction + inventory update)
+- ✅ Stock management (unlimited and limited stock support)
+- ✅ Full prototype enrichment for item details
+- ✅ Category system and featured items support
+
+**Files Created:**
+
+- `data/store_general.json` - Store inventory with 5 items
+- `eidolon/store.py` (295 lines) - Store management functions
+- `lambda/api_store_list.py` (79 lines) - Store listing endpoint
+- `lambda/api_store_purchase.py` (111 lines) - Purchase endpoint
+
+**Store Inventory:**
+
+1. **Healing Potion**: 250 FU, unlimited stock, level 0+
+2. **Long Sword**: 500 FU, 3 in stock, level 1+
+3. **Leather Armor**: 750 FU, 2 in stock, level 1+
+4. **Iron Shield**: 600 FU, 3 in stock, level 2+
+5. **Health Elixir**: 500 FU, unlimited stock, level 3+
+
+**API Endpoints:**
+
+1. **List Store**: `GET /store/list?StoreID=general-store&CharacterID=uuid`
+   - Returns: Store info, available items (filtered by level), prototype details
+   - Level filtering: Only shows items character can use
+   - Stock filtering: Hides out-of-stock items
+
+2. **Purchase Item**: `POST /store/purchase`
+   - Body: `{"CharacterID": "uuid", "PrototypeID": "uuid", "Quantity": 1}`
+   - Returns: ItemIDs created, total cost, currency remaining
+   - Errors: 402 (insufficient funds), 409 (insufficient stock)
+   - Atomic: Currency and inventory updated together
+
+**Key Features:**
+
+1. **Level Filtering**: Items only shown if character meets MinLevel requirement
+2. **Stock Management**: -1 = unlimited, positive = limited stock
+3. **Atomic Transactions**: Currency and inventory updated atomically (no partial purchases)
+4. **Stackable Items**: Merge with existing stacks using UUIDv7 oldest-wins logic
+5. **Non-stackable Items**: Create new UUID for each purchase
+6. **Category System**: Items tagged with category (consumable, weapon, armor, etc.)
+7. **Featured Items**: Support for featured/promotional items
+
+#### Previous State (Now Resolved)
+
+**What Existed Before Implementation:**
+
+- Currency calculation (R5-T1 had persisted it)
 - Item creation system via prototypes
 - Character inventory management
 
-**What's Missing:**
+**What Was Missing (Now Complete):**
 
-- No way to spend currency
-- No store UI in Incremental app
-- No purchase transaction logic
+- ✅ No way to spend currency - NOW IMPLEMENTED
+- ✅ No store UI in Incremental app - BACKEND COMPLETE (frontend pending)
+- ✅ No purchase transaction logic - NOW IMPLEMENTED
 
 #### Implementation Requirements
 

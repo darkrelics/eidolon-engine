@@ -156,20 +156,27 @@ class ApiStack(Stack):
             ),
         )
 
-        # Create Cognito authorizer if we have the pool ARN
-        authorizer = None
-        if self.cognito_user_pool_arn:
-            user_pool = cognito.UserPool.from_user_pool_arn(self, "ImportedUserPool", self.cognito_user_pool_arn)
-            authorizer = apigateway.CognitoUserPoolsAuthorizer(
-                self,
-                "ApiAuthorizer",
-                cognito_user_pools=[user_pool],
-                authorizer_name="eidolon-api-authorizer",
-                identity_source="method.request.header.Authorization",
+        # ✅ FIX BUG #7: Require Cognito configuration for security
+        # Fail deployment if authentication not configured
+        if not self.cognito_user_pool_arn:
+            raise ValueError(
+                "CRITICAL SECURITY ERROR: Cognito User Pool ARN not configured. "
+                "Cannot deploy API without authentication. "
+                "Set COGNITO_USER_POOL_ARN in environment or config."
             )
 
+        # Create Cognito authorizer (guaranteed to exist after check above)
+        user_pool = cognito.UserPool.from_user_pool_arn(self, "ImportedUserPool", self.cognito_user_pool_arn)
+        authorizer = apigateway.CognitoUserPoolsAuthorizer(
+            self,
+            "ApiAuthorizer",
+            cognito_user_pools=[user_pool],
+            authorizer_name="eidolon-api-authorizer",
+            identity_source="method.request.header.Authorization",
+        )
+
         # Add Lambda integrations for available functions
-        self._add_api_endpoints(api, authorizer)  # type: ignore
+        self._add_api_endpoints(api, authorizer)
 
         # Configure CORS for error responses
         self._configure_gateway_responses(api, client_origin)
@@ -213,9 +220,29 @@ class ApiStack(Stack):
             prototype_resource = item_resource.add_resource("prototype")
             self._add_lambda_integration(prototype_resource, "GET", "api-item-prototype", authorizer)
 
-        if "api-item-consume" in self.lambda_arns:
-            consume_resource = item_resource.add_resource("consume")
-            self._add_lambda_integration(consume_resource, "POST", "api-item-consume", authorizer)
+        if "api-item-use" in self.lambda_arns:
+            use_resource = item_resource.add_resource("use")
+            self._add_lambda_integration(use_resource, "POST", "api-item-use", authorizer)
+
+        if "api-item-discard" in self.lambda_arns:
+            discard_resource = item_resource.add_resource("discard")
+            self._add_lambda_integration(discard_resource, "POST", "api-item-discard", authorizer)
+
+        if "api-item-consolidate" in self.lambda_arns:
+            consolidate_resource = item_resource.add_resource("consolidate")
+            self._add_lambda_integration(consolidate_resource, "POST", "api-item-consolidate", authorizer)
+
+        # Store endpoints (for incremental/hybrid modes)
+        if self.deployment_mode in ["incremental", "hybrid"]:
+            store_resource = api.root.add_resource("store")
+
+            if "api-store-list" in self.lambda_arns:
+                list_resource = store_resource.add_resource("list")
+                self._add_lambda_integration(list_resource, "GET", "api-store-list", authorizer)
+
+            if "api-store-purchase" in self.lambda_arns:
+                purchase_resource = store_resource.add_resource("purchase")
+                self._add_lambda_integration(purchase_resource, "POST", "api-store-purchase", authorizer)
 
         # Story endpoints (for incremental/hybrid modes)
         if self.deployment_mode in ["incremental", "hybrid"]:
@@ -260,12 +287,13 @@ class ApiStack(Stack):
             # Create integration
             integration = apigateway.LambdaIntegration(lambda_function)
 
-            # Add method
+            # Add method with required authentication
+            # Authorizer is guaranteed non-None (checked at stack creation)
             resource.add_method(
                 method,
                 integration,
                 authorizer=authorizer,
-                authorization_type=apigateway.AuthorizationType.COGNITO if authorizer else None,
+                authorization_type=apigateway.AuthorizationType.COGNITO,
             )
 
             # Grant API Gateway permission to invoke the Lambda
@@ -370,10 +398,14 @@ class ApiStack(Stack):
             "api-character-list": "ImportApiCharacterList",
             "api-item-brief": "ImportApiItemBrief",
             "api-item-prototype": "ImportApiItemPrototype",
-            "api-item-consume": "ImportApiItemConsume",
+            "api-item-use": "ImportApiItemUse",
+            "api-item-discard": "ImportApiItemDiscard",
+            "api-item-consolidate": "ImportApiItemConsolidate",
             "api-segment-decision": "ImportApiSegmentDecision",
             "api-segment-history": "ImportApiSegmentHistory",
             "api-segment-status": "ImportApiSegmentStatus",
+            "api-store-list": "ImportApiStoreList",
+            "api-store-purchase": "ImportApiStorePurchase",
             "api-story-abandon": "ImportApiStoryAbandon",
             "api-story-history": "ImportApiStoryHistory",
             "api-story-start": "ImportApiStoryStart",

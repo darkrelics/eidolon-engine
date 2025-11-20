@@ -6,11 +6,7 @@ Provides functions for processing combat encounters using dual action system.
 
 from botocore.exceptions import ClientError
 
-from eidolon.constants import (
-    DEFAULT_COMBAT_ROUNDS,
-    PLAYER_DEATH_LETHAL_WOUNDS,
-    PLAYER_INCAPACITATED_TOTAL_WOUNDS,
-)
+from eidolon.constants import DEFAULT_COMBAT_ROUNDS, PLAYER_DEATH_LETHAL_WOUNDS, PLAYER_INCAPACITATED_TOTAL_WOUNDS
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.mechanics import calculate_heal_time, resolve_opposed_check_with_xp
