@@ -6,6 +6,7 @@ import 'package:eidolon_incremental/constants/navigation_constants.dart';
 import 'package:eidolon_incremental/controllers/account_settings_controller.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/providers/theme_provider.dart';
+import 'package:eidolon_incremental/screens/mfa_setup_screen.dart';
 import 'package:eidolon_incremental/utils/error_handler.dart';
 import 'package:eidolon_incremental/widgets/shared/keyboard_shortcuts.dart';
 import 'package:flutter/material.dart';
@@ -203,9 +204,19 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
                     title: const Text('Security'),
                     subtitle: const Text('Manage your account security'),
                   ),
-                  const Divider(height: 1),
+                  const Divider(),
                   ListTile(
-                    leading: const Icon(Icons.lock_reset),
+                    leading: const Icon(Icons.security),
+                    title: const Text('Multi-Factor Authentication'),
+                    subtitle: const Text('Secure your account with 2FA'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MfaSetupScreen()));
+                    },
+                  ),
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.red),
                     title: const Text('Change Password'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: isLoading
