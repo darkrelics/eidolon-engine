@@ -1,79 +1,23 @@
-// Eidolon Engine
-//
-// Copyright 2024‑2025 Jason E. Robinson
-
+import 'package:eidolon_incremental/controllers/password_reset_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:eidolon_incremental/providers/auth_provider.dart';
-import 'package:eidolon_incremental/utils/error_handler.dart';
-
-class PasswordResetScreen extends StatefulWidget {
+class PasswordResetScreen extends StatelessWidget {
   const PasswordResetScreen({super.key});
 
   @override
-  State<PasswordResetScreen> createState() => _PasswordResetScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(create: (_) => PasswordResetController(), child: const _PasswordResetScreenView());
+  }
 }
 
-class _PasswordResetScreenState extends State<PasswordResetScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handlePasswordReset() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final authProvider = context.read<AuthProvider>();
-      await authProvider.forgotPassword(_emailController.text.trim());
-
-      if (mounted) {
-        Navigator.pushNamed(
-          context,
-          '/password-reset-confirm',
-          arguments: _emailController.text.trim(),
-        );
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Reset code sent to your email'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword'),
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
+class _PasswordResetScreenView extends StatelessWidget {
+  const _PasswordResetScreenView();
 
   @override
   Widget build(BuildContext context) {
+    final controller = context.watch<PasswordResetController>();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Reset Password')),
       body: Center(
@@ -82,15 +26,11 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Form(
-              key: _formKey,
+              key: controller.formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Forgot Your Password?',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text('Forgot Your Password?', style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
                   const SizedBox(height: 16),
                   Text(
                     'Enter your email address and we\'ll send you a code to reset your password.',
@@ -99,7 +39,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                   ),
                   const SizedBox(height: 32),
                   TextFormField(
-                    controller: _emailController,
+                    controller: controller.emailController,
                     decoration: const InputDecoration(
                       labelText: 'Email',
                       border: OutlineInputBorder(),
@@ -107,14 +47,12 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                     ),
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _handlePasswordReset(),
+                    onFieldSubmitted: (_) => controller.handlePasswordResetRequest(context),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(
-                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                      ).hasMatch(value)) {
+                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -122,18 +60,14 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _isLoading ? null : _handlePasswordReset,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                    onPressed: controller.isLoading ? null : () => controller.handlePasswordResetRequest(context),
+                    child: controller.isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Send Reset Code'),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: _isLoading
+                    onPressed: controller.isLoading
                         ? null
                         : () {
                             Navigator.pop(context);
