@@ -44,9 +44,11 @@ type Player struct {
 	shutdownOnce  sync.Once
 	done          chan struct{} // Channel signaled when all goroutines complete
 	inputBuffer   *InputBuffer  // Track current input line content
+	remoteAddr    string        // IP address of the client
+	clientType    string        // Type of client (e.g., "SSH", "Telnet")
 }
 
-func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfaceCtx context.Context, userUUID uuid.UUID) (*Player, error) {
+func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfaceCtx context.Context, userUUID uuid.UUID, remoteAddr string, clientType string) (*Player, error) {
 	ctx, cancel := context.WithCancel(server.ctx)
 
 	player := &Player{
@@ -67,6 +69,8 @@ func NewPlayerSSH(server *Server, playerEmail string, conn ssh.Channel, interfac
 		shutdownOnce:  sync.Once{},
 		done:          make(chan struct{}),
 		inputBuffer:   NewInputBuffer(),
+		remoteAddr:    remoteAddr,
+		clientType:    clientType,
 	}
 
 	// Load player data

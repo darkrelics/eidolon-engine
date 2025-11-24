@@ -45,9 +45,10 @@ type Game struct {
 	balance              float64
 	autoSaveInterval     uint16
 	eventStore           events.EventStore
+	cloudWatch           *CloudWatch
 }
 
-func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
+func NewGame(globalCtx context.Context, config *Configuration, cloudWatch *CloudWatch) (*Game, error) {
 
 	Logger.Info("New Game...Initializing Game...")
 
@@ -74,11 +75,12 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		balance:          config.Game.Balance,
 		autoSaveInterval: 5,
 		eventStore:       events.NewMemoryEventStore(),
+		cloudWatch:       cloudWatch,
 	}
 
 	game.characterCount.Store(0)
 
-	database, err := NewKeyPair(ctx, config)
+	database, err := NewKeyPair(ctx, config, cloudWatch)
 	if err != nil {
 		return nil, fmt.Errorf("database init error: %w", err)
 	}

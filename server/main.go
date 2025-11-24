@@ -49,14 +49,14 @@ func main() {
 	CloudWatchMetrics = cloudWatch
 
 	Logger.Info("Main - Starting Game Engine...")
-	game, err := NewGame(ctx, config)
+	game, err := NewGame(ctx, config, cloudWatch)
 	if err != nil {
 		Logger.Error("Main - Error initializing game engine", "error", err)
 		os.Exit(123)
 	}
 
 	Logger.Info("Main - Starting Server...")
-	server, err := NewServer(ctx, config)
+	server, err := NewServer(ctx, config, cloudWatch)
 	if err != nil {
 		Logger.Error("Main - Error initializing server", "error", err)
 		os.Exit(122)
