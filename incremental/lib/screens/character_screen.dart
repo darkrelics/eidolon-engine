@@ -81,7 +81,7 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
       body: SafeArea(child: _buildBody(context, controller, characters, isLoading, error)),
       floatingActionButton: characters != null && characters.isNotEmpty
           ? FloatingActionButton.extended(
-              onPressed: () => _showAddCharacterDialog(context),
+              onPressed: () => _showAddCharacterDialog(),
               label: const Text('Add Character'),
               icon: const Icon(Icons.add),
               backgroundColor: colorScheme.primaryContainer,
@@ -148,7 +148,7 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
               ),
               const SizedBox(height: 24),
               FilledButton.icon(
-                onPressed: () => _showAddCharacterDialog(context),
+                onPressed: () => _showAddCharacterDialog(),
                 icon: const Icon(Icons.add),
                 label: const Text('Create Character'),
               ),
@@ -197,10 +197,7 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(
-                              icon: const Icon(Icons.delete),
-                              onPressed: () => _showDeleteCharacterDialog(context, character),
-                            ),
+                            IconButton(icon: const Icon(Icons.delete), onPressed: () => _showDeleteCharacterDialog(character)),
                             const Icon(Icons.chevron_right),
                           ],
                         ),
@@ -217,7 +214,7 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
     );
   }
 
-  Future<void> _showAddCharacterDialog(BuildContext context) async {
+  Future<void> _showAddCharacterDialog() async {
     final controller = context.read<CharacterScreenController>();
     // First load archetypes
     List<ArchetypeInfo> archetypes = await controller.getArchetypes();
@@ -350,7 +347,7 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
     );
   }
 
-  Future<void> _showDeleteCharacterDialog(BuildContext context, CharacterInfo character) async {
+  Future<void> _showDeleteCharacterDialog(CharacterInfo character) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -369,12 +366,12 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
 
     if (confirmed ?? false) {
       if (mounted) {
-        _deleteCharacter(context, character);
+        _deleteCharacter(character);
       }
     }
   }
 
-  Future<void> _deleteCharacter(BuildContext context, CharacterInfo character) async {
+  Future<void> _deleteCharacter(CharacterInfo character) async {
     final controller = context.read<CharacterScreenController>();
 
     await controller.deleteCharacter(
