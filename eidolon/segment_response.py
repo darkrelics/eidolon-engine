@@ -68,5 +68,6 @@ def new_segment_response(active_segment: dict, segment: dict) -> dict:
 
     return {
         "Success": True,
+        "SchemaVersion": "1.0",
         "Segment": response,
     }

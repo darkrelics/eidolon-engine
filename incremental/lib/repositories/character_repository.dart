@@ -1,17 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/indexeddb_service.dart';
+import 'package:flutter/foundation.dart';
 
 /// Error categories for repository operations
-enum RepositoryErrorType {
-  cacheCorruption,
-  cacheUnavailable,
-  parsingError,
-  updateLogicError,
-  networkError,
-  unknown,
-}
+enum RepositoryErrorType { cacheCorruption, cacheUnavailable, parsingError, updateLogicError, networkError, unknown }
 
 /// Exception thrown by repository operations with categorized error types
 class RepositoryException implements Exception {
@@ -20,12 +13,7 @@ class RepositoryException implements Exception {
   final Object? originalError;
   final StackTrace? stackTrace;
 
-  RepositoryException(
-    this.message, {
-    required this.type,
-    this.originalError,
-    this.stackTrace,
-  });
+  RepositoryException(this.message, {required this.type, this.originalError, this.stackTrace});
 
   @override
   String toString() {
@@ -53,11 +41,9 @@ class CharacterRepository {
   final ApiService _apiService;
   final IndexedDBService _indexedDB;
 
-  CharacterRepository({
-    required ApiService apiService,
-    IndexedDBService? indexedDBService,
-  })  : _apiService = apiService,
-        _indexedDB = indexedDBService ?? IndexedDBService();
+  CharacterRepository({required ApiService apiService, IndexedDBService? indexedDBService})
+    : _apiService = apiService,
+      _indexedDB = indexedDBService ?? IndexedDBService();
 
   /// Load all characters for a player from server and cache them.
   ///
@@ -191,10 +177,7 @@ class CharacterRepository {
   /// Returns the updated character.
   ///
   /// Throws [RepositoryException] with categorized error type for proper handling.
-  Future<Character?> updateCharacterFromSegment(
-    String characterId,
-    Map<String, dynamic> segmentUpdates,
-  ) async {
+  Future<Character?> updateCharacterFromSegment(String characterId, Map<String, dynamic> segmentUpdates) async {
     debugPrint('CharacterRepository: Applying segment updates to character $characterId');
 
     try {
@@ -222,6 +205,16 @@ class CharacterRepository {
           originalError: e,
           stackTrace: stackTrace,
         );
+      }
+
+      // Check schema version
+      const expectedSchemaVersion = '1.0';
+      final schemaVersion = segmentUpdates['SchemaVersion'] as String?;
+
+      if (schemaVersion != expectedSchemaVersion) {
+        debugPrint('CharacterRepository: Schema version mismatch (Expected: $expectedSchemaVersion, Got: $schemaVersion)');
+        debugPrint('CharacterRepository: Falling back to full server fetch');
+        return await refreshCharacterFromServer(characterId);
       }
 
       // Extract character updates from segment response
@@ -351,9 +344,7 @@ class CharacterRepository {
 
     // Inventory updates (if provided)
     final inventoryUpdates = updates['Inventory'] as Map<String, dynamic>?;
-    final updatedInventory = inventoryUpdates != null
-        ? Map<String, dynamic>.from(inventoryUpdates)
-        : character.inventory;
+    final updatedInventory = inventoryUpdates != null ? Map<String, dynamic>.from(inventoryUpdates) : character.inventory;
 
     // Inventory details updates (if provided)
     final inventoryDetailsUpdates = updates['InventoryDetails'] as Map<String, dynamic>?;
@@ -363,15 +354,11 @@ class CharacterRepository {
 
     // Wounds updates
     final woundsUpdate = updates['Wounds'] as List<dynamic>?;
-    final updatedWounds = woundsUpdate != null
-        ? woundsUpdate.map((w) => w as Map<String, dynamic>).toList()
-        : character.wounds;
+    final updatedWounds = woundsUpdate != null ? woundsUpdate.map((w) => w as Map<String, dynamic>).toList() : character.wounds;
 
     // Progress updates
     final progressUpdates = updates['Progress'] as Map<String, dynamic>?;
-    final updatedProgress = progressUpdates != null
-        ? {...character.progress, ...progressUpdates}
-        : character.progress;
+    final updatedProgress = progressUpdates != null ? {...character.progress, ...progressUpdates} : character.progress;
 
     // Create updated character using copyWith
     return character.copyWith(
