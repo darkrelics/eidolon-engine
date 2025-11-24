@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid/v5"
+	"github.com/robinje/eidolon-engine/events"
 )
 
 // Room command messages
@@ -85,7 +86,7 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 
 	// Communication commands
 	if verb == "say" || verb == "\"" || verb == "'" {
-		return handleSayCommand(cmd)
+		return handleSayCommand(cmd, game)
 	}
 
 	// Stealth commands
@@ -132,7 +133,7 @@ func (r *Room) ProcessRoomCommand(cmd *CommandRequest, game *Game) *CommandRespo
 	return response
 }
 
-func handleSayCommand(cmd *CommandRequest) *CommandResponse {
+func handleSayCommand(cmd *CommandRequest, game *Game) *CommandResponse {
 	character := cmd.Character
 
 	if character == nil || character.room == nil {
@@ -168,24 +169,23 @@ func handleSayCommand(cmd *CommandRequest) *CommandResponse {
 		}
 	}
 
-	// Message for the speaker
-	speakerMessage := fmt.Sprintf("\n\rYou say '%s'\n\r", message)
+	// Create Event
+	event := events.NewChatEvent(character.id, message, character.room.roomID, character.name)
 
-	// Message for others in the room - depends on whether speaker is hidden
-	var roomMessage string
-	if character.IsHidden() {
-		roomMessage = fmt.Sprintf("\n\rYou hear a voice say '%s'\n\r", message)
-	} else {
-		roomMessage = fmt.Sprintf("\n\r%s says '%s'\n\r", character.name, message)
+	// Save Event
+	if game.eventStore != nil {
+		if err := game.eventStore.Save(event); err != nil {
+			Logger.Error("Failed to save chat event", "error", err)
+		}
 	}
 
-	// Send message to everyone else in the room
-	SendRoomMessage(character.room, roomMessage, character)
+	// Apply Event (this handles the broadcasting)
+	character.ApplyEvent(event)
 
 	return &CommandResponse{
 		RequestID: cmd.ID,
 		Success:   true,
-		Message:   speakerMessage,
+		Message:   "", // Message handled by ApplyEvent
 		Timestamp: time.Now(),
 	}
 }

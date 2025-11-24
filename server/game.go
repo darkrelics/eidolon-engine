@@ -19,6 +19,7 @@ import (
 
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/gofrs/uuid/v5"
+	"github.com/robinje/eidolon-engine/events"
 )
 
 type Game struct {
@@ -43,6 +44,7 @@ type Game struct {
 	startingEssence      uint16
 	balance              float64
 	autoSaveInterval     uint16
+	eventStore           events.EventStore
 }
 
 func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
@@ -71,6 +73,7 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		startingEssence:  config.Game.StartingEssence,
 		balance:          config.Game.Balance,
 		autoSaveInterval: 5,
+		eventStore:       events.NewMemoryEventStore(),
 	}
 
 	game.characterCount.Store(0)
