@@ -3,6 +3,7 @@ import 'package:eidolon_incremental/utils/error_handler.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class MfaSetupScreen extends StatefulWidget {
   const MfaSetupScreen({super.key});
@@ -114,7 +115,6 @@ class _MfaSetupScreenState extends State<MfaSetupScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
-                  // Placeholder for QR Code - using text for now
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -123,7 +123,14 @@ class _MfaSetupScreenState extends State<MfaSetupScreen> {
                     ),
                     child: Column(
                       children: [
-                        const Icon(Icons.qr_code_2, size: 100),
+                        if (_secretKey != null)
+                          QrImageView(
+                            data:
+                                'otpauth://totp/EidolonEngine:${context.read<AuthProvider>().userEmail}?secret=$_secretKey&issuer=EidolonEngine',
+                            version: QrVersions.auto,
+                            size: 200.0,
+                            backgroundColor: Colors.white,
+                          ),
                         const SizedBox(height: 16),
                         const Text('Secret Key:', style: TextStyle(fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
