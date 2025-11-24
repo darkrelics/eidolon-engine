@@ -8,7 +8,7 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.items import create_coins_from_value, find_matching_stack
+from eidolon.items import create_coins_from_value, create_item_from_prototype, find_matching_stack
 from eidolon.logger import logger
 
 
@@ -205,7 +205,6 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                 if prototype_id:
                     # For stackable items, check if we can merge
                     existing_stack = find_matching_stack(inventory, prototype_id)
-                    is_stackable = item_reward.get("Stackable", False)
 
                     if existing_stack:
                         # Merge with existing stack

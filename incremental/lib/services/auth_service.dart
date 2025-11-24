@@ -2,7 +2,9 @@
 //
 // Copyright 2024‑2025 Jason E. Robinson
 
+import 'dart:convert';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -176,6 +178,8 @@ class AuthService {
   static const String _idTokenKey = 'id_token';
   static const String _refreshTokenKey = 'refresh_token';
   static const String _userEmailKey = 'user_email';
+  static const String _integrityKey = 'token_integrity';
+  static const String _deviceKeyKey = 'device_key';
 
   static AuthService? _instance;
 
@@ -506,22 +510,92 @@ class AuthService {
     }
   }
 
-  /// Persists authentication tokens
+  /// Get or generate device-specific key for HMAC
+  Future<String> _getDeviceKey() async {
+    try {
+      final existingKey = await _secureStorage.read(key: _deviceKeyKey);
+      if (existingKey != null && existingKey.isNotEmpty) {
+        return existingKey;
+      }
+
+      // Generate new device key using timestamp and random component
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final random = DateTime.now().microsecondsSinceEpoch;
+      final deviceKey = '$timestamp-$random-${userPool.getUserPoolId()}';
+      final hash = sha256.convert(utf8.encode(deviceKey)).toString();
+
+      await _secureStorage.write(key: _deviceKeyKey, value: hash);
+      return hash;
+    } catch (err) {
+      _logError('Device key generation failed', err);
+      // Fallback to pool ID if device key generation fails
+      return userPool.getUserPoolId();
+    }
+  }
+
+  /// Generate HMAC for token data to detect tampering
+  Future<String> _generateTokenIntegrity(String accessToken, String idToken, String? refreshToken, String email) async {
+    try {
+      final deviceKey = await _getDeviceKey();
+      final tokenData = '$accessToken|$idToken|${refreshToken ?? ''}|$email';
+      final hmacKey = utf8.encode(deviceKey);
+      final hmacData = utf8.encode(tokenData);
+      final hmac = Hmac(sha256, hmacKey);
+      final digest = hmac.convert(hmacData);
+      return digest.toString();
+    } catch (err) {
+      _logError('HMAC generation failed', err);
+      // Return empty string on failure - will cause validation to fail on restore
+      return '';
+    }
+  }
+
+  /// Validate token integrity using HMAC
+  Future<bool> _validateTokenIntegrity(String accessToken, String idToken, String? refreshToken, String email, String storedHmac) async {
+    try {
+      final computedHmac = await _generateTokenIntegrity(accessToken, idToken, refreshToken, email);
+
+      if (computedHmac.isEmpty || storedHmac.isEmpty) {
+        debugPrint('AuthService: Integrity validation failed - empty HMAC');
+        return false;
+      }
+
+      final isValid = computedHmac == storedHmac;
+
+      if (!isValid) {
+        debugPrint('AuthService: Token integrity check failed - possible tampering detected');
+      }
+
+      return isValid;
+    } catch (err) {
+      _logError('HMAC validation failed', err);
+      return false;
+    }
+  }
+
+  /// Persists authentication tokens with integrity protection
   Future<bool> _persistTokens(CognitoUserSession session, String email) async {
     try {
-      await _secureStorage.write(
-        key: _accessTokenKey,
-        value: session.getAccessToken().getJwtToken(),
-      );
-      await _secureStorage.write(
-        key: _idTokenKey,
-        value: session.getIdToken().getJwtToken(),
-      );
-      await _secureStorage.write(
-        key: _refreshTokenKey,
-        value: session.getRefreshToken()?.getToken(),
-      );
-      await _secureStorage.write(key: _userEmailKey, value: email);
+      final accessToken = session.getAccessToken().getJwtToken() ?? '';
+      final idToken = session.getIdToken().getJwtToken() ?? '';
+      final refreshToken = session.getRefreshToken()?.getToken();
+
+      if (accessToken.isEmpty || idToken.isEmpty) {
+        _logError('Cannot persist session - missing required tokens', null);
+        return false;
+      }
+
+      // Generate integrity hash before storing
+      final integrity = await _generateTokenIntegrity(accessToken, idToken, refreshToken, email);
+
+      await Future.wait([
+        _secureStorage.write(key: _accessTokenKey, value: accessToken),
+        _secureStorage.write(key: _idTokenKey, value: idToken),
+        if (refreshToken != null) _secureStorage.write(key: _refreshTokenKey, value: refreshToken),
+        _secureStorage.write(key: _userEmailKey, value: email),
+        _secureStorage.write(key: _integrityKey, value: integrity),
+      ]);
+
       return true;
     } catch (err) {
       _logError('Session storage issue', err);
@@ -529,7 +603,7 @@ class AuthService {
     }
   }
 
-  /// Clears stored tokens
+  /// Clears stored tokens and integrity data
   Future<bool> _clearTokens() async {
     try {
       await Future.wait([
@@ -537,20 +611,22 @@ class AuthService {
         _secureStorage.delete(key: _idTokenKey),
         _secureStorage.delete(key: _refreshTokenKey),
         _secureStorage.delete(key: _userEmailKey),
+        _secureStorage.delete(key: _integrityKey),
+        // Note: Device key is NOT cleared - it persists across sessions
       ]);
 
       final accessTokenValue = await _secureStorage.read(key: _accessTokenKey);
       final idTokenValue = await _secureStorage.read(key: _idTokenKey);
-      final refreshTokenValue = await _secureStorage.read(
-        key: _refreshTokenKey,
-      );
+      final refreshTokenValue = await _secureStorage.read(key: _refreshTokenKey);
       final emailValue = await _secureStorage.read(key: _userEmailKey);
+      final integrityValue = await _secureStorage.read(key: _integrityKey);
 
       final allNull =
           accessTokenValue == null &&
           idTokenValue == null &&
           refreshTokenValue == null &&
-          emailValue == null;
+          emailValue == null &&
+          integrityValue == null;
 
       return allNull;
     } catch (err) {
@@ -559,15 +635,41 @@ class AuthService {
     }
   }
 
-  /// Attempts to restore previous session from stored tokens
+  /// Attempts to restore previous session from stored tokens with integrity validation
   Future<bool> _restoreSession() async {
     try {
       final email = await _secureStorage.read(key: _userEmailKey);
+      final accessToken = await _secureStorage.read(key: _accessTokenKey);
+      final idToken = await _secureStorage.read(key: _idTokenKey);
       final refreshToken = await _secureStorage.read(key: _refreshTokenKey);
+      final storedIntegrity = await _secureStorage.read(key: _integrityKey);
 
       if (email == null || refreshToken == null) {
         _logError('No stored session found', null);
         return false;
+      }
+
+      // Validate token integrity if HMAC is present
+      if (storedIntegrity != null && storedIntegrity.isNotEmpty) {
+        final isValid = await _validateTokenIntegrity(
+          accessToken ?? '',
+          idToken ?? '',
+          refreshToken,
+          email,
+          storedIntegrity,
+        );
+
+        if (!isValid) {
+          debugPrint('AuthService: Token integrity validation failed - clearing potentially tampered tokens');
+          await _clearTokens();
+          return false;
+        }
+
+        debugPrint('AuthService: Token integrity validated successfully');
+      } else {
+        // No integrity hash found - tokens stored before integrity feature was added
+        // Allow restore but re-persist with new integrity hash
+        debugPrint('AuthService: No integrity hash found - will generate on next persist');
       }
 
       _currentUser = CognitoUser(email, userPool);
@@ -581,6 +683,7 @@ class AuthService {
         return false;
       }
 
+      // Re-persist tokens with fresh integrity hash
       final tokensPersisted = await _persistTokens(_session!, email);
       if (!tokensPersisted) {
         _logError('Session persistence issue', null);

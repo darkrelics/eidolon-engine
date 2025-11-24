@@ -43,6 +43,7 @@ class GameScreenController extends ChangeNotifier {
   bool _storyCompletionNotified = false;
   Future<void>? _activeCharacterLoad;
   StoryLifecycleState _storyLifecycleState = StoryLifecycleState.none;
+  bool _disposed = false;
 
   // Timer & Debouncers
   Timer? _characterUpdateTimer;
@@ -85,12 +86,23 @@ class GameScreenController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _runtime.dispose();
     _decisionDebouncer.dispose();
     _refreshDebouncer.dispose();
     _characterUpdateTimer?.cancel();
     _statusUpdateDebounce?.cancel();
+    // Note: _activeCharacterLoad is not cancelled explicitly
+    // Instead, we check _disposed before calling notifyListeners()
+    // This allows in-flight requests to complete safely without affecting UI
     super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) {
+      super.notifyListeners();
+    }
   }
 
   void setSelectedPanelIndex(int index) {
@@ -300,7 +312,7 @@ class GameScreenController extends ChangeNotifier {
     required CharacterLoadRateLimitStrategy strategy,
     required bool showLoadingIndicator,
   }) async {
-    if (_characterInfo == null) return;
+    if (_characterInfo == null || _disposed) return;
 
     final previousCharacterId = _character?.id;
 
@@ -312,6 +324,12 @@ class GameScreenController extends ChangeNotifier {
       }
 
       final character = await retryWithBackoff(() => _executeCharacterLoad(strategy));
+
+      // Check if disposed after async operation
+      if (_disposed) {
+        debugPrint('GameScreenController: Disposed during character load - ignoring result');
+        return;
+      }
 
       _isLoading = false;
       final newCharacterId = character?.id;
@@ -335,6 +353,12 @@ class GameScreenController extends ChangeNotifier {
       _startOrchestrationIfNeeded();
       _manageCharacterUpdateTimer();
     } catch (e) {
+      // Check if disposed before error handling
+      if (_disposed) {
+        debugPrint('GameScreenController: Disposed during character load error - ignoring');
+        return;
+      }
+
       debugPrint('GameScreenController: ERROR loading character: $e');
       _error = ErrorHandler.getUserFriendlyMessage(e, context: 'loading character');
       _isLoading = false;
@@ -450,10 +474,23 @@ class GameScreenController extends ChangeNotifier {
       notifyListeners();
     }
 
+    // Extract segment start time from current state for initial poll delay calculation
+    DateTime? segmentStartTime;
+    final activeSegment = _character!.storyState?['ActiveSegment'];
+    if (activeSegment != null && activeSegment['StartTime'] != null) {
+      try {
+        segmentStartTime = DateTime.parse(activeSegment['StartTime'] as String).toUtc();
+      } catch (e) {
+        // If parsing fails, polling service will use default 60-second delay
+        debugPrint('GameScreenController: Failed to parse StartTime: $e');
+      }
+    }
+
     _runtime.startPolling(
       characterId: _character!.id,
+      segmentStartTime: segmentStartTime,
       onStatusUpdate: (status) {
-        if (_character == null) return;
+        if (_disposed || _character == null) return;
 
         final segmentKey = _segmentIdentity(status);
         final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
@@ -510,10 +547,12 @@ class GameScreenController extends ChangeNotifier {
         }
       },
       onSegmentComplete: (segmentUpdates) async {
-        if (_character == null) return;
+        if (_disposed || _character == null) return;
 
         try {
           final updatedCharacter = await _characterRepository.updateCharacterFromSegment(_character!.id, segmentUpdates);
+
+          if (_disposed) return;
 
           if (updatedCharacter != null) {
             _character = updatedCharacter;
@@ -521,20 +560,29 @@ class GameScreenController extends ChangeNotifier {
             notifyListeners();
           }
         } catch (e) {
+          if (_disposed) return;
+
           try {
             final character = await _apiService.getCharacterById(_character!.id);
+
+            if (_disposed) return;
+
             if (character != null) {
               _character = character;
               _error = null;
               notifyListeners();
             }
           } catch (fallbackError) {
+            if (_disposed) return;
+
             _error = 'Failed to update character';
             notifyListeners();
           }
         }
       },
       onCharacterReload: (characterData) {
+        if (_disposed) return;
+
         try {
           final updated = Character.fromJson(characterData);
 
@@ -581,25 +629,34 @@ class GameScreenController extends ChangeNotifier {
         }
       },
       onStoryComplete: () async {
-        if (_storyLifecycleState == StoryLifecycleState.completed) return;
+        if (_disposed || _storyLifecycleState == StoryLifecycleState.completed) return;
 
         _storyLifecycleState = StoryLifecycleState.completed;
         notifyListeners();
 
         try {
           final refreshedCharacter = await _characterRepository.refreshCharacterFromServer(_character!.id);
+
+          if (_disposed) return;
+
           if (refreshedCharacter != null) {
             _character = refreshedCharacter;
             notifyListeners();
           }
         } catch (e) {
+          if (_disposed) return;
+
           debugPrint('GameScreenController: Failed to refresh character from server: $e');
         }
+
+        if (_disposed) return;
 
         await _handleStoryCompletion(refreshCharacter: false, showMessage: true);
         _manageCharacterUpdateTimer();
       },
       onError: (err) {
+        if (_disposed) return;
+
         _error = err.toString();
         notifyListeners();
       },

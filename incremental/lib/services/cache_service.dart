@@ -13,6 +13,7 @@ class CacheService {
   late SharedPreferences _prefs;
   final Map<String, dynamic> _memoryCache = {};
   final Map<String, DateTime> _memoryCacheTimestamps = {};
+  final Map<String, Timer> _expirationTimers = {};
 
   /// Configurable cleanup threshold for expired cache entries
   Duration _cleanupThreshold = _defaultCleanupThreshold;
@@ -45,6 +46,10 @@ class CacheService {
     final now = DateTime.now();
 
     try {
+      // Cancel any existing expiration timer for this key
+      _expirationTimers[key]?.cancel();
+      _expirationTimers.remove(key);
+
       // Store in memory cache
       _memoryCache[key] = value;
       _memoryCacheTimestamps[key] = now;
@@ -54,9 +59,12 @@ class CacheService {
       await _prefs.setString(cacheKey, jsonString);
       await _prefs.setString(timestampKey, now.toIso8601String());
 
-      // Schedule cleanup
+      // Schedule cleanup and track the timer
       if (ttl != Duration.zero) {
-        Timer(ttl, () => remove(key));
+        _expirationTimers[key] = Timer(ttl, () {
+          remove(key);
+          _expirationTimers.remove(key);
+        });
       }
     } catch (e) {
       debugPrint('Cache set error: $e');
@@ -106,6 +114,10 @@ class CacheService {
 
   /// Remove specific key from cache
   Future<void> remove(String key) async {
+    // Cancel any pending expiration timer
+    _expirationTimers[key]?.cancel();
+    _expirationTimers.remove(key);
+
     _memoryCache.remove(key);
     _memoryCacheTimestamps.remove(key);
 
@@ -115,6 +127,12 @@ class CacheService {
 
   /// Clear all cache
   Future<void> clear() async {
+    // Cancel all pending expiration timers
+    for (final timer in _expirationTimers.values) {
+      timer.cancel();
+    }
+    _expirationTimers.clear();
+
     _memoryCache.clear();
     _memoryCacheTimestamps.clear();
 
@@ -151,6 +169,21 @@ class CacheService {
 
     final age = DateTime.now().difference(timestamp);
     return age <= maxAge;
+  }
+
+  /// Dispose of all resources and cancel pending timers.
+  ///
+  /// Note: As a singleton, this is typically not called during normal app lifecycle.
+  /// However, it's provided for testing scenarios or explicit cleanup if needed.
+  void dispose() {
+    // Cancel all pending expiration timers
+    for (final timer in _expirationTimers.values) {
+      timer.cancel();
+    }
+    _expirationTimers.clear();
+
+    _memoryCache.clear();
+    _memoryCacheTimestamps.clear();
   }
 }
 
