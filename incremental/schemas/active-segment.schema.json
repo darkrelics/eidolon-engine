@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Active Segment Schema",
+  "description": "Schema for active segment instances in Eidolon Engine",
+  "type": "object",
+  "required": [
+    "ActiveSegmentID",
+    "CharacterID",
+    "PlayerID",
+    "StoryID",
+    "SegmentID",
+    "StartTime",
+    "EndTime"
+  ],
+  "properties": {
+    "ActiveSegmentID": {
+      "type": "string",
+      "description": "Unique identifier for the active segment instance (UUIDv7)"
+    },
+    "CharacterID": {
+      "type": "string",
+      "description": "UUID of the character playing this segment"
+    },
+    "PlayerID": {
+      "type": "string",
+      "description": "UUID of the player who owns the character"
+    },
+    "StoryID": {
+      "type": "string",
+      "description": "Identifier of the story being played"
+    },
+    "SegmentID": {
+      "type": "string",
+      "description": "Identifier of the segment definition from the Segments table"
+    },
+    "SegmentType": {
+      "type": "string",
+      "description": "Type of segment (mechanical, decision, combat, etc.)"
+    },
+    "SegmentTitle": {
+      "type": "string",
+      "description": "Title of the segment for display"
+    },
+    "SegmentActivity": {
+      "type": "string",
+      "description": "Activity description for display during segment"
+    },
+    "StartTime": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when the segment started"
+    },
+    "EndTime": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when the segment ends/ended"
+    },
+    "ProcessedAt": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when the segment was processed"
+    },
+    "CompletedAt": {
+      "type": "string",
+      "description": "ISO 8601 timestamp when the segment completed"
+    },
+    "Status": {
+      "type": "string",
+      "enum": ["Active", "Completed", "Abandoned"],
+      "description": "Current status of the segment"
+    },
+    "ProcessingStatus": {
+      "type": "string",
+      "enum": ["pending", "processing", "processed"],
+      "description": "Processing status for segment mechanics"
+    },
+    "Outcome": {
+      "type": "string",
+      "enum": ["Success", "Failure", "Normal", "Critical", "Abandoned"],
+      "description": "Outcome of the segment"
+    },
+    "Decision": {
+      "type": "string",
+      "description": "Player's decision choice (for decision segments)"
+    },
+    "ClientEvents": {
+      "type": "array",
+      "description": "Events to display to the client during segment",
+      "items": {
+        "type": "object",
+        "required": ["EventType", "Title", "Description"],
+        "properties": {
+          "EventType": {
+            "type": "string",
+            "description": "Type of event (narrative, decision, combat, etc.)"
+          },
+          "Title": {
+            "type": "string",
+            "description": "Title of the event"
+          },
+          "Description": {
+            "type": "string",
+            "description": "Description or content of the event"
+          },
+          "Data": {
+            "type": "object",
+            "description": "Additional event data",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "CharacterUpdates": {
+      "type": "object",
+      "description": "Character field updates from segment completion",
+      "additionalProperties": true
+    },
+    "SkillXPAwarded": {
+      "type": "object",
+      "description": "Skill XP awarded during this segment",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "AttributeXPAwarded": {
+      "type": "object",
+      "description": "Attribute XP awarded during this segment",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "ChallengeResults": {
+      "type": "array",
+      "description": "Results from skill challenges in this segment",
+      "items": {
+        "type": "object"
+      }
+    },
+    "CombatState": {
+      "type": "object",
+      "description": "Combat state data if segment includes combat",
+      "additionalProperties": true
+    }
+  }
+}

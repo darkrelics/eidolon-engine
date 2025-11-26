@@ -121,6 +121,19 @@ class ApiService extends BaseApiService {
     }
   }
 
+  /// Get raw character response including ActiveStory and ActiveSegment.
+  ///
+  /// Returns the complete API response with Character, ActiveStory, and ActiveSegment fields.
+  /// Used by polling service to get authoritative character state after story completion.
+  Future<Map<String, dynamic>> getCharacter({required String characterId}) async {
+    ApiMetrics.recordCall('GET /character (raw)', details: 'id=$characterId');
+
+    return await get<Map<String, dynamic>>(
+      '/character',
+      queryParams: {'CharacterID': characterId},
+    );
+  }
+
   /// List all characters for the player.
   ///
   /// Returns a list of all characters owned by the authenticated player.

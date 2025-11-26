@@ -13,6 +13,7 @@ class CacheService {
   late SharedPreferences _prefs;
   final Map<String, dynamic> _memoryCache = {};
   final Map<String, DateTime> _memoryCacheTimestamps = {};
+  final Map<String, Timer> _expiryTimers = {};
 
   /// Configurable cleanup threshold for expired cache entries
   Duration _cleanupThreshold = _defaultCleanupThreshold;
@@ -45,6 +46,10 @@ class CacheService {
     final now = DateTime.now();
 
     try {
+      // Cancel existing timer for this key to prevent memory leaks
+      _expiryTimers[key]?.cancel();
+      _expiryTimers.remove(key);
+
       // Store in memory cache
       _memoryCache[key] = value;
       _memoryCacheTimestamps[key] = now;
@@ -54,9 +59,12 @@ class CacheService {
       await _prefs.setString(cacheKey, jsonString);
       await _prefs.setString(timestampKey, now.toIso8601String());
 
-      // Schedule cleanup
+      // Schedule cleanup with timer tracking
       if (ttl != Duration.zero) {
-        Timer(ttl, () => remove(key));
+        _expiryTimers[key] = Timer(ttl, () {
+          _expiryTimers.remove(key);
+          remove(key);
+        });
       }
     } catch (e) {
       debugPrint('Cache set error: $e');
@@ -106,6 +114,10 @@ class CacheService {
 
   /// Remove specific key from cache
   Future<void> remove(String key) async {
+    // Cancel and remove timer to prevent memory leaks
+    _expiryTimers[key]?.cancel();
+    _expiryTimers.remove(key);
+
     _memoryCache.remove(key);
     _memoryCacheTimestamps.remove(key);
 
@@ -115,6 +127,12 @@ class CacheService {
 
   /// Clear all cache
   Future<void> clear() async {
+    // Cancel all timers to prevent memory leaks
+    for (final timer in _expiryTimers.values) {
+      timer.cancel();
+    }
+    _expiryTimers.clear();
+
     _memoryCache.clear();
     _memoryCacheTimestamps.clear();
 

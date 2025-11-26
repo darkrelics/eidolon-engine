@@ -617,8 +617,9 @@ class AuthService {
   }
 
   /// Validates email format
+  /// Allows plus addressing (user+tag@domain) and modern TLDs (.digital, .technology, etc.)
   bool _validateEmail(String email) {
-    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+    return RegExp(r'^[\w\-\.\+]+@([\w-]+\.)+[a-zA-Z]{2,}$').hasMatch(email);
   }
 
   /// Validates password complexity

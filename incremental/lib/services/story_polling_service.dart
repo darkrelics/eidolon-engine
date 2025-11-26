@@ -114,7 +114,18 @@ class StoryPollingService {
       }
 
       if (activeSegmentId == null) {
-        debugPrint('StoryPollingService: Story complete - stopping polling');
+        debugPrint('StoryPollingService: Story complete - reloading character');
+
+        // Reload character to get authoritative state (XP, wounds, inventory)
+        try {
+          final character = await _apiService.getCharacter(characterId: characterId);
+          onCharacterReload(character);
+        } catch (e) {
+          debugPrint('StoryPollingService: Failed to reload character after completion: $e');
+          // Continue to onStoryComplete even if reload fails
+          onError?.call(e);
+        }
+
         stopPolling();
         onStoryComplete();
         return;
@@ -244,7 +255,18 @@ class StoryPollingService {
       // Check for "no active segment" which indicates story completion
       final errorMsg = e.toString().toLowerCase();
       if (errorMsg.contains('no active segment') || errorMsg.contains('404')) {
-        debugPrint('StoryPollingService: No active segment - story complete');
+        debugPrint('StoryPollingService: No active segment - story complete, reloading character');
+
+        // Reload character to get authoritative state (XP, wounds, inventory)
+        try {
+          final character = await _apiService.getCharacter(characterId: characterId);
+          onCharacterReload(character);
+        } catch (reloadErr) {
+          debugPrint('StoryPollingService: Failed to reload character after completion: $reloadErr');
+          // Continue to onStoryComplete even if reload fails
+          onError?.call(reloadErr);
+        }
+
         stopPolling();
         onStoryComplete();
         return;
