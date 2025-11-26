@@ -51,6 +51,9 @@ type CommandRequest struct {
 	State     CommandState          // Current state of the command
 	Timestamp time.Time             // When the command was created
 	Response  chan *CommandResponse // Channel for direct response
+	OriginIP  string                // IP address of the command origin
+	SessionID string                // Session ID (Player ID)
+	ClientType string               // Type of client (SSH, Telnet, etc)
 }
 
 // CommandResponse encapsulates a response to a command

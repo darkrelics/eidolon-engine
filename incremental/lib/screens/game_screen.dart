@@ -1,23 +1,9 @@
-import 'dart:async';
-
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
+import 'package:eidolon_incremental/controllers/game_screen_controller.dart';
 import 'package:eidolon_incremental/models/character.dart';
-import 'package:eidolon_incremental/models/story.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/providers/character_provider.dart';
-import 'package:eidolon_incremental/repositories/character_repository.dart';
-import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
-import 'package:eidolon_incremental/services/indexeddb_service.dart';
-import 'package:eidolon_incremental/services/notification_service.dart';
-import 'package:eidolon_incremental/services/rate_limiter.dart';
-import 'package:eidolon_incremental/services/story_polling_service.dart';
-import 'package:eidolon_incremental/utils/debounce.dart';
-import 'package:eidolon_incremental/utils/error_handler.dart';
-import 'package:eidolon_incremental/utils/retry.dart';
 import 'package:eidolon_incremental/widgets/game/character_panel.dart';
 import 'package:eidolon_incremental/widgets/game/inventory_panel.dart';
 import 'package:eidolon_incremental/widgets/game/story_panel.dart';
@@ -25,1386 +11,62 @@ import 'package:eidolon_incremental/widgets/shared/breadcrumb.dart';
 import 'package:eidolon_incremental/widgets/shared/error_boundary.dart';
 import 'package:eidolon_incremental/widgets/shared/keyboard_shortcuts.dart';
 import 'package:eidolon_incremental/widgets/shared/responsive_layout.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-class GameScreen extends StatefulWidget {
+class GameScreen extends StatelessWidget {
   const GameScreen({super.key});
 
   @override
-  State<GameScreen> createState() => _GameScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => GameScreenController(apiService: ApiService(authService: AuthService.instance)),
+      child: const _GameScreenView(),
+    );
+  }
 }
 
-enum CharacterLoadRateLimitStrategy { automated, humanDriven, immediate }
-
-/// Story lifecycle states to prevent premature completion detection
-enum StoryLifecycleState {
-  /// No active story
-  none,
-  /// Story is running with active segments
-  running,
-  /// Story completion confirmed by polling service
-  completed,
-}
-
-class _GameScreenState extends State<GameScreen> {
-  late ApiService _apiService;
-  late StoryPollingService _runtime;
-  late CharacterRepository _characterRepository;
-  final GlobalRateLimiter _rateLimiter = GlobalRateLimiter();
-  Character? _character;
-  CharacterInfo? _characterInfo;
-  bool _isLoading = true;
-  String? _error;
-  bool _isSubmittingDecision = false;
-  bool _storyCompletionNotified = false;
-  Future<void>? _activeCharacterLoad;
-
-  // Story lifecycle tracking to prevent premature completion
-  StoryLifecycleState _storyLifecycleState = StoryLifecycleState.none;
-
-  // Character update timer (when not in active story)
-  Timer? _characterUpdateTimer;
-  int _characterUpdateTimerCount = 0;
-
-  // Segment history (completion view only)
-  List<Map<String, dynamic>> _segmentHistory = const [];
-  Map<String, dynamic>? _lastStoryDetails;
-  int _segmentCounter = 0;
-
-  // Panel visibility for mobile/tablet
-  int _selectedPanelIndex = 1; // 0: Character, 1: Story, 2: Inventory
-
-  // Track last orchestrated segment to avoid duplicate starts
-  String? _orchestratedSegmentId;
-
-  // Debouncers for user actions
-  late Debouncer _decisionDebouncer;
-  late Debouncer _refreshDebouncer;
-
-  // Performance optimization: Cache expensive computations
-  List<Map<String, dynamic>>? _cachedCompletedSegments;
-  String? _completedSegmentsCacheKey;
-  List<Map<String, dynamic>>? _cachedStoryHistory;
-  String? _storyHistoryCacheKey;
-  Timer? _statusUpdateDebounce;
+class _GameScreenView extends StatefulWidget {
+  const _GameScreenView();
 
   @override
-  void initState() {
-    super.initState();
-    debugPrint('GameScreen: initState called');
-    _apiService = ApiService(authService: AuthService.instance);
-    _runtime = StoryPollingService(apiService: _apiService);
-    _characterRepository = CharacterRepository(
-      apiService: _apiService,
-      indexedDBService: IndexedDBService(),
-    );
-    _decisionDebouncer = Debouncer(delay: const Duration(milliseconds: 300));
-    _refreshDebouncer = Debouncer(delay: const Duration(milliseconds: 500));
-  }
+  State<_GameScreenView> createState() => _GameScreenViewState();
+}
 
+class _GameScreenViewState extends State<_GameScreenView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Get character info from route arguments
+    final controller = context.read<GameScreenController>();
     final args = ModalRoute.of(context)?.settings.arguments;
-    // Handle both Character and CharacterInfo types
+    final characterProvider = context.read<CharacterProvider>();
+
     if (args is Character) {
-      // Direct character object with story state (from StorySelectionScreen)
-      if (_character == null || _character!.id != args.id) {
-        final storyData = args.storyState?['Story'] as Map<String, dynamic>?;
-        final completedSegments = args.storyState?['CompletedSegments'] as List<dynamic>?;
-
-        setState(() {
-          _resetForNewCharacter();
-          _character = args;
-          _characterInfo = CharacterInfo(name: args.name, id: args.id, dead: args.health <= 0);
-          _isLoading = false;
-          _error = null;
-
-          if (storyData != null) {
-            _lastStoryDetails = Map<String, dynamic>.from(storyData);
-          }
-
-          if (completedSegments != null) {
-            _segmentHistory = completedSegments
-                .whereType<Map<String, dynamic>>()
-                .map((segment) {
-                  final copy = Map<String, dynamic>.from(segment);
-                  if (!copy.containsKey('_index')) {
-                    copy['_index'] = _segmentCounter++;
-                  }
-                  return copy;
-                })
-                .where(_isSegmentComplete)
-                .toList();
-          }
-
-          _synchronizeStoryCompletionState();
-        });
-
-        _startOrchestrationIfNeeded();
-        _manageCharacterUpdateTimer();
-      }
+      controller.initialize(args, null);
     } else if (args is CharacterInfo) {
-      // Only update if it's a different character or first load
-      if (_characterInfo == null || _characterInfo!.id != args.id) {
-        setState(() {
-          _resetForNewCharacter();
-          _characterInfo = args;
-          _character = null;
-          _isLoading = true;
-          _error = null;
-        });
-        _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate)
-            .then((_) => _loadSegmentHistory());
-      }
+      controller.initialize(null, args);
     } else {
-      // No route arguments (page reload or direct URL navigation)
-      // Try to load from CharacterProvider (local storage)
-      if (_characterInfo == null && _character == null) {
-        debugPrint('GameScreen: No route arguments, checking CharacterProvider');
-
-        // Try to get character from provider
-        final characterProvider = context.read<CharacterProvider>();
-        final savedCharacter = characterProvider.character;
-
-        if (savedCharacter != null) {
-          debugPrint('GameScreen: Found saved character: ${savedCharacter.name}');
-          setState(() {
-            _resetForNewCharacter();
-            _character = savedCharacter;
-            _characterInfo = CharacterInfo(
-              name: savedCharacter.name,
-              id: savedCharacter.id,
-              dead: savedCharacter.health <= 0,
-            );
-            _isLoading = false;
-            _error = null;
-          });
-
-          _startOrchestrationIfNeeded();
-          _manageCharacterUpdateTimer();
-
-          // Refresh character data from server in background
-          _loadCharacterData(
-            strategy: CharacterLoadRateLimitStrategy.immediate,
-            showLoadingIndicator: false,
-          );
-        } else {
-          // No saved character, redirect to selection
-          debugPrint('GameScreen: No saved character, redirecting to character selection');
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              Navigator.pushReplacementNamed(context, '/character-selection');
-            }
-          });
-        }
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _runtime.dispose();
-    _decisionDebouncer.dispose();
-    _refreshDebouncer.dispose();
-    _characterUpdateTimer?.cancel();
-    _characterUpdateTimerCount = 0;
-    _statusUpdateDebounce?.cancel();
-    super.dispose();
-  }
-
-  void _resetForNewCharacter() {
-    _runtime.stopPolling();
-    _characterUpdateTimer?.cancel();
-    _characterUpdateTimerCount = 0;
-    _orchestratedSegmentId = null;
-    _segmentHistory = <Map<String, dynamic>>[];
-    _segmentCounter = 0;
-    _lastStoryDetails = null;
-    _storyCompletionNotified = false;
-    _storyLifecycleState = StoryLifecycleState.none;
-    _invalidateCache();
-  }
-
-  void _invalidateCache() {
-    _cachedCompletedSegments = null;
-    _completedSegmentsCacheKey = null;
-    _cachedStoryHistory = null;
-    _storyHistoryCacheKey = null;
-  }
-
-  /// Generate stable identity for segment tracking
-  ///
-  /// Key hierarchy:
-  /// 1. ActiveSegmentID (preferred) - unique per segment execution
-  /// 2. SegmentID (fallback) - story definition ID, can repeat across executions
-  /// 3. Composite key (last resort) - for segments missing both IDs
-  String _segmentIdentity(Map<String, dynamic> segment) {
-    // Primary key: ActiveSegmentID (unique execution identifier)
-    final activeSegmentId = segment['ActiveSegmentID'];
-    if (activeSegmentId != null) {
-      final idString = activeSegmentId.toString().trim();
-      if (idString.isNotEmpty) {
-        return 'active:$idString';
-      }
-    }
-
-    // Fallback: SegmentID (story definition identifier)
-    final segmentId = segment['SegmentID'];
-    if (segmentId != null) {
-      final idString = segmentId.toString().trim();
-      if (idString.isNotEmpty) {
-        return 'segment:$idString';
-      }
-    }
-
-    // Last resort: Composite key from available fields
-    final storyInstanceId = segment['StoryInstanceID']?.toString().trim();
-    final storyId = segment['StoryID']?.toString().trim();
-    final segmentActivity = segment['SegmentActivity']?.toString().trim();
-    final segmentTitle = segment['SegmentTitle']?.toString().trim();
-    final prompt = segment['Prompt']?.toString().trim();
-
-    final parts = <String>[
-      if (storyInstanceId != null && storyInstanceId.isNotEmpty) storyInstanceId,
-      if (storyId != null && storyId.isNotEmpty) storyId,
-      if (segmentActivity != null && segmentActivity.isNotEmpty) segmentActivity,
-      if (segmentTitle != null && segmentTitle.isNotEmpty) segmentTitle,
-      if (prompt != null && prompt.isNotEmpty) prompt,
-    ];
-
-    if (parts.isEmpty) {
-      return 'fallback:${segment.hashCode}';
-    }
-
-    return 'composite:${parts.join('|')}';
-  }
-
-  void _sortSegmentsChronologically(List<Map<String, dynamic>> segments, {bool newestFirst = false}) {
-    segments.sort((a, b) {
-      final aIndex = a['_index'] as int?;
-      final bIndex = b['_index'] as int?;
-
-      if (aIndex != null && bIndex != null) {
-        return newestFirst ? bIndex.compareTo(aIndex) : aIndex.compareTo(bIndex);
-      }
-
-      // If indices are missing (shouldn't happen in active play), keep original order
-      if (aIndex == null && bIndex == null) return 0;
-      if (aIndex == null) return 1;
-      if (bIndex == null) return -1;
-
-      return 0;
-    });
-  }
-
-  /// Manage character update timer based on story state.
-  /// Timer runs every 2 minutes when NOT in an active story.
-  void _manageCharacterUpdateTimer() {
-    final hasActiveStory = _character?.activeSegmentID != null;
-
-    debugPrint('GameScreen: _manageCharacterUpdateTimer called - hasActiveStory=$hasActiveStory, timerExists=${_characterUpdateTimer != null}, characterId=${_character?.id}');
-
-    if (hasActiveStory) {
-      // Stop timer if in active story
-      if (_characterUpdateTimer != null) {
-        debugPrint('GameScreen: Stopping character update timer (in active story)');
-        _characterUpdateTimer?.cancel();
-        _characterUpdateTimer = null;
-        _characterUpdateTimerCount = 0;
-      }
-    } else {
-      // Start timer if not in active story and timer not already running
-      if (_characterUpdateTimer == null && _character != null) {
-        debugPrint('GameScreen: Starting character update timer (no active story) - first update in 2 minutes');
-        _characterUpdateTimerCount = 0;
-
-        // Start periodic timer - fires every 2 minutes
-        _characterUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
-          _characterUpdateTimerCount++;
-          debugPrint('GameScreen: Auto-refreshing character (2-minute timer tick $_characterUpdateTimerCount/60)');
-
-          if (_characterUpdateTimerCount >= 60) {
-            debugPrint('GameScreen: Timer count reached 60, stopping timer');
-            timer.cancel();
-            _characterUpdateTimer = null;
-            _characterUpdateTimerCount = 0;
-            return;
-          }
-
-          _loadCharacterData(
-            strategy: CharacterLoadRateLimitStrategy.automated,
-            showLoadingIndicator: false,
-          );
-        });
-      } else if (_characterUpdateTimer != null) {
-        debugPrint('GameScreen: Timer already running, not starting new one');
-      } else if (_character == null) {
-        debugPrint('GameScreen: Cannot start timer - no character loaded');
-      }
-    }
-  }
-
-  Future<void> _loadCharacterData({
-    CharacterLoadRateLimitStrategy strategy = CharacterLoadRateLimitStrategy.automated,
-    bool showLoadingIndicator = true,
-  }) {
-    final activeLoad = _activeCharacterLoad;
-    if (activeLoad != null) {
-      return activeLoad;
-    }
-
-    final future = _loadCharacterDataInternal(
-      strategy: strategy,
-      showLoadingIndicator: showLoadingIndicator,
-    );
-    _activeCharacterLoad = future;
-    future.whenComplete(() {
-      if (identical(_activeCharacterLoad, future)) {
-        _activeCharacterLoad = null;
-      }
-    });
-
-    return future;
-  }
-
-  Future<void> _loadCharacterDataInternal({
-    required CharacterLoadRateLimitStrategy strategy,
-    required bool showLoadingIndicator,
-  }) async {
-    debugPrint('GameScreen: Loading character data');
-    if (_characterInfo == null) return;
-
-    final previousCharacterId = _character?.id;
-
-    try {
-      if (mounted) {
-        setState(() {
-          _error = null;
-          if (showLoadingIndicator) {
-            _isLoading = true;
-          }
-        });
-      }
-
-      final character = await retryWithBackoff(() => _executeCharacterLoad(strategy));
-      debugPrint('GameScreen: Character loaded: ${character != null ? 'success' : 'null'}');
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          final newCharacterId = character?.id;
-          if (previousCharacterId != newCharacterId) {
-            _resetForNewCharacter();
-          }
-          _character = character;
-          _error = null;
-          if (character?.activeSegmentID != null) {
-            _storyCompletionNotified = false;
-          }
-
-          final storyData = character?.storyState?['Story'] as Map<String, dynamic>?;
-          if (storyData != null) {
-            _lastStoryDetails = Map<String, dynamic>.from(storyData);
-          }
-
-          _synchronizeStoryCompletionState();
-        });
-
-        _startOrchestrationIfNeeded();
-        _manageCharacterUpdateTimer();
-      }
-    } catch (e) {
-      debugPrint('GameScreen: ERROR loading character: $e');
-      if (mounted) {
-        setState(() {
-          _error = ErrorHandler.getUserFriendlyMessage(e, context: 'loading character');
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<Character?> _executeCharacterLoad(CharacterLoadRateLimitStrategy strategy) {
-    switch (strategy) {
-      case CharacterLoadRateLimitStrategy.immediate:
-        return _apiService.getCharacterById(_characterInfo!.id).then((character) {
-          _rateLimiter.limiter.recordCall(GlobalRateLimiter.getCharacter);
-          return character;
-        });
-      case CharacterLoadRateLimitStrategy.humanDriven:
-        return _rateLimiter.limiter.executeHumanDriven(
-          GlobalRateLimiter.getCharacter,
-          () => _apiService.getCharacterById(_characterInfo!.id),
-        );
-      case CharacterLoadRateLimitStrategy.automated:
-        return _rateLimiter.limiter.executeAutomated(
-          GlobalRateLimiter.getCharacter,
-          () => _apiService.getCharacterById(_characterInfo!.id),
-        );
-    }
-  }
-
-  Future<void> _refreshCharacterImmediate() {
-    // Debounce refresh to prevent spam clicking
-    if (_refreshDebouncer.isActive) {
-      debugPrint('Refresh blocked: debounce cooldown active');
-      return Future.value();
-    }
-
-    _refreshDebouncer.runImmediate(() {
-      // Empty callback - we just want the cooldown timer
-    });
-
-    return _loadCharacterData(
-      strategy: CharacterLoadRateLimitStrategy.immediate,
-      showLoadingIndicator: false,
-    );
-  }
-
-  // Orchestration is handled by StoryPollingService
-
-  Future<void> _handleStorySelect(StoryMetadata story) async {
-    if (!story.available) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(story.cooldownRemaining > 0 ? 'Story on cooldown' : 'Story not available')));
-      return;
-    }
-
-    try {
-      if (mounted) {
-        setState(() {
-          _isLoading = true;
-          // Clear segment history when starting a new story
-          _segmentHistory = [];
-          _storyCompletionNotified = false;
-        });
-      }
-
-      final initialSegment = await _rateLimiter.limiter.executeHumanDriven(
-        GlobalRateLimiter.startStory,
-        () => _apiService.startStory(characterId: _character!.id, storyId: story.storyID),
-        throwOnRateLimit: true,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        // Build story state and active IDs for immediate UI
-        final newStoryState = Map<String, dynamic>.from(_character?.storyState ?? <String, dynamic>{});
-        newStoryState['ActiveSegment'] = initialSegment;
-        newStoryState['Story'] = {
-          'Title': story.title,
-          'Description': story.description,
-          'Type': story.type,
-          'StoryID': story.storyID,
-        };
-
-        _character = _character!.copyWith(
-          activeStoryId: initialSegment['StoryID']?.toString(),
-          activeSegmentId: initialSegment['ActiveSegmentID']?.toString() ?? initialSegment['SegmentID']?.toString(),
-          storyState: newStoryState,
-          gameMode: 'Incremental',
-        );
-
-        _lastStoryDetails = Map<String, dynamic>.from(newStoryState['Story'] as Map<String, dynamic>);
-
-        // Add initial segment to history for tracking
-        final initialSegmentCopy = Map<String, dynamic>.from(initialSegment);
-        initialSegmentCopy['StoryTitle'] = story.title;
-        initialSegmentCopy['_index'] = _segmentCounter++;
-        _segmentHistory = [initialSegmentCopy];
-        debugPrint('GameScreen: Added initial segment to history: ${_character!.activeSegmentID}');
-
-        _isLoading = false;
-
-        // Set story lifecycle to running
-        _storyLifecycleState = StoryLifecycleState.running;
-        debugPrint('GameScreen: Story lifecycle state changed to RUNNING - story started: ${story.title}');
-
-        // Start API metrics tracking for this segment
-        ApiMetrics.startSegment();
-      });
-
-      _startOrchestrationIfNeeded(force: true);
-      _manageCharacterUpdateTimer();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
-        );
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      }
-    }
-  }
-
-  void _startOrchestrationIfNeeded({bool force = false}) {
-    if (_character == null) return;
-    final segId = _character!.activeSegmentID;
-    if (!force && (segId == null || segId == _orchestratedSegmentId)) return;
-
-    _orchestratedSegmentId = segId;
-
-    if (segId == null) return; // No active story
-
-    // Set story lifecycle to running when orchestration starts
-    if (_storyLifecycleState != StoryLifecycleState.running) {
-      debugPrint('GameScreen: Story lifecycle state changed to RUNNING - orchestration started for segment: $segId');
-      setState(() {
-        _storyLifecycleState = StoryLifecycleState.running;
-      });
-    }
-
-    _runtime.startPolling(
-      characterId: _character!.id,
-      onStatusUpdate: (status) {
-        if (!mounted || _character == null) return;
-
-        // Add segment to history for tracking (if not already present)
-        final segmentId = status['ActiveSegmentID']?.toString() ?? status['SegmentID']?.toString();
-        final segmentKey = _segmentIdentity(status);
-        final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
-        final processingStatus = status['ProcessingStatus'];
-        final timeRemaining = status['TimeRemaining'];
-
-        debugPrint('GameScreen: Segment update - ID: $segmentId, Status: $processingStatus, Time: ${timeRemaining}s, InHistory: $exists');
-
-        // Check if this is a meaningful update before triggering setState
-        final currentActiveSegmentId = _character!.activeSegmentID;
-        final newActiveSegmentId = status['ActiveSegmentID']?.toString() ?? status['SegmentID']?.toString();
-        final segmentChanged = currentActiveSegmentId != newActiveSegmentId;
-        final statusChanged = processingStatus != _character!.storyState?['ActiveSegment']?['ProcessingStatus'];
-
-        if (!exists) {
-          final segmentCopy = Map<String, dynamic>.from(status);
-          if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-            segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-          }
-          segmentCopy['_index'] = _segmentCounter++;
-          _segmentHistory = [..._segmentHistory, segmentCopy];
-          debugPrint('GameScreen: Added segment to history (total: ${_segmentHistory.length})');
-        } else {
-          // Update existing segment in history with latest data
-          _segmentHistory = _segmentHistory.map((s) {
-            if (_segmentIdentity(s) == segmentKey) {
-              final updated = Map<String, dynamic>.from(status);
-              if (!updated.containsKey('StoryTitle') && _lastStoryDetails != null) {
-                updated['StoryTitle'] = _lastStoryDetails!['Title'];
-              }
-              // Preserve the _index from the original segment to maintain chronological ordering
-              if (s.containsKey('_index')) {
-                updated['_index'] = s['_index'];
-              }
-              return updated;
-            }
-            return s;
-          }).toList();
-          debugPrint('GameScreen: Updated existing segment in history');
-        }
-
-        // Update character with new segment status
-        final storyState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{});
-        storyState['ActiveSegment'] = status;
-
-        // Preserve story details
-        final story = status['Story'] as Map<String, dynamic>?;
-        if (story != null) {
-          storyState['Story'] = story;
-          _lastStoryDetails = Map<String, dynamic>.from(story);
-        }
-
-        // Debounce only major changes; always call setState to maintain consistency
-        if (segmentChanged || statusChanged || !exists) {
-          // Major change - debounce to prevent rapid rebuilds
-          _statusUpdateDebounce?.cancel();
-          _statusUpdateDebounce = Timer(const Duration(milliseconds: 200), () {
-            if (!mounted) return;
-            setState(() {
-              _character = _character!.copyWith(
-                activeSegmentId: newActiveSegmentId,
-                storyState: storyState,
-              );
-              _error = null;
-              _invalidateCache();
-            });
-          });
-        } else {
-          // Minor update - immediate setState without debounce to prevent state drift
-          if (mounted) {
-            setState(() {
-              _character = _character!.copyWith(
-                activeSegmentId: newActiveSegmentId,
-                storyState: storyState,
-              );
-            });
-          }
-        }
-      },
-      onSegmentComplete: (segmentUpdates) async {
-        if (!mounted || _character == null) return;
-
-        debugPrint('GameScreen: Applying incremental character updates from segment');
-
-        try {
-          // Apply incremental updates using Character Repository
-          final updatedCharacter = await _characterRepository.updateCharacterFromSegment(
-            _character!.id,
-            segmentUpdates,
-          );
-
-          if (!mounted) return;
-
-          if (updatedCharacter != null) {
-            setState(() {
-              _character = updatedCharacter;
-              _error = null;
-            });
-            debugPrint('GameScreen: Character updated from segment incrementally');
-          }
-        } catch (e) {
-          debugPrint('GameScreen: Error applying incremental updates: $e');
-          // If incremental update fails, fall back to full character reload
-          try {
-            final character = await _apiService.getCharacterById(_character!.id);
-            if (!mounted) return;
-            if (character != null) {
-              setState(() {
-                _character = character;
-                _error = null;
-              });
-              debugPrint('GameScreen: Fell back to full character reload');
-            }
-          } catch (fallbackError) {
-            debugPrint('GameScreen: Fallback character reload also failed: $fallbackError');
-            setState(() {
-              _error = 'Failed to update character';
-            });
-          }
-        }
-      },
-      onCharacterReload: (characterData) {
-        if (!mounted) return;
-
-        // Parse character data and update
-        try {
-          final updated = Character.fromJson(characterData);
-
-          // Detect story completion immediately
-          // Check multiple indicators to ensure story is truly complete
-          final wasRunning = _storyLifecycleState == StoryLifecycleState.running;
-          final hasActiveSegmentField = updated.activeSegmentID != null;
-          final hasActiveStoryField = updated.activeStoryID != null;
-          final hasActiveSegmentInState = updated.storyState?['ActiveSegment'] != null;
-          final hasActiveStoryInState = updated.storyState?['ActiveStory'] != null;
-
-          final storyCompleted = wasRunning &&
-                                !hasActiveSegmentField &&
-                                !hasActiveStoryField &&
-                                !hasActiveSegmentInState &&
-                                !hasActiveStoryInState;
-
-          if (wasRunning && (hasActiveSegmentField || hasActiveStoryField || hasActiveSegmentInState || hasActiveStoryInState)) {
-            debugPrint('GameScreen: Story still active - activeSegmentID=${updated.activeSegmentID}, '
-                      'activeStoryID=${updated.activeStoryID}, '
-                      'hasActiveSegmentInState=$hasActiveSegmentInState, '
-                      'hasActiveStoryInState=$hasActiveStoryInState');
-          }
-
-          // Add new segment to history if present
-          // (Segments are tracked in history immediately when encountered)
-          final newActiveSegment = updated.storyState?['ActiveSegment'] as Map<String, dynamic>?;
-          final newActiveSegmentId = updated.activeSegmentID;
-
-          if (newActiveSegment != null) {
-            final segmentKey = _segmentIdentity(newActiveSegment);
-            final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
-
-            if (!exists) {
-              final segmentCopy = Map<String, dynamic>.from(newActiveSegment);
-              if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-                segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-              }
-              segmentCopy['_index'] = _segmentCounter++;
-              _segmentHistory = [..._segmentHistory, segmentCopy];
-              debugPrint('GameScreen: Added new segment to history from character reload: ${newActiveSegmentId ?? segmentKey}');
-            }
-          }
-
-          setState(() {
-            _character = updated;
-            _error = null;
-          });
-
-          debugPrint('GameScreen: Character reloaded at segment boundary');
-
-          // Trigger completion immediately if detected
-          if (storyCompleted) {
-            debugPrint('GameScreen: Story completion detected in character reload - triggering immediate completion');
-            _runtime.stopPolling();
-
-            // Set lifecycle state to completed
-            setState(() {
-              _storyLifecycleState = StoryLifecycleState.completed;
-            });
-            debugPrint('GameScreen: Story lifecycle state changed to COMPLETED');
-
-            // Handle completion
-            _handleStoryCompletion(refreshCharacter: false, showMessage: true).then((_) {
-              _manageCharacterUpdateTimer();
-            });
-          }
-        } catch (e) {
-          debugPrint('GameScreen: Error parsing character data: $e');
-          setState(() {
-            _error = 'Failed to update character';
-          });
-        }
-      },
-      onStoryComplete: () async {
-        if (!mounted) return;
-
-        debugPrint('GameScreen: Story complete - confirmed by polling service');
-        debugPrint('GameScreen: Previous lifecycle state: $_storyLifecycleState');
-        debugPrint('GameScreen: Active story ID: ${_character?.activeStoryID}');
-        debugPrint('GameScreen: Active segment ID: ${_character?.activeSegmentID}');
-        debugPrint('GameScreen: Segment history count: ${_segmentHistory.length}');
-
-        // Skip if already handled completion
-        if (_storyLifecycleState == StoryLifecycleState.completed) {
-          debugPrint('GameScreen: Story completion already handled, skipping');
-          return;
-        }
-
-        // Mark story as completed (confirmed by polling service)
-        setState(() {
-          _storyLifecycleState = StoryLifecycleState.completed;
-        });
-        debugPrint('GameScreen: Story lifecycle state changed to COMPLETED');
-
-        // Refresh character from server after story completion
-        try {
-          debugPrint('GameScreen: Refreshing character from server after story completion');
-          final refreshedCharacter = await _characterRepository.refreshCharacterFromServer(_character!.id);
-          if (!mounted) return;
-          if (refreshedCharacter != null) {
-            setState(() {
-              _character = refreshedCharacter;
-            });
-            debugPrint('GameScreen: Character refreshed from server');
-          }
-        } catch (e) {
-          debugPrint('GameScreen: Failed to refresh character from server: $e');
-        }
-
-        // Handle completion
-        await _handleStoryCompletion(refreshCharacter: false, showMessage: true);
-        _manageCharacterUpdateTimer();
-      },
-      onError: (err) {
-        if (!mounted) return;
-        setState(() {
-          _error = err.toString();
-        });
-      },
-    );
-  }
-
-  Future<void> _loadSegmentHistory({bool mergeWithExisting = false}) async {
-    if (_character == null) {
-      if (mounted && !mergeWithExisting) {
-        setState(() {
-          _segmentHistory = [];
-          _synchronizeStoryCompletionState();
-        });
-      }
-      return;
-    }
-
-    // Load history when no active story OR when explicitly merging during completion
-    // This allows us to fetch backend history even during the completion transition
-    if (_character!.activeStoryID != null && !mergeWithExisting) {
-      return;
-    }
-
-    try {
-      final historyResponse = await _apiService.getSegmentHistory(characterId: _character!.id);
-
-      // Trust backend completion markers, don't apply client-side timer checks to history
-      final history = historyResponse.map((segment) => Map<String, dynamic>.from(segment)).where((segment) {
-        final completedAt = segment['CompletedAt'];
-        if (completedAt is String && completedAt.isNotEmpty) {
-          return true;
-        }
-        if (completedAt is num && completedAt > 0) {
-          return true;
-        }
-
-        final status = segment['Status']?.toString().toLowerCase();
-        if (status == 'completed') {
-          return true;
-        }
-
-        return _isSegmentComplete(segment);
-      }).toList();
-
-      // Assign indices to all segments (backend or otherwise) to maintain consistent ordering
-
-      if (!mounted) return;
-      setState(() {
-        if (mergeWithExisting) {
-          final mergedByKey = <String, Map<String, dynamic>>{};
-
-          // First add existing segments (with their indices)
-          for (final existing in _segmentHistory) {
-            mergedByKey[_segmentIdentity(existing)] = Map<String, dynamic>.from(existing);
-          }
-
-          // Then merge in backend segments, preserving local indices
-          for (final segment in history) {
-            final key = _segmentIdentity(segment);
-            final existingSegment = mergedByKey[key];
-            final merged = Map<String, dynamic>.from(segment);
-
-            // Preserve the local index if it exists, otherwise assign new one
-            if (existingSegment != null && existingSegment.containsKey('_index')) {
-              merged['_index'] = existingSegment['_index'];
-            } else {
-              merged['_index'] = _segmentCounter++;
-            }
-
-            mergedByKey[key] = merged;
-          }
-
-          final mergedSegments = mergedByKey.values.toList();
-          _sortSegmentsChronologically(mergedSegments);
-          _segmentHistory = mergedSegments;
-        } else {
-          _segmentHistory = history.map((segment) {
-            final copy = Map<String, dynamic>.from(segment);
-            if (!copy.containsKey('_index')) {
-              copy['_index'] = _segmentCounter++;
-            }
-            return copy;
-          }).toList();
-        }
-        _synchronizeStoryCompletionState();
-      });
-      debugPrint('GameScreen: Loaded ${history.length} segments from history API');
-    } catch (e) {
-      debugPrint('GameScreen: Failed to load segment history: $e');
-    }
-  }
-
-  bool _isSegmentComplete(Map<String, dynamic> segment) {
-    // A segment is only complete when BOTH conditions are met:
-    // 1. ProcessingStatus == 'processed' (backend has generated results)
-    // 2. Timer has expired (EndTime has passed)
-
-    final completedAt = segment['CompletedAt'];
-    if (completedAt is String && completedAt.isNotEmpty) {
-      return true;
-    }
-    if (completedAt is num && completedAt > 0) {
-      return true;
-    }
-
-    final status = segment['Status']?.toString().toLowerCase();
-    if (status == 'completed') {
-      return true;
-    }
-
-    // Check processing status AND timer expiration
-    final processingStatus = segment['ProcessingStatus']?.toString().toLowerCase();
-    if (processingStatus == 'processed') {
-      // Processed, but need to check if timer expired
-      final endTimeStr = segment['EndTime']?.toString();
-      if (endTimeStr != null && endTimeStr.isNotEmpty) {
-        try {
-          final endTime = DateTime.parse(endTimeStr).toUtc();
-          final now = DateTime.now().toUtc();
-          final timerExpired = now.isAfter(endTime) || now.isAtSameMomentAs(endTime);
-          debugPrint('GameScreen: _isSegmentComplete check - processed=true, timerExpired=$timerExpired (now=$now, end=$endTime)');
-          return timerExpired;
-        } catch (e) {
-          debugPrint('GameScreen: Error parsing EndTime: $e');
-        }
-      }
-
-      // If no EndTime or can't parse, check TimeRemaining
-      final timeRemaining = segment['TimeRemaining'];
-      if (timeRemaining is num) {
-        final expired = timeRemaining <= 0;
-        debugPrint('GameScreen: _isSegmentComplete check - processed=true, timeRemaining=$timeRemaining, expired=$expired');
-        return expired;
-      }
-
-      // Processed but can't determine timer status - assume not complete yet
-      debugPrint('GameScreen: _isSegmentComplete - processed=true but no timer info, assuming not complete');
-      return false;
-    }
-
-    // Check if this is the final segment of a completed story
-    final storyComplete = segment['StoryComplete'];
-    if (storyComplete == true) {
-      return true;
-    }
-
-    return false;
-  }
-
-  void _synchronizeStoryCompletionState() {
-    if (_character == null || _segmentHistory.isEmpty) {
-      return;
-    }
-
-    if (_character!.activeSegmentID != null) {
-      return;
-    }
-
-    // Use immutable update pattern instead of direct mutation
-    final currentStoryState = _character!.storyState ?? <String, dynamic>{};
-    final updatedStoryState = Map<String, dynamic>.from(currentStoryState);
-
-    final synchronizedSegments = _segmentHistory.map((segment) => Map<String, dynamic>.from(segment)).toList();
-    _sortSegmentsChronologically(synchronizedSegments);
-    updatedStoryState['CompletedSegments'] = synchronizedSegments;
-
-    if (!updatedStoryState.containsKey('Story') && _lastStoryDetails != null) {
-      updatedStoryState['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
-    }
-
-    _character = _character!.copyWith(storyState: updatedStoryState);
-  }
-
-  Future<void> _handleDecisionSelect(String choiceId) async {
-    // Multi-layer protection against double submissions:
-    // 1. Atomic flag check-and-set (prevents race conditions)
-    // 2. Debouncer (ignores rapid clicks within 300ms)
-    // 3. Rate limiter (15s cooldown between submissions)
-    // 4. Backend conditional update (ultimate protection)
-
-    if (_isSubmittingDecision) {
-      debugPrint('Decision submission blocked: already processing');
-      return;
-    }
-
-    // Check debouncer cooldown
-    if (_decisionDebouncer.isActive) {
-      debugPrint('Decision submission blocked: debounce cooldown active');
-      return;
-    }
-
-    // Set flag IMMEDIATELY before any async operations to prevent race condition
-    // Must use setState to update UI and disable buttons
-    if (mounted) {
-      setState(() {
-        _isSubmittingDecision = true;
-        _error = null;
-      });
-    }
-
-    // Start debounce cooldown
-    _decisionDebouncer.runImmediate(() {
-      // Empty callback - we just want the cooldown timer
-    });
-
-    try {
-      final response = await _rateLimiter.limiter.executeHumanDriven(
-        GlobalRateLimiter.submitDecision,
-        () => _apiService.submitDecision(characterId: _character!.id, decision: choiceId),
-        throwOnRateLimit: true,
-      );
-
-      // Use the completed segment from response (includes narrative ClientEvents)
-      final completedSegment = response['CompletedSegment'] as Map<String, dynamic>?;
-
-      // Use the next segment from response instead of reloading
-      if (response['NextSegment'] != null) {
-        final nextSegment = response['NextSegment'] as Map<String, dynamic>;
-
-        // Add the completed decision segment to history with its narrative
-        // Backend provides this with ClientEvents already generated
-        if (completedSegment != null) {
-          final segmentCopy = Map<String, dynamic>.from(completedSegment);
-
-          // Add story title for display
-          if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-            segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-          }
-
-          // Add to history if not already present, otherwise refresh data (to capture narrative)
-          final segmentKey = _segmentIdentity(segmentCopy);
-          final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
-
-          if (!exists) {
-            segmentCopy['_index'] = _segmentCounter++;
-            _segmentHistory = [..._segmentHistory, segmentCopy];
-            debugPrint('GameScreen: Added completed decision segment to history with narrative: ${segmentCopy['SegmentID'] ?? segmentCopy['ActiveSegmentID'] ?? segmentKey}');
-          } else {
-            _segmentHistory = _segmentHistory.map((s) {
-              if (_segmentIdentity(s) == segmentKey) {
-                // Preserve the _index from the original segment
-                if (s.containsKey('_index')) {
-                  segmentCopy['_index'] = s['_index'];
-                }
-                return segmentCopy;
-              }
-              return s;
-            }).toList();
-          }
-        }
-
-        // Add next segment to history for tracking
-        final nextSegmentCopy = Map<String, dynamic>.from(nextSegment);
-        if (!nextSegmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-          nextSegmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-        }
-
-        final nextKey = _segmentIdentity(nextSegmentCopy);
-        final nextExists = _segmentHistory.any((s) => _segmentIdentity(s) == nextKey);
-
-        if (!nextExists) {
-          nextSegmentCopy['_index'] = _segmentCounter++;
-          _segmentHistory = [..._segmentHistory, nextSegmentCopy];
-          debugPrint('GameScreen: Added next segment to history after decision: ${nextSegmentCopy['SegmentID'] ?? nextSegmentCopy['ActiveSegmentID'] ?? nextKey}');
-        } else {
-          _segmentHistory = _segmentHistory.map((s) {
-            if (_segmentIdentity(s) == nextKey) {
-              // Preserve the _index from the original segment
-              if (s.containsKey('_index')) {
-                nextSegmentCopy['_index'] = s['_index'];
-              }
-              return nextSegmentCopy;
-            }
-            return s;
-          }).toList();
-        }
-
-        if (mounted) {
-          setState(() {
-            // Update character's active segment locally
-            final updatedStoryState =
-                Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{})
-                  ..['ActiveSegment'] = nextSegment;
-
-            final dynamic nextSegmentIdValue =
-                nextSegment['ActiveSegmentID'] ?? nextSegment['SegmentID'];
-            final String? nextSegmentId = nextSegmentIdValue?.toString();
-
-            _character = _character!.copyWith(
-              activeSegmentId: nextSegmentId,
-              storyState: updatedStoryState,
-            );
-          });
-        }
-
-        // Start orchestration for the new segment
-        _startOrchestrationIfNeeded(force: true);
-        _manageCharacterUpdateTimer();
-      } else {
-        // No next segment means the story has finished
-        _runtime.stopPolling();
-        await _handleStoryCompletion(refreshCharacter: true);
-      }
-
-      if (mounted && completedSegment != null) {
-        // Show notification for decision outcome
-        final outcome = completedSegment['Outcome'];
-        String? outcomeType;
-        Map<String, dynamic>? rewards;
-
-        if (outcome is Map<String, dynamic>) {
-          outcomeType = outcome['Type'] as String?;
-          final rawRewards = outcome['Rewards'];
-          if (rawRewards is Map<String, dynamic>) {
-            rewards = rawRewards;
-          }
-        } else if (outcome is String) {
-          outcomeType = outcome;
-        }
-
-        if (outcomeType != null) {
-          NotificationService.showSegmentComplete(context, segmentType: 'decision', outcome: outcomeType);
-
-          if (rewards != null) {
-            for (final reward in rewards.entries) {
-              await Future.delayed(const Duration(milliseconds: 500));
-              if (mounted) {
-                NotificationService.showReward(context, type: reward.key, value: reward.value);
-              }
-            }
-          }
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
-        );
-        setState(() {
-          _error = ErrorHandler.getUserFriendlyMessage(e);
-        });
-      }
-    } finally {
-      // Always reset submission flag
-      if (mounted) {
-        setState(() {
-          _isSubmittingDecision = false;
-        });
-      }
-    }
-  }
-
-
-  Future<void> _handleStoryCompletion({bool refreshCharacter = true, bool showMessage = true, Map<String, dynamic>? finalActiveSegment}) async {
-    debugPrint('GameScreen: Handling story completion (refreshCharacter=$refreshCharacter, showMessage=$showMessage)');
-    debugPrint('GameScreen: Current lifecycle state: $_storyLifecycleState');
-    _runtime.stopPolling();
-
-    // End API metrics tracking and print segment summary
-    ApiMetrics.endSegment();
-
-    // Ensure lifecycle state is set to completed
-    if (_storyLifecycleState != StoryLifecycleState.completed) {
-      debugPrint('GameScreen: Setting lifecycle state to COMPLETED (was $_storyLifecycleState)');
-      setState(() {
-        _storyLifecycleState = StoryLifecycleState.completed;
-      });
-    }
-
-    // Capture the final segment BEFORE reloading character
-    // This ensures we have the complete segment data even if backend clears it
-    final activeSegment = finalActiveSegment ?? (_character?.storyState?['ActiveSegment'] as Map<String, dynamic>?);
-    final shouldIncludeFinalSegment = activeSegment != null && _isSegmentComplete(activeSegment);
-
-    try {
-      // Add final segment to local history before any reloads
-      // shouldIncludeFinalSegment already ensures activeSegment is non-null
-      if (shouldIncludeFinalSegment) {
-        final copy = Map<String, dynamic>.from(activeSegment);
-        if (!copy.containsKey('StoryTitle') && _lastStoryDetails != null && _lastStoryDetails!['Title'] is String) {
-          copy['StoryTitle'] = _lastStoryDetails!['Title'];
-        }
-
-        final segmentKey = _segmentIdentity(copy);
-        final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
-        if (!exists) {
-          copy['_index'] = _segmentCounter++;
-          _segmentHistory = [..._segmentHistory, copy];
-          debugPrint('GameScreen: Added final segment to local history before reload');
-        } else {
-          _segmentHistory = _segmentHistory.map((s) {
-            if (_segmentIdentity(s) == segmentKey) {
-              // Preserve the _index from the original segment
-              if (s.containsKey('_index')) {
-                copy['_index'] = s['_index'];
-              }
-              return copy;
-            }
-            return s;
-          }).toList();
-        }
-      }
-
-      // Now reload character - this will clear ActiveStoryID/ActiveSegmentID
-      if (refreshCharacter) {
-        await _loadCharacterData(
-          strategy: CharacterLoadRateLimitStrategy.immediate,
-          showLoadingIndicator: false,
-        );
-      }
-
-      // Don't load backend history - we already have complete history from active play tracking
-    } catch (e) {
-      debugPrint('GameScreen: Error updating state after story completion: $e');
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      if (_character != null) {
-        final completedSegmentsCopy = _segmentHistory.map((segment) => Map<String, dynamic>.from(segment)).toList();
-        _sortSegmentsChronologically(completedSegmentsCopy);
-
-        Map<String, dynamic>? storyStateUpdate;
-        if (completedSegmentsCopy.isNotEmpty || _lastStoryDetails != null) {
-          storyStateUpdate = <String, dynamic>{};
-          if (completedSegmentsCopy.isNotEmpty) {
-            storyStateUpdate['CompletedSegments'] = completedSegmentsCopy;
-          }
-          if (_lastStoryDetails != null) {
-            storyStateUpdate['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
-          }
-        }
-
-        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
-      }
-
-      _isLoading = false;
-    });
-
-    _manageCharacterUpdateTimer();
-
-    if (showMessage && !_storyCompletionNotified) {
-      final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
-      final fallbackStoryTitle = _segmentHistory.isNotEmpty ? _segmentHistory.last['StoryTitle'] as String? : null;
-      final storyTitle = storyData?['Title'] ?? fallbackStoryTitle ?? 'Story';
-
-      debugPrint('GameScreen: Showing completion notification for: $storyTitle');
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$storyTitle complete'), duration: const Duration(seconds: 4)));
-
-      _storyCompletionNotified = true;
-    }
-
-    debugPrint('GameScreen: Story completion handling finished - lifecycle: $_storyLifecycleState, segments: ${_segmentHistory.length}');
-  }
-
-  Future<void> _handleStoryAbandonment() async {
-    debugPrint('GameScreen: Handling story abandonment');
-    _runtime.stopPolling();
-
-    try {
-      // Reload character to clear story state and history
-      await Future.wait([_loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate), _loadSegmentHistory()]);
-    } catch (e) {
-      debugPrint('GameScreen: Error updating state after story abandonment: $e');
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      if (_character != null) {
-        final completedSegmentsCopy = _segmentHistory.map((segment) => Map<String, dynamic>.from(segment)).toList();
-        _sortSegmentsChronologically(completedSegmentsCopy);
-
-        Map<String, dynamic>? storyStateUpdate;
-        if (completedSegmentsCopy.isNotEmpty || _lastStoryDetails != null) {
-          storyStateUpdate = <String, dynamic>{};
-          if (completedSegmentsCopy.isNotEmpty) {
-            storyStateUpdate['CompletedSegments'] = completedSegmentsCopy;
-          }
-          if (_lastStoryDetails != null) {
-            storyStateUpdate['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
-          }
-        }
-
-        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
-      }
-
-      _isLoading = false;
-    });
-
-    _manageCharacterUpdateTimer();
-
-    if (!_storyCompletionNotified) {
-      final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
-      final fallbackStoryTitle = _segmentHistory.isNotEmpty ? _segmentHistory.last['StoryTitle'] as String? : null;
-      final storyTitle = storyData?['Title'] ?? fallbackStoryTitle ?? 'Story';
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('$storyTitle abandoned'), duration: const Duration(seconds: 4)));
-
-      _storyCompletionNotified = true;
-    }
-  }
-
-  Future<void> _handleReturnToStories() async {
-    debugPrint('GameScreen: Returning to stories - previous lifecycle: $_storyLifecycleState');
-    // Clear story state locally and reload to get available stories
-    _runtime.stopPolling();
-    if (mounted) {
-      setState(() {
-        if (_character != null) {
-          _character = _character!.copyWith(storyState: null, gameMode: 'None');
-        }
-        _lastStoryDetails = null;
-        _storyLifecycleState = StoryLifecycleState.none;
-      });
-      debugPrint('GameScreen: Story lifecycle state changed to NONE');
-    }
-
-    // Reload character to get available stories
-    await _loadCharacterData(
-      strategy: CharacterLoadRateLimitStrategy.immediate,
-      showLoadingIndicator: false,
-    );
-    // Clear segment history after story completion
-    if (mounted) {
-      setState(() {
-        _segmentHistory = [];
-        _storyCompletionNotified = false;
-        _lastStoryDetails = null;
-      });
-    }
-    _manageCharacterUpdateTimer();
-  }
-
-  Future<void> _handleAbandonStory() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Abandon Story'),
-        content: const Text('Are you sure you want to abandon this story?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
-            child: const Text('Abandon'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    try {
-      if (mounted) {
-        setState(() {
-          _isLoading = true;
-        });
-      }
-
-      await _rateLimiter.limiter.executeHumanDriven(
-        GlobalRateLimiter.abandonStory,
-        () => _apiService.abandonStory(_character!.id),
-        throwOnRateLimit: true,
-      );
-
-      // Stop runtime to prevent duplicate completion detection
-      _runtime.stopPolling();
-
-      // Handle abandonment with specific messaging
-      await _handleStoryAbandonment();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
-        );
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      }
+      controller.initialize(null, null, savedCharacter: characterProvider.character);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Temporarily remove debug print to reduce noise
-    // debugPrint('GameScreen: Building with character: ${_character?.name}, loading: $_isLoading, error: $_error}');
+    final controller = context.watch<GameScreenController>();
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final deviceType = ResponsiveLayout.getDeviceType(context);
+
+    // Redirect if no character found after initialization
+    if (!controller.isLoading && controller.character == null && controller.characterInfo == null && controller.error == null) {
+      // Use PostFrameCallback to avoid build-time navigation
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/character-selection');
+        }
+      });
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return ErrorBoundary(
       onError: (details) {
@@ -1412,15 +74,13 @@ class _GameScreenState extends State<GameScreen> {
         debugPrint('GameScreen: Error details: ${details.exception}');
       },
       child: GameKeyboardShortcuts(
-        onRefresh: _refreshCharacterImmediate,
+        onRefresh: controller.refreshCharacterImmediate,
         onEscape: () {
           Navigator.pushReplacementNamed(context, '/character-selection');
         },
         onTogglePanel: () {
           if (deviceType != DeviceType.desktop) {
-            setState(() {
-              _selectedPanelIndex = (_selectedPanelIndex + 1) % 3;
-            });
+            controller.setSelectedPanelIndex((controller.selectedPanelIndex + 1) % 3);
           }
         },
         child: Scaffold(
@@ -1436,12 +96,16 @@ class _GameScreenState extends State<GameScreen> {
                           Navigator.pushReplacementNamed(context, '/character-selection');
                         },
                       ),
-                      if (_characterInfo != null) BreadcrumbItem(label: _characterInfo!.name, icon: Icons.person),
-                      if (_character?.storyState != null && _character!.storyState!['Story'] != null)
-                        BreadcrumbItem(label: _character!.storyState!['Story']['Title'] ?? 'Story', icon: Icons.auto_stories),
+                      if (controller.characterInfo != null)
+                        BreadcrumbItem(label: controller.characterInfo!.name, icon: Icons.person),
+                      if (controller.character?.storyState != null && controller.character!.storyState!['Story'] != null)
+                        BreadcrumbItem(
+                          label: controller.character!.storyState!['Story']['Title'] ?? 'Story',
+                          icon: Icons.auto_stories,
+                        ),
                     ],
                   )
-                : Text(_characterInfo?.name ?? 'Game'),
+                : Text(controller.characterInfo?.name ?? 'Game'),
             leading: IconButton(
               icon: const Icon(Icons.chevron_left),
               onPressed: () {
@@ -1450,7 +114,7 @@ class _GameScreenState extends State<GameScreen> {
               tooltip: 'Back to Character Selection',
             ),
             actions: [
-              IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshCharacterImmediate, tooltip: 'Refresh'),
+              IconButton(icon: const Icon(Icons.refresh), onPressed: controller.refreshCharacterImmediate, tooltip: 'Refresh'),
               IconButton(
                 icon: const Icon(Icons.settings),
                 onPressed: () {
@@ -1471,22 +135,18 @@ class _GameScreenState extends State<GameScreen> {
             ],
           ),
           body: SafeArea(
-            child: _isLoading && _character == null
+            child: controller.isLoading && controller.character == null
                 ? const Center(child: CircularProgressIndicator())
-                : _error != null && _character == null
-                ? _buildErrorWidget()
-                : _character == null
-                ? _buildNoCharacterWidget()
-                : _buildGameInterface(deviceType),
+                : controller.error != null && controller.character == null
+                ? _buildErrorWidget(context, controller)
+                : controller.character == null
+                ? _buildNoCharacterWidget(context)
+                : _buildGameInterface(context, controller, deviceType),
           ),
-          bottomNavigationBar: deviceType == DeviceType.mobile && _character != null
+          bottomNavigationBar: deviceType == DeviceType.mobile && controller.character != null
               ? BottomNavigationBar(
-                  currentIndex: _selectedPanelIndex,
-                  onTap: (index) {
-                    setState(() {
-                      _selectedPanelIndex = index;
-                    });
-                  },
+                  currentIndex: controller.selectedPanelIndex,
+                  onTap: controller.setSelectedPanelIndex,
                   items: const [
                     BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Character'),
                     BottomNavigationBarItem(icon: Icon(Icons.auto_stories), label: 'Story'),
@@ -1499,7 +159,7 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildErrorWidget() {
+  Widget _buildErrorWidget(BuildContext context, GameScreenController controller) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -1514,19 +174,19 @@ class _GameScreenState extends State<GameScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _error!,
+              controller.error!,
               style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            FilledButton(onPressed: _refreshCharacterImmediate, child: const Text('Retry')),
+            FilledButton(onPressed: controller.refreshCharacterImmediate, child: const Text('Retry')),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNoCharacterWidget() {
+  Widget _buildNoCharacterWidget(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -1551,237 +211,175 @@ class _GameScreenState extends State<GameScreen> {
     );
   }
 
-  Widget _buildGameInterface(DeviceType deviceType) {
+  Widget _buildGameInterface(BuildContext context, GameScreenController controller, DeviceType deviceType) {
     switch (deviceType) {
       case DeviceType.desktop:
-        return _buildDesktopLayout();
+        return _buildDesktopLayout(context, controller);
       case DeviceType.tablet:
-        return _buildTabletLayout();
+        return _buildTabletLayout(context, controller);
       case DeviceType.mobile:
-        return _buildMobileLayout();
+        return _buildMobileLayout(context, controller);
     }
   }
 
-  /// Get segments that are completed (not currently active)
-  /// Segments are tracked in history immediately, but only displayed as "completed"
-  /// when they're no longer the active segment
-  List<Map<String, dynamic>> _getCompletedSegments() {
-    // Cache key based on active segment and history length
-    final activeSegmentId = _character?.activeSegmentID;
-    final cacheKey = '${activeSegmentId ?? 'none'}_${_segmentHistory.length}_${_segmentHistory.hashCode}';
-
-    // Return cached result if still valid
-    if (_completedSegmentsCacheKey == cacheKey && _cachedCompletedSegments != null) {
-      return _cachedCompletedSegments!;
-    }
-
-    final completed = _segmentHistory.where((segment) {
-      // Check ActiveSegmentID first to match character.activeSegmentID (unique execution ID)
-      // SegmentID is the story definition ID and can repeat across multiple executions
-      final segmentActiveId = segment['ActiveSegmentID']?.toString() ?? segment['SegmentID']?.toString();
-      // Only show as completed if it's NOT the current active segment
-      final isComplete = segmentActiveId != activeSegmentId && _isSegmentComplete(segment);
-
-      if (!isComplete && segmentActiveId == activeSegmentId) {
-        debugPrint('GameScreen: Filtering out active segment from completed list: $segmentActiveId');
-      }
-
-      return isComplete;
-    }).toList();
-
-    _sortSegmentsChronologically(completed, newestFirst: true);
-
-    if (completed.length != _segmentHistory.length) {
-      debugPrint('GameScreen: Completed segments: ${completed.length}/${_segmentHistory.length} (active: $activeSegmentId)');
-    }
-
-    // Cache the result
-    _completedSegmentsCacheKey = cacheKey;
-    _cachedCompletedSegments = completed;
-
-    return completed;
-  }
-
-  List<Map<String, dynamic>> _buildStoryHistoryArchive() {
-    // Cache key based on active segment and history
-    final activeSegmentId = _character?.activeSegmentID;
-    final stateSegmentsHash = _character?.storyState?['CompletedSegments']?.hashCode ?? 0;
-    final cacheKey = '${activeSegmentId ?? 'none'}_${_segmentHistory.length}_${_segmentHistory.hashCode}_$stateSegmentsHash';
-
-    // Return cached result if still valid
-    if (_storyHistoryCacheKey == cacheKey && _cachedStoryHistory != null) {
-      return _cachedStoryHistory!;
-    }
-
-    final Map<String, Map<String, dynamic>> deduped = {};
-
-    void addSegments(Iterable<Map<String, dynamic>> segments) {
-      for (final segment in segments) {
-        final copy = Map<String, dynamic>.from(segment);
-        // Check ActiveSegmentID first to match character.activeSegmentID (unique execution ID)
-        // SegmentID is the story definition ID and can repeat across multiple executions
-        final segmentActiveId =
-            copy['ActiveSegmentID']?.toString() ?? copy['SegmentID']?.toString();
-        final key = _segmentIdentity(copy);
-
-        // Only add if it's NOT the current active segment (completed mode only)
-        final isActiveSegment = activeSegmentId != null && segmentActiveId == activeSegmentId;
-        if (!isActiveSegment) {
-          deduped[key] = copy;
-        }
-      }
-    }
-
-    final completedSegmentsDynamic =
-        _character?.storyState?['CompletedSegments'] as List<dynamic>?;
-    if (completedSegmentsDynamic != null) {
-      final completedSegments = completedSegmentsDynamic
-          .whereType<Map<String, dynamic>>()
-          .where(_isSegmentComplete)
-          .map((segment) => Map<String, dynamic>.from(segment));
-      addSegments(completedSegments);
-    }
-
-    if (_segmentHistory.isNotEmpty) {
-      final historyCopies = _segmentHistory
-          .where(_isSegmentComplete)
-          .map((segment) => Map<String, dynamic>.from(segment));
-      addSegments(historyCopies);
-    }
-
-    final segments = deduped.values.toList();
-
-    // Sort by index (insertion order)
-    _sortSegmentsChronologically(segments);
-
-    // Cache the result
-    _storyHistoryCacheKey = cacheKey;
-    _cachedStoryHistory = segments;
-
-    return segments;
-  }
-
-  Widget _buildDesktopLayout() {
+  Widget _buildDesktopLayout(BuildContext context, GameScreenController controller) {
     return Row(
       children: [
         // Character Panel (Left)
         SizedBox(
           width: 320,
           child: CharacterPanel(
-            key: ValueKey('character_panel_${_character!.id}'),
-            character: _character!,
-            onRefresh: _refreshCharacterImmediate,
+            key: ValueKey('character_panel_${controller.character!.id}'),
+            character: controller.character!,
+            onRefresh: controller.refreshCharacterImmediate,
           ),
         ),
         // Story Panel (Center)
         Expanded(
           child: StoryPanel(
-            key: ValueKey('story_panel_${_character!.id}_${_character!.activeSegmentID ?? "none"}'),
-            character: _character!,
-            segmentHistory: _getCompletedSegments(),
-            storyHistoryArchive: _buildStoryHistoryArchive(),
-            isLoading: _isLoading,
-            error: _error,
-            onRefresh: _refreshCharacterImmediate,
-            onStorySelect: _handleStorySelect,
-            onDecisionSelect: _handleDecisionSelect,
-            onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
-            onReturnToStories: _handleReturnToStories,
-            isDecisionSubmitting: _isSubmittingDecision,
-            isStoryConfirmedComplete: _storyLifecycleState == StoryLifecycleState.completed,
+            key: ValueKey('story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}'),
+            character: controller.character!,
+            segmentHistory: controller.getCompletedSegments(),
+            storyHistoryArchive: controller.buildStoryHistoryArchive(),
+            isLoading: controller.isLoading,
+            error: controller.error,
+            onRefresh: controller.refreshCharacterImmediate,
+            onStorySelect: (story) => controller.handleStorySelect(context, story),
+            onDecisionSelect: (choice) => controller.handleDecisionSelect(context, choice),
+            onAbandonStory: controller.character!.storyState != null ? () => _confirmAbandonStory(context, controller) : null,
+            onReturnToStories: controller.handleReturnToStories,
+            isDecisionSubmitting: controller.isSubmittingDecision,
+            isStoryConfirmedComplete: controller.storyLifecycleState == StoryLifecycleState.completed,
           ),
         ),
         // Inventory Panel (Right)
         SizedBox(
           width: 320,
           child: InventoryPanel(
-            key: ValueKey('inventory_panel_${_character!.id}'),
-            character: _character!,
-            onRefresh: _refreshCharacterImmediate,
+            key: ValueKey('inventory_panel_${controller.character!.id}'),
+            character: controller.character!,
+            onRefresh: controller.refreshCharacterImmediate,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTabletLayout() {
+  Widget _buildTabletLayout(BuildContext context, GameScreenController controller) {
     return Row(
       children: [
         // Character Panel (Collapsible)
-        if (_selectedPanelIndex == 0)
+        if (controller.selectedPanelIndex == 0)
           SizedBox(
             width: 280,
             child: CharacterPanel(
-              key: ValueKey('character_panel_${_character!.id}'),
-              character: _character!,
-              onRefresh: _refreshCharacterImmediate,
+              key: ValueKey('character_panel_${controller.character!.id}'),
+              character: controller.character!,
+              onRefresh: controller.refreshCharacterImmediate,
             ),
           ),
         // Story Panel (Center - Always visible)
         Expanded(
           child: StoryPanel(
-            key: ValueKey('story_panel_${_character!.id}_${_character!.activeSegmentID ?? "none"}'),
-            character: _character!,
-            segmentHistory: _getCompletedSegments(),
-            storyHistoryArchive: _buildStoryHistoryArchive(),
-            isLoading: _isLoading,
-            error: _error,
-            onRefresh: _refreshCharacterImmediate,
-            onStorySelect: _handleStorySelect,
-            onDecisionSelect: _handleDecisionSelect,
-            onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
-            onReturnToStories: _handleReturnToStories,
-            isDecisionSubmitting: _isSubmittingDecision,
-            isStoryConfirmedComplete: _storyLifecycleState == StoryLifecycleState.completed,
+            key: ValueKey('story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}'),
+            character: controller.character!,
+            segmentHistory: controller.getCompletedSegments(),
+            storyHistoryArchive: controller.buildStoryHistoryArchive(),
+            isLoading: controller.isLoading,
+            error: controller.error,
+            onRefresh: controller.refreshCharacterImmediate,
+            onStorySelect: (story) => controller.handleStorySelect(context, story),
+            onDecisionSelect: (choice) => controller.handleDecisionSelect(context, choice),
+            onAbandonStory: controller.character!.storyState != null ? () => _confirmAbandonStory(context, controller) : null,
+            onReturnToStories: controller.handleReturnToStories,
+            isDecisionSubmitting: controller.isSubmittingDecision,
+            isStoryConfirmedComplete: controller.storyLifecycleState == StoryLifecycleState.completed,
           ),
         ),
         // Inventory Panel (Collapsible)
-        if (_selectedPanelIndex == 2)
+        if (controller.selectedPanelIndex == 2)
           SizedBox(
             width: 280,
             child: InventoryPanel(
-              key: ValueKey('inventory_panel_${_character!.id}'),
-              character: _character!,
-              onRefresh: _refreshCharacterImmediate,
+              key: ValueKey('inventory_panel_${controller.character!.id}'),
+              character: controller.character!,
+              onRefresh: controller.refreshCharacterImmediate,
             ),
           ),
       ],
     );
   }
 
-  Widget _buildMobileLayout() {
+  Widget _buildMobileLayout(BuildContext context, GameScreenController controller) {
     // Show only the selected panel
-    switch (_selectedPanelIndex) {
+    switch (controller.selectedPanelIndex) {
       case 0:
         return CharacterPanel(
-          key: ValueKey('character_panel_${_character!.id}'),
-          character: _character!,
-          onRefresh: _refreshCharacterImmediate,
+          key: ValueKey('character_panel_${controller.character!.id}'),
+          character: controller.character!,
+          onRefresh: controller.refreshCharacterImmediate,
         );
       case 1:
         return StoryPanel(
-          key: ValueKey('story_panel_${_character!.id}_${_character!.activeSegmentID ?? "none"}'),
-          character: _character!,
-          segmentHistory: _getCompletedSegments(),
-          storyHistoryArchive: _buildStoryHistoryArchive(),
-          isLoading: _isLoading,
-          error: _error,
-          onRefresh: _refreshCharacterImmediate,
-          onStorySelect: _handleStorySelect,
-          onDecisionSelect: _handleDecisionSelect,
-          onAbandonStory: _character!.storyState != null ? _handleAbandonStory : null,
-          onReturnToStories: _handleReturnToStories,
-          isDecisionSubmitting: _isSubmittingDecision,
-          isStoryConfirmedComplete: _storyLifecycleState == StoryLifecycleState.completed,
+          key: ValueKey('story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}'),
+          character: controller.character!,
+          segmentHistory: controller.getCompletedSegments(),
+          storyHistoryArchive: controller.buildStoryHistoryArchive(),
+          isLoading: controller.isLoading,
+          error: controller.error,
+          onRefresh: controller.refreshCharacterImmediate,
+          onStorySelect: (story) => controller.handleStorySelect(context, story),
+          onDecisionSelect: (choice) => controller.handleDecisionSelect(context, choice),
+          onAbandonStory: controller.character!.storyState != null ? () => _confirmAbandonStory(context, controller) : null,
+          onReturnToStories: controller.handleReturnToStories,
+          isDecisionSubmitting: controller.isSubmittingDecision,
+          isStoryConfirmedComplete: controller.storyLifecycleState == StoryLifecycleState.completed,
         );
       case 2:
         return InventoryPanel(
-          key: ValueKey('inventory_panel_${_character!.id}'),
-          character: _character!,
-          onRefresh: _refreshCharacterImmediate,
+          key: ValueKey('inventory_panel_${controller.character!.id}'),
+          character: controller.character!,
+          onRefresh: controller.refreshCharacterImmediate,
         );
       default:
         return const SizedBox();
+    }
+  }
+
+  Future<void> _confirmAbandonStory(BuildContext context, GameScreenController controller) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Abandon Story'),
+        content: const Text('Are you sure you want to abandon this story?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            child: const Text('Abandon'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (mounted) {
+        await controller.handleAbandonStory(
+          onAbandon: (message) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 4)));
+            }
+          },
+          onError: (error) {
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(error), backgroundColor: Theme.of(context).colorScheme.error));
+            }
+          },
+        );
+      }
     }
   }
 }

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid/v5"
+	"github.com/robinje/eidolon-engine/events"
 )
 
 // CanExecuteCommand checks if character can perform a command based on wait time and state
@@ -66,6 +67,35 @@ func (c *Character) SetCommandWaitTime(duration time.Duration) {
 
 func (c *Character) Save() error {
 	return c.SaveWithContext(c.game.ctx)
+}
+
+// ApplyEvent applies an event to the character, potentially causing side effects like broadcasting messages.
+func (c *Character) ApplyEvent(event events.Event) error {
+	switch e := event.(type) {
+	case *events.ChatEvent:
+		Logger.Info("Applying ChatEvent", "character", c.name, "message", e.Data.Message)
+
+		message := e.Data.Message
+
+		// Display to self
+		c.DisplayMessage(fmt.Sprintf("\n\rYou say '%s'\n\r", message))
+
+		// Display to others
+		var roomMessage string
+		if c.IsHidden() {
+			roomMessage = fmt.Sprintf("\n\rYou hear a voice say '%s'\n\r", message)
+		} else {
+			roomMessage = fmt.Sprintf("\n\r%s says '%s'\n\r", c.name, message)
+		}
+
+		if c.room != nil {
+			SendRoomMessage(c.room, roomMessage, c)
+		}
+
+	default:
+		Logger.Warn("Unknown event type", "type", event.GetType())
+	}
+	return nil
 }
 
 // SaveWithContext saves the character to the database with a specific context

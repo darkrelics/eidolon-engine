@@ -13,7 +13,7 @@ class CacheService {
   late SharedPreferences _prefs;
   final Map<String, dynamic> _memoryCache = {};
   final Map<String, DateTime> _memoryCacheTimestamps = {};
-  final Map<String, Timer> _expiryTimers = {};
+  final Map<String, Timer> _expirationTimers = {};
 
   /// Configurable cleanup threshold for expired cache entries
   Duration _cleanupThreshold = _defaultCleanupThreshold;
@@ -24,7 +24,7 @@ class CacheService {
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
-    await _cleanExpiredCache();
+    await cleanExpiredCache();
   }
 
   /// Set the cleanup threshold for expired cache entries
@@ -46,9 +46,9 @@ class CacheService {
     final now = DateTime.now();
 
     try {
-      // Cancel existing timer for this key to prevent memory leaks
-      _expiryTimers[key]?.cancel();
-      _expiryTimers.remove(key);
+      // Cancel any existing expiration timer for this key
+      _expirationTimers[key]?.cancel();
+      _expirationTimers.remove(key);
 
       // Store in memory cache
       _memoryCache[key] = value;
@@ -59,11 +59,11 @@ class CacheService {
       await _prefs.setString(cacheKey, jsonString);
       await _prefs.setString(timestampKey, now.toIso8601String());
 
-      // Schedule cleanup with timer tracking
+      // Schedule cleanup and track the timer
       if (ttl != Duration.zero) {
-        _expiryTimers[key] = Timer(ttl, () {
-          _expiryTimers.remove(key);
+        _expirationTimers[key] = Timer(ttl, () {
           remove(key);
+          _expirationTimers.remove(key);
         });
       }
     } catch (e) {
@@ -76,7 +76,7 @@ class CacheService {
     // Check memory cache first
     if (_memoryCache.containsKey(key)) {
       final timestamp = _memoryCacheTimestamps[key];
-      if (timestamp != null && _isValid(timestamp, maxAge)) {
+      if (timestamp != null && isValid(timestamp, maxAge)) {
         return _memoryCache[key] as T?;
       }
     }
@@ -91,7 +91,7 @@ class CacheService {
     if (jsonString != null && timestampString != null) {
       final timestamp = DateTime.parse(timestampString);
 
-      if (_isValid(timestamp, maxAge)) {
+      if (isValid(timestamp, maxAge)) {
         try {
           final value = jsonDecode(jsonString);
           // Update memory cache
@@ -114,9 +114,9 @@ class CacheService {
 
   /// Remove specific key from cache
   Future<void> remove(String key) async {
-    // Cancel and remove timer to prevent memory leaks
-    _expiryTimers[key]?.cancel();
-    _expiryTimers.remove(key);
+    // Cancel any pending expiration timer
+    _expirationTimers[key]?.cancel();
+    _expirationTimers.remove(key);
 
     _memoryCache.remove(key);
     _memoryCacheTimestamps.remove(key);
@@ -127,11 +127,11 @@ class CacheService {
 
   /// Clear all cache
   Future<void> clear() async {
-    // Cancel all timers to prevent memory leaks
-    for (final timer in _expiryTimers.values) {
+    // Cancel all pending expiration timers
+    for (final timer in _expirationTimers.values) {
       timer.cancel();
     }
-    _expiryTimers.clear();
+    _expirationTimers.clear();
 
     _memoryCache.clear();
     _memoryCacheTimestamps.clear();
@@ -145,7 +145,7 @@ class CacheService {
   }
 
   /// Clean expired cache entries
-  Future<void> _cleanExpiredCache() async {
+  Future<void> cleanExpiredCache() async {
     final keys = _prefs.getKeys();
     final now = DateTime.now();
 
@@ -164,11 +164,26 @@ class CacheService {
     }
   }
 
-  bool _isValid(DateTime timestamp, Duration? maxAge) {
+  bool isValid(DateTime timestamp, Duration? maxAge) {
     if (maxAge == null) return true;
 
     final age = DateTime.now().difference(timestamp);
     return age <= maxAge;
+  }
+
+  /// Dispose of all resources and cancel pending timers.
+  ///
+  /// Note: As a singleton, this is typically not called during normal app lifecycle.
+  /// However, it's provided for testing scenarios or explicit cleanup if needed.
+  void dispose() {
+    // Cancel all pending expiration timers
+    for (final timer in _expirationTimers.values) {
+      timer.cancel();
+    }
+    _expirationTimers.clear();
+
+    _memoryCache.clear();
+    _memoryCacheTimestamps.clear();
   }
 }
 

@@ -2,10 +2,9 @@
 //
 // Copyright 2024‑2025 Jason E. Robinson
 
+import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
-
-import 'package:eidolon_incremental/services/auth_service.dart';
 
 enum AuthStatus { uninitialized, authenticated, unauthenticated, loading }
 
@@ -43,9 +42,7 @@ class AuthProvider extends ChangeNotifier {
       }
       notifyListeners();
     } catch (err) {
-      debugPrint(
-        'AuthProvider $_instanceId: Error during initialization: $err',
-      );
+      debugPrint('AuthProvider $_instanceId: Error during initialization: $err');
       _status = AuthStatus.unauthenticated;
       notifyListeners();
     }
@@ -126,11 +123,7 @@ class AuthProvider extends ChangeNotifier {
     await _authService.forgotPassword(email);
   }
 
-  Future<void> confirmPassword(
-    String email,
-    String code,
-    String newPassword,
-  ) async {
+  Future<void> confirmPassword(String email, String code, String newPassword) async {
     await _authService.confirmPassword(email, code, newPassword);
   }
 
@@ -145,6 +138,30 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
     } catch (err) {
       _status = AuthStatus.authenticated;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  Future<String> setupMfa() async {
+    return await _authService.setupMfa();
+  }
+
+  Future<bool> verifyMfaSetup(String code) async {
+    return await _authService.verifyMfaSetup(code);
+  }
+
+  Future<void> respondToMfaChallenge(String code) async {
+    _status = AuthStatus.loading;
+    notifyListeners();
+
+    try {
+      await _authService.respondToMfaChallenge(code);
+      _userEmail = await _authService.currentUserEmail;
+      _status = AuthStatus.authenticated;
+      notifyListeners();
+    } catch (err) {
+      _status = AuthStatus.unauthenticated;
       notifyListeners();
       rethrow;
     }

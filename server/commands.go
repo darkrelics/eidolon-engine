@@ -13,6 +13,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	cwtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 )
 
 // applyRoundTime applies round time to a character if the command generates one
@@ -49,6 +52,21 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 	if character == nil || character.game == nil {
 		return false, errors.New("invalid character state")
 	}
+
+	// Instrument command processing
+	start := time.Now()
+	defer func() {
+		if character.game.cloudWatch != nil {
+			dimensions := []cwtypes.Dimension{
+				{
+					Name:  aws.String("Verb"),
+					Value: aws.String(verb),
+				},
+			}
+			character.game.cloudWatch.SendDurationMetric("CommandProcessDuration", time.Since(start), dimensions)
+			character.game.cloudWatch.SendCountMetric("CommandCount", 1, dimensions)
+		}
+	}()
 
 	// Retrieve the command info
 	character.game.mutex.RLock()
@@ -94,11 +112,18 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 		Character: character,
 		Verb:      verb,
 		Args:      tokens,
-		Tier:      RoomTier,
-		State:     CommandPending,
-		Timestamp: time.Now(),
-		Response:  make(chan *CommandResponse, 1),
+		Tier:       RoomTier,
+		State:      CommandPending,
+		Timestamp:  time.Now(),
+		Response:   make(chan *CommandResponse, 1),
+		OriginIP:   character.player.remoteAddr,
+		SessionID:  character.player.id.String(),
+		OriginIP:   character.player.remoteAddr,
+		SessionID:  character.player.id.String(),
+		ClientType: character.player.clientType,
 	}
+
+	Logger.Info("Command Origin", "ip", cmdReq.OriginIP, "client", cmdReq.ClientType, "session", cmdReq.SessionID)
 
 	// Ensure room is running
 	if !character.room.IsRunning() {
@@ -156,10 +181,13 @@ func escalateToGame(ctx context.Context, character *Character, verb string, toke
 		Character: character,
 		Verb:      verb,
 		Args:      tokens,
-		Tier:      GameTier,
-		State:     CommandPending,
-		Timestamp: time.Now(),
-		Response:  make(chan *CommandResponse, 1),
+		Tier:       GameTier,
+		State:      CommandPending,
+		Timestamp:  time.Now(),
+		Response:   make(chan *CommandResponse, 1),
+		OriginIP:   character.player.remoteAddr,
+		SessionID:  character.player.id.String(),
+		ClientType: character.player.clientType,
 	}
 
 	// Game submission routes to global handler

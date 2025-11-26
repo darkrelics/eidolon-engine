@@ -19,13 +19,16 @@ class StoryPollingService {
 
   String? _characterId;
   Timer? _pollingTimer;
+  Timer? _completionTimer;
   bool _isPolling = false;
   int _consecutiveErrors = 0;
   String? _lastSeenActiveSegmentId;
   String? _lastReloadedSegmentId;
+  String? _pendingCompletionSegmentId;
   static const int _maxConsecutiveErrors = 3;
   static const int _errorRetryDelaySeconds = 30;
   static const int _defaultPollDelaySeconds = 60;  // Fallback if no PollAfter
+  static const int _initialPollDelaySeconds = 60;  // Backend design spec: INITIAL_POLL_DELAY
 
   void dispose() {
     stopPolling();
@@ -34,14 +37,21 @@ class StoryPollingService {
   void stopPolling() {
     _pollingTimer?.cancel();
     _pollingTimer = null;
+    _completionTimer?.cancel();
+    _completionTimer = null;
     _isPolling = false;
     _characterId = null;
     _consecutiveErrors = 0;
     _lastSeenActiveSegmentId = null;
     _lastReloadedSegmentId = null;
+    _pendingCompletionSegmentId = null;
   }
 
   /// Start polling for the character's active story.
+  ///
+  /// Parameters:
+  /// - segmentStartTime: When the current segment started (for calculating initial delay).
+  ///   If null, waits 60 seconds before first poll.
   ///
   /// Callbacks:
   /// - onStatusUpdate: Called with segment status data from GET /segment/status
@@ -51,6 +61,7 @@ class StoryPollingService {
   /// - onError: Called when API errors occur
   void startPolling({
     required String characterId,
+    DateTime? segmentStartTime,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
     required void Function(Map<String, dynamic> character) onCharacterReload,
     required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
@@ -69,8 +80,31 @@ class StoryPollingService {
 
     debugPrint('StoryPollingService: Started polling for character $characterId');
 
-    // Check immediately to get current status and PollAfter guidance from server
-    _pollOnce(
+    // Calculate delay before first poll (60 seconds from segment start per backend spec)
+    Duration initialDelay;
+    if (segmentStartTime != null) {
+      final now = DateTime.now().toUtc();
+      final segmentStart = segmentStartTime.toUtc();
+      final elapsedSeconds = now.difference(segmentStart).inSeconds;
+      final remainingDelay = _initialPollDelaySeconds - elapsedSeconds;
+
+      if (remainingDelay > 0) {
+        initialDelay = Duration(seconds: remainingDelay);
+        debugPrint('StoryPollingService: Waiting $remainingDelay seconds before first poll (segment started ${elapsedSeconds}s ago)');
+      } else {
+        // Segment started more than 60 seconds ago, poll immediately
+        initialDelay = Duration.zero;
+        debugPrint('StoryPollingService: Polling immediately (segment started ${elapsedSeconds}s ago)');
+      }
+    } else {
+      // No start time provided, wait full 60 seconds
+      initialDelay = const Duration(seconds: _initialPollDelaySeconds);
+      debugPrint('StoryPollingService: Waiting $_initialPollDelaySeconds seconds before first poll (no start time provided)');
+    }
+
+    // Schedule first poll after initial delay
+    _scheduleNextPoll(
+      initialDelay,
       characterId: characterId,
       onStatusUpdate: onStatusUpdate,
       onCharacterReload: onCharacterReload,
@@ -98,14 +132,24 @@ class StoryPollingService {
       // Get segment status
       final segmentStatus = await _apiService.getSegmentStatus(characterId: characterId);
 
+      // Cancel any stale completion timer if segment has changed
+      // This handles the case where a new poll happens before the completion timer fires
+      final currentActiveSegmentId = segmentStatus['ActiveSegmentID'] as String?;
+      if (_pendingCompletionSegmentId != null && _pendingCompletionSegmentId != currentActiveSegmentId) {
+        debugPrint('StoryPollingService: Canceling stale completion timer for segment $_pendingCompletionSegmentId');
+        _completionTimer?.cancel();
+        _completionTimer = null;
+        _pendingCompletionSegmentId = null;
+      }
+
       // Reset error counter on successful call
       _consecutiveErrors = 0;
 
       // Update UI with segment status
       onStatusUpdate(segmentStatus);
 
-      // Check if story is complete (ActiveSegmentID will be null)
-      final activeSegmentId = segmentStatus['ActiveSegmentID'] as String?;
+      // Use the already-extracted activeSegmentId
+      final activeSegmentId = currentActiveSegmentId;
 
       if (activeSegmentId != _lastSeenActiveSegmentId) {
         // Active segment changed; reset boundary reload guard so the new segment can sync once
@@ -170,18 +214,45 @@ class StoryPollingService {
         // Segment processed but timer not expired - wait for timer then apply incremental updates
         debugPrint('StoryPollingService: Segment processed, waiting $timeRemaining seconds then applying updates');
 
-        // Schedule segment completion at segment end
+        // Check if we already have a pending completion for this segment
+        if (_pendingCompletionSegmentId == activeSegmentId) {
+          debugPrint('StoryPollingService: Completion timer already scheduled for segment $activeSegmentId - skipping duplicate');
+          return;
+        }
+
+        // Cancel any existing completion timer to prevent race conditions
+        _completionTimer?.cancel();
+        _completionTimer = null;
+
+        // Track which segment we're waiting for
         final pendingSegmentId = activeSegmentId;
-        Timer(Duration(seconds: timeRemaining), () async {
-          if (!_isPolling || _characterId != characterId) return;
+        _pendingCompletionSegmentId = pendingSegmentId;
+
+        // Capture the current segment status to avoid closure issues
+        final capturedSegmentStatus = Map<String, dynamic>.from(segmentStatus);
+
+        // Schedule segment completion at segment end
+        _completionTimer = Timer(Duration(seconds: timeRemaining), () async {
+          // Clear pending completion tracking
+          if (_pendingCompletionSegmentId == pendingSegmentId) {
+            _pendingCompletionSegmentId = null;
+          }
+          _completionTimer = null;
+
+          // Verify polling is still active for this character
+          if (!_isPolling || _characterId != characterId) {
+            debugPrint('StoryPollingService: Completion timer fired but polling stopped');
+            return;
+          }
 
           try {
+            // Check for duplicate processing
             if (_lastReloadedSegmentId == pendingSegmentId) {
               debugPrint('StoryPollingService: Skipping segment updates for segment $pendingSegmentId - already synchronized');
             } else {
               // Apply incremental updates from segment response
               debugPrint('StoryPollingService: Applying incremental character updates from segment');
-              onSegmentComplete(segmentStatus);
+              onSegmentComplete(capturedSegmentStatus);
               _lastReloadedSegmentId = pendingSegmentId;
             }
 
