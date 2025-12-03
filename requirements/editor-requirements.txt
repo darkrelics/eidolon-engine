@@ -1,7 +1,7 @@
 #Required
 jupyter==1.1.1
 matplotlib==3.10.7
-networkx==3.5
+networkx==3.6
 notebook==7.4.7
 numpy==2.3.5
 pyyaml==6.0.3
