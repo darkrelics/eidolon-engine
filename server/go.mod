@@ -16,7 +16,7 @@ require (
 	github.com/aws/smithy-go v1.23.2
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/goccy/go-yaml v1.18.0
-	github.com/gofrs/uuid/v5 v5.3.2
+	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/paul-mannino/go-fuzzywuzzy v0.0.0-20200127021948-54652b135d0e
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/crypto v0.45.0
