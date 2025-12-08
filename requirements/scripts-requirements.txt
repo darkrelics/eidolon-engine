@@ -4,7 +4,6 @@ aws-cdk-lib==2.219.0
 boto3==1.40.45
 constructs==10.4.2
 uuid-extension==0.2.0
-
 #Dependancies
 attrs==25.4.0
 # aws-cdk.asset-awscli-v1
@@ -21,4 +20,4 @@ s3transfer==0.14.0
 six==1.17.0
 # typeguard
 typing_extensions==4.15.0
-urllib3==2.5.0
+urllib3==2.6.0
