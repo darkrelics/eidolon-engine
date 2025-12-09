@@ -41,4 +41,4 @@ sortedcontainers==2.4.0
 stevedore==5.5.0
 toml==0.10.2
 tomlkit==0.13.3
-urllib3==2.5.0
+urllib3==2.6.0

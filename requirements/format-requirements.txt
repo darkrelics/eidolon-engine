@@ -41,6 +41,6 @@ sortedcontainers==2.4.0
 tokenize-rt==6.2.0
 toml==0.10.2
 tomli==2.3.0
-urllib3==2.5.0
+urllib3==2.6.0
 webencodings==0.5.1
 zipp==3.23.0
