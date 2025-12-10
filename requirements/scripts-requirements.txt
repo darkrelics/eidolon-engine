@@ -4,7 +4,6 @@ aws-cdk-lib==2.219.0
 boto3==1.40.45
 constructs==10.4.3
 uuid-extension==0.2.0
-
 #Dependancies
 attrs==25.4.0
 # aws-cdk.asset-awscli-v1
@@ -14,7 +13,7 @@ botocore==1.40.45
 cattrs==25.2.0
 importlib_resources==6.5.2
 jmespath==1.0.1
-jsii==1.117.0
+jsii==1.120.0
 publication==0.0.3
 python-dateutil==2.9.0.post0
 s3transfer==0.14.0
