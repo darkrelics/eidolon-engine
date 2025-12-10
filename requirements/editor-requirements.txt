@@ -85,7 +85,7 @@ referencing==0.37.0
 requests==2.32.5
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
-rpds-py==0.27.1
+rpds-py==0.30.0
 send2trash==1.8.3
 setuptools==80.9.0
 six==1.17.0
