@@ -20,7 +20,7 @@ html5lib==1.1
 idna==3.11
 importlib-metadata==8.7.0
 license-expression==30.4.4
-markdown-it-py==3.0.0
+markdown-it-py==4.0.0
 mdurl==0.1.2
 msgpack==1.1.2
 mypy-extensions==1.1.0

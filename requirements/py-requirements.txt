@@ -19,7 +19,7 @@ filelock==3.20.0
 idna==3.11
 isort==6.1.0
 license-expression==30.4.4
-markdown-it-py==3.0.0
+markdown-it-py==4.0.0
 mccabe==0.7.0
 mdurl==0.1.2
 msgpack==1.1.2
