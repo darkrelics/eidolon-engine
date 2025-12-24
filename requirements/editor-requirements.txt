@@ -10,7 +10,8 @@ voila==0.5.11
 anyio==4.12.0 
 argon2-cffi==25.1.0 
 argon2-cffi-bindings==25.1.0 
-arrow-1.4.0 asttokens==3.0.1 
+arrow==1.4.0 
+asttokens==3.0.1 
 async-lru==2.0.5 
 attrs==25.4.0 
 babel==2.17.0 
