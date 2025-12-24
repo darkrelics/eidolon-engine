@@ -3,15 +3,7 @@
   "title": "Active Segment Schema",
   "description": "Schema for active segment instances in Eidolon Engine",
   "type": "object",
-  "required": [
-    "ActiveSegmentID",
-    "CharacterID",
-    "PlayerID",
-    "StoryID",
-    "SegmentID",
-    "StartTime",
-    "EndTime"
-  ],
+  "required": ["ActiveSegmentID", "CharacterID", "PlayerID", "StoryID", "SegmentID", "StartTime", "EndTime"],
   "properties": {
     "ActiveSegmentID": {
       "type": "string",

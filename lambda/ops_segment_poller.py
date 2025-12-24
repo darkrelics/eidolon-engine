@@ -165,7 +165,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     except (ClientError, RuntimeError) as err:
         logger.error(f"Segment polling failed: {err}", exc_info=True)
-        raise
+        return {"statusCode": 500, "body": {"Message": "Segment polling failed", "Error": str(err)}}
     except Exception as err:
         logger.error(f"Unexpected error during segment polling: {err}", exc_info=True)
-        raise
+        return {"statusCode": 500, "body": {"Message": "Internal error", "Error": str(err)}}

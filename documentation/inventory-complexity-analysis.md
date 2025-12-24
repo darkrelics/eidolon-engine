@@ -7,6 +7,7 @@
 This document describes planned advanced inventory features that require IndexedDB relational data management. These features are NOT yet implemented.
 
 **Current Implementation Status (2025-10-21):**
+
 - ✅ Basic IndexedDB caching implemented and working (items and item_prototypes stores)
 - ✅ Item Repository with three-tier caching (memory → IndexedDB → server)
 - ✅ Simple inventory display with item names and quantities (Equipped + Bag sections)
@@ -16,6 +17,7 @@ This document describes planned advanced inventory features that require Indexed
 **Status Update:** The basic inventory display issue has been resolved (2025-10-21). Players now see "Bronze Coin x5" and "Iron Sword" instead of UUIDs.
 
 **This Document Describes:**
+
 - Planned container hierarchy navigation
 - Planned inventory search and filtering
 - Planned equipment optimization
@@ -432,6 +434,7 @@ The container hierarchies, equipment relationships, and item state management cr
 ## Current vs Planned
 
 **Current Implementation (Release 4):**
+
 - IndexedDB service implemented with basic item caching
 - Simple inventory display (equipped items + bag grid)
 - No container navigation
@@ -440,6 +443,7 @@ The container hierarchies, equipment relationships, and item state management cr
 - No analytics
 
 **Planned Features (This Document):**
+
 - Container hierarchy navigation with breadcrumbs
 - Multi-criteria inventory search
 - Equipment optimization suggestions

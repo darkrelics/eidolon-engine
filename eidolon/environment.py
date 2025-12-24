@@ -37,7 +37,7 @@ MAX_CHARACTERS_PER_PLAYER = int(os.environ.get("MAX_CHARACTERS_PER_PLAYER", "1")
 
 
 # Logging Configuration
-def _validate_log_level(level_str: str) -> str:
+def validate_log_level(level_str: str) -> str:
     """Validate and normalize log level.
 
     Accepts:
@@ -62,7 +62,7 @@ def _validate_log_level(level_str: str) -> str:
         return upper_level if upper_level in valid_names else "INFO"
 
 
-LOG_LEVEL = _validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
+LOG_LEVEL = validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
 
 # AWS Environment Detection
 AWS_EXECUTION_ENV = os.environ.get("AWS_EXECUTION_ENV")

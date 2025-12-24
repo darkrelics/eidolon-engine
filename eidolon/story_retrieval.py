@@ -254,15 +254,15 @@ def enrich_segment_with_narrative(segment_data: dict, active_segment: dict) -> d
         try:
             unix_time = float(segment_data["StartTime"])
             segment_data["StartTime"] = from_unix(int(unix_time))
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Failed to convert StartTime: {e}")
+        except (ValueError, TypeError) as err:
+            logger.warning(f"Failed to convert StartTime: {err}")
 
     if "EndTime" in segment_data and segment_data["EndTime"] is not None:
         try:
             unix_time = float(segment_data["EndTime"])
             segment_data["EndTime"] = from_unix(int(unix_time))
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Failed to convert EndTime: {e}")
+        except (ValueError, TypeError) as err:
+            logger.warning(f"Failed to convert EndTime: {err}")
 
     # Add narrative data if segment is processed/completed
     processing_status = active_segment.get("ProcessingStatus", "")

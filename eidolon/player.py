@@ -218,7 +218,7 @@ def get_character_list(player_id: str) -> list:
     return characters
 
 
-def _character_contains_item(character: dict, item_id: str, *, character_id: str | None = None) -> bool:
+def character_contains_item(character: dict, item_id: str, *, character_id=None) -> bool:
     """
     Determine whether the provided character owns the supplied item ID.
 
@@ -345,7 +345,7 @@ def player_owns_item(player_id: str, item_id: str) -> bool:
         if not character:
             continue
 
-        if _character_contains_item(character, item_id, character_id=char_id):
+        if character_contains_item(character, item_id, character_id=char_id):
             return True
 
     return False

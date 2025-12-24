@@ -83,7 +83,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         return updated_segment
     except ClientError as err:
         # Check if this was a conditional check failure
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             # Try to determine which condition failed by checking current state
             current_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
             if current_segment:

@@ -44,6 +44,7 @@ class GameScreenController extends ChangeNotifier {
   Future<void>? _activeCharacterLoad;
   StoryLifecycleState _storyLifecycleState = StoryLifecycleState.none;
   bool _disposed = false;
+  bool _handlingStoryCompletion = false;
 
   // Timer & Debouncers
   Timer? _characterUpdateTimer;
@@ -193,6 +194,7 @@ class GameScreenController extends ChangeNotifier {
     _lastStoryDetails = null;
     _storyCompletionNotified = false;
     _storyLifecycleState = StoryLifecycleState.none;
+    _handlingStoryCompletion = false;
     _invalidateCache();
   }
 
@@ -903,81 +905,85 @@ class GameScreenController extends ChangeNotifier {
     bool showMessage = true,
     Map<String, dynamic>? finalActiveSegment,
   }) async {
-    _runtime.stopPolling();
-    ApiMetrics.endSegment();
-
-    if (_storyLifecycleState != StoryLifecycleState.completed) {
-      _storyLifecycleState = StoryLifecycleState.completed;
-      notifyListeners();
+    // Prevent re-entry from concurrent callbacks (polling + character reload)
+    if (_handlingStoryCompletion) {
+      debugPrint('GameScreenController: Story completion already in progress - skipping duplicate call');
+      return;
     }
-
-    final activeSegment = finalActiveSegment ?? (_character?.storyState?['ActiveSegment'] as Map<String, dynamic>?);
-    final shouldIncludeFinalSegment = activeSegment != null && _isSegmentComplete(activeSegment);
+    _handlingStoryCompletion = true;
 
     try {
-      if (shouldIncludeFinalSegment) {
-        final copy = Map<String, dynamic>.from(activeSegment);
-        if (!copy.containsKey('StoryTitle') && _lastStoryDetails != null && _lastStoryDetails!['Title'] is String) {
-          copy['StoryTitle'] = _lastStoryDetails!['Title'];
-        }
+      _runtime.stopPolling();
+      ApiMetrics.endSegment();
 
-        final segmentKey = _segmentIdentity(copy);
-        final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
-        if (!exists) {
-          copy['_index'] = _segmentCounter++;
-          _segmentHistory = [..._segmentHistory, copy];
-        } else {
-          _segmentHistory = _segmentHistory.map((s) {
-            if (_segmentIdentity(s) == segmentKey) {
-              if (s.containsKey('_index')) {
-                copy['_index'] = s['_index'];
+      if (_storyLifecycleState != StoryLifecycleState.completed) {
+        _storyLifecycleState = StoryLifecycleState.completed;
+        notifyListeners();
+      }
+
+      final activeSegment = finalActiveSegment ?? (_character?.storyState?['ActiveSegment'] as Map<String, dynamic>?);
+      final shouldIncludeFinalSegment = activeSegment != null && _isSegmentComplete(activeSegment);
+
+      try {
+        if (shouldIncludeFinalSegment) {
+          final copy = Map<String, dynamic>.from(activeSegment);
+          if (!copy.containsKey('StoryTitle') && _lastStoryDetails != null && _lastStoryDetails!['Title'] is String) {
+            copy['StoryTitle'] = _lastStoryDetails!['Title'];
+          }
+
+          final segmentKey = _segmentIdentity(copy);
+          final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
+          if (!exists) {
+            copy['_index'] = _segmentCounter++;
+            _segmentHistory = [..._segmentHistory, copy];
+          } else {
+            _segmentHistory = _segmentHistory.map((s) {
+              if (_segmentIdentity(s) == segmentKey) {
+                if (s.containsKey('_index')) {
+                  copy['_index'] = s['_index'];
+                }
+                return copy;
               }
-              return copy;
-            }
-            return s;
-          }).toList();
+              return s;
+            }).toList();
+          }
         }
+
+        if (refreshCharacter) {
+          await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate, showLoadingIndicator: false);
+        }
+      } catch (e) {
+        debugPrint('GameScreenController: Error updating state after story completion: $e');
       }
 
-      if (refreshCharacter) {
-        await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate, showLoadingIndicator: false);
-      }
-    } catch (e) {
-      debugPrint('GameScreenController: Error updating state after story completion: $e');
-    }
+      if (_character != null) {
+        final completedSegmentsCopy = _segmentHistory.map((segment) => Map<String, dynamic>.from(segment)).toList();
+        _sortSegmentsChronologically(completedSegmentsCopy);
 
-    if (_character != null) {
-      final completedSegmentsCopy = _segmentHistory.map((segment) => Map<String, dynamic>.from(segment)).toList();
-      _sortSegmentsChronologically(completedSegmentsCopy);
+        Map<String, dynamic>? storyStateUpdate;
+        if (completedSegmentsCopy.isNotEmpty || _lastStoryDetails != null) {
+          storyStateUpdate = <String, dynamic>{};
+          if (completedSegmentsCopy.isNotEmpty) {
+            storyStateUpdate['CompletedSegments'] = completedSegmentsCopy;
+          }
+          if (_lastStoryDetails != null) {
+            storyStateUpdate['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
+          }
+        }
 
-      Map<String, dynamic>? storyStateUpdate;
-      if (completedSegmentsCopy.isNotEmpty || _lastStoryDetails != null) {
-        storyStateUpdate = <String, dynamic>{};
-        if (completedSegmentsCopy.isNotEmpty) {
-          storyStateUpdate['CompletedSegments'] = completedSegmentsCopy;
-        }
-        if (_lastStoryDetails != null) {
-          storyStateUpdate['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
-        }
+        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
       }
 
-      _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
-    }
+      _isLoading = false;
+      notifyListeners();
 
-    _isLoading = false;
-    notifyListeners();
+      _manageCharacterUpdateTimer();
 
-    _manageCharacterUpdateTimer();
-
-    if (showMessage && !_storyCompletionNotified) {
-      // We need a context to show the snackbar, but this method is internal.
-      // The controller shouldn't trigger UI directly if possible, but for now we'll rely on the caller or a callback mechanism if we were stricter.
-      // However, since we don't have context here, we'll skip the snackbar inside this private method and rely on state.
-      // Wait, the original code used context. We should probably expose a stream or callback for notifications.
-      // For simplicity in this refactor step, I'll add a callback or just let the UI react to state changes.
-      // But wait, the original code showed a snackbar.
-
-      _storyCompletionNotified = true;
+      if (showMessage && !_storyCompletionNotified) {
+        _storyCompletionNotified = true;
+      }
+    } finally {
+      _handlingStoryCompletion = false;
     }
   }
 

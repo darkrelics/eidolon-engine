@@ -176,12 +176,14 @@ stateDiagram-v2
 Stories have a `StoryType` field that determines their repeatability:
 
 1. **one-time**: Can only be completed once per character
+
    - Added to CompletedStories on first start (not completion)
    - Permanently blocks subsequent attempts
    - Entry format: `{StoryID: {"StoryType": "one-time", "CompletedAt": timestamp}}`
    - Example: Discovery quests, unique narrative events
 
 2. **daily**: Can be repeated after 24-hour cooldown
+
    - Added to CompletedStories on start
    - Entry format: `{StoryID: {"StoryType": "daily", "CompletedAt": timestamp}}`
    - Automatically removed from CompletedStories after 24 hours (UTC)
@@ -194,6 +196,7 @@ Stories have a `StoryType` field that determines their repeatability:
    - Example: Combat training, random encounters
 
 **CompletedStories Structure:**
+
 ```json
 "CompletedStories": [
   {"story-uuid-1": {"StoryType": "one-time", "CompletedAt": 1729468900}},
@@ -202,6 +205,7 @@ Stories have a `StoryType` field that determines their repeatability:
 ```
 
 **Story Eligibility Logic:**
+
 - Check AvailableStories list (must be present)
 - Check CompletedStories for story ID:
   - If found with `StoryType: "one-time"` → Blocked permanently
@@ -354,6 +358,7 @@ Non-combat challenges should generally result in segment repetition on failure, 
 - **Skill checks without consequences**: Any challenge where failure doesn't change the physical situation
 
 Example branching for investigation challenge:
+
 ```json
 "Results": {
   "Failure": {
@@ -375,6 +380,7 @@ Example branching for investigation challenge:
 - **Irreversible actions**: Attempts that cannot be undone once initiated
 
 Example branching for tumbling while climbing:
+
 ```json
 "Results": {
   "Failure": {

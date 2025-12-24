@@ -26,34 +26,34 @@ This document defines the complete database schema for the Eidolon Engine's unif
 
 ## Character Table
 
-| Field              | Type            | Key      | Description                                                                   |
-| ------------------ | --------------- | -------- | ----------------------------------------------------------------------------- |
-| `CharacterID`      | `STRING`        | **HASH** | UUID of the character.                                                        |
-| `PlayerID`         | `STRING`        |          | UUID of the player who owns the character.                                    |
-| `CharacterName`    | `STRING`        | **GSI**  | Name of the character.                                                        |
-| `GameMode`         | `STRING`        |          | Current mode: "MUD", "Incremental", or "None" (prevents concurrent use)       |
-| `RoomID`           | `NUMBER`        |          | ID of the room the character is currently in.                                 |
+| Field              | Type            | Key      | Description                                                                                                                                                                                                              |
+| ------------------ | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CharacterID`      | `STRING`        | **HASH** | UUID of the character.                                                                                                                                                                                                   |
+| `PlayerID`         | `STRING`        |          | UUID of the player who owns the character.                                                                                                                                                                               |
+| `CharacterName`    | `STRING`        | **GSI**  | Name of the character.                                                                                                                                                                                                   |
+| `GameMode`         | `STRING`        |          | Current mode: "MUD", "Incremental", or "None" (prevents concurrent use)                                                                                                                                                  |
+| `RoomID`           | `NUMBER`        |          | ID of the room the character is currently in.                                                                                                                                                                            |
 | `Inventory`        | `MAP`           |          | Map of inventory slots to item data objects. Format: `{slot: {"ItemID": "uuid"}}` for non-stackable items, or `{slot: {"ItemID": "uuid", "Quantity": number}}` for stackable items where Quantity represents count (1+). |
-| `Attributes`       | `MAP`           |          | Map of attribute names to their values (e.g., Strength: 4).                   |
-| `Skills`           | `MAP`           |          | Map of skill names to their values (e.g., Stealth: 3).                        |
-| `Essence`          | `NUMBER`        |          | The character's essence or magical energy.                                    |
-| `MaxHealth`        | `NUMBER`        |          | The character's maximum health levels.                                        |
-| `Hidden`           | `BOOL`          |          | Whether the character is currently hidden.                                    |
-| `Wounds`           | `LIST` of `MAP` |          | List of wound objects. Each wound is a map with DamageType and HealAt fields. |
-| `CharState`        | `STRING`        |          | Current character state (e.g., "standing", "unconscious", "dead"). Stored in DB but NOT returned in GET /character API response. |
-| `LeftHandID`       | `STRING`        |          | UUID of item equipped in left hand (if any).                                  |
-| `RightHandID`      | `STRING`        |          | UUID of item equipped in right hand (if any).                                 |
-| `AvailableStories` | `LIST`          |          | List of story IDs available to this character.                                |
-| `CompletedStories` | `LIST`          |          | List of maps tracking story completions. Format: `[{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]`. Only tracks "one-time" and "daily" stories. Daily stories auto-removed after 24 hours. |
-| `ActiveStoryID`    | `STRING`        |          | UUID of the currently active story (if any).                                  |
-| `ActiveSegmentID`  | `STRING`        |          | UUID of the currently active segment (if any).                                |
-| `Archetype`        | `STRING`        |          | Name of the character's archetype.                                            |
-| `MaxEssence`       | `NUMBER`        |          | The character's maximum essence points.                                       |
-| `Resources`        | `MAP`           |          | Map of resource types to values. `Value` field tracks total currency in FU (fundamental units). |
-| `Progress`         | `MAP`           |          | Map tracking story progress flags and achievements.                           |
-| `CreatedAt`        | `STRING`        |          | ISO 8601 timestamp when character was created.                                |
-| `UpdatedAt`        | `STRING`        |          | ISO 8601 timestamp of last character update.                                  |
-| `LastPlayed`       | `STRING`        |          | ISO 8601 timestamp when character was last active.                            |
+| `Attributes`       | `MAP`           |          | Map of attribute names to their values (e.g., Strength: 4).                                                                                                                                                              |
+| `Skills`           | `MAP`           |          | Map of skill names to their values (e.g., Stealth: 3).                                                                                                                                                                   |
+| `Essence`          | `NUMBER`        |          | The character's essence or magical energy.                                                                                                                                                                               |
+| `MaxHealth`        | `NUMBER`        |          | The character's maximum health levels.                                                                                                                                                                                   |
+| `Hidden`           | `BOOL`          |          | Whether the character is currently hidden.                                                                                                                                                                               |
+| `Wounds`           | `LIST` of `MAP` |          | List of wound objects. Each wound is a map with DamageType and HealAt fields.                                                                                                                                            |
+| `CharState`        | `STRING`        |          | Current character state (e.g., "standing", "unconscious", "dead"). Stored in DB but NOT returned in GET /character API response.                                                                                         |
+| `LeftHandID`       | `STRING`        |          | UUID of item equipped in left hand (if any).                                                                                                                                                                             |
+| `RightHandID`      | `STRING`        |          | UUID of item equipped in right hand (if any).                                                                                                                                                                            |
+| `AvailableStories` | `LIST`          |          | List of story IDs available to this character.                                                                                                                                                                           |
+| `CompletedStories` | `LIST`          |          | List of maps tracking story completions. Format: `[{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]`. Only tracks "one-time" and "daily" stories. Daily stories auto-removed after 24 hours.           |
+| `ActiveStoryID`    | `STRING`        |          | UUID of the currently active story (if any).                                                                                                                                                                             |
+| `ActiveSegmentID`  | `STRING`        |          | UUID of the currently active segment (if any).                                                                                                                                                                           |
+| `Archetype`        | `STRING`        |          | Name of the character's archetype.                                                                                                                                                                                       |
+| `MaxEssence`       | `NUMBER`        |          | The character's maximum essence points.                                                                                                                                                                                  |
+| `Resources`        | `MAP`           |          | Map of resource types to values. `Value` field tracks total currency in FU (fundamental units).                                                                                                                          |
+| `Progress`         | `MAP`           |          | Map tracking story progress flags and achievements.                                                                                                                                                                      |
+| `CreatedAt`        | `STRING`        |          | ISO 8601 timestamp when character was created.                                                                                                                                                                           |
+| `UpdatedAt`        | `STRING`        |          | ISO 8601 timestamp of last character update.                                                                                                                                                                             |
+| `LastPlayed`       | `STRING`        |          | ISO 8601 timestamp when character was last active.                                                                                                                                                                       |
 
 **Primary Key:** CharacterID (HASH)
 
@@ -73,14 +73,16 @@ This document defines the complete database schema for the Eidolon Engine's unif
 - **JSON Field Names**: All fields use PascalCase to match DynamoDB field names (e.g., CharacterID, CharacterName, AvailableStories)
 - **Acronyms**: Acronyms in field names are fully capitalized (e.g., StoryID not StoryId, ItemID not ItemId, PlayerID not PlayerId)
 - **Inventory Structure**: Stored as map of slots to item data objects:
+
   ```json
   {
     "Inventory": {
-      "0": {"ItemID": "uuid-123"},                    // Non-stackable (equipment, no Quantity field)
-      "1": {"ItemID": "uuid-456", "Quantity": 50}     // Stackable (coins with count)
+      "0": { "ItemID": "uuid-123" }, // Non-stackable (equipment, no Quantity field)
+      "1": { "ItemID": "uuid-456", "Quantity": 50 } // Stackable (coins with count)
     }
   }
   ```
+
   - **Stackable items**: Include `Quantity` field representing the count (1 or more)
   - **Non-stackable items**: No `Quantity` field (unique items)
 
@@ -91,7 +93,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
       "ItemID": "uuid-123",
       "Name": "Iron Sword",
       "Description": "A sturdy iron blade",
-      "Quantity": 0,              // API interface: 0 for non-stackable (field omitted in storage)
+      "Quantity": 0, // API interface: 0 for non-stackable (field omitted in storage)
       "Stackable": false,
       "Mass": 3.5,
       "Value": 150,
@@ -102,7 +104,7 @@ This document defines the complete database schema for the Eidolon Engine's unif
       "ItemID": "uuid-456",
       "Name": "Gold Coin",
       "Description": "Shiny gold currency",
-      "Quantity": 50,              // Actual count for stackable items
+      "Quantity": 50, // Actual count for stackable items
       "Stackable": true,
       "Mass": 0.01,
       "Value": 100
@@ -172,26 +174,26 @@ This document defines the complete database schema for the Eidolon Engine's unif
 
 ## Items Table
 
-| Field         | Type      | Key      | Description                                                   |
-| ------------- | --------- | -------- | ------------------------------------------------------------- |
-| `ItemID`      | `STRING`  | **HASH** | UUID of the item.                                             |
-| `PrototypeID` | `STRING`  |          | UUID of the item prototype.                                   |
-| `Name`        | `STRING`  |          | Name of the item.                                             |
-| `Description` | `STRING`  |          | Description of the item.                                      |
-| `Mass`        | `NUMBER`  |          | Weight or mass of the item.                                   |
-| `Value`       | `NUMBER`  |          | Monetary value of the item.                                   |
-| `Stackable`   | `BOOLEAN` |          | Indicates if the item can be stacked. Stackable items are immutable except for Quantity. |
+| Field         | Type      | Key      | Description                                                                                                                  |
+| ------------- | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `ItemID`      | `STRING`  | **HASH** | UUID of the item.                                                                                                            |
+| `PrototypeID` | `STRING`  |          | UUID of the item prototype.                                                                                                  |
+| `Name`        | `STRING`  |          | Name of the item.                                                                                                            |
+| `Description` | `STRING`  |          | Description of the item.                                                                                                     |
+| `Mass`        | `NUMBER`  |          | Weight or mass of the item.                                                                                                  |
+| `Value`       | `NUMBER`  |          | Monetary value of the item.                                                                                                  |
+| `Stackable`   | `BOOLEAN` |          | Indicates if the item can be stacked. Stackable items are immutable except for Quantity.                                     |
 | `Quantity`    | `NUMBER`  |          | **Only for stackable items**: count (1+). Non-stackable items do not have this field. Stack merging uses UUIDv7 oldest-wins. |
-| `Wearable`    | `BOOLEAN` |          | Indicates if the item can be worn.                            |
-| `WornOn`      | `STRING`  |          | Body part where the item can be worn (e.g., "head", "feet").  |
-| `Verbs`       | `MAP`     |          | Actions associated with the item (e.g., "eat": "You eat..."). |
-| `Overrides`   | `MAP`     |          | Overrides for default behaviors or properties.                |
-| `TraitMods`   | `MAP`     |          | Modifications to character traits when item is used/worn.     |
-| `Container`   | `BOOLEAN` |          | Indicates if the item can contain other items.                |
-| `Contents`    | `LIST`    |          | List of item UUIDs contained within this item.                |
-| `IsWorn`      | `BOOLEAN` |          | Indicates if the item is currently worn by a character.       |
-| `CanPickUp`   | `BOOLEAN` |          | Indicates if the item can be picked up by players.            |
-| `Metadata`    | `MAP`     |          | Additional custom data related to the item.                   |
+| `Wearable`    | `BOOLEAN` |          | Indicates if the item can be worn.                                                                                           |
+| `WornOn`      | `STRING`  |          | Body part where the item can be worn (e.g., "head", "feet").                                                                 |
+| `Verbs`       | `MAP`     |          | Actions associated with the item (e.g., "eat": "You eat...").                                                                |
+| `Overrides`   | `MAP`     |          | Overrides for default behaviors or properties.                                                                               |
+| `TraitMods`   | `MAP`     |          | Modifications to character traits when item is used/worn.                                                                    |
+| `Container`   | `BOOLEAN` |          | Indicates if the item can contain other items.                                                                               |
+| `Contents`    | `LIST`    |          | List of item UUIDs contained within this item.                                                                               |
+| `IsWorn`      | `BOOLEAN` |          | Indicates if the item is currently worn by a character.                                                                      |
+| `CanPickUp`   | `BOOLEAN` |          | Indicates if the item can be picked up by players.                                                                           |
+| `Metadata`    | `MAP`     |          | Additional custom data related to the item.                                                                                  |
 
 **Primary Key:** ItemID (HASH)
 
@@ -199,26 +201,26 @@ This document defines the complete database schema for the Eidolon Engine's unif
 
 ## Prototypes Table
 
-| Field           | Type      | Key      | Description                                                   |
-| --------------- | --------- | -------- | ------------------------------------------------------------- |
-| `PrototypeID`   | `STRING`  | **HASH** | UUID of the item prototype.                                   |
-| `PrototypeName` | `STRING`  |          | Name of the item (singular form).                             |
-| `PrototypeNamePlural` | `STRING`  |     | Plural form of item name for stackable items.                |
-| `Description`   | `STRING`  |          | Description of the item.                                      |
-| `Mass`          | `NUMBER`  |          | Weight or mass of the item.                                   |
-| `Value`         | `NUMBER`  |          | Monetary value of the item in FU. REQUIRED for all items.     |
-| `Stackable`     | `BOOLEAN` |          | REQUIRED. Indicates if the item can be stacked.               |
-| `Quantity`      | `NUMBER`  |          | Default quantity if stackable.                                |
-| `Wearable`      | `BOOLEAN` |          | Indicates if the item can be worn.                            |
-| `WornOn`        | `LIST`    |          | Body slots where item can be worn                             |
-| `Verbs`         | `MAP`     |          | Actions associated with the item (e.g., "Use": "You use..."). |
-| `Overrides`     | `MAP`     |          | Overrides for default behaviors or properties.                |
-| `TraitMods`     | `MAP`     |          | Modifications to character traits when item is used/worn.     |
-| `Container`     | `BOOLEAN` |          | Indicates if the item can contain other items.                |
-| `Contents`      | `LIST`    |          | List of item UUIDs contained within this item.                |
-| `IsWorn`        | `BOOLEAN` |          | Default worn state when item is created.                      |
-| `CanPickUp`     | `BOOLEAN` |          | Indicates if the item can be picked up by players.            |
-| `Metadata`      | `MAP`     |          | Additional custom data related to the item.                   |
+| Field                 | Type      | Key      | Description                                                   |
+| --------------------- | --------- | -------- | ------------------------------------------------------------- |
+| `PrototypeID`         | `STRING`  | **HASH** | UUID of the item prototype.                                   |
+| `PrototypeName`       | `STRING`  |          | Name of the item (singular form).                             |
+| `PrototypeNamePlural` | `STRING`  |          | Plural form of item name for stackable items.                 |
+| `Description`         | `STRING`  |          | Description of the item.                                      |
+| `Mass`                | `NUMBER`  |          | Weight or mass of the item.                                   |
+| `Value`               | `NUMBER`  |          | Monetary value of the item in FU. REQUIRED for all items.     |
+| `Stackable`           | `BOOLEAN` |          | REQUIRED. Indicates if the item can be stacked.               |
+| `Quantity`            | `NUMBER`  |          | Default quantity if stackable.                                |
+| `Wearable`            | `BOOLEAN` |          | Indicates if the item can be worn.                            |
+| `WornOn`              | `LIST`    |          | Body slots where item can be worn                             |
+| `Verbs`               | `MAP`     |          | Actions associated with the item (e.g., "Use": "You use..."). |
+| `Overrides`           | `MAP`     |          | Overrides for default behaviors or properties.                |
+| `TraitMods`           | `MAP`     |          | Modifications to character traits when item is used/worn.     |
+| `Container`           | `BOOLEAN` |          | Indicates if the item can contain other items.                |
+| `Contents`            | `LIST`    |          | List of item UUIDs contained within this item.                |
+| `IsWorn`              | `BOOLEAN` |          | Default worn state when item is created.                      |
+| `CanPickUp`           | `BOOLEAN` |          | Indicates if the item can be picked up by players.            |
+| `Metadata`            | `MAP`     |          | Additional custom data related to the item.                   |
 
 **Primary Key:** PrototypeID (HASH)
 
@@ -308,19 +310,19 @@ In this example:
 
 ## Story Table
 
-| Field               | Type     | Key      | Description                                |
-| ------------------- | -------- | -------- | ------------------------------------------ |
-| `StoryID`           | `STRING` | **HASH** | UUID of the story.                         |
-| `Title`             | `STRING` |          | Display title of the story.                |
-| `Description`       | `STRING` |          | Brief description of the story.            |
-| `NarrativeText`     | `STRING` |          | Full narrative text introducing the story. |
-| `StoryType`         | `STRING` |          | Type: one-time, daily, or repeatable.      |
-| `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.      |
-| `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).     |
-| `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.  |
+| Field               | Type     | Key      | Description                                                                                |
+| ------------------- | -------- | -------- | ------------------------------------------------------------------------------------------ |
+| `StoryID`           | `STRING` | **HASH** | UUID of the story.                                                                         |
+| `Title`             | `STRING` |          | Display title of the story.                                                                |
+| `Description`       | `STRING` |          | Brief description of the story.                                                            |
+| `NarrativeText`     | `STRING` |          | Full narrative text introducing the story.                                                 |
+| `StoryType`         | `STRING` |          | Type: one-time, daily, or repeatable.                                                      |
+| `EstimatedDuration` | `NUMBER` |          | Estimated completion time in seconds.                                                      |
+| `Prerequisites`     | `MAP`    |          | Requirements to start (skills, items).                                                     |
+| `DifficultyMap`     | `MAP`    |          | Map of skill checks to base difficulties.                                                  |
 | `RewardTiers`       | `MAP`    |          | Reward data by outcome tier. Format: `{"narrative": "text", "currency": 300, "items": []}` |
-| `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.              |
-| `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.      |
+| `FirstSegmentID`    | `STRING` |          | UUID of the starting segment.                                                              |
+| `CreatedAt`         | `STRING` |          | ISO timestamp when story was created.                                                      |
 
 **Primary Key:** StoryID (HASH)
 
@@ -553,15 +555,18 @@ Records the complete history of each segment played by a character. This table s
 The economy uses Fundamental Units (FU) as the base currency unit, which is converted to coins for player-facing display and inventory management.
 
 **Coin Prototypes:**
+
 - Bronze Coin: 10 FU (PrototypeID: `3d8a6f2e-1c4b-4e9f-a5d2-7b3e9f0c1d8a`)
 - Silver Coin: 120 FU (PrototypeID: `8f5b3c9e-2d7a-4f8e-b6c1-9a4e7d2b5f3c`)
 - Gold Coin: 2400 FU (PrototypeID: `6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d`)
 
 **Exchange Rates:**
+
 - 1 Silver = 12 Bronze
 - 1 Gold = 20 Silver = 240 Bronze
 
 **Stack Management:**
+
 - Coins are stackable items with Quantity field
 - Stack merging uses UUIDv7 timestamp comparison (oldest wins)
 - Character Resources.Value tracks total currency in FU
@@ -582,9 +587,9 @@ List of maps with ItemID and Chance fields. Each item has an independent probabi
 
 ```json
 [
-  {"ItemID": "item-uuid-1", "Chance": 0.3},
-  {"ItemID": "item-uuid-2", "Chance": 0.5},
-  {"ItemID": "item-uuid-3", "Chance": 0.2}
+  { "ItemID": "item-uuid-1", "Chance": 0.3 },
+  { "ItemID": "item-uuid-2", "Chance": 0.5 },
+  { "ItemID": "item-uuid-3", "Chance": 0.2 }
 ]
 ```
 
@@ -599,14 +604,15 @@ When using probabilistic format, items are processed using cumulative probabilit
 
 **Probability Examples:**
 
-| Configuration | Probabilities | Result |
-|--------------|---------------|--------|
-| `0.3, 0.5` | 30%, 50% | 80% total chance (20% chance of no reward) |
-| `0.4, 0.6` | 40%, 60% | 100% total chance (both items can drop) |
-| `0.5, 0.6` | 50%, 50% | 100% total chance (second clipped from 0.6 to 0.5) |
-| `0.2, 0.3, 0.7` | 20%, 30%, 50% | 100% total chance (third clipped from 0.7 to 0.5) |
+| Configuration   | Probabilities | Result                                             |
+| --------------- | ------------- | -------------------------------------------------- |
+| `0.3, 0.5`      | 30%, 50%      | 80% total chance (20% chance of no reward)         |
+| `0.4, 0.6`      | 40%, 60%      | 100% total chance (both items can drop)            |
+| `0.5, 0.6`      | 50%, 50%      | 100% total chance (second clipped from 0.6 to 0.5) |
+| `0.2, 0.3, 0.7` | 20%, 30%, 50% | 100% total chance (third clipped from 0.7 to 0.5)  |
 
 This algorithm ensures:
+
 - Lower-probability items always get their full chance
 - Higher-probability items are clipped if needed
 - Total probability never exceeds 100%
@@ -685,7 +691,7 @@ The CharacterUpdates map stored in ActiveSegments and SegmentHistory contains al
     "supplies": -2
   },
   "Inventory": {
-    "0": {"ItemID": "item-uuid-123"}
+    "0": { "ItemID": "item-uuid-123" }
   }
 }
 ```

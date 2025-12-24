@@ -21,7 +21,14 @@ from lambda_functions import deploy_lambda, update_lambda_functions_directly
 from player import deploy_player
 from s3 import deploy_s3
 from story import deploy_story
-from utilities import get_aws_account_id, validate_region, verify_cdk_bootstrap, verify_prerequisites
+from utilities import (
+    get_aws_account_id,
+    validate_lambda_artifacts,
+    validate_region,
+    validate_s3_bucket,
+    verify_cdk_bootstrap,
+    verify_prerequisites,
+)
 
 
 @dataclass
@@ -333,6 +340,67 @@ def collect_deployment_params(config: Config) -> DeploymentParams:
     return params
 
 
+def validate_deployment_prerequisites(params) -> tuple:
+    """Validate deployment prerequisites before starting.
+
+    Checks:
+    - S3 artifacts bucket exists and is accessible
+    - Lambda artifacts exist in S3 (warns if missing, doesn't fail)
+
+    Args:
+        params: DeploymentParams object
+
+    Returns:
+        Tuple of (success: bool, warnings: list)
+    """
+    print("\n" + "=" * 60)
+    print("Pre-deployment Validation")
+    print("=" * 60)
+
+    warnings = []
+    errors = []
+
+    # Validate S3 artifacts bucket exists
+    print("\nValidating S3 buckets...")
+    if not validate_s3_bucket(params.s3_bucket, params.region):
+        errors.append(f"S3 artifacts bucket '{params.s3_bucket}' not accessible")
+
+    # Validate S3 client bucket if specified
+    if params.client_bucket:
+        if not validate_s3_bucket(params.client_bucket, params.region):
+            warnings.append(f"S3 client bucket '{params.client_bucket}' not accessible (will be created)")
+
+    # Validate Lambda artifacts exist (warning only - CodeBuild may create them)
+    print("\nValidating Lambda artifacts...")
+    artifacts_ok, missing, present = validate_lambda_artifacts(
+        params.s3_bucket, params.region, params.deployment_mode
+    )
+    if not artifacts_ok:
+        warnings.append(
+            f"{len(missing)} Lambda artifacts missing from S3. "
+            "CodeBuild will create them during deployment."
+        )
+
+    # Report results
+    print("\n" + "-" * 40)
+    if errors:
+        print("ERRORS (deployment cannot proceed):")
+        for error in errors:
+            print(f"  - {error}")
+
+    if warnings:
+        print("WARNINGS (deployment can proceed):")
+        for warning in warnings:
+            print(f"  - {warning}")
+
+    if not errors and not warnings:
+        print("All pre-deployment checks passed!")
+
+    print("-" * 40)
+
+    return len(errors) == 0, warnings
+
+
 def update_lambdas_only():
     """Update Lambda functions only without full deployment."""
     print("=" * 60)
@@ -452,6 +520,20 @@ def main():
                 return 0
         else:
             print("\nWARNING: CDK bootstrap not found, proceeding anyway (non-interactive mode)")
+
+    # Pre-deployment validation
+    prereq_ok, prereq_warnings = validate_deployment_prerequisites(params)
+    if not prereq_ok:
+        print("\nDeployment cannot proceed due to prerequisite errors.")
+        print("Please fix the errors above and try again.")
+        return 1
+
+    if prereq_warnings and is_interactive():
+        print(f"\n{len(prereq_warnings)} warning(s) found during pre-deployment validation.")
+        response = input("Continue with deployment? [Y/n]: ").strip().lower()
+        if response == "n":
+            print("Deployment cancelled")
+            return 0
 
     # Display deployment summary based on mode
     print("\n" + "=" * 60)

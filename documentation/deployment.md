@@ -11,6 +11,43 @@ This guide explains how to deploy the Eidolon Engine infrastructure using the mo
 - AWS CDK Bootstrap: Run `cdk bootstrap aws://ACCOUNT-ID/REGION` if not already done
 - Supported regions: us-east-1, us-east-2, us-west-2
 
+## Pre-Deployment Checklist
+
+Before running deployment, verify these requirements:
+
+### Required Infrastructure
+- [ ] AWS CLI configured with appropriate IAM permissions
+- [ ] AWS CDK CLI installed (`npm install -g aws-cdk`)
+- [ ] CDK bootstrapped in target region (`cdk bootstrap aws://ACCOUNT-ID/REGION`)
+- [ ] S3 artifacts bucket exists and is accessible
+- [ ] Route53 hosted zone configured for your domain
+
+### Required Permissions (IAM)
+- [ ] CloudFormation: CreateStack, UpdateStack, DeleteStack, DescribeStacks
+- [ ] S3: CreateBucket, PutObject, GetObject, ListBucket
+- [ ] Lambda: CreateFunction, UpdateFunctionCode, AddPermission
+- [ ] DynamoDB: CreateTable, DescribeTable, PutItem
+- [ ] IAM: CreateRole, AttachRolePolicy, CreatePolicy
+- [ ] Cognito: CreateUserPool, CreateUserPoolClient
+- [ ] API Gateway: CreateRestApi, CreateResource, PutMethod
+- [ ] CloudFront: CreateDistribution, CreateInvalidation
+- [ ] Route53: ChangeResourceRecordSets
+
+### Configuration Files
+- [ ] `config.yml` exists with valid settings (or use environment variables)
+- [ ] Cognito User Pool ARN available (for API authentication)
+
+### Pre-Deployment Validation
+
+The deployment script automatically validates:
+
+1. **S3 Artifacts Bucket**: Must exist and be accessible
+2. **Lambda Artifacts**: Warns if missing (CodeBuild will create them)
+3. **AWS Credentials**: Validates IAM identity
+4. **CDK Bootstrap**: Checks if CDK is bootstrapped in target region
+
+If validation fails with errors, deployment stops. Warnings allow you to proceed.
+
 ## Quick Start
 
 ```bash
@@ -143,21 +180,21 @@ The deployment script automatically detects interactive vs. non-interactive mode
 
 All deployment parameters can be set via environment variables to enable automated deployments:
 
-| Environment Variable | Description | Required | Example |
-|---------------------|-------------|----------|---------|
-| `AWS_REGION` | AWS region to deploy to | Yes | `us-east-1` |
-| `EIDOLON_DEPLOYMENT_MODE` | Deployment mode | No | `incremental` |
-| `EIDOLON_S3_BUCKET` | S3 artifacts bucket name | Yes | `eidolon-artifacts-prod` |
-| `EIDOLON_SCRIPTS_BUCKET` | S3 scripts bucket (mud/hybrid only) | Conditional | `eidolon-scripts-prod` |
-| `EIDOLON_CLIENT_BUCKET` | S3 client bucket for portal | Yes | `eidolon-portal-prod` |
-| `GITHUB_OWNER` | GitHub repository owner | No | `robinje` |
-| `GITHUB_REPO` | GitHub repository name | No | `eidolon-engine` |
-| `GITHUB_BRANCH` | GitHub branch to deploy | No | `develop` |
-| `EIDOLON_DOMAIN` | Base domain for services | Yes | `darkrelics.net` |
-| `EIDOLON_HOSTED_ZONE_ID` | Route53 hosted zone ID | Yes | `Z1234567890ABC` |
-| `EIDOLON_API_HOST` | API subdomain | Yes | `api` |
-| `EIDOLON_CLIENT_HOST` | Client subdomain | Yes | `portal` |
-| `EIDOLON_REPLY_EMAIL` | Cognito reply email | No | `contact@darkrelics.net` |
+| Environment Variable      | Description                         | Required    | Example                  |
+| ------------------------- | ----------------------------------- | ----------- | ------------------------ |
+| `AWS_REGION`              | AWS region to deploy to             | Yes         | `us-east-1`              |
+| `EIDOLON_DEPLOYMENT_MODE` | Deployment mode                     | No          | `incremental`            |
+| `EIDOLON_S3_BUCKET`       | S3 artifacts bucket name            | Yes         | `eidolon-artifacts-prod` |
+| `EIDOLON_SCRIPTS_BUCKET`  | S3 scripts bucket (mud/hybrid only) | Conditional | `eidolon-scripts-prod`   |
+| `EIDOLON_CLIENT_BUCKET`   | S3 client bucket for portal         | Yes         | `eidolon-portal-prod`    |
+| `GITHUB_OWNER`            | GitHub repository owner             | No          | `robinje`                |
+| `GITHUB_REPO`             | GitHub repository name              | No          | `eidolon-engine`         |
+| `GITHUB_BRANCH`           | GitHub branch to deploy             | No          | `develop`                |
+| `EIDOLON_DOMAIN`          | Base domain for services            | Yes         | `darkrelics.net`         |
+| `EIDOLON_HOSTED_ZONE_ID`  | Route53 hosted zone ID              | Yes         | `Z1234567890ABC`         |
+| `EIDOLON_API_HOST`        | API subdomain                       | Yes         | `api`                    |
+| `EIDOLON_CLIENT_HOST`     | Client subdomain                    | Yes         | `portal`                 |
+| `EIDOLON_REPLY_EMAIL`     | Cognito reply email                 | No          | `contact@darkrelics.net` |
 
 ### Non-Interactive Mode Behavior
 

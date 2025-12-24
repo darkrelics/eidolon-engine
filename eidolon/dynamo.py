@@ -174,7 +174,7 @@ class DynamoInterface:
 
             # Try to connect to all tables
             for table_enum in TableName:
-                self._connect_table(table_enum)
+                self.connect_table(table_enum)
 
             self._initialized = True
 
@@ -187,7 +187,7 @@ class DynamoInterface:
             if failed:
                 logger.error(f"Failed to connect to DynamoDB tables: {', '.join(failed)}")
 
-    def _connect_table(self, table_enum: TableName) -> bool:
+    def connect_table(self, table_enum: TableName) -> bool:
         """
         Connect to a specific DynamoDB table.
 
@@ -244,7 +244,7 @@ class DynamoInterface:
         ]
 
         for table_enum in TableName:
-            self._connect_table(table_enum)
+            self.connect_table(table_enum)
 
     def get_table(self, table_enum: TableName):
         """

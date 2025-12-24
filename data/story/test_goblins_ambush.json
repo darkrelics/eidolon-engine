@@ -67,9 +67,7 @@
         "Failure": {
           "Narrative": "You leave the sunlit glade entrance and push into the forest, but the well-trodden path quickly becomes confusing. The trees forming a green tunnel overhead make navigation difficult, and the scent of earth and decaying leaves is overwhelming. The dense forest proves too disorienting. You retreat back to the glade entrance to catch your breath and reconsider your approach. Perhaps a more careful investigation will reveal the path.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 1
           },
           "NextSegmentID": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
@@ -77,9 +75,7 @@
         "Minimal": {
           "Narrative": "Leaving behind the dappled shadows and birdsong of the glade entrance, you push through the undergrowth with difficulty. The well-trodden path leads you deeper where trees form a green tunnel overhead. In the cool, damp air heavy with the scent of earth and decaying leaves, you find only vague traces of recent activity - a few broken branches rustling in the wind. You press on despite your scratches.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 2
           },
           "NextSegmentID": "b2c3d4e5-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
@@ -151,9 +147,7 @@
         "Failure": {
           "Narrative": "Despite the brook's peaceful murmur providing cover, your clumsy movements along the water's edge alert every creature within earshot. Rocks tumble, water splashes, and branches snap. The tranquil scene shatters as goblin war cries echo through the trees. Wounded by your hasty scramble and outnumbered, you flee back to the glade entrance in defeat, nursing your injuries in the sunlight and birdsong.",
           "Effects": {
-            "Wounds": [
-              "lethal"
-            ],
+            "Wounds": ["lethal"],
             "Room": 1
           },
           "NextSegmentID": null
@@ -161,9 +155,7 @@
         "Minimal": {
           "Narrative": "You move along the babbling brook, using the peaceful murmur of the water to mask your approach. The clear waters sparkle in dappled sunlight as you creep forward, though twigs snap underfoot at crucial moments. You're quiet enough to avoid immediate danger, but the goblins know someone is near. You suffer minor injuries navigating the rocky bank.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 5
           },
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
@@ -211,10 +203,7 @@
         "Failure": {
           "Narrative": "The path grows narrower and more overgrown with each step. Thorny bushes tear at you while tangled vines obstruct every move. The air becomes still and oppressively heavy, and the buzzing of insects grows maddening. Bloodied by thorns and exhausted by the wildness of nature, you're forced to retreat back to the glade entrance, your quest abandoned.",
           "Effects": {
-            "Wounds": [
-              "lethal",
-              "bashing"
-            ],
+            "Wounds": ["lethal", "bashing"],
             "Room": 1
           },
           "NextSegmentID": null
@@ -222,10 +211,7 @@
         "Minimal": {
           "Narrative": "The path becomes increasingly narrow and overgrown as you push deeper. Thorny bushes catch your clothes and tangled vines obstruct your progress - a painful reminder of nature's wildness. The still, heavy air makes the journey exhausting, and the insistent buzzing of insects frays your nerves. You force your way through, bloodied and torn, finally emerging on the other side.",
           "Effects": {
-            "Wounds": [
-              "bashing",
-              "bashing"
-            ],
+            "Wounds": ["bashing", "bashing"],
             "Room": 6
           },
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
@@ -241,9 +227,7 @@
           "Narrative": "Your strength makes short work of the obstacles! As the path narrows and becomes overgrown, you power through thorny bushes and tangled vines with impressive efficiency. The still, heavy air and insistent buzzing of insects don't deter you. Your eyes catch something others would miss - an old adventurer's pack tangled in the vines, a reminder that nature's wildness has claimed others before you.",
           "Effects": {
             "Room": 6,
-            "Items": [
-              {"ItemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484", "Chance": 0.8}
-            ]
+            "Items": [{ "ItemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484", "Chance": 0.8 }]
           },
           "NextSegmentID": "e5f6a7b8-9c0d-1e2f-3a4b-5c6d7e8f9a0b"
         }
@@ -288,9 +272,7 @@
           "Narrative": "After a fierce battle among the overgrown path's thorny bushes and tangled vines, you defeat the goblin scout. The confined space and nature's wildness actually work to your advantage. As it flees through the narrow path, it drops a small pouch in its haste. The still air and insistent insect buzzing return as you catch your breath.",
           "Effects": {
             "Room": 6,
-            "Items": [
-              {"ItemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484", "Chance": 0.7}
-            ]
+            "Items": [{ "ItemID": "a47ac10b-58cc-4372-a567-0e02b2c3d484", "Chance": 0.7 }]
           },
           "NextSegmentID": "f6a7b8c9-0d1e-2f3a-4b5c-6d7e8f9a0b1c"
         },
@@ -372,9 +354,7 @@
           "Narrative": "Your legendary combat display defeats the warrior utterly, even turning the dim light and treacherous footing to your advantage! The trees give way to a grove of tall, slender pines as the warrior falls. You claim its enchanted armor as your prize. Standing among the tall pines with wind whispering through branches and squirrels chattering overhead, you rest on the soft cushion of pine needles - a champion victorious.",
           "Effects": {
             "Room": 8,
-            "Items": [
-              {"ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482", "Chance": 0.85}
-            ]
+            "Items": [{ "ItemID": "c47ac10b-58cc-4372-a567-0e02b2c3d482", "Chance": 0.85 }]
           },
           "NextSegmentID": null
         }
@@ -407,10 +387,7 @@
         "Failure": {
           "Narrative": "The detour through the damp fern gully proves too challenging. The lush ferns with their delicate fronds obscure the path, creating a disorienting sea of green. The cool, moist air and lingering scent of decay sap your strength. Despite the otherworldly glow from filtered sunlight, you're too exhausted to continue. You abandon your quest and painfully make your way back to the glade entrance, where flowers and birdsong welcome your retreat.",
           "Effects": {
-            "Wounds": [
-              "bashing",
-              "bashing"
-            ],
+            "Wounds": ["bashing", "bashing"],
             "Room": 1
           },
           "NextSegmentID": null
@@ -418,9 +395,7 @@
         "Minimal": {
           "Narrative": "You navigate the difficult terrain of the damp gully, clambering over slippery rocks and fallen logs. The lush ferns with their delicate fronds creating a sea of green make the journey exhausting. The cool, moist air with its scent of decay weighs on you, and the silence broken only by occasional water drips accompanies your struggle. You emerge weary but alive, ready to search for sustenance.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 9
           },
           "NextSegmentID": "c9d0e1f2-3a4b-5c6d-7e8f-9a0b1c2d3e4f"
@@ -490,8 +465,8 @@
           "Narrative": "Your masterful foraging reveals hidden treasures in the fern gully! The damp environment with its lush ferns creating a sea of green conceals secrets others miss. In the cool, moist air where the scent of decay lingers and sunlight casts an otherworldly glow, you discover not only excellent forage but also a cache of supplies left by previous adventurers. The silence broken only by water drips makes the discovery feel almost magical.",
           "Effects": {
             "Items": [
-              {"ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485", "Chance": 0.8},
-              {"ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479", "Chance": 0.65}
+              { "ItemID": "947ac10b-58cc-4372-a567-0e02b2c3d485", "Chance": 0.8 },
+              { "ItemID": "f47ac10b-58cc-4372-a567-0e02b2c3d479", "Chance": 0.65 }
             ],
             "Room": 9
           },

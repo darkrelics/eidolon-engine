@@ -5,7 +5,6 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
 from functools import cache
-from typing import Any
 
 from botocore.exceptions import ClientError
 
@@ -51,20 +50,25 @@ def merge_stacks(item1: dict, item2: dict) -> dict:
 
     total_quantity = item1.get("Quantity", 1) + item2.get("Quantity", 1)
 
+    item1_id = item1.get("ItemID", "")
+    item2_id = item2.get("ItemID", "")
+    if not item1_id or not item2_id:
+        return {}
+
     # UUIDv7 has timestamp, so lexicographic comparison gives older item
-    if item1["ItemID"] < item2["ItemID"]:
+    if item1_id < item2_id:
         # item1 is older, keep its ID
         return {
-            "ItemID": item1["ItemID"],
-            "PrototypeID": item1["PrototypeID"],
+            "ItemID": item1_id,
+            "PrototypeID": item1.get("PrototypeID", ""),
             "Quantity": total_quantity,
             "OwnerID": item1.get("OwnerID"),
         }
     else:
         # item2 is older, keep its ID
         return {
-            "ItemID": item2["ItemID"],
-            "PrototypeID": item2["PrototypeID"],
+            "ItemID": item2_id,
+            "PrototypeID": item2.get("PrototypeID", ""),
             "Quantity": total_quantity,
             "OwnerID": item2.get("OwnerID"),
         }
@@ -244,8 +248,8 @@ def build_item_payload(
     *,
     is_worn: bool = False,
     contents=None,
-    quantity_override: int | None = None,
-    owner_id: str | None = None,
+    quantity_override=None,
+    owner_id=None,
 ) -> dict:
     """Construct item payload from a prototype definition.
 
@@ -298,8 +302,8 @@ def create_item_from_prototype(
     *,
     is_worn: bool = False,
     initial_contents=None,
-    quantity: int | None = None,
-    owner_id: str | None = None,
+    quantity=None,
+    owner_id=None,
 ) -> dict:
     """Create a single item instance from a prototype and persist it."""
 
@@ -702,7 +706,7 @@ def get_inventory(inventory: dict) -> dict:
     return enriched_inventory
 
 
-def _coerce_int(value: Any, default: int = 0) -> int:
+def coerce_int(value, default: int = 0) -> int:
     """Convert DynamoDB numeric values to int safely."""
     if value is None:
         return default
@@ -720,7 +724,7 @@ def _coerce_int(value: Any, default: int = 0) -> int:
     return default
 
 
-def _normalize_effect_config(effects: dict | None) -> dict:
+def normalize_effect_config(effects) -> dict:
     """Normalize consumable effect configuration keys."""
     if not isinstance(effects, dict):
         return {}
@@ -733,7 +737,7 @@ def _normalize_effect_config(effects: dict | None) -> dict:
     return normalized
 
 
-def _remove_wounds(wounds: list, amount: int, priority: list[str] | None = None) -> tuple[list, list]:
+def remove_wounds(wounds: list, amount: int, priority=None) -> tuple[list, list]:
     """Remove up to `amount` wounds following optional priority ordering."""
     if amount <= 0 or not isinstance(wounds, list) or not wounds:
         return wounds or [], []
@@ -852,19 +856,16 @@ def consume_item(character_id: str, item_id: str) -> dict:
         raise ValueError("Item is not consumable")
 
     effects_config = (
-        prototype.get("ConsumableEffects")
-        or item.get("ConsumableEffects")
-        or prototype.get("Effects")
-        or item.get("Effects")
+        prototype.get("ConsumableEffects") or item.get("ConsumableEffects") or prototype.get("Effects") or item.get("Effects")
     )
-    effects = _normalize_effect_config(effects_config)
+    effects = normalize_effect_config(effects_config)
     if not effects:
         raise ValueError("Consumable item is missing effects configuration")
 
     wounds: list = character.get("Wounds") or []
     if not isinstance(wounds, list):
         wounds = []
-    max_health = _coerce_int(character.get("MaxHealth"), DEFAULT_HEALTH)
+    max_health = coerce_int(character.get("MaxHealth"), DEFAULT_HEALTH)
 
     updated_wounds = list(wounds)
     removed_wounds: list = []
@@ -878,17 +879,17 @@ def consume_item(character_id: str, item_id: str) -> dict:
     heal_config = effects.get("healwounds") or effects.get("heal") or effects.get("health")
     if heal_config is not None:
         heal_amount = 0
-        damage_priority: list[str] | None = None
+        damage_priority = None
         if isinstance(heal_config, dict):
-            heal_amount = _coerce_int(heal_config.get("Amount"), 0)
+            heal_amount = coerce_int(heal_config.get("Amount"), 0)
             priority_raw = heal_config.get("DamageTypes")
             if isinstance(priority_raw, list):
                 damage_priority = [str(entry).lower() for entry in priority_raw]
         else:
-            heal_amount = _coerce_int(heal_config, 0)
+            heal_amount = coerce_int(heal_config, 0)
 
         if heal_amount > 0:
-            updated_wounds, removed_wounds = _remove_wounds(updated_wounds, heal_amount, damage_priority)
+            updated_wounds, removed_wounds = remove_wounds(updated_wounds, heal_amount, damage_priority)
             removed_count = len(removed_wounds)
             damage_types = [w.get("DamageType") for w in removed_wounds if isinstance(w, dict)]
 
@@ -903,12 +904,12 @@ def consume_item(character_id: str, item_id: str) -> dict:
     if essence_config is not None:
         essence_amount = 0
         if isinstance(essence_config, dict):
-            essence_amount = _coerce_int(essence_config.get("Amount"), 0)
+            essence_amount = coerce_int(essence_config.get("Amount"), 0)
         else:
-            essence_amount = _coerce_int(essence_config, 0)
+            essence_amount = coerce_int(essence_config, 0)
 
-        current_essence = _coerce_int(character.get("Essence"), DEFAULT_ESSENCE)
-        max_essence = _coerce_int(character.get("MaxEssence"), DEFAULT_ESSENCE)
+        current_essence = coerce_int(character.get("Essence"), DEFAULT_ESSENCE)
+        max_essence = coerce_int(character.get("MaxEssence"), DEFAULT_ESSENCE)
 
         if max_essence <= 0:
             max_essence = DEFAULT_ESSENCE
@@ -950,7 +951,7 @@ def consume_item(character_id: str, item_id: str) -> dict:
 
     inventory_changed = False
     stackable = bool(item.get("Stackable"))
-    current_quantity = _coerce_int(slot_entry.get("Quantity", item.get("Quantity", 1)), 1)
+    current_quantity = coerce_int(slot_entry.get("Quantity", item.get("Quantity", 1)), 1)
     remaining_quantity = 0
     item_removed = False
 
@@ -977,8 +978,8 @@ def consume_item(character_id: str, item_id: str) -> dict:
     timestamp = datetime.now(timezone.utc).isoformat()
 
     update_expression_parts = ["UpdatedAt = :updated_at"]
-    expression_values: dict[str, Any] = {":updated_at": timestamp}
-    expression_names: dict[str, str] = {}
+    expression_values = {":updated_at": timestamp}
+    expression_names = {}
 
     if inventory_changed:
         update_expression_parts.append("Inventory = :inventory")
@@ -1041,12 +1042,7 @@ def consume_item(character_id: str, item_id: str) -> dict:
         logger.error("Failed to update item %s after consumption Error: %s", item_id, err, exc_info=True)
         raise RuntimeError("Failed to update item after consumption") from err
 
-    item_name = (
-        prototype.get("PrototypeName")
-        or prototype.get("Name")
-        or item.get("Name")
-        or "item"
-    )
+    item_name = prototype.get("PrototypeName") or prototype.get("Name") or item.get("Name") or "item"
 
     use_message = "You consume the item."
     verbs = prototype.get("Verbs", {})

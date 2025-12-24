@@ -35,7 +35,7 @@ def delete_player(player_id: str) -> dict:
         results: dict = delete_player_data(player_id)
     except ValueError as err:
         logger.error(f"Invalid player ID: {err}", exc_info=True)
-        return {}
+        raise
 
     logger.info(f"Player deletion completed: {player_id} results: {results}")
 

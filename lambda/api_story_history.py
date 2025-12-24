@@ -6,8 +6,6 @@ Accepts up to 10 story instance IDs (UUIDv7) provided by the client and
 returns the corresponding story history records if the character owns them.
 """
 
-from typing import Iterable, List
-
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
@@ -20,12 +18,12 @@ from eidolon.validation import validate_uuid
 MAX_HISTORY_IDS = 10
 
 
-def _extract_story_instance_ids(event: dict) -> List[str]:
+def extract_story_instance_ids(event: dict) -> list:
     """Extract up to MAX_HISTORY_IDS story instance IDs from the request."""
 
-    def _clean(ids: Iterable[str]) -> List[str]:
+    def clean_ids(ids) -> list:
         seen = set()
-        ordered: List[str] = []
+        ordered = []
         for raw in ids:
             candidate = (raw or "").strip()
             if not candidate or candidate in seen:
@@ -39,7 +37,7 @@ def _extract_story_instance_ids(event: dict) -> List[str]:
     # Try query string first (comma-separated list)
     query_value = get_query_parameter(event, "StoryInstanceIDs")
     if query_value:
-        return _clean(part.strip() for part in query_value.split(","))
+        return clean_ids(part.strip() for part in query_value.split(","))
 
     # Fall back to request body JSON
     try:
@@ -50,14 +48,14 @@ def _extract_story_instance_ids(event: dict) -> List[str]:
     if isinstance(body, dict):
         raw_ids = body.get("StoryInstanceIDs") or body.get("storyInstanceIds")
         if isinstance(raw_ids, list):
-            return _clean(str(item) for item in raw_ids)
+            return clean_ids(str(item) for item in raw_ids)
         if isinstance(raw_ids, str):
-            return _clean(part.strip() for part in raw_ids.split(","))
+            return clean_ids(part.strip() for part in raw_ids.split(","))
 
     return []
 
 
-def get_story_history_entries(character_id: str, story_instance_ids: List[str]) -> dict:
+def get_story_history_entries(character_id: str, story_instance_ids: list) -> dict:
     """Business logic for fetching story history entries for a character."""
 
     if not character_id:
@@ -115,7 +113,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     if not validate_uuid(character_id):
         raise ValueError("Invalid CharacterID")
 
-    story_instance_ids = _extract_story_instance_ids(event)
+    story_instance_ids = extract_story_instance_ids(event)
 
     if not story_instance_ids:
         logger.info(f"No StoryInstanceIDs provided in request for {character_id}")

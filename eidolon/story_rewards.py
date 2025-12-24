@@ -3,6 +3,7 @@ Story reward calculation and application.
 
 Provides functions for calculating and applying story rewards.
 """
+
 from decimal import Decimal
 
 from botocore.exceptions import ClientError
@@ -81,7 +82,9 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
         reward_tiers = {}
 
     # Get rewards based on outcome tier
-    tier_rewards = reward_tiers.get(outcome, {})
+    # Normalize outcome to lowercase since reward_tiers keys are lowercase
+    outcome_key = outcome.lower() if outcome else "normal"
+    tier_rewards = reward_tiers.get(outcome_key, {})
     if isinstance(tier_rewards, dict):
         rewards["items"] = tier_rewards.get("items", [])
         rewards["currency"] = tier_rewards.get("currency", 0)
@@ -127,8 +130,11 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
 
             # Process each coin type
             for coin_request in coin_requests:
-                prototype_id = coin_request["PrototypeID"]
-                quantity = coin_request["Quantity"]
+                prototype_id = coin_request.get("PrototypeID")
+                quantity = coin_request.get("Quantity")
+                if not prototype_id or not quantity:
+                    logger.warning(f"Invalid coin request: {coin_request}")
+                    continue
 
                 # Check if we have an existing stack of this coin type
                 existing_stack = find_matching_stack(inventory, prototype_id)
@@ -293,7 +299,6 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                     expression_names if expression_names else None,
                     expression_values,
                 )
-
 
         logger.info(
             f"Applied story rewards for {character_id}: " f"{currency_value} currency value, " f"{len(items_created)} items created"

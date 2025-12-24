@@ -256,7 +256,7 @@ Resources:
           SSM_POLLER_STATE_PARAMETER: !Sub "/${GameName}/segment-poller-state"
           SEGMENT_QUEUE_URL: !ImportValue
             Fn::Sub: "sqs-${AWS::StackName}-SegmentQueueUrl"
-      MemorySize: 256
+      MemorySize: 128
       Timeout: 60
       Role: !ImportValue
         Fn::Sub: "iam-${AWS::StackName}-LambdaSSMSQSExecutionRoleArn"
@@ -280,7 +280,7 @@ Resources:
           ACTIVE_SEGMENTS_TABLE: active_segments
           OPPONENTS_TABLE: opponents
           SSM_POLLER_STATE_PARAMETER: !Sub "/${GameName}/segment-poller-state"
-      MemorySize: 256
+      MemorySize: 128
       Timeout: 60
       Role: !ImportValue
         Fn::Sub: "iam-${AWS::StackName}-LambdaSSMSQSExecutionRoleArn"

@@ -190,9 +190,9 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
             # Extract XP awards from CharacterUpdates for Flutter
             char_updates = segment.get("CharacterUpdates", {})
             if "SkillsAwarded" in char_updates:
-                formatted_segment_dict["SkillXPAwarded"] = char_updates["SkillsAwarded"]
+                formatted_segment_dict["SkillXPAwarded"] = char_updates.get("SkillsAwarded")
             if "AttributesAwarded" in char_updates:
-                formatted_segment_dict["AttributeXPAwarded"] = char_updates["AttributesAwarded"]
+                formatted_segment_dict["AttributeXPAwarded"] = char_updates.get("AttributesAwarded")
 
         if segment.get("Decision"):
             formatted_segment_dict["Decision"] = segment.get("Decision")

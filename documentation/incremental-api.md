@@ -205,8 +205,8 @@ Retrieves complete character data including active story and segment information
     "Resources": {},
     "AvailableStories": ["story_1", "story_2"],
     "CompletedStories": [
-      {"story-uuid-3": {"StoryType": "one-time", "CompletedAt": 1729468900}},
-      {"story-uuid-4": {"StoryType": "daily", "CompletedAt": 1729555200}}
+      { "story-uuid-3": { "StoryType": "one-time", "CompletedAt": 1729468900 } },
+      { "story-uuid-4": { "StoryType": "daily", "CompletedAt": 1729555200 } }
     ],
     "ActiveStoryID": "story_current_uuid",
     "ActiveSegmentID": "segment_current_uuid",
@@ -690,22 +690,26 @@ Consumes an inventory item and applies its effects server-side. Supports stackab
 These endpoints will manage stackable item operations when implemented:
 
 **Stack Merging:** Automatic during inventory updates
+
 - When picking up stackable items, system automatically merges with existing stacks
 - Uses UUIDv7 comparison - older stack keeps its ItemID
 - Updates Quantity field on the surviving stack
 
 **Stack Splitting (Planned):** `POST /item/split`
+
 - Split a stack into two separate stacks
 - Required for trade, dropping partial stacks
 - Body: `{"ItemID": "uuid", "Quantity": 50}`
 - Returns: New stack ItemID
 
 **Inventory Consolidation (Planned):** `POST /inventory/consolidate`
+
 - Merges all matching stackable items in inventory
 - Reduces inventory slots used
 - Returns: Updated inventory with consolidated stacks
 
 **Stack Rules:**
+
 - Stackable items: Immutable except for Quantity field
 - Non-stackable items: Mutable, no Quantity field
 - Stack merging: Oldest ItemID (UUIDv7) wins
@@ -728,6 +732,7 @@ The designed polling pattern (from backend constants):
 8. **No Periodic Character Fetches**: Character only fetched at selection and story completion
 
 **Current Implementation Note:**
+
 - Flutter client currently polls immediately (T+0), not T+60
 - This is inconsistent with backend INITIAL_POLL_DELAY constant
 - Single polling source in GameScreen (no dual-polling)

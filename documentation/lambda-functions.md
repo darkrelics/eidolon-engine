@@ -15,6 +15,7 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 18 Lambda functions deployed (19 total, cognito-player-delete not deployed). All functions fully implemented and operational in production.
 
 **Deployment Distribution:**
+
 - Character Stack: 7 functions
 - Story Stack: 9 functions
 - Player Stack: 1 function
@@ -33,6 +34,7 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 ### Story Operations (9 functions - Story Stack)
 
 **API Functions (6 total):**
+
 - `api-story-start` - Begin new story
 - `api-story-abandon` - Exit active story
 - `api-story-history` - Get story history by instance IDs
@@ -41,6 +43,7 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 - `api-segment-history` - Retrieve past segments
 
 **Operational Functions (3 total):**
+
 - `ops-segment-poller` - EventBridge-triggered polling (1 minute)
 - `ops-segment-process` - SQS mechanical processing
 - `ops-story-advance` - SQS story advancement
@@ -64,11 +67,13 @@ The bloom filter for restricted character names is properly loaded and functiona
 Functions are deployed via Character, Player, and Story stacks (not Lambda Stack).
 
 **Lambda Stack provides:**
+
 - Shared execution role
 - Shared layer (eidolon dependencies)
 - No functions deployed directly in Lambda Stack
 
 **All functions use:**
+
 - **Runtime**: Python 3.12
 - **Memory**: 128MB
 - **Timeout**: 30 seconds

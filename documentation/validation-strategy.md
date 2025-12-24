@@ -210,28 +210,33 @@ All tests passing does not mean code is correct. Critical bugs (race conditions,
 ### What We Do Instead
 
 **Integration Testing:**
+
 - Test real workflows end-to-end
 - Run against actual AWS services (local or test account)
 - Verify entire system works together
 
 **Manual Testing:**
+
 - Faster than comprehensive unit tests at this scale
 - More effective at catching real issues
 - Better aligned with actual user experience
 
 **Code Review:**
+
 - Simplicity and clarity verification
 - Correct business logic validation
 - Proper error handling checks
 - Security considerations
 
 **Production Monitoring:**
+
 - Real user behavior patterns
 - Actual error rates and types
 - Performance bottlenecks
 - Edge cases no test anticipated
 
 **Design for Correctness:**
+
 - Type hints to catch errors at development time
 - Enums instead of magic strings
 - DynamoDB conditional writes for atomic operations
@@ -241,11 +246,13 @@ All tests passing does not mean code is correct. Critical bugs (race conditions,
 ### Exceptions Where Testing Provides Value
 
 **Complex Business Logic:**
+
 - Algorithms with many edge cases (damage calculation, XP formulas)
 - Integration tests testing observable behavior
 - Minimal and focused on actual edge cases
 
 **Security-Critical Code:**
+
 - Authentication, authorization, cryptographic functions
 - Test security properties, not implementation details
 - Use security audits and code review
@@ -254,6 +261,7 @@ All tests passing does not mean code is correct. Critical bugs (race conditions,
 ### Policy Summary
 
 The Eidolon Engine does not implement unit tests because:
+
 1. Well-designed code is self-evidently correct
 2. Faulty tests create more problems than they solve
 3. Unit tests double the effort required for changes

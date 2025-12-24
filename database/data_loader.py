@@ -628,7 +628,7 @@ def display_rooms(rooms):
         print(f"  Description: {room.get('Description', 'No description')}")
         print(f"  Exits: {', '.join(room.get('ExitID', []))}")
         print(f"  Persistent: {room.get('Persistent', False)}")
-        print(f"  ScriptID: {room.get('ScriptID', '')}")       
+        print(f"  ScriptID: {room.get('ScriptID', '')}")
 
 
 def display_archetypes(archetypes):
@@ -663,7 +663,7 @@ def display_archetypes(archetypes):
         if available_stories:
             print("  Available Stories:")
             for story_id in available_stories:
-                print(f"    {story_id}")        
+                print(f"    {story_id}")
 
 
 def display_item_prototypes(prototypes):

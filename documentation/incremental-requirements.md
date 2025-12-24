@@ -91,6 +91,7 @@ This document defines the functional and non-functional requirements for the Inc
 - Room relocations (IMPLEMENTED)
 
 **Implementation Status:**
+
 - Skill/attribute XP: Fully working via segment processing
 - Item rewards: Work via segment Results field
 - Currency rewards: BROKEN - apply_story_rewards() is empty function, Resources field never populated
@@ -101,6 +102,7 @@ This document defines the functional and non-functional requirements for the Inc
 **FR-014**: Stories SHALL be authored using Twine for visual narrative design.
 
 **Implementation Status:**
+
 - Content writers use Twine for visual story authoring
 - Converter subproject transforms Twine to JSON format
 - Final JSON files stored in data/story/ directory
@@ -109,6 +111,7 @@ This document defines the functional and non-functional requirements for the Inc
 **FR-015**: The system SHALL convert Twine format to game-compatible structure.
 
 **Implementation Status:**
+
 - Formal converter subproject in development
 - Converts Twine visual narrative to JSON segment definitions
 - Output matches schema required by backend
@@ -116,6 +119,7 @@ This document defines the functional and non-functional requirements for the Inc
 **FR-016**: Content updates SHALL not affect stories in progress.
 
 **Implementation Status:**
+
 - Story and segment definitions are immutable (separate tables)
 - ActiveSegments contain snapshot of segment data
 - Content updates only affect new story starts
@@ -276,12 +280,14 @@ This document defines the functional and non-functional requirements for the Inc
 ### 5.3 Known Implementation Gaps
 
 **Critical Gaps:**
+
 1. Currency/economy system non-functional (apply_story_rewards empty)
 2. Dead characters can start stories (story_eligibility bug)
 3. Inventory displays UUIDs (get_inventory or Items table issue)
 4. Flutter polling timing violates INITIAL_POLL_DELAY specification
 
 **Missing Features:**
+
 1. Store system (no endpoints)
 2. Store system (pending)
 3. Item discarding (no api_item_discard endpoint)

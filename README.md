@@ -121,9 +121,11 @@ The engine uses a modern cloud-native architecture with a unified backend servin
 ## Implementation Status
 
 ### MUD Mode
+
 Status: Production-ready and fully functional.
 
 ### Incremental Mode
+
 Status: Core gameplay functional, but critical mechanics broken.
 
 - ✅ Character creation and progression

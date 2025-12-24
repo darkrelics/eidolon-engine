@@ -201,8 +201,8 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
                                 "SegmentTitle": next_segment_def.get("SegmentTitle", "Processing..."),
                                 "SegmentActivity": next_segment_def.get("SegmentActivity", ""),
                             }
-                    except Exception as preview_err:
-                        logger.debug(f"Could not fetch next segment preview: {preview_err}")
+                    except Exception as err:
+                        logger.debug(f"Could not fetch next segment preview: {err}")
                         # Not critical, continue without preview
 
             except Exception as err:

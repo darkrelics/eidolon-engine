@@ -13,12 +13,14 @@ The Multi-User Dungeon economy operates on a hybrid system where currency exists
 ### Fundamental Units (Hidden Layer)
 
 The **Fundamental Unit (FU)** is the atomic economic value that underlies all currency and items in the game world. This value is:
+
 - Never displayed to players
 - Used for all internal calculations
 - The basis for all economic transactions
 - Allows dynamic revaluation based on world events
 
 **Key Properties:**
+
 - All items, including coins, have a Value in FU
 - The Value field tracks total fundamental units
 - Physical coins exist as inventory items
@@ -27,20 +29,22 @@ The **Fundamental Unit (FU)** is the atomic economic value that underlies all cu
 
 Coins are physical items with prototype definitions:
 
-| Coin Type | PrototypeID | Value per Coin | Weight |
-|-----------|-------------|----------------|---------|
-| Bronze Coin | bronze-coin-001 | 10 FU | 0.01 kg |
-| Silver Coin | silver-coin-001 | 120 FU | 0.02 kg |
-| Gold Coin | gold-coin-001 | 2,400 FU | 0.05 kg |
+| Coin Type   | PrototypeID     | Value per Coin | Weight  |
+| ----------- | --------------- | -------------- | ------- |
+| Bronze Coin | bronze-coin-001 | 10 FU          | 0.01 kg |
+| Silver Coin | silver-coin-001 | 120 FU         | 0.02 kg |
+| Gold Coin   | gold-coin-001   | 2,400 FU       | 0.05 kg |
 
 ### Exchange Rates
 
 **Fixed Player-Visible Rates:**
+
 - 1 Silver = 12 Bronze
 - 1 Gold = 20 Silver
 - 1 Gold = 240 Bronze
 
 **Fundamental Conversion:**
+
 - 1 Bronze = 10 FU
 - 1 Silver = 120 FU (12 × 10)
 - 1 Gold = 2,400 FU (20 × 120)
@@ -52,6 +56,7 @@ Coins are physical items with prototype definitions:
 **Critical Design Principles**:
 
 **Stackable Items** (`"Stackable": true`):
+
 - Immutable except for Quantity field
 - Cannot have individual modifications, enchantments, or unique properties
 - All items with same PrototypeID are identical
@@ -59,6 +64,7 @@ Coins are physical items with prototype definitions:
 - Examples: coins, berries, arrows, basic materials
 
 **Non-Stackable Items** (`"Stackable": false`):
+
 - Fully mutable - can have modifications
 - Do NOT have a Quantity attribute (always implicitly 1)
 - Each instance can have unique properties (enchantments, condition, etc.)
@@ -67,29 +73,32 @@ Coins are physical items with prototype definitions:
 ### Item Storage Examples
 
 **Stackable Item** (coins, materials):
+
 ```json
 {
   "ItemID": "unique-item-uuid",
   "PrototypeID": "bronze-coin-001",
-  "Quantity": 247,  // Stack of 247 identical bronze coins
+  "Quantity": 247, // Stack of 247 identical bronze coins
   "OwnerID": "character-uuid"
 }
 ```
 
 **Non-Stackable Item** (weapon with modifications):
+
 ```json
 {
   "ItemID": "unique-sword-uuid",
   "PrototypeID": "long-sword-001",
   "OwnerID": "character-uuid",
-  "Enchantment": "flaming",  // Custom property
-  "Condition": 0.85,  // Custom property
-  "CreatedBy": "master-smith"  // Custom property
+  "Enchantment": "flaming", // Custom property
+  "Condition": 0.85, // Custom property
+  "CreatedBy": "master-smith" // Custom property
   // Note: NO Quantity field - always implicitly 1
 }
 ```
 
 **Invalid Examples**:
+
 ```json
 // INVALID - stackable item with modifications
 {
@@ -165,7 +174,7 @@ Characters have both a Value tracker and physical coin items:
 {
   "CharacterID": "uuid",
   "Resources": {
-    "Value": 3650  // Total wealth in FU for quick calculations
+    "Value": 3650 // Total wealth in FU for quick calculations
   },
   "Inventory": [
     {
@@ -271,13 +280,13 @@ Story rewards define value and items to award. The system converts value into ap
 
 ### Reward Tier Guidelines (in Value)
 
-| Outcome | Value Range | Coins Created | Rationale |
-|---------|------------|---------------|-----------|
-| Death | 0 | None | No reward for failure |
-| Failure | 50-100 | 5-10 Bronze | Consolation prize |
-| Minimal | 150-250 | 15-25 Bronze | Basic success |
-| Normal | 300-500 | 2-4 Silver + Bronze | Standard reward |
-| Exceptional | 750-1000 | 6-8 Silver + Bronze | Excellent performance |
+| Outcome     | Value Range | Coins Created       | Rationale             |
+| ----------- | ----------- | ------------------- | --------------------- |
+| Death       | 0           | None                | No reward for failure |
+| Failure     | 50-100      | 5-10 Bronze         | Consolation prize     |
+| Minimal     | 150-250     | 15-25 Bronze        | Basic success         |
+| Normal      | 300-500     | 2-4 Silver + Bronze | Standard reward       |
+| Exceptional | 750-1000    | 6-8 Silver + Bronze | Excellent performance |
 
 ### Story-Specific Modifiers
 
@@ -290,6 +299,7 @@ Different story types warrant different reward scales:
 ### Coin Generation Example
 
 When a player completes a story with 450 value reward:
+
 1. System calculates: 450 ÷ 120 = 3 silver, 90 remainder
 2. Remainder: 90 ÷ 10 = 9 bronze
 3. Creates items:
@@ -303,13 +313,13 @@ All items have a fundamental value for economic consistency:
 
 ### Value Categories
 
-| Category | FU Range | Example Items |
-|----------|----------|---------------|
-| Trivial | 1-50 | Berries, common herbs |
-| Common | 51-200 | Basic tools, simple potions |
-| Uncommon | 201-1000 | Quality weapons, armor |
-| Rare | 1001-5000 | Magic items, rare materials |
-| Legendary | 5001+ | Unique artifacts |
+| Category  | FU Range  | Example Items               |
+| --------- | --------- | --------------------------- |
+| Trivial   | 1-50      | Berries, common herbs       |
+| Common    | 51-200    | Basic tools, simple potions |
+| Uncommon  | 201-1000  | Quality weapons, armor      |
+| Rare      | 1001-5000 | Magic items, rare materials |
+| Legendary | 5001+     | Unique artifacts            |
 
 ## Economic Dynamics
 
@@ -338,6 +348,7 @@ class EconomicState:
 ### Inflation/Deflation Mechanics
 
 Future implementation can adjust FU values globally:
+
 - **Inflation**: Increase FU requirements (items cost more)
 - **Deflation**: Decrease FU requirements (items cost less)
 - **Scarcity**: Individual item/category multipliers
@@ -389,13 +400,19 @@ def calculate_buyback_price(base_value: int, condition: float = 0.8) -> int:
 {
   "success": true,
   "previous_balance": {
-    "gold": 2, "silver": 5, "bronze": 8
+    "gold": 2,
+    "silver": 5,
+    "bronze": 8
   },
   "cost": {
-    "gold": 0, "silver": 12, "bronze": 0
+    "gold": 0,
+    "silver": 12,
+    "bronze": 0
   },
   "new_balance": {
-    "gold": 1, "silver": 13, "bronze": 8
+    "gold": 1,
+    "silver": 13,
+    "bronze": 8
   }
 }
 ```
@@ -578,35 +595,41 @@ def calculate_buyback_price(base_value: int, condition: float = 0.8) -> int:
 ## Implementation Checklist
 
 ### Phase 1: Core Currency System
+
 - [ ] Add coin prototypes to `data/test_prototypes.json`
 - [ ] Add stack management functions to `eidolon/items.py`
 - [ ] Add `create_coins_from_value()` helper to `eidolon/items.py`
 
 ### Phase 2: Story Rewards
+
 - [ ] Update story JSON files with value-based rewards
 - [ ] Implement `apply_story_rewards()` to create coin items
 - [ ] Update character Value tracker on reward
 - [ ] Test coin creation from story rewards
 
 ### Phase 3: Inventory Management
+
 - [ ] Update `eidolon/items.py` with stacking logic
 - [ ] Implement stack merging on item pickup
 - [ ] Handle stack overflow (create new stacks)
 - [ ] Update inventory display for stacked items
 
 ### Phase 4: Transactions
+
 - [ ] Implement coin payment calculation
 - [ ] Handle change-making logic
 - [ ] Create store pricing functions
 - [ ] Implement purchase transaction logic
 
 ### Phase 5: API Integration
+
 - [ ] Add currency display to character API responses
 - [ ] Update inventory endpoints for stack display
 - [ ] Create coin exchange endpoints
 - [ ] Document all currency API endpoints
 
 ### Phase 6: Testing & Polish
+
 - [ ] Write unit tests for stacking system
 - [ ] Write unit tests for currency conversion
 - [ ] Integration tests for transactions

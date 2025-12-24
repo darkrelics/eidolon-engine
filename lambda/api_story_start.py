@@ -76,8 +76,8 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
                     ExpressionAttributeValues={":stories": list(available_stories)},
                 )
                 logger.info(f"Removed invalid story {story_id} from character {character_id}")
-        except Exception as cleanup_err:
-            logger.error(f"Failed to remove invalid story from character: {cleanup_err}")
+        except Exception as err:
+            logger.error(f"Failed to remove invalid story from character: {err}")
         raise ValueError("404:Story no longer exists") from err
 
     # Create story instance

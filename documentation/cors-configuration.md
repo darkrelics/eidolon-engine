@@ -49,6 +49,7 @@ All CORS logic is centralized in `eidolon/cors.py`:
 **File:** `eidolon/cors.py`
 
 **Key Features:**
+
 - Single global instance: `cors_handler`
 - Reads configuration from environment variables
 - Supports multiple origins via comma-separated ALLOWED_ORIGINS
@@ -56,8 +57,9 @@ All CORS logic is centralized in `eidolon/cors.py`:
 - Adds CORS headers to all responses automatically
 
 **Fallback Logic:**
-1. If "*" in ALLOWED_ORIGINS: Always return "*" without credentials
-2. If ALLOWED_ORIGINS empty: Return "*" without credentials (permissive degradation)
+
+1. If "_" in ALLOWED_ORIGINS: Always return "_" without credentials
+2. If ALLOWED_ORIGINS empty: Return "\*" without credentials (permissive degradation)
 3. If origin in allowed list: Return origin with credentials if enabled
 4. If single origin configured: Return that origin with credentials (fallback for mismatched origin)
 5. If multiple origins configured and origin not in list: Return None (block request)
@@ -83,6 +85,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 ```
 
 **Key Points:**
+
 - No manual origin validation needed in handlers
 - No manual CORS header construction
 - `cors_handler.handle_preflight()` handles OPTIONS requests
@@ -115,10 +118,12 @@ cd deployment && python deploy.py
 ```
 
 You will be prompted for:
+
 - Domain (e.g., `darkrelics.net`)
 - Client Host (e.g., `portal`)
 
 This constructs:
+
 - **API Gateway origin:** `https://portal.darkrelics.net`
 - **Lambda ALLOWED_ORIGINS:** `https://portal.darkrelics.net`
 
@@ -127,6 +132,7 @@ This constructs:
 The system supports multiple origins via comma-separated list:
 
 **In deployment stack:**
+
 ```python
 # Example: Support production and localhost
 allowed_origins = [
@@ -138,6 +144,7 @@ env_vars["ALLOWED_ORIGINS"] = ",".join(allowed_origins)
 ```
 
 **cors_handler automatically:**
+
 - Splits on comma
 - Validates request origin against list
 - Returns matching origin in Access-Control-Allow-Origin header
@@ -149,12 +156,14 @@ env_vars["ALLOWED_ORIGINS"] = ",".join(allowed_origins)
 The cors_handler implements strict origin validation:
 
 **From eidolon/cors.py:78-88:**
+
 ```python
 def is_origin_allowed(self, origin: str) -> bool:
     return bool(origin and origin in self.allowed_origins)
 ```
 
 **From eidolon/cors.py:90-126:**
+
 - Checks if origin is in allowed list
 - Falls back to single origin if only one configured
 - Blocks requests if multiple origins configured and origin not in list
@@ -163,11 +172,12 @@ def is_origin_allowed(self, origin: str) -> bool:
 ### Credentials Handling
 
 When `CORS_ALLOW_CREDENTIALS="true"`:
+
 - Access-Control-Allow-Credentials header added
 - Origin must be explicit (not wildcard)
 - Required for authenticated requests with JWT tokens
 
-**Note:** Wildcard origin ("*") cannot be used with credentials. If "*" is in ALLOWED_ORIGINS, credentials are automatically disabled.
+**Note:** Wildcard origin ("_") cannot be used with credentials. If "_" is in ALLOWED_ORIGINS, credentials are automatically disabled.
 
 ### Preflight Caching
 
@@ -178,6 +188,7 @@ Preflight responses are cached for 24 hours (86400 seconds) as configured in COR
 All 13 API Lambda functions use the same pattern:
 
 **Functions Using cors_handler:**
+
 - api-archetype-list
 - api-character-add
 - api-character-delete
@@ -221,6 +232,7 @@ curl -X OPTIONS https://api.yourdomain.com/character/list \
 ```
 
 Expected response:
+
 - Status: 200
 - Access-Control-Allow-Origin: https://portal.yourdomain.com
 - Access-Control-Allow-Credentials: true
@@ -235,26 +247,31 @@ curl https://api.yourdomain.com/character/list \
 ```
 
 Expected response headers:
+
 - Access-Control-Allow-Origin: https://portal.yourdomain.com
 - Access-Control-Allow-Credentials: true
 
 ### Common Issues
 
 **"Origin not in allowed list" Warning in Logs:**
+
 - Request origin doesn't match ALLOWED_ORIGINS environment variable
 - Check Lambda environment variables
 - Verify request is from correct domain
 
 **"No CORS headers in response":**
+
 - Lambda function not using cors_handler pattern
 - Verify function imports cors_handler
 - Verify function uses lambda_response() helper
 
 **"Credentials not supported with wildcard":**
-- ALLOWED_ORIGINS contains "*"
+
+- ALLOWED_ORIGINS contains "\*"
 - Change to explicit origin for credential support
 
 **CloudFront Blocking CORS:**
+
 - Ensure CloudFront distribution forwards Origin header
 - Check cache behavior settings
 
@@ -290,6 +307,7 @@ Or configure ALLOWED_ORIGINS to include localhost as shown above.
 ## Code Reference
 
 **CORS Implementation Files:**
+
 - `eidolon/cors.py` - CorsHandler class with all CORS logic
 - `eidolon/responses.py` - lambda_response() and lambda_error() helpers
 - `deployment/stacks/api_stack.py:151-152` - API Gateway CORS configuration
@@ -311,12 +329,14 @@ Or configure ALLOWED_ORIGINS to include localhost as shown above.
 ## Architecture Notes
 
 **Why Two-Layer CORS:**
+
 - API Gateway handles high-volume preflight requests efficiently
 - Lambda functions validate actual request origins with business logic
 - Environment variables allow dynamic configuration without API Gateway redeployment
 - Single origin configuration (cors_handler) ensures consistency
 
 **Security Model:**
+
 - API Gateway preflight uses explicit origin from deployment config
 - Lambda functions validate against ALLOWED_ORIGINS environment variable
 - Credentials only allowed with explicit origins (never wildcard)
