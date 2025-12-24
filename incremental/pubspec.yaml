@@ -43,7 +43,7 @@ dependencies:
 
   # Local storage
   shared_preferences: ^2.3.4
-  flutter_secure_storage: ^9.2.4
+  flutter_secure_storage: ^10.0.0
   idb_shim: ^2.6.7
 
   # HTTP requests
