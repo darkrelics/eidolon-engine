@@ -386,7 +386,7 @@ def test_authenticated_handler_with_valid_token():
 - ⚠️ Legacy `six` package (1.17.0) - consider removing
 
 **Go (45 modules):**
-- ✅ Go 1.24.0 (latest)
+- ✅ Go 1.24.11 (latest)
 - ✅ AWS SDK v2 (modern)
 - ✅ Modern crypto packages
 - ⚠️ go-fuzzywuzzy v0.0.0 (pseudo-version) - verify maintenance
