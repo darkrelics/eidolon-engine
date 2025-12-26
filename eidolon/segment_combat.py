@@ -9,7 +9,8 @@ from botocore.exceptions import ClientError
 from eidolon.constants import DEFAULT_COMBAT_ROUNDS, PLAYER_DEATH_LETHAL_WOUNDS, PLAYER_INCAPACITATED_TOTAL_WOUNDS
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.mechanics import calculate_heal_time, resolve_opposed_check_with_xp
+from eidolon.character_state import calculate_heal_time
+from eidolon.mechanics import resolve_opposed_check_with_xp
 
 
 def get_character_best_offensive_action(attributes: dict, skills: dict) -> tuple:

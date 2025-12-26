@@ -12,7 +12,7 @@ from eidolon.character_data import apply_character_updates, character_clear_stor
 from eidolon.character_segment import character_get_active_segment
 from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
-from eidolon.mechanics import calculate_heal_time
+from eidolon.character_state import calculate_heal_time
 from eidolon.state_machines import GameMode, set_character_game_mode
 from eidolon.validation import validate_uuid
 
