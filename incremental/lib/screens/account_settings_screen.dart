@@ -7,6 +7,7 @@ import 'package:eidolon_incremental/controllers/account_settings_controller.dart
 import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/providers/theme_provider.dart';
 import 'package:eidolon_incremental/screens/mfa_setup_screen.dart';
+import 'package:eidolon_incremental/services/indexeddb_service.dart';
 import 'package:eidolon_incremental/utils/error_handler.dart';
 import 'package:eidolon_incremental/widgets/shared/keyboard_shortcuts.dart';
 import 'package:flutter/material.dart';
@@ -135,6 +136,17 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
         false;
   }
 
+  Future<void> _handleClearCache() async {
+    final indexedDB = IndexedDBService();
+    await indexedDB.clearAll();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Local cache cleared'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
@@ -191,6 +203,26 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
                     subtitle: const Text('View available keyboard shortcuts'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => KeyboardShortcutHelp.show(context),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.storage),
+                    title: const Text('Storage'),
+                    subtitle: const Text('Manage local data'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.cached),
+                    title: const Text('Clear Local Cache'),
+                    subtitle: const Text('Remove cached items and prototypes'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: isLoading ? null : _handleClearCache,
                   ),
                 ],
               ),
