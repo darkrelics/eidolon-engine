@@ -224,7 +224,7 @@ def get_item_prototype_full(prototype_id: str) -> dict:
         prototype_id: Prototype UUID to fetch
 
     Returns:
-        Complete prototype data dict
+        Complete prototype data dict with Name field for client compatibility
 
     Raises:
         ValueError: If prototype not found
@@ -239,7 +239,11 @@ def get_item_prototype_full(prototype_id: str) -> dict:
     if not prototype:
         raise ValueError(f"Prototype {prototype_id} not found")
 
-    return prototype
+    # Add Name field for client compatibility (prototypes store PrototypeName)
+    result = dict(prototype)
+    result["Name"] = prototype.get("PrototypeName", prototype.get("Name", "Unknown Item"))
+
+    return result
 
 
 def build_item_payload(
@@ -265,7 +269,7 @@ def build_item_payload(
     payload = {
         "ItemID": item_id,
         "PrototypeID": prototype.get("PrototypeID", ""),
-        "Name": prototype.get("Name", "Unknown Item"),
+        "Name": prototype.get("PrototypeName", prototype.get("Name", "Unknown Item")),
         "Description": prototype.get("Description", ""),
         "Mass": prototype.get("Mass", 0),
         "Value": prototype.get("Value", 0),

@@ -40,6 +40,9 @@ class LoginScreenController extends ChangeNotifier {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
+      debugPrint('LoginScreenController: Sign in error caught: ${e.runtimeType}');
+      debugPrint('LoginScreenController: Error message: $e');
+
       if (context.mounted) {
         // Check for MFA requirement
         // Note: We check the string representation or specific error type if available
@@ -51,13 +54,18 @@ class LoginScreenController extends ChangeNotifier {
           notifyListeners();
           await _showMfaDialog(context);
         } else {
+          final errorMessage = ErrorHandler.getUserFriendlyMessage(e, context: 'signIn');
+          debugPrint('LoginScreenController: Showing error SnackBar: $errorMessage');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'signIn')),
+              content: Text(errorMessage),
               backgroundColor: Theme.of(context).colorScheme.error,
+              duration: const Duration(seconds: 4),
             ),
           );
         }
+      } else {
+        debugPrint('LoginScreenController: Context not mounted, cannot show error');
       }
     } finally {
       _isLoading = false;
@@ -67,6 +75,9 @@ class LoginScreenController extends ChangeNotifier {
 
   Future<void> _showMfaDialog(BuildContext context) async {
     final codeController = TextEditingController();
+    // Capture providers and navigator before showing dialog to avoid stale context issues
+    final authProvider = context.read<AuthProvider>();
+    final navigator = Navigator.of(context);
 
     await showDialog(
       context: context,
@@ -93,14 +104,11 @@ class LoginScreenController extends ChangeNotifier {
               if (codeController.text.length < 6) return;
 
               try {
-                final authProvider = context.read<AuthProvider>();
                 await authProvider.respondToMfaChallenge(codeController.text);
 
                 if (dialogContext.mounted) {
                   Navigator.of(dialogContext).pop(); // Close dialog
-                  if (context.mounted) {
-                    Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
-                  }
+                  navigator.pushNamedAndRemoveUntil('/', (route) => false);
                 }
               } catch (e) {
                 if (dialogContext.mounted) {

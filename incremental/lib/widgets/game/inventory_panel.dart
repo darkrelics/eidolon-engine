@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/utils/json_parser.dart';
 import 'package:eidolon_incremental/utils/rpg_icons.dart';
 import 'package:eidolon_incremental/repositories/item_repository.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
@@ -106,7 +107,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
     if (value is Map<String, dynamic>) {
       // If Quantity field exists, use it (stackable item)
       // If Quantity field missing, return 0 (non-stackable item)
-      return value['Quantity'] as int? ?? 0;
+      return JsonParser.getInt(value, 'Quantity');
     }
     return 0;
   }
@@ -400,9 +401,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
         itemId: itemId,
       );
 
-      final remainingQuantity = (result['remainingQuantity'] as num?)?.toInt() ?? 0;
-      final itemRemoved = result['itemRemoved'] as bool? ?? remainingQuantity <= 0;
-      final message = result['message'] as String? ?? 'Item consumed.';
+      final remainingQuantity = JsonParser.getInt(result, 'remainingQuantity');
+      final itemRemoved = JsonParser.getBool(result, 'itemRemoved', defaultValue: remainingQuantity <= 0);
+      final message = JsonParser.getString(result, 'message', defaultValue: 'Item consumed.');
 
       final slotsToUpdate = widget.character.inventory.entries
           .where((entry) => entry.value is Map && entry.value['ItemID'] == itemId)

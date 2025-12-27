@@ -1,3 +1,5 @@
+import 'package:eidolon_incremental/utils/json_parser.dart';
+
 /// Segment history model for tracking completed story segments
 class SegmentHistoryEntry {
   final String activeSegmentId;
@@ -77,14 +79,7 @@ class SegmentHistoryEntry {
 
   /// Get total XP earned from this segment
   int get totalXP {
-    int total = 0;
-    for (final xp in skillXP.values) {
-      if (xp is num) total += xp.toInt();
-    }
-    for (final xp in attributeXP.values) {
-      if (xp is num) total += xp.toInt();
-    }
-    return total;
+    return JsonParser.sumMapValues(skillXP) + JsonParser.sumMapValues(attributeXP);
   }
 
   /// Get a display-friendly outcome string
@@ -187,13 +182,6 @@ class StoryHistoryEntry {
 
   /// Get total XP earned from the story
   int get totalXP {
-    int total = 0;
-    for (final xp in totalSkillXP.values) {
-      if (xp is num) total += xp.toInt();
-    }
-    for (final xp in totalAttributeXP.values) {
-      if (xp is num) total += xp.toInt();
-    }
-    return total;
+    return JsonParser.sumMapValues(totalSkillXP) + JsonParser.sumMapValues(totalAttributeXP);
   }
 }

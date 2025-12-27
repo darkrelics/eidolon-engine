@@ -3,6 +3,7 @@ import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/utils/api_parser.dart';
 import 'package:eidolon_incremental/utils/api_validation.dart';
+import 'package:eidolon_incremental/utils/json_parser.dart';
 import 'base_api_service.dart';
 
 /// Character info for listing
@@ -407,12 +408,12 @@ class ArchetypeInfo {
 
   factory ArchetypeInfo.fromJson(Map<String, dynamic> json) {
     return ArchetypeInfo(
-      name: json['ArchetypeName'] as String,
-      description: json['Description'] as String? ?? '',
-      attributes: Map<String, dynamic>.from(json['Attributes'] ?? {}),
-      skills: Map<String, dynamic>.from(json['Skills'] ?? {}),
-      health: (json['Health'] as num?)?.toInt() ?? 10,
-      essence: (json['Essence'] as num?)?.toInt() ?? 3,
+      name: JsonParser.getString(json, 'ArchetypeName'),
+      description: JsonParser.getString(json, 'Description'),
+      attributes: JsonParser.getMap(json, 'Attributes'),
+      skills: JsonParser.getMap(json, 'Skills'),
+      health: JsonParser.getInt(json, 'Health', defaultValue: 10),
+      essence: JsonParser.getInt(json, 'Essence', defaultValue: 3),
     );
   }
 }
