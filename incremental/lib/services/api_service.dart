@@ -411,8 +411,8 @@ class ArchetypeInfo {
       description: json['Description'] as String? ?? '',
       attributes: Map<String, dynamic>.from(json['Attributes'] ?? {}),
       skills: Map<String, dynamic>.from(json['Skills'] ?? {}),
-      health: json['Health'] as int? ?? 10,
-      essence: json['Essence'] as int? ?? 3,
+      health: (json['Health'] as num?)?.toInt() ?? 10,
+      essence: (json['Essence'] as num?)?.toInt() ?? 3,
     );
   }
 }

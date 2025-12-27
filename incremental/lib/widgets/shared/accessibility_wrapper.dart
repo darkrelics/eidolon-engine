@@ -217,19 +217,23 @@ class _AccessibleCardState extends State<AccessibleCard> {
 /// Screen reader announcements
 class ScreenReaderAnnouncer {
   static void announce(BuildContext context, String message) {
-    SemanticsService.announce(message, TextDirection.ltr);
+    final view = View.of(context);
+    SemanticsService.sendAnnouncement(view, message, TextDirection.ltr);
   }
 
   static void announceSuccess(BuildContext context, String message) {
-    SemanticsService.announce('Success: $message', TextDirection.ltr);
+    final view = View.of(context);
+    SemanticsService.sendAnnouncement(view, 'Success: $message', TextDirection.ltr);
   }
 
   static void announceError(BuildContext context, String message) {
-    SemanticsService.announce('Error: $message', TextDirection.ltr);
+    final view = View.of(context);
+    SemanticsService.sendAnnouncement(view, 'Error: $message', TextDirection.ltr);
   }
 
   static void announceLoading(BuildContext context, String message) {
-    SemanticsService.announce('Loading: $message', TextDirection.ltr);
+    final view = View.of(context);
+    SemanticsService.sendAnnouncement(view, 'Loading: $message', TextDirection.ltr);
   }
 }
 

@@ -219,17 +219,33 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
     // First load archetypes
     List<ArchetypeInfo> archetypes = await controller.getArchetypes();
 
-    if (!mounted) return;
+    debugPrint('CharacterScreen: Got ${archetypes.length} archetypes');
+    for (final arch in archetypes) {
+      debugPrint('  Archetype: ${arch.name}, desc: ${arch.description.length} chars, health: ${arch.health}, essence: ${arch.essence}');
+    }
 
+    if (!mounted) {
+      debugPrint('CharacterScreen: Not mounted after getArchetypes, returning');
+      return;
+    }
+
+    debugPrint('CharacterScreen: Creating dialog controllers');
     final nameController = TextEditingController();
     String? selectedArchetype = archetypes.isNotEmpty ? archetypes.first.name : null;
+    debugPrint('CharacterScreen: Selected archetype: $selectedArchetype');
 
-    await showDialog(
+    debugPrint('CharacterScreen: About to show dialog');
+    try {
+      await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) {
+        debugPrint('CharacterScreen: Dialog builder called');
+        return AlertDialog(
         title: const Text('Create New Character'),
         content: StatefulBuilder(
-          builder: (context, setDialogState) => Column(
+          builder: (sbContext, setDialogState) {
+            debugPrint('CharacterScreen: StatefulBuilder builder called');
+            return Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -237,6 +253,7 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                 controller: nameController,
                 decoration: const InputDecoration(labelText: 'Character Name', hintText: 'Enter character name'),
                 textCapitalization: TextCapitalization.words,
+                autofocus: true,
               ),
               if (archetypes.isNotEmpty) ...[
                 const SizedBox(height: 16),
@@ -251,8 +268,8 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                         return Card(
                           elevation: isSelected ? 2 : 0,
                           color: isSelected
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : Theme.of(context).colorScheme.surface,
+                              ? Theme.of(sbContext).colorScheme.primaryContainer
+                              : Theme.of(sbContext).colorScheme.surface,
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           child: ListTile(
                             selected: isSelected,
@@ -265,7 +282,7 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                                     archetype.description,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    style: Theme.of(sbContext).textTheme.bodySmall,
                                   )
                                 : null,
                             onTap: () {
@@ -284,19 +301,19 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(sbContext).colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      Icon(Icons.info_outline, size: 20, color: Theme.of(sbContext).colorScheme.onSurfaceVariant),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'No archetypes available. Default stats will be used.',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                          style: Theme.of(sbContext).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(sbContext).colorScheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
                     ],
@@ -304,26 +321,33 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                 ),
               ],
             ],
-          ),
+          );
+          },
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
           FilledButton(
             onPressed: () {
               final name = nameController.text.trim();
               if (name.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a character name')));
+                ScaffoldMessenger.of(dialogContext).showSnackBar(const SnackBar(content: Text('Please enter a character name')));
                 return;
               }
 
-              Navigator.of(context).pop();
-              _createCharacter(context, name, selectedArchetype ?? 'default');
+              Navigator.of(dialogContext).pop();
+              _createCharacter(dialogContext, name, selectedArchetype ?? 'default');
             },
             child: const Text('Create'),
           ),
         ],
-      ),
+      );
+      },
     );
+      debugPrint('CharacterScreen: Dialog closed normally');
+    } catch (err, stackTrace) {
+      debugPrint('CharacterScreen: Dialog error - $err');
+      debugPrint('CharacterScreen: Stack trace - $stackTrace');
+    }
   }
 
   Future<void> _createCharacter(BuildContext context, String name, String archetype) async {
