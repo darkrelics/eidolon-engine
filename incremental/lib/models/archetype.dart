@@ -1,11 +1,11 @@
 /// Archetype definition matching server structure.
 /// Loaded dynamically from external sources.
+/// Note: Only player-selectable archetypes are returned by the API.
 class Archetype {
   final String archetypeName;
   final String description;
   final double health;
   final double essence;
-  final bool player;
   final Map<String, double> attributes;
   final Map<String, double> skills;
   final List<StartingItem> startingItems;
@@ -16,7 +16,6 @@ class Archetype {
     required this.description,
     required this.health,
     required this.essence,
-    required this.player,
     required this.attributes,
     required this.skills,
     required this.startingItems,
@@ -29,7 +28,6 @@ class Archetype {
       description: json['Description'] as String,
       health: (json['Health'] as num).toDouble(),
       essence: (json['Essence'] as num).toDouble(),
-      player: json['Player'] as bool,
       attributes: Map<String, double>.from(
         (json['Attributes'] as Map).map(
           (key, value) => MapEntry(key, (value as num).toDouble()),
@@ -55,7 +53,6 @@ class Archetype {
       'Description': description,
       'Health': health,
       'Essence': essence,
-      'Player': player,
       'Attributes': attributes,
       'Skills': skills,
       'StartingItems': startingItems.map((item) => item.toJson()).toList(),
