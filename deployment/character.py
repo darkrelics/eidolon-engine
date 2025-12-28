@@ -83,6 +83,7 @@ def validate_character_functions(region: str) -> dict:
         "api-item-use",
         "api-item-discard",
         "api-item-consolidate",
+        "api-item-split",
         "api-store-list",
         "api-store-purchase",
     ]

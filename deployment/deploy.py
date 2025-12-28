@@ -372,14 +372,9 @@ def validate_deployment_prerequisites(params) -> tuple:
 
     # Validate Lambda artifacts exist (warning only - CodeBuild may create them)
     print("\nValidating Lambda artifacts...")
-    artifacts_ok, missing, present = validate_lambda_artifacts(
-        params.s3_bucket, params.region, params.deployment_mode
-    )
+    artifacts_ok, missing, present = validate_lambda_artifacts(params.s3_bucket, params.region, params.deployment_mode)
     if not artifacts_ok:
-        warnings.append(
-            f"{len(missing)} Lambda artifacts missing from S3. "
-            "CodeBuild will create them during deployment."
-        )
+        warnings.append(f"{len(missing)} Lambda artifacts missing from S3. " "CodeBuild will create them during deployment.")
 
     # Report results
     print("\n" + "-" * 40)

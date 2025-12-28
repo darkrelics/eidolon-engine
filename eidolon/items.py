@@ -50,6 +50,13 @@ def merge_stacks(item1: dict, item2: dict) -> dict:
 
     total_quantity = item1.get("Quantity", 1) + item2.get("Quantity", 1)
 
+    # Check if merged quantity would exceed MaxStack
+    max_stack = prototype.get("MaxStack", 99)
+    if max_stack <= 0:
+        max_stack = 99
+    if total_quantity > max_stack:
+        return {}
+
     item1_id = item1.get("ItemID", "")
     item2_id = item2.get("ItemID", "")
     if not item1_id or not item2_id:
@@ -74,13 +81,14 @@ def merge_stacks(item1: dict, item2: dict) -> dict:
         }
 
 
-def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
+def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int = 1) -> tuple:
     """
-    Find an existing stack in inventory that matches the prototype.
+    Find an existing stack in inventory that matches the prototype and has room.
 
     Args:
         inventory: Dict mapping slot to item data: {slot: {"ItemID": "...", "Quantity": int}}
         prototype_id: PrototypeID to find
+        quantity_to_add: Quantity that needs to fit in the stack (default 1)
 
     Returns:
         Tuple of (slot, item_data_dict) or empty tuple if no matching stack found
@@ -88,10 +96,14 @@ def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
     if not inventory or not prototype_id:
         return ()
 
-    # Get prototype to check if stackable
+    # Get prototype to check if stackable and get MaxStack
     prototype = get_prototype(prototype_id)
     if not prototype or not prototype.get("Stackable", False):
         return ()
+
+    max_stack = prototype.get("MaxStack", 99)
+    if max_stack <= 0:
+        max_stack = 99
 
     # Check each item in inventory
     for slot, item_data in inventory.items():
@@ -106,12 +118,72 @@ def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
         try:
             item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
             if item and item.get("PrototypeID") == prototype_id:
-                # Return slot and the inventory entry (includes Quantity)
-                return (slot, item_data)
+                # Check if stack has room for the quantity
+                current_quantity = item_data.get("Quantity", 1)
+                if can_add_to_stack(current_quantity, quantity_to_add, max_stack):
+                    return (slot, item_data)
         except ClientError:
             continue
 
     return ()
+
+
+def can_add_to_stack(current_quantity: int, add_quantity: int, max_stack: int) -> bool:
+    """
+    Check if quantity can be added to a stack without exceeding MaxStack.
+
+    Args:
+        current_quantity: Current stack quantity
+        add_quantity: Quantity to add
+        max_stack: Maximum stack size from prototype
+
+    Returns:
+        True if the addition would not exceed MaxStack
+    """
+    if max_stack <= 0:
+        max_stack = 99
+    return current_quantity + add_quantity <= max_stack
+
+
+def get_stack_space(current_quantity: int, max_stack: int) -> int:
+    """
+    Calculate how many items can be added to a stack.
+
+    Args:
+        current_quantity: Current stack quantity
+        max_stack: Maximum stack size from prototype
+
+    Returns:
+        Number of items that can be added (0 if stack is full)
+    """
+    if max_stack <= 0:
+        max_stack = 99
+    return max(0, max_stack - current_quantity)
+
+
+def distribute_into_stacks(total_quantity: int, max_stack: int) -> list:
+    """
+    Split a quantity into MaxStack-compliant portions.
+
+    Args:
+        total_quantity: Total quantity to distribute
+        max_stack: Maximum stack size
+
+    Returns:
+        List of quantities, each <= max_stack
+    """
+    if max_stack <= 0:
+        max_stack = 99
+    if total_quantity <= 0:
+        return []
+
+    stacks = []
+    remaining = total_quantity
+    while remaining > 0:
+        stack_qty = min(remaining, max_stack)
+        stacks.append(stack_qty)
+        remaining -= stack_qty
+    return stacks
 
 
 def create_coins_from_value(value: int) -> list[dict]:

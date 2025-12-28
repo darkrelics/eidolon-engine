@@ -14,7 +14,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_data import character_get
 from eidolon.dynamo import TableName, dynamo
-from eidolon.items import get_item_brief, get_item_prototype_full
+from eidolon.items import distribute_into_stacks, get_item_brief, get_item_prototype_full
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
@@ -127,7 +127,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         quantity = slot_data.get("Quantity", 1)
         prototype_map[item_prototype_id].append((slot, item_id, quantity))
 
-    # Consolidate stacks
+    # Consolidate stacks with MaxStack enforcement
     consolidated_stacks = []
     updated_inventory = inventory.copy()
 
@@ -136,34 +136,72 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         if len(item_list) < 2:
             continue
 
-        # Sort by slot to keep the lowest slot number
-        item_list.sort(key=lambda x: int(x[0]))
+        # Get MaxStack from prototype
+        try:
+            prototype = get_item_prototype_full(proto_id)
+            max_stack = prototype.get("MaxStack", 99)
+            if max_stack <= 0:
+                max_stack = 99
+        except ValueError:
+            max_stack = 99
 
-        # Keep the first slot, sum up all quantities
-        keep_slot, keep_item_id, _ = item_list[0]
+        # Sort by slot to keep the lowest slot numbers
+        # Filter to only numeric slots (equipment slots like "weapon" are not consolidated)
+        numeric_items = [(s, i, q) for s, i, q in item_list if s.isdigit()]
+
+        # Only consolidate if we have multiple numeric slots
+        if len(numeric_items) < 2:
+            # If only non-numeric or single numeric slot, skip consolidation for this prototype
+            continue
+
+        # Sort numeric slots by slot number
+        numeric_items.sort(key=lambda x: int(x[0]))
+        item_list = numeric_items
+
+        # Calculate total quantity
         total_quantity = sum(qty for _, _, qty in item_list)
 
-        # Update the kept slot with total quantity
-        updated_inventory[keep_slot]["Quantity"] = total_quantity
+        # Distribute into MaxStack-compliant stacks
+        stack_quantities = distribute_into_stacks(total_quantity, max_stack)
+        stacks_needed = len(stack_quantities)
 
-        # Remove all other slots
+        # Determine which slots to keep and which to remove
+        slots_to_keep = item_list[:stacks_needed]
+        slots_to_remove = item_list[stacks_needed:]
+
+        # Update kept slots with new quantities
+        kept_slots = []
+        kept_item_ids = []
+        for i, (slot, item_id, _) in enumerate(slots_to_keep):
+            new_qty = stack_quantities[i]
+            updated_inventory[slot]["Quantity"] = new_qty
+            kept_slots.append(slot)
+            kept_item_ids.append(item_id)
+
+        # Remove excess slots
         removed_slots = []
-        for slot, item_id, qty in item_list[1:]:
+        for slot, item_id, qty in slots_to_remove:
             del updated_inventory[slot]
             removed_slots.append(slot)
 
-        consolidated_stacks.append(
-            {
-                "PrototypeID": proto_id,
-                "KeptSlot": keep_slot,
-                "KeptItemID": keep_item_id,
-                "TotalQuantity": total_quantity,
-                "StacksConsolidated": len(item_list),
-                "RemovedSlots": removed_slots,
-            }
-        )
+        # Only report as consolidated if we actually reduced the number of stacks
+        if removed_slots:
+            consolidated_stacks.append(
+                {
+                    "PrototypeID": proto_id,
+                    "KeptSlots": kept_slots,
+                    "KeptItemIDs": kept_item_ids,
+                    "TotalQuantity": total_quantity,
+                    "StacksAfterConsolidation": stacks_needed,
+                    "StacksConsolidated": len(item_list),
+                    "RemovedSlots": removed_slots,
+                }
+            )
 
-        logger.info(f"Consolidated {len(item_list)} stacks of {proto_id} " f"into slot {keep_slot} with {total_quantity} items")
+            logger.info(
+                f"Consolidated {len(item_list)} stacks of {proto_id} "
+                f"into {stacks_needed} stack(s) with {total_quantity} total items"
+            )
 
     # Update inventory if consolidation occurred
     if consolidated_stacks:

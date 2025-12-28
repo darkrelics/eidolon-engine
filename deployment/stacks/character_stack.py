@@ -99,6 +99,7 @@ class CharacterStack(Stack):
             ("api-item-use", "api_item_use.lambda_handler"),
             ("api-item-discard", "api_item_discard.lambda_handler"),
             ("api-item-consolidate", "api_item_consolidate.lambda_handler"),
+            ("api-item-split", "api_item_split.lambda_handler"),
             ("api-store-list", "api_store_list.lambda_handler"),
             ("api-store-purchase", "api_store_purchase.lambda_handler"),
         ]
@@ -142,6 +143,7 @@ class CharacterStack(Stack):
             "api-item-use": "ApiItemUseFunction",
             "api-item-discard": "ApiItemDiscardFunction",
             "api-item-consolidate": "ApiItemConsolidateFunction",
+            "api-item-split": "ApiItemSplitFunction",
             "api-store-list": "ApiStoreListFunction",
             "api-store-purchase": "ApiStorePurchaseFunction",
         }
