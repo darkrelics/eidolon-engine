@@ -2,6 +2,7 @@
 //
 // Copyright 2024‑2025 Jason E. Robinson
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
@@ -160,6 +161,10 @@ class AuthService {
   CognitoUserSession? _session;
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
   bool _isInitialized = false;
+
+  /// Lock to prevent concurrent session operations (restore, refresh)
+  /// When a session operation is in progress, subsequent callers will await the same result
+  Completer<bool>? _sessionOperationLock;
 
   static const String _accessTokenKey = 'access_token';
   static const String _idTokenKey = 'id_token';
@@ -608,7 +613,31 @@ class AuthService {
   }
 
   /// Attempts to restore previous session from stored tokens with integrity validation
+  /// Uses a lock to prevent concurrent restore operations
   Future<bool> _restoreSession() async {
+    // If a session operation is already in progress, wait for it
+    if (_sessionOperationLock != null) {
+      debugPrint('AuthService: Session restore already in progress, waiting...');
+      return _sessionOperationLock!.future;
+    }
+
+    // Create a new lock
+    _sessionOperationLock = Completer<bool>();
+
+    try {
+      final result = await _doRestoreSession();
+      _sessionOperationLock!.complete(result);
+      return result;
+    } catch (err) {
+      _sessionOperationLock!.complete(false);
+      rethrow;
+    } finally {
+      _sessionOperationLock = null;
+    }
+  }
+
+  /// Internal session restore logic
+  Future<bool> _doRestoreSession() async {
     try {
       final email = await _secureStorage.read(key: _userEmailKey);
       final accessToken = await _secureStorage.read(key: _accessTokenKey);
