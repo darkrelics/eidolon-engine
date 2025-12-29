@@ -518,8 +518,11 @@ def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[
 
         slot_key = find_next_available_slot(normalized_inventory)
         item_id = item_payload["ItemID"]
-        # Non-stackable items don't have Quantity field
-        normalized_inventory[slot_key] = {"ItemID": item_id}
+        # Build inventory entry - stackable items include Quantity
+        slot_entry = {"ItemID": item_id}
+        if item_payload.get("Stackable", False):
+            slot_entry["Quantity"] = item_payload.get("Quantity", 1)
+        normalized_inventory[slot_key] = slot_entry
         granted_items.append(item_id)
 
     if not granted_items:

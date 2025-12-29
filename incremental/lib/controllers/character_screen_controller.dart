@@ -16,11 +16,16 @@ class CharacterScreenController extends ChangeNotifier {
 
   CharacterScreenController({required ApiService apiService, required CharacterProvider characterProvider})
     : _apiService = apiService,
-      _characterProvider = characterProvider {
-    loadCharacters();
-  }
+      _characterProvider = characterProvider;
+
+  bool _loadInProgress = false;
 
   Future<void> loadCharacters() async {
+    // Prevent duplicate concurrent loads
+    if (_loadInProgress) {
+      return;
+    }
+    _loadInProgress = true;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -31,6 +36,7 @@ class CharacterScreenController extends ChangeNotifier {
     } catch (e) {
       _error = _getUserFriendlyErrorMessage(e);
     } finally {
+      _loadInProgress = false;
       _isLoading = false;
       notifyListeners();
     }
