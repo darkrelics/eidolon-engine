@@ -53,14 +53,23 @@ def get_lambda_function_arns(region: str) -> dict:
 
     # List of Lambda functions needed for API
     api_functions = [
+        # Character functions
         "api-archetype-list",
         "api-character-add",
         "api-character-get",
         "api-character-delete",
         "api-character-list",
+        # Item functions
         "api-item-brief",
         "api-item-prototype",
-        "api-item-consume",
+        "api-item-use",
+        "api-item-discard",
+        "api-item-consolidate",
+        "api-item-split",
+        # Store functions
+        "api-store-list",
+        "api-store-purchase",
+        # Story functions
         "api-story-start",
         "api-story-abandon",
         "api-story-history",
