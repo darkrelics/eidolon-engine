@@ -1,7 +1,7 @@
 #Required
 PyYAML==6.0.3
 aws-cdk-lib==2.219.0
-boto3==1.40.45
+boto3==1.42.17
 constructs==10.4.3
 uuid-extension==0.2.0
 #Dependancies
