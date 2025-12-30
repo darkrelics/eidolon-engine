@@ -39,7 +39,7 @@ The **Eidolon Engine** is a **well-architected, production-ready cloud-native ga
 | Component | Technology | Version | Lines of Code |
 |-----------|-----------|---------|---------------|
 | **Backend** | Python (AWS Lambda) | 3.12+ | ~15,000+ |
-| **Server** | Go (SSH MUD) | 1.24.0 | ~12,000+ |
+| **Server** | Go (SSH MUD) | 1.24.11 | ~12,000+ |
 | **Frontend** | Flutter/Dart | 3.32+ | ~8,000+ |
 | **Infrastructure** | AWS CDK (Python) | 2.219.0 | ~6,000+ |
 | **Scripting** | Lua | - | ~500 |
@@ -708,7 +708,7 @@ The project follows an **opinionated, pragmatic testing philosophy** documented 
 **File:** `/server/go.mod`
 
 ✅ **Strengths:**
-- Go 1.24.0 (current, released Nov 2024)
+- Go 1.24.11 (current, released Dec 2025)
 - AWS SDK v2 (modern, actively maintained)
 - Modern crypto packages (`golang.org/x/crypto v0.43.0`)
 
@@ -939,7 +939,7 @@ The project follows an **opinionated, pragmatic testing philosophy** documented 
 | Technology | Current Version | Project Version | Status |
 |------------|-----------------|-----------------|--------|
 | Python | 3.13 | 3.12+ | ✅ Current |
-| Go | 1.23 | 1.24.0 | ✅ **Latest** |
+| Go | 1.24.11 | ✅ **Latest** |
 | Flutter | 3.32 | 3.32+ | ✅ Current |
 | AWS CDK | 2.x | 2.219.0 | ✅ Current |
 | Boto3 | 1.35+ | 1.40.45 | ✅ Current |
