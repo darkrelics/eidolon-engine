@@ -81,7 +81,7 @@ def merge_stacks(item1: dict, item2: dict) -> dict:
         }
 
 
-def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int = 1) -> tuple:
+def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int = 1, owner_id: str = None) -> tuple:
     """
     Find an existing stack in inventory that matches the prototype and has room.
 
@@ -89,6 +89,7 @@ def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int
         inventory: Dict mapping slot to item data: {slot: {"ItemID": "...", "Quantity": int}}
         prototype_id: PrototypeID to find
         quantity_to_add: Quantity that needs to fit in the stack (default 1)
+        owner_id: Character ID to verify ownership (recommended to prevent cross-character merge)
 
     Returns:
         Tuple of (slot, item_data_dict) or empty tuple if no matching stack found
@@ -118,6 +119,13 @@ def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int
         try:
             item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
             if item and item.get("PrototypeID") == prototype_id:
+                # Verify ownership if owner_id provided (prevents cross-character merge)
+                if owner_id and item.get("OwnerID") and item.get("OwnerID") != owner_id:
+                    logger.warning(
+                        f"Item {item_id} ownership mismatch: expected {owner_id}, found {item.get('OwnerID')}"
+                    )
+                    continue
+
                 # Check if stack has room for the quantity
                 current_quantity = item_data.get("Quantity", 1)
                 if can_add_to_stack(current_quantity, quantity_to_add, max_stack):
@@ -1074,14 +1082,23 @@ def consume_item(character_id: str, item_id: str) -> dict:
         expression_values[":char_state"] = new_char_state
 
     try:
+        # Add conditional expression to prevent race conditions
+        # Verify the item still exists in the expected slot
+        expression_names["#slot"] = slot_key
+        expression_values[":expected_item_id"] = item_id
+
         dynamo.update_item(
             TableName.CHARACTERS,
             Key={"CharacterID": character_id},
             UpdateExpression="SET " + ", ".join(update_expression_parts),
+            ConditionExpression="Inventory.#slot.ItemID = :expected_item_id",
             ExpressionAttributeValues=expression_values,
-            ExpressionAttributeNames=expression_names if expression_names else None,
+            ExpressionAttributeNames=expression_names,
         )
     except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.warning("Item %s already consumed (race condition) for character %s", item_id, character_id)
+            raise ValueError("Item has already been consumed") from err
         logger.error("Failed to update character %s after consumption Error: %s", character_id, err, exc_info=True)
         raise RuntimeError("Failed to update character after consumption") from err
 

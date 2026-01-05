@@ -101,7 +101,10 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     current_quantity = slot_data.get("Quantity", 1)
 
     # Validate split quantity against current quantity
-    if split_quantity >= current_quantity:
+    if split_quantity > current_quantity:
+        raise ValueError(f"Cannot split {split_quantity} items from a stack of {current_quantity}")
+
+    if split_quantity == current_quantity:
         raise ValueError("Cannot split entire stack. Use a smaller quantity.")
 
     # Get item brief and prototype to verify it's stackable
@@ -139,7 +142,11 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
 
     # Update inventory
     try:
-        updated_inventory = inventory.copy()
+        # Deep copy inventory to avoid mutating the original
+        updated_inventory = {
+            k: dict(v) if isinstance(v, dict) else v
+            for k, v in inventory.items()
+        }
 
         # Update original slot with reduced quantity
         updated_inventory[slot]["Quantity"] = remaining_quantity

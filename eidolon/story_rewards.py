@@ -107,6 +107,9 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
         if not isinstance(inventory, dict):
             inventory = {}
 
+        # Capture original inventory slots for conditional check
+        original_inventory = set(inventory.keys())
+
         items_created = []
         update_expressions = []
         expression_names = {}
@@ -332,14 +335,33 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                     {":expected_currency": Decimal(str(current_value))},
                 )
             else:
-                # No currency reward, do unchecked update (only inventory items)
-                dynamo.update_item(
-                    TableName.CHARACTERS,
-                    {"CharacterID": character_id},
-                    update_expression,
-                    expression_names if expression_names else None,
-                    expression_values,
-                )
+                # No currency reward - use inventory slot check to prevent race conditions
+                # Find the first new slot we're adding to for conditional check
+                first_new_slot = None
+                for slot in inventory:
+                    if slot not in original_inventory:
+                        first_new_slot = slot
+                        break
+
+                if first_new_slot:
+                    expression_names["#check_slot"] = first_new_slot
+                    dynamo.update_item(
+                        TableName.CHARACTERS,
+                        {"CharacterID": character_id},
+                        update_expression,
+                        expression_names,
+                        expression_values,
+                        "attribute_not_exists(Inventory.#check_slot)",
+                    )
+                else:
+                    # Only updating existing stacks, no new slots - use version check
+                    dynamo.update_item(
+                        TableName.CHARACTERS,
+                        {"CharacterID": character_id},
+                        update_expression,
+                        expression_names if expression_names else None,
+                        expression_values,
+                    )
 
         logger.info(
             f"Applied story rewards for {character_id}: " f"{currency_value} currency value, " f"{len(items_created)} items created"

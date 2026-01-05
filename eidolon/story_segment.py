@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
 from eidolon.dynamo import TableName, dynamo
+from eidolon.environment import DEFAULT_SEGMENT_DURATION
 from eidolon.logger import logger
 from eidolon.time_utils import from_unix, future_unix, now_unix
 
@@ -32,7 +33,7 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, segm
     """
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "mechanical")
-    duration = int(segment.get("SegmentDuration", 300))
+    duration = int(segment.get("SegmentDuration", DEFAULT_SEGMENT_DURATION))
 
     start_time = now_unix()
     end_time = future_unix(duration)

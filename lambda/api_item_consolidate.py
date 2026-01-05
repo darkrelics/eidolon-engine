@@ -91,6 +91,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
 
     # Build a mapping of PrototypeID -> list of (slot, item_id, quantity)
     prototype_map = {}
+    orphaned_items = []  # Track items that exist in inventory but not in ITEMS table
 
     for slot, slot_data in inventory.items():
         item_id = slot_data.get("ItemID")
@@ -102,7 +103,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             item_brief = get_item_brief(item_id)
             item_prototype_id = item_brief.get("PrototypeID")
         except ValueError as err:
-            logger.warning(f"Could not get brief for item {item_id}, skipping: {err}")
+            # Orphaned item - exists in inventory but not in ITEMS table
+            logger.error(f"Orphaned item detected in slot {slot}: {item_id} - {err}")
+            orphaned_items.append({"Slot": slot, "ItemID": item_id, "Error": str(err)})
             continue
 
         # If filtering by prototype, skip non-matching items
@@ -127,9 +130,16 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         quantity = slot_data.get("Quantity", 1)
         prototype_map[item_prototype_id].append((slot, item_id, quantity))
 
+    # Clean up orphaned items from inventory
+    updated_inventory = inventory.copy()
+    for orphan in orphaned_items:
+        orphan_slot = orphan["Slot"]
+        if orphan_slot in updated_inventory:
+            del updated_inventory[orphan_slot]
+            logger.info(f"Removed orphaned item from slot {orphan_slot}")
+
     # Consolidate stacks with MaxStack enforcement
     consolidated_stacks = []
-    updated_inventory = inventory.copy()
 
     for proto_id, item_list in prototype_map.items():
         # Only consolidate if there are multiple stacks of the same prototype
@@ -203,16 +213,22 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
                 f"into {stacks_needed} stack(s) with {total_quantity} total items"
             )
 
-    # Update inventory if consolidation occurred
-    if consolidated_stacks:
+    # Update inventory if consolidation occurred or orphaned items were cleaned
+    if consolidated_stacks or orphaned_items:
         try:
-            # ✅ FIX BUG #3: Use conditional update to prevent race conditions
-            # Check that the first removed slot still exists (if inventory changed, consolidation is stale)
-            # Get first consolidated entry to validate against
-            first_stack = consolidated_stacks[0]
-            first_removed_slot = first_stack["RemovedSlots"][0] if first_stack["RemovedSlots"] else None
+            # Determine which slot to use for conditional check
+            # Prefer consolidated slots, but fall back to orphaned slots
+            check_slot = None
 
-            if first_removed_slot:
+            if consolidated_stacks:
+                first_stack = consolidated_stacks[0]
+                if first_stack.get("RemovedSlots"):
+                    check_slot = first_stack["RemovedSlots"][0]
+
+            if not check_slot and orphaned_items:
+                check_slot = orphaned_items[0]["Slot"]
+
+            if check_slot:
                 # Ensure the slot we're about to remove still exists in its original state
                 dynamo.update_item(
                     TableName.CHARACTERS,
@@ -220,7 +236,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
                     UpdateExpression="SET Inventory = :inventory",
                     ConditionExpression="attribute_exists(Inventory.#check_slot)",
                     ExpressionAttributeNames={
-                        "#check_slot": first_removed_slot,
+                        "#check_slot": check_slot,
                     },
                     ExpressionAttributeValues={":inventory": updated_inventory},
                 )
@@ -252,6 +268,11 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         "ConsolidatedStacks": consolidated_stacks,
         "TotalStacksRemoved": sum(len(cs["RemovedSlots"]) for cs in consolidated_stacks),
     }
+
+    # Include orphaned items if any were found and cleaned
+    if orphaned_items:
+        response_body["OrphanedItemsCleaned"] = orphaned_items
+        response_body["Message"] = f"{message}. Cleaned {len(orphaned_items)} orphaned inventory slot(s)."
 
     logger.info(f"Stack consolidation for character {character_id}: {len(consolidated_stacks)} types")
 

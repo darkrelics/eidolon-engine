@@ -5,6 +5,7 @@ Provides functions for formatting segment data for API responses.
 """
 
 from eidolon.constants import INITIAL_POLL_DELAY
+from eidolon.environment import DEFAULT_SEGMENT_DURATION
 from eidolon.time_utils import from_unix, now_unix
 
 
@@ -21,7 +22,7 @@ def new_segment_response(active_segment: dict, segment: dict) -> dict:
     """
     # Use active segment times if available, otherwise calculate from now
     start_time_unix = active_segment.get("StartTime", now_unix())
-    segment_duration = segment.get("SegmentDuration", 60)  # Default 60 seconds
+    segment_duration = segment.get("SegmentDuration", DEFAULT_SEGMENT_DURATION)
     end_time_unix = active_segment.get("EndTime", start_time_unix + segment_duration)
 
     # Always convert to valid ISO strings - never empty

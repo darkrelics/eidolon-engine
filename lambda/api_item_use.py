@@ -127,26 +127,18 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Check if item is stackable (typically consumable)
     is_stackable = prototype.get("Stackable", False)
 
-    # Apply item effects
-    try:
-        effect_result = apply_item_effects(character_id, prototype)
-    except ValueError as err:
-        logger.warning(f"Item use failed: {err}")
-        raise ValueError(f"400:{err}") from err
-    except RuntimeError as err:
-        logger.error(f"Failed to apply item effects: {err}")
-        raise RuntimeError("Failed to use item") from err
+    # IMPORTANT: Update inventory FIRST before applying effects
+    # This prevents double-consumption exploits where effects are applied
+    # but the inventory update fails due to race condition
 
     # Update inventory: decrement quantity or remove item
     try:
-        character_update = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-        if not character_update:
-            raise RuntimeError("Character not found after effect application")
+        # Deep copy current inventory to avoid mutations
+        current_inventory = {
+            k: dict(v) if isinstance(v, dict) else v
+            for k, v in inventory.items()
+        }
 
-        current_inventory = character_update.get("Inventory", {})
-
-        # ✅ FIX BUG #6: Safe to delete because we validated consumability above
-        # Only consumable items reach this point (checked at line 122)
         if is_stackable and item_quantity and item_quantity > 1:
             # Decrement quantity for stackable consumables
             current_inventory[found_slot]["Quantity"] = item_quantity - 1
@@ -158,7 +150,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             logger.info(f"Consumed item {item_id} from inventory slot {found_slot}")
             item_consumed = True
 
-        # ✅ FIX BUG #2: Use conditional update to prevent race conditions
+        # Use conditional update to prevent race conditions
         # Ensures item still exists in the same slot (prevents double-use exploits)
         dynamo.update_item(
             TableName.CHARACTERS,
@@ -182,6 +174,20 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
 
         logger.error(f"Failed to update inventory for {character_id}: {err}")
         raise RuntimeError("Failed to update inventory") from err
+
+    # Apply item effects AFTER inventory is successfully updated
+    # This ensures we don't apply effects if the item was already consumed
+    try:
+        effect_result = apply_item_effects(character_id, prototype)
+    except ValueError as err:
+        # Effects failed after inventory update - log but continue
+        # The item is consumed, just the effect didn't apply fully
+        logger.warning(f"Item effects partially applied for {item_id}: {err}")
+        effect_result = {"effects_applied": [], "message": f"Item used but effect limited: {err}"}
+    except RuntimeError as err:
+        logger.error(f"Failed to apply item effects after inventory update: {err}")
+        # Item is consumed but effects failed - this is rare but we should report
+        effect_result = {"effects_applied": [], "message": "Item consumed but effects failed to apply"}
 
     # Build response
     prototype_name = prototype.get("PrototypeName", "Unknown Item")

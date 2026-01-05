@@ -38,6 +38,8 @@ def check_character_limit(player_id: str) -> bool:
     """
     Check if player has reached character limit.
 
+    Only counts non-dead characters toward the limit.
+
     Args:
         player_id: Cognito user ID.
 
@@ -56,7 +58,12 @@ def check_character_limit(player_id: str) -> bool:
             raise ValueError(f"Player {player_id} not found")
 
         character_list = player.get("CharacterList", {})
-        current_count = len(character_list)
+
+        # Count only non-dead characters toward the limit
+        current_count = 0
+        for char_name, char_info in character_list.items():
+            if isinstance(char_info, dict) and not char_info.get("Dead", False):
+                current_count += 1
 
         return current_count < MAX_CHARACTERS_PER_PLAYER
 
@@ -299,7 +306,11 @@ def character_get(character_id: str, player_id: str) -> dict:
 
 def create_character_record(character_item: dict) -> bool:
     """
-    Create character record in database with atomic name check.
+    Create character record in database.
+
+    Note: Name uniqueness is primarily enforced by the query in create_character().
+    The conditional here prevents overwriting an existing character with the
+    same CharacterID (which shouldn't happen with UUID generation).
 
     Args:
         character_item: Complete character record to create
@@ -308,19 +319,24 @@ def create_character_record(character_item: dict) -> bool:
         True if created successfully
 
     Raises:
-        ValueError: If character name is already taken
+        ValueError: If character with this ID already exists
         RuntimeError: If database operation fails
     """
     try:
-        # Use conditional put - only succeeds if name doesn't exist
-        dynamo.put_item(TableName.CHARACTERS, character_item, ConditionExpression="attribute_not_exists(CharacterName)")
+        # Conditional ensures we don't overwrite an existing character
+        # Note: Name uniqueness is enforced by query check in create_character()
+        dynamo.put_item(
+            TableName.CHARACTERS,
+            character_item,
+            ConditionExpression="attribute_not_exists(CharacterID)",
+        )
         logger.info(f"Character record created successfully for {character_item.get('CharacterID')}")
         return True
     except ClientError as err:
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            # Name already taken - convert to ValueError for proper HTTP status
-            logger.info(f"Character name '{character_item.get('CharacterName')}' already taken")
-            raise ValueError("Character name is already taken") from err
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            # CharacterID collision (extremely rare with UUIDs) or retry
+            logger.warning(f"Character ID collision for {character_item.get('CharacterID')}")
+            raise ValueError("Character creation failed - please try again") from err
         logger.error(f"Failed to create character record for {character_item.get('CharacterName')} Error: {err}")
         raise RuntimeError(f"Failed to create character record: {err}") from err
 

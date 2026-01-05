@@ -579,6 +579,86 @@ class DynamoInterface:
 
         return failed_items
 
+    @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
+    def transact_write_items(self, transact_items: list) -> dict:
+        """
+        Perform a transactional write across multiple tables atomically.
+
+        All operations in a transaction either succeed together or fail together.
+        Useful for ensuring data consistency when writing to multiple tables.
+
+        Args:
+            transact_items: List of transaction operations, each containing one of:
+                - Put: {"TableName": str, "Item": dict, "ConditionExpression": str (optional)}
+                - Update: {"TableName": str, "Key": dict, "UpdateExpression": str, ...}
+                - Delete: {"TableName": str, "Key": dict, "ConditionExpression": str (optional)}
+                - ConditionCheck: {"TableName": str, "Key": dict, "ConditionExpression": str}
+
+        Returns:
+            Response from DynamoDB transact_write_items
+
+        Raises:
+            ClientError: If transaction fails (e.g., condition check failed)
+
+        Example:
+            transact_items = [
+                {
+                    "Put": {
+                        "TableName": TABLE_ENV_MAP[TableName.STORY_HISTORY],
+                        "Item": history_item,
+                    }
+                },
+                {
+                    "Put": {
+                        "TableName": TABLE_ENV_MAP[TableName.ACTIVE_SEGMENTS],
+                        "Item": segment_item,
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
+                        "Key": {"CharacterID": character_id},
+                        "UpdateExpression": "SET ActiveStoryID = :story",
+                        "ConditionExpression": "attribute_not_exists(ActiveStoryID)",
+                        "ExpressionAttributeValues": {":story": story_id},
+                    }
+                },
+            ]
+            dynamo.transact_write_items(transact_items)
+        """
+        logger.debug(f"DB Interface: TransactWriteItems with {len(transact_items)} operations")
+
+        # Clean all items in the transaction
+        cleaned_items = []
+        for item in transact_items:
+            cleaned_item = {}
+            for op_type, op_data in item.items():
+                cleaned_op = {}
+                for key, value in op_data.items():
+                    if key == "Item":
+                        cleaned_op[key] = clean_value(value)
+                    elif key == "ExpressionAttributeValues":
+                        cleaned_op[key] = clean_value(value)
+                    else:
+                        cleaned_op[key] = value
+                cleaned_item[op_type] = cleaned_op
+            cleaned_items.append(cleaned_item)
+
+        try:
+            response = self._client.transact_write_items(TransactItems=cleaned_items)
+        except ClientError as err:
+            error_code = err.response.get("Error", {}).get("Code", "")
+            if error_code == "TransactionCanceledException":
+                # Extract cancellation reasons for debugging
+                reasons = err.response.get("CancellationReasons", [])
+                reason_codes = [r.get("Code", "Unknown") for r in reasons if r.get("Code")]
+                logger.error(f"Transaction cancelled: {reason_codes}")
+            logger.error(f"Error in transact_write_items Error: {err}")
+            raise
+
+        logger.debug("DB Interface: TransactWriteItems: Success")
+        return response
+
 
 def clean_value(value: object) -> object:
     """Helper function to ensure all data passed to DynamoDB is formatted as expected by the SDK."""
