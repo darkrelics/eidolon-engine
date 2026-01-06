@@ -18,7 +18,7 @@ defusedxml==0.7.1
 filelock==3.20.1
 html5lib==1.1
 idna==3.11
-importlib-metadata==8.7.0
+importlib-metadata==8.7.1
 license-expression==30.4.4
 markdown-it-py==4.0.0
 mdurl==0.1.2
