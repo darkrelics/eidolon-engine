@@ -4,7 +4,7 @@ black==25.9.0
 isort==6.1.0
 pip-audit==2.9.0
 pyupgrade==3.21.0
-ruff==0.14.1
+ruff==0.14.10
 yapf==0.43.0
 #Supporting Packages
 CacheControl==0.14.3
