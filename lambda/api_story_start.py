@@ -1,10 +1,13 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to start a story for a character.
 Validates character state, creates active segment, and returns first segment details.
+
+Endpoint: POST /story/start
+Authentication: Cognito (required)
 """
 
 from eidolon.character_data import character_get

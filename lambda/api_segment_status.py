@@ -1,10 +1,13 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to get the status of an active segment.
 Returns segment completion status and any available results.
+
+Endpoint: GET /segment/status
+Authentication: Cognito (required)
 """
 
 import time

@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to consolidate stackable item stacks in character inventory.
 Merges multiple separate stacks of the same item into a single stack.

@@ -1,9 +1,14 @@
 """
 Eidolon Engine - Incremental Game
 
+Copyright 2024-2026 Jason E. Robinson
+
 Lambda function to retrieve story history entries for a character.
 Accepts up to 10 story instance IDs (UUIDv7) provided by the client and
 returns the corresponding story history records if the character owns them.
+
+Endpoint: GET /story/history
+Authentication: Cognito (required)
 """
 
 from botocore.exceptions import ClientError

@@ -1,10 +1,13 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to abandon an active story.
 Updates character state, marks active segments as abandoned, and updates history.
+
+Endpoint: POST /story/abandon
+Authentication: Cognito (required)
 """
 
 from botocore.exceptions import ClientError

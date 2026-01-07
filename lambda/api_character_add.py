@@ -1,4 +1,14 @@
-"""Lambda function to add a new character for the incremental game."""
+"""
+Eidolon Engine - Incremental Game
+
+Copyright 2024-2026 Jason E. Robinson
+
+Lambda function to add a new character for the incremental game.
+Validates character name, checks bloom filter and character limit, then creates character.
+
+Endpoint: POST /character/add
+Authentication: Cognito (required)
+"""
 
 from eidolon.archetypes import get_archetype
 from eidolon.bloom import character_name_filter

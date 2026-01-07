@@ -1,10 +1,13 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to retrieve segment history for a character.
 Returns completed segment results from the character's story history.
+
+Endpoint: GET /segment/history
+Authentication: Cognito (required)
 """
 
 from botocore.exceptions import ClientError
