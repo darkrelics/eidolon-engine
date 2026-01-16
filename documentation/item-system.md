@@ -53,6 +53,7 @@ Items marked with `"Stackable": true` in their prototype are fungible - every in
 ```
 
 **Only these fields are valid for stackable items**:
+
 - `ItemID`: Unique identifier for this stack
 - `PrototypeID`: Reference to item prototype
 - `Quantity`: Number of items in stack (1 or more)
@@ -97,6 +98,7 @@ Items marked with `"Stackable": false` in their prototype are unique instances t
 ```
 
 **Allowed fields for non-stackable items**:
+
 - All base fields (ItemID, PrototypeID, OwnerID, LocationID)
 - Any custom properties defined by game logic
 - NO Quantity field
@@ -112,9 +114,9 @@ All items reference a prototype that defines their base properties:
   "PrototypeID": "item-type-001",
   "PrototypeName": "Item Name",
   "Description": "Base description",
-  "Stackable": true,  // CRITICAL: Determines item type
-  "Value": 10,        // REQUIRED: All items must have value for economy
-  "Mass": 0.1,        // Weight in kg
+  "Stackable": true, // CRITICAL: Determines item type
+  "Value": 10, // REQUIRED: All items must have value for economy
+  "Mass": 0.1, // Weight in kg
   "Wearable": false,
   "WornOn": [],
   "Container": false,
@@ -174,6 +176,7 @@ def get_stack_display_name(prototype: dict, quantity: int) -> str:
 ```
 
 Examples:
+
 - 1 coin: "a bronze coin"
 - 2 coins: "2 bronze coins"
 - 10 arrows: "10 arrows"
@@ -351,18 +354,21 @@ def validate_non_stackable_item(item: dict, prototype: dict) -> list:
 **Performance**: Stackable items as single entries dramatically reduce database operations for common items like coins and materials.
 
 **Gameplay**: Non-stackable items enable rich RPG mechanics like:
+
 - Weapon enchantment and naming
 - Item wear and repair
 - Crafting with maker's marks
 - Unique quest items
 
 **Economy**: Clear distinction between:
+
 - Fungible currency and materials (stackable)
 - Unique equipment and artifacts (non-stackable)
 
 ### Why Immutable Stacks?
 
 If stackable items could have individual properties, they couldn't stack efficiently. By making them immutable:
+
 - Stack merging is simple
 - No confusion about which properties apply
 - Database queries are efficient
@@ -375,12 +381,14 @@ Non-stackable items are unique instances. Having a quantity would be meaningless
 ## Future Enhancements
 
 ### Phase 2
+
 - Container items that can hold stacks
 - Stack quick-actions (split in half, take one)
 - Visual stack indicators in UI
 - Bulk operations on stacks
 
 ### Phase 3
+
 - Quality variations within stackable items (separate stacks by quality)
 - Transmutation of stacks (combine materials)
 - Stack-based crafting recipes

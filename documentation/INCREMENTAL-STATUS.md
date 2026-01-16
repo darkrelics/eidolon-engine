@@ -66,6 +66,7 @@ This document provides an honest assessment of the Incremental mode implementati
 **Lambda Functions Implemented (23 total):**
 
 **Character Management (5 functions):**
+
 - ✅ `api_archetype_list.py` - List available archetypes
 - ✅ `api_character_add.py` - Create new character
 - ✅ `api_character_delete.py` - Delete character
@@ -73,6 +74,7 @@ This document provides an honest assessment of the Incremental mode implementati
 - ✅ `api_character_list.py` - List player's characters
 
 **Item Management (7 functions - 5 new in Nov 2025):**
+
 - ✅ `api_item_brief.py` - Get item ID and prototype reference
 - ✅ `api_item_prototype.py` - Get item prototype definition
 - ✅ `api_item_use.py` - **NEW** Use consumable items (healing, effects)
@@ -82,6 +84,7 @@ This document provides an honest assessment of the Incremental mode implementati
 - ✅ `api_store_purchase.py` - **NEW** Purchase items with currency
 
 **Story Management (6 functions):**
+
 - ✅ `api_segment_decision.py` - Submit decision choice
 - ✅ `api_segment_history.py` - Get segment history
 - ✅ `api_segment_status.py` - Poll segment processing status
@@ -90,10 +93,12 @@ This document provides an honest assessment of the Incremental mode implementati
 - ✅ `api_story_start.py` - Start new story
 
 **Player Management (2 functions):**
+
 - ✅ `cognito_player_delete.py` - Delete player account
 - ✅ `cognito_player_new.py` - Create new player
 
 **Operations (3 functions):**
+
 - ✅ `ops_segment_poller.py` - EventBridge-triggered segment polling
 - ✅ `ops_segment_process.py` - Process mechanical segments
 - ✅ `ops_story_advance.py` - Advance story after segment completion
@@ -233,7 +238,6 @@ When a character dies:
 - ✅ `eidolon/story_validation.py` - Added CharState death check (line 68-70)
 - ✅ `lambda/api_story_start.py` - Enhanced error handling (line 50-54)
 
-
 ---
 
 ### ✅ Combat Opponent Defeat Logic
@@ -258,7 +262,6 @@ When a character dies:
 - ✅ `eidolon/segment_combat.py` - Simplified defeat logic (line 295-297)
 - ✅ `eidolon/constants.py` - Removed obsolete multiplier constant
 
-
 **Note on Opponent Persistence:**
 
 - Opponents respawn each story by design - each story is a fresh encounter
@@ -274,11 +277,13 @@ When a character dies:
 **Implementation:**
 
 Currency system with three coin types:
+
 - Bronze Coin: 10 FU (Fundamental Units)
 - Silver Coin: 120 FU
 - Gold Coin: 2400 FU
 
 Story reward values:
+
 - Death: 0 FU
 - Failure: 40-60 FU
 - Minimal: 120-180 FU
@@ -286,6 +291,7 @@ Story reward values:
 - Exceptional: 480-720 FU
 
 Backend changes:
+
 - Updated all 3 story JSON files with proper RewardTiers structure
 - Added bronze/silver/gold coin prototypes to test_prototypes.json
 - Implemented `apply_story_rewards()` function (199 lines)
@@ -406,6 +412,7 @@ The inventory display system was implemented with the following architecture:
 **Result:** Players now see "Bronze Coin x5" and "Iron Sword" instead of UUIDs
 
 **Performance Improvements:**
+
 - Load time: 4-10 seconds → <500ms (95% improvement)
 - API calls for 20 items: 20 calls → ~5 calls (75% reduction)
 - Data transfer: 200KB → 12KB (94% reduction)
@@ -491,11 +498,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **Why:** Players can't see what items they have. Most immediate broken experience.
 
 **Backend Status:** ✅ COMPLETE (2025-10-21)
+
 - ✅ api_item_brief.py updated (returns ItemID + PrototypeID + Quantity)
 - ✅ api_item_prototype.py exists (returns full prototype data)
 - ✅ Inventory schema supports Quantity field
 
 **Frontend Status:** ✅ COMPLETE (2025-10-21)
+
 - ✅ item_repository.dart implemented (288 lines, three-tier caching)
 - ✅ inventory_panel.dart integrated with IndexedDB (displays item names and quantities)
 - ✅ IndexedDB initialization added to main.dart
@@ -521,6 +530,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **Result:** Players see "Bronze Coin x5" and "Iron Sword" instead of UUIDs.
 
 <<<<<<< HEAD
+
 ### ✅ Implement Item Consumption
 
 **Status:** COMPLETE (2025-10-22)
@@ -607,6 +617,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **Why:** Maintainability and adherence to project standards (300-line guideline).
 
 **Original Target Functions:**
+
 - `lambda/api_segment_status.py` (359 lines)
 - `lambda/ops_story_advance.py` (315 lines)
 
@@ -624,6 +635,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
    - Reduced from 359 → 342 lines (47% of needed reduction)
 
 **Final State:**
+
 - `lambda/api_segment_status.py`: 342 lines (42 over guideline, 12% over)
 - `lambda/ops_story_advance.py`: 315 lines (15 over guideline, 5% over)
 - Both are **acceptable exceptions** due to complex orchestration logic
@@ -799,6 +811,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
 - ❌ Large Lambda functions exceed project standards (api_segment_status.py 359 lines, ops_story_advance.py 315 lines)
 
 **For MVP:**
+
 - Need item consumption and store system
 - Code refactoring is optional
 

@@ -781,22 +781,18 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 **Object Stores (5 total):**
 
 1. **stories** - Completed story history
-
    - Key: [characterId, storyInstanceId]
    - Indexes: by-character, by-completion-date, by-outcome, by-story-type
 
 2. **story_segments** - Completed segment history
-
    - Key: [characterId, storyInstanceId, activeSegmentId]
    - Indexes: by-story-instance, by-segment-type, by-outcome
 
 3. **characters** - Character data cache
-
    - Key: characterId
    - Indexes: by-player, by-last-updated
 
 4. **items** - Item instances
-
    - Key: itemId
    - Index: by-character
    - Stores: ItemID + PrototypeID only

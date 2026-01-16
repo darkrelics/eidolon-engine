@@ -37,6 +37,7 @@ Scripts are automatically uploaded during S3 stack deployment.
 **Automatic Upload:**
 
 When deploying MUD or Hybrid mode, the S3 stack (Phase 7) automatically:
+
 1. Creates S3 bucket (if needed)
 2. Uploads all files from scripts_lua/ directory
 3. Scripts uploaded to scripts/ prefix in bucket
@@ -327,6 +328,7 @@ When updating scripts:
 4. Monitor logs for any errors after deployment
 
 **Deployment Modes:**
+
 - MUD Mode: S3 stack deployed, scripts uploaded
 - Incremental Mode: S3 stack NOT deployed (no Lua scripting)
 - Hybrid Mode: S3 stack deployed, scripts uploaded

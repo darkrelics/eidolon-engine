@@ -23,6 +23,7 @@ Following the comprehensive security audit documented in `CRITICAL-BUGS-FOUND.md
 **Problem**: Read-modify-write without conditional update allowed duplicate purchases
 
 **Fix Applied**:
+
 ```python
 # Added ConditionExpression to purchase_item()
 ConditionExpression="#resources.#value = :expected_currency"
@@ -33,6 +34,7 @@ if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException
 ```
 
 **Impact**:
+
 - Prevents infinite money exploits
 - Concurrent purchases now fail with 409 Conflict (safe retry)
 - Currency deduction is truly atomic now
@@ -46,6 +48,7 @@ if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException
 **Problem**: Multiple DB writes allowed double-use of consumables
 
 **Fix Applied**:
+
 ```python
 # Added conditional update to ensure item still exists
 ConditionExpression="Inventory.#slot.ItemID = :expected_item_id"
@@ -56,6 +59,7 @@ if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException
 ```
 
 **Impact**:
+
 - Prevents item duplication exploits
 - Concurrent item uses now fail gracefully
 - Players get clear error message to refresh
@@ -67,6 +71,7 @@ if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException
 ### ✅ BUG #3 FIXED: Inventory Operation Race Conditions
 
 **Files Fixed**:
+
 - `lambda/api_item_discard.py:143-166`
 - `lambda/api_item_consolidate.py:171-204`
 - `eidolon/story_rewards.py:212-249`
@@ -76,24 +81,28 @@ if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException
 **Fixes Applied**:
 
 **Discard**:
+
 ```python
 ConditionExpression="Inventory.#slot.ItemID = :expected_item_id"
 # Ensures item still exists before discarding
 ```
 
 **Consolidate**:
+
 ```python
 ConditionExpression="attribute_exists(Inventory.#check_slot)"
 # Ensures inventory hasn't changed before consolidation
 ```
 
 **Story Rewards**:
+
 ```python
 ConditionExpression="#resources.#check_value = :expected_currency"
 # Prevents double-reward if story completes twice
 ```
 
 **Impact**:
+
 - All inventory operations now race-condition safe
 - Prevents item loss and corruption
 - Prevents duplicate rewards
@@ -103,17 +112,20 @@ ConditionExpression="#resources.#check_value = :expected_currency"
 ### ✅ BUG #4 FIXED: Stock Management
 
 **Files Changed**:
+
 - `data/store_general_store.json`: All Stock values → -1 (unlimited)
 - `eidolon/store.py:170-177`: Added TODO documentation
 
 **Problem**: Stock checked but never decremented (static JSON file)
 
 **Fix Applied**:
+
 - Set all items to Stock=-1 (unlimited) for MVP
 - Added clear documentation that stock tracking is not implemented
 - Added TODO for future DynamoDB-based stock management
 
 **Impact**:
+
 - No longer misleading players about "limited stock"
 - Documented limitation clearly
 - Prevents confusion
@@ -129,6 +141,7 @@ ConditionExpression="#resources.#check_value = :expected_currency"
 **Problem**: No check if item is actually consumable (could "use" weapons/armor)
 
 **Fix Applied**:
+
 ```python
 # Validate item has consumable effects before allowing use
 metadata = prototype.get("Metadata", {})
@@ -141,6 +154,7 @@ if not (has_healing or has_nutrition or has_buff):
 ```
 
 **Impact**:
+
 - Prevents using non-consumable items
 - Clear error message for players
 - Protects equipment from accidental deletion
@@ -154,11 +168,13 @@ if not (has_healing or has_nutrition or has_buff):
 **Problem**: Using non-stackable items deleted them permanently
 
 **Fix Applied**:
+
 - Added validation (Bug #5) prevents non-consumables from being used
 - Added clarifying comments that deletion is safe now
 - Improved logging to say "Consumed" instead of "Removed"
 
 **Impact**:
+
 - Equipment can no longer be accidentally deleted
 - Only validated consumables reach deletion code
 - Data loss prevented
@@ -172,6 +188,7 @@ if not (has_healing or has_nutrition or has_buff):
 **Problem**: API could deploy without auth if Cognito ARN not configured
 
 **Fix Applied**:
+
 ```python
 # Fail fast if Cognito not configured
 if not self.cognito_user_pool_arn:
@@ -185,6 +202,7 @@ authorization_type=apigateway.AuthorizationType.COGNITO  # No more conditional
 ```
 
 **Impact**:
+
 - Deployment fails if authentication not configured (fail-safe)
 - No risk of accidentally deploying public API
 - Clear error message guides fix
@@ -198,6 +216,7 @@ authorization_type=apigateway.AuthorizationType.COGNITO  # No more conditional
 **Problem**: `list(entry.keys())[0]` crashed if entry was empty dict
 
 **Fix Applied**:
+
 ```python
 # Validate structure before accessing
 if not isinstance(entry, dict) or len(entry) != 1:
@@ -211,10 +230,12 @@ if not isinstance(story_data, dict):
 ```
 
 **Documentation**:
+
 - Updated docstring with expected structure examples
 - Documented that malformed entries are skipped
 
 **Impact**:
+
 - No more crashes on corrupted data
 - Graceful degradation (skip bad entries)
 - Helpful logging for debugging
@@ -309,6 +330,7 @@ except ClientError as err:
 The codebase has been systematically hardened against the 8 critical bugs identified in the security audit. All race conditions now have proper conditional updates, all dangerous operations have validation, and deployment security has been enforced.
 
 **Status Change**:
+
 - **Before**: NOT PRODUCTION READY (8 critical bugs)
 - **After**: READY FOR INTEGRATION TESTING (all critical bugs fixed)
 

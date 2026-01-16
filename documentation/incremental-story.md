@@ -147,20 +147,17 @@ stateDiagram-v2
 ### Story Lifecycle
 
 1. **Initialization** (from prototype):
-
    - Story definitions loaded from Story table
    - Available stories determined by archetype and prerequisites
    - Added to character's AvailableStories list
 
 2. **Activation**:
-
    - Player selects story via api-story-start
    - First segment copied from Segments table
    - ActiveSegment instance created with calculated outcomes
    - Character state atomically updated
 
 3. **Progression**:
-
    - Segments advance one by one
    - Each segment completion triggers next segment creation
    - Story remains active until terminal outcome or completion
@@ -194,6 +191,7 @@ Stories have a `StoryType` field that determines their repeatability:
    - Example: Combat training, random encounters
 
 **CompletedStories Structure:**
+
 ```json
 "CompletedStories": [
   {"story-uuid-1": {"StoryType": "one-time", "CompletedAt": 1729468900}},
@@ -202,6 +200,7 @@ Stories have a `StoryType` field that determines their repeatability:
 ```
 
 **Story Eligibility Logic:**
+
 - Check AvailableStories list (must be present)
 - Check CompletedStories for story ID:
   - If found with `StoryType: "one-time"` → Blocked permanently
@@ -354,6 +353,7 @@ Non-combat challenges should generally result in segment repetition on failure, 
 - **Skill checks without consequences**: Any challenge where failure doesn't change the physical situation
 
 Example branching for investigation challenge:
+
 ```json
 "Results": {
   "Failure": {
@@ -375,6 +375,7 @@ Example branching for investigation challenge:
 - **Irreversible actions**: Attempts that cannot be undone once initiated
 
 Example branching for tumbling while climbing:
+
 ```json
 "Results": {
   "Failure": {
@@ -576,27 +577,23 @@ Use `scripts_python/validate_branching.py` to validate:
 ### Segment Lifecycle
 
 1. **Creation** (from prototype):
-
    - Segment definition loaded from Segments table
    - ActiveSegment instance created with UUID
    - All outcomes calculated immediately (front-loaded)
    - ClientEvents generated for entire duration
 
 2. **Processing** (mechanical only):
-
    - Poller detects segment ready for processing
    - Queued to SQS for ops-segment-process
    - Challenges evaluated, combat simulated
    - XP and wounds applied to character
 
 3. **Waiting**:
-
    - Segment timer runs (SegmentDuration)
    - Client displays events over time
    - No server processing during wait
 
 4. **Advancement**:
-
    - Poller detects EndTime reached
    - Queued to SQS for ops-story-advance
    - Character updates applied

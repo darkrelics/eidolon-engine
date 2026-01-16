@@ -721,6 +721,7 @@ Deployment complete with all core infrastructure tested and operational. R1 work
 ### Current Actions (Post-R1)
 
 **Completed:**
+
 - ✅ Combat system fixes (opponent defeat logic simplified)
 - ✅ Currency system implementation (coin-based economy)
 - ✅ Death mechanics (dead characters blocked)
@@ -792,6 +793,7 @@ R1 work completed with state machine formalization and currency system implement
 The incremental subsystem has **completed its baseline story validation objective**. The CI safety harness is live and will prevent invalid story data from entering the repository.
 
 **Status as of 2025-10-19:**
+
 - Core gameplay loop functional (stories, combat, death, currency)
 - Economy backend complete (currency awarded, Resources.Value tracked)
 - Missing frontend integration (inventory display, item usage, store UI)

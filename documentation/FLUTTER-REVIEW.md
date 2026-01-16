@@ -341,6 +341,7 @@ class Resources {
 ```
 
 **Backend Status (as of 2025-10-19):**
+
 - ✅ Backend now populates Resources.Value with total currency
 - ⚠️ Flutter needs to add Resources.Value constant and display logic (see Currency System Flutter Updates section below)
 
@@ -614,23 +615,23 @@ No code smells, anti-patterns, or architectural issues detected.
 
 ### Frontend Expects Backend to Provide:
 
-| Data Field              | Backend Sends? | Frontend Handles? | Result             |
-| ----------------------- | -------------- | ----------------- | ------------------ |
-| CharacterID             | ✅ Yes         | ✅ Yes            | Works              |
-| CharacterName           | ✅ Yes         | ✅ Yes            | Works              |
-| Health/MaxHealth        | ✅ Yes         | ✅ Yes            | Works              |
-| Essence/MaxEssence      | ✅ Yes         | ✅ Yes            | Works              |
-| Attributes              | ✅ Yes         | ✅ Yes            | Works              |
-| Skills                  | ✅ Yes         | ✅ Yes            | Works              |
-| **Resources**           | ✅ Yes (Value) | ⚠️ Needs update   | Backend ready      |
-| Inventory               | ✅ Yes         | ✅ Yes            | Works (2025-10-21) |
+| Data Field              | Backend Sends?        | Frontend Handles?       | Result             |
+| ----------------------- | --------------------- | ----------------------- | ------------------ |
+| CharacterID             | ✅ Yes                | ✅ Yes                  | Works              |
+| CharacterName           | ✅ Yes                | ✅ Yes                  | Works              |
+| Health/MaxHealth        | ✅ Yes                | ✅ Yes                  | Works              |
+| Essence/MaxEssence      | ✅ Yes                | ✅ Yes                  | Works              |
+| Attributes              | ✅ Yes                | ✅ Yes                  | Works              |
+| Skills                  | ✅ Yes                | ✅ Yes                  | Works              |
+| **Resources**           | ✅ Yes (Value)        | ⚠️ Needs update         | Backend ready      |
+| Inventory               | ✅ Yes                | ✅ Yes                  | Works (2025-10-21) |
 | **InventoryDetails**    | ✅ Via ItemRepository | ✅ Yes (ItemRepository) | Works (2025-10-21) |
-| Wounds                  | ✅ Yes         | ✅ Yes            | Works              |
-| ActiveStoryID           | ✅ Yes         | ✅ Yes            | Works              |
-| ActiveSegmentID         | ✅ Yes         | ✅ Yes            | Works              |
-| GameMode                | ✅ Yes         | ✅ Yes            | Works              |
-| **CharState**           | ❌ Not sent    | ❌ Not modeled    | Dead flag used     |
-| Dead (in CharacterList) | ✅ Yes         | ✅ Yes            | Works              |
+| Wounds                  | ✅ Yes                | ✅ Yes                  | Works              |
+| ActiveStoryID           | ✅ Yes                | ✅ Yes                  | Works              |
+| ActiveSegmentID         | ✅ Yes                | ✅ Yes                  | Works              |
+| GameMode                | ✅ Yes                | ✅ Yes                  | Works              |
+| **CharState**           | ❌ Not sent           | ❌ Not modeled          | Dead flag used     |
+| Dead (in CharacterList) | ✅ Yes                | ✅ Yes                  | Works              |
 
 **Frontend is ready for all features. Backend not sending data.**
 

@@ -292,19 +292,16 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 **Story Management:**
 
 - `POST /story/start` - Start a story
-
   - Payload: `{CharacterID, StoryID}`
   - Response: `{Success, Segment: {ActiveSegmentID, SegmentType, StartTime, EndTime, ...}}`
   - Errors: 400 (invalid ID), 409 (already in story), 403 (prerequisites not met)
 
 - `POST /story/abandon` - Abandon active story
-
   - Payload: `{CharacterID}` or `{StoryID}`
   - Response: `{Success}`
   - Errors: 400 (no active story)
 
 - `GET /story/status` - Get current segment status
-
   - Query: `?characterId=uuid`
   - Response: Active segment details or null
   - Errors: 401 (unauthorized)
@@ -317,7 +314,6 @@ Release 1 focuses on backend logic robustness: making state transitions foolproo
 **Segment Operations:**
 
 - `POST /segment/decision` - Make choice in decision segment
-
   - Payload: `{CharacterID, SegmentID, Decision}`
   - Response: `{Success}`
   - Errors: 400 (invalid choice), 409 (already decided)

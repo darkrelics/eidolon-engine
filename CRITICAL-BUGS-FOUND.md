@@ -11,6 +11,7 @@
 A comprehensive, adversarial code audit revealed **8 CRITICAL BUGS** and multiple systemic issues that make this codebase **NOT PRODUCTION READY**. The documentation claims features are "production-ready" and "fully functional" - these claims are **FALSE**.
 
 **Critical Issues Summary**:
+
 - 🔴 Race conditions in ALL inventory/currency operations (infinite money exploits)
 - 🔴 Stock management is completely fake/non-functional
 - 🔴 Players can permanently delete equipment by "using" it
@@ -152,6 +153,7 @@ dynamo.update_item(
 ```
 
 **Same issue in**:
+
 - `api_item_consolidate.py:171-176`
 - `eidolon/story_rewards.py:212-216` (story completion rewards)
 
@@ -177,7 +179,7 @@ The store data file defines stock limits:
   "PrototypeID": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
   "PrototypeName": "Long Sword",
   "Price": 500,
-  "Stock": 3,  // ← Says only 3 available
+  "Stock": 3 // ← Says only 3 available
 }
 ```
 
@@ -204,6 +206,7 @@ Stock values live in a **static JSON file** that is never written to. The stock 
 ### Fix Required
 
 Either:
+
 1. Store stock in DynamoDB and decrement atomically (with transactions)
 2. Remove stock feature entirely (just mark everything unlimited)
 3. Document that stock is cosmetic only
@@ -229,6 +232,7 @@ effect_result = apply_item_effects(character_id, prototype)
 ### Proof
 
 Items have a "Consumable" field conceptually, but the code never checks it. You can call `/item/use` on:
+
 - Weapons
 - Armor
 - Non-consumable quest items
@@ -279,6 +283,7 @@ else:
 ### Combined with Bug #5
 
 Since there's no consumable validation (Bug #5), players can trigger this on ANY non-stackable item:
+
 - Weapons → deleted
 - Armor → deleted
 - Unique quest items → deleted
@@ -322,6 +327,7 @@ resource.add_method(
 If `cognito_user_pool_arn` is not configured (empty, misconfigured, or forgotten), the deployment will **succeed** but create API endpoints with **NO AUTHENTICATION**.
 
 Any endpoint would be publicly accessible:
+
 - `/character/add` - create characters for any player
 - `/store/purchase` - buy items with fake player IDs
 - `/item/use` - use any player's items
@@ -378,6 +384,7 @@ for entry in completed_stories:
 ### Expected Structure
 
 CompletedStories should be:
+
 ```python
 [
     {"story-uuid-1": {"StoryType": "daily", "CompletedAt": 1234567890}},
@@ -419,6 +426,7 @@ for entry in completed_stories:
 ### Why This Matters
 
 This is defensive programming 101. Never assume data structure without validation, especially when:
+
 - Data comes from database (can be corrupted)
 - Structure is complex (nested dicts)
 - Failure is catastrophic (crashes character access)
@@ -483,9 +491,11 @@ $ find . -name "*test*.py" -o -name "test_*"
 ```
 
 The documentation claims:
+
 > "Code Review Validation Strategy - No automated tests, manual code review"
 
 **This is inadequate** for:
+
 - Concurrency bugs (race conditions can't be found by code review)
 - Edge cases
 - Regression detection

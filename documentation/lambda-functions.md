@@ -15,6 +15,7 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 18 Lambda functions deployed (19 total, cognito-player-delete not deployed). All functions fully implemented and operational in production.
 
 **Deployment Distribution:**
+
 - Character Stack: 7 functions
 - Story Stack: 9 functions
 - Player Stack: 1 function
@@ -33,6 +34,7 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 ### Story Operations (9 functions - Story Stack)
 
 **API Functions (6 total):**
+
 - `api-story-start` - Begin new story
 - `api-story-abandon` - Exit active story
 - `api-story-history` - Get story history by instance IDs
@@ -41,6 +43,7 @@ The Lambda functions are deployed as part of the architecture described in [Depl
 - `api-segment-history` - Retrieve past segments
 
 **Operational Functions (3 total):**
+
 - `ops-segment-poller` - EventBridge-triggered polling (1 minute)
 - `ops-segment-process` - SQS mechanical processing
 - `ops-story-advance` - SQS story advancement
@@ -64,11 +67,13 @@ The bloom filter for restricted character names is properly loaded and functiona
 Functions are deployed via Character, Player, and Story stacks (not Lambda Stack).
 
 **Lambda Stack provides:**
+
 - Shared execution role
 - Shared layer (eidolon dependencies)
 - No functions deployed directly in Lambda Stack
 
 **All functions use:**
+
 - **Runtime**: Python 3.12
 - **Memory**: 128MB
 - **Timeout**: 30 seconds
@@ -176,7 +181,6 @@ All Lambda functions must follow these parameter standards:
   - Example: `/characters?characterId=123`
   - Use `get_query_parameter()` from `eidolon.requests`
 - **Request Body**: Use for data submission (POST, PUT, PATCH)
-
   - Example: `POST /characters` with JSON body `{"characterName": "Hero", "archetype": "Warrior"}`
 
 - **Path Parameters**: **NEVER** use for IDs - always use query parameters instead
@@ -196,19 +200,16 @@ Lambda functions are deployed through the modular CDK stack system:
 ### CDK Stack Deployment (Lambda Stack #3)
 
 1. **CodeBuild Process** (Stack #1):
-
    - Builds Lambda layer from `requirements/lambda-requirements.txt`
    - Packages each function with `eidolon` modules
    - Uploads artifacts to S3 bucket
 
 2. **Lambda Stack Deployment** (Stack #3):
-
    - Creates shared execution role
    - Deploys Lambda layer
    - No functions deployed in Lambda Stack itself
 
 3. **Character, Player, Story Stacks** (Stacks #4, #5, #6):
-
    - Deploy 17 functions total with fixed logical IDs
    - Import shared role and layer from Lambda Stack
    - Set environment variables from stack outputs
@@ -581,7 +582,6 @@ Some Lambda functions apply transformations to data before returning responses:
 The `api_get_character.py` function applies several transformations for client compatibility:
 
 1. **Inventory Enrichment**: Raw inventory UUIDs are enriched with item details
-
    - Database: `{"RightHand": "sword-uuid"}`
    - Response adds: `{"InventoryDetails": {"RightHand": {"ItemID": "sword-uuid", "Name": "Iron Sword", ...}}}`
 

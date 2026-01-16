@@ -117,13 +117,11 @@ Modular deployment functions for each stack:
 ## Deployment Flow
 
 1. **Prerequisites Check**
-
    - Verify CDK bootstrap status
    - Validate AWS credentials and region
    - Auto-copy config.template.yml if needed
 
 2. **Parameter Collection**
-
    - Priority: Defaults → cdk.json → config.yml → User prompts
    - Collect all user input upfront
    - Single deployment confirmation
@@ -134,14 +132,12 @@ Modular deployment functions for each stack:
    The detailed sequence for each mode is maintained in [Deployment Guide](deployment.md#stack-deployment-order).
 
 4. **CDK Execution**
-
    - Pass parameters via CDK context (-c flags)
    - Each stack in separate app file
    - Fixed logical IDs for all resources
    - Post-deployment validation with boto3
 
 5. **Post-Deployment Operations**
-
    - Lambda function updates from S3
    - Layer version management and cleanup
    - Cognito trigger configuration for imported pools

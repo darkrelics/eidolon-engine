@@ -120,6 +120,7 @@ See [schema.md](schema.md) for detailed table schemas.
 **Total Functions: 18 (17 deployed, 1 reserved)**
 
 All Lambda functions use `eidolon-lambda-execution-role` with:
+
 - DynamoDB access via managed policy `eidolon-dynamodb-policy`
 - CloudWatch Logs permissions
 - Additional policies attached by dependent stacks
@@ -165,16 +166,19 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 The dual-queue design separates immediate mechanical processing from timed segment advancement:
 
 **processing-queue:**
+
 - Target: `ops-segment-process` Lambda
 - Purpose: Immediate processing of mechanical segments
 - Configuration: 4-day retention, 30-second visibility, 3 retries before DLQ
 
 **advancement-queue:**
+
 - Target: `ops-story-advance` Lambda
 - Purpose: Timed processing of all segment types
 - Configuration: 4-day retention, 30-second visibility, 3 retries before DLQ
 
 **Processing Flow:**
+
 1. Mechanical segments queued immediately at creation
 2. All segments queued to advancement when timer expires
 3. ProcessingStatus field ensures idempotent processing
@@ -182,11 +186,13 @@ The dual-queue design separates immediate mechanical processing from timed segme
 ### 5. Polling Infrastructure
 
 **EventBridge Rule:** `eidolon-story-poller`
+
 - Schedule: rate(1 minute)
 - Target: `ops-segment-poller` Lambda
 - State: DISABLED by default, enabled when stories start
 
 **SSM Parameter:** `/eidolon/story/config`
+
 - Values: "run" or "stop"
 - Controls polling execution
 - Auto-managed based on active segment count
@@ -592,14 +598,14 @@ The system uses DynamoDB conditional writes to ensure atomic state transitions a
 
 **Failure Scenarios and Handling:**
 
-| Failure Type | Detection | Recovery | Maximum Recovery Time |
-|-------------|-----------|----------|----------------------|
-| Client crash/network loss | Next API call | Automatic GameMode cleanup | Immediate |
-| Lambda timeout | Polling system | Retry with new Lambda | 1 minute |
-| Processing stuck | ProcessingStatus check | Reset to pending | 5 minutes |
-| Orphaned segments | EndTime exceeded | Mark exceptional | 2 minutes |
-| Queue message loss | Poller scan | Re-queue segment | 1 minute |
-| DLQ overflow | CloudWatch alarm | Manual intervention | N/A |
+| Failure Type              | Detection              | Recovery                   | Maximum Recovery Time |
+| ------------------------- | ---------------------- | -------------------------- | --------------------- |
+| Client crash/network loss | Next API call          | Automatic GameMode cleanup | Immediate             |
+| Lambda timeout            | Polling system         | Retry with new Lambda      | 1 minute              |
+| Processing stuck          | ProcessingStatus check | Reset to pending           | 5 minutes             |
+| Orphaned segments         | EndTime exceeded       | Mark exceptional           | 2 minutes             |
+| Queue message loss        | Poller scan            | Re-queue segment           | 1 minute              |
+| DLQ overflow              | CloudWatch alarm       | Manual intervention        | N/A                   |
 
 **Protection Mechanisms:**
 
@@ -611,28 +617,33 @@ The system uses DynamoDB conditional writes to ensure atomic state transitions a
 ## Performance Optimization
 
 **Database:**
+
 - Pay-per-request DynamoDB pricing (no capacity planning)
 - GSI for efficient secondary access patterns
 - Conditional writes prevent race conditions
 
 **Lambda:**
+
 - Cold start caching of archetype data
 - Shared dependency layer
 - 128MB memory, 30-second timeout
 - Post-deployment code updates from S3
 
 **Queue:**
+
 - Batch processing via SQS
 - Auto-disable polling when inactive
 - Immediate mechanical segment processing
 
 **Client:**
+
 - Front-loaded outcome calculation
 - Server-authoritative state (no client sync)
 - IndexedDB caching reduces API calls by 90%
 - Two-tier item loading strategy
 
 **IndexedDB Cache Domains:**
+
 - **Stories**: Historical preservation for offline access
 - **Characters**: Field-level updates (60+ calls/hour → 5-10)
 - **Items**: Prototype caching with memory layer
@@ -642,22 +653,26 @@ See [Incremental Design](incremental-design.md#indexeddb-cache-layer-integration
 ## Security Considerations
 
 **Authentication:**
+
 - Cognito User Pool (`eidolon-users`)
 - API Gateway Cognito authorizer
 - JWT validation on protected endpoints
 
 **IAM:**
+
 - Shared execution role: `eidolon-lambda-execution-role`
 - Managed policies only (no inline)
 - Least privilege per stack
 - Fixed logical IDs prevent recreation
 
 **CORS:**
+
 - Lambda-level validation
 - Environment variable configuration
 - Credentials support
 
 **State Protection:**
+
 - GameMode modifications restricted to authorized Lambdas
 - Conditional updates prevent race conditions
 - ProcessingStatus ensures single processing
@@ -666,11 +681,13 @@ See [Incremental Design](incremental-design.md#indexeddb-cache-layer-integration
 ## Monitoring and Observability
 
 **CloudWatch Integration:**
+
 - All Lambda functions log to CloudWatch
 - Structured logging with correlation IDs
 - Error tracking with stack traces
 
 **Metrics:**
+
 - Lambda: Duration, errors, throttles
 - DynamoDB: Read/write capacity, throttles
 - SQS: Message age, DLQ depth

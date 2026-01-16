@@ -636,19 +636,23 @@ The IndexedDB cache layer implements a three-tier fallback strategy for graceful
 **Three-Tier Fallback Pattern:**
 
 For each data domain, the system attempts access in order:
+
 1. **Primary**: Read from IndexedDB cache for instant display
 2. **Fallback**: Fetch fresh data from server API on cache failure
 3. **Graceful Degradation**: Return empty state or stale cache as last resort
 
 **Stories Domain Fallback:**
+
 - IndexedDB fails → fetch via `GET /story/history` → return empty array if server fails
 - Story history is non-critical, so empty state provides acceptable experience
 
 **Characters Domain Fallback:**
+
 - IndexedDB fails → fetch via `GET /character` → use stale cache if server fails
 - Character data is critical, so stale data better than no data
 
 **Inventory Domain Fallback:**
+
 - IndexedDB fails → fetch all item details via server → return empty inventory if server fails
 - Inventory display degrades gracefully with "unable to load items" message
 
@@ -716,6 +720,7 @@ See `incremental/lib/services/story_polling_service.dart` for complete implement
 7. **Error Handling**: Consecutive error counter with max 3 failures before stopping
 
 **Pattern:**
+
 ```dart
 // Simplified view - see actual file for complete implementation
 _runtime.startPolling(
@@ -746,6 +751,7 @@ _runtime.startPolling(
 **Mechanical Segments**: Server processes outcomes - client waits and polls normally
 
 **Why Single Endpoint Works:**
+
 - GET /segment/status includes ActiveSegmentID (for completion detection)
 - GET /segment/status includes TimeRemaining (server-calculated)
 - GET /segment/status includes all narrative, outcomes, and effects

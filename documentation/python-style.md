@@ -148,11 +148,13 @@ def get_value(key: str) -> Optional[str]:  # WRONG
 ```
 
 **Allowed basic types:**
+
 - `str`, `int`, `bool`, `dict`, `list`
 - Parameterized collections: `list[str]`, `dict[str, int]`
 - Object type: `object` (for Lambda context parameter)
 
 **Prohibited:**
+
 - `Optional[T]` or `T | None` in function signatures
 - `Union[T, U]` or `T | U` in function signatures
 - `Any`, `TypeVar`, `Generic`, or other typing module constructs

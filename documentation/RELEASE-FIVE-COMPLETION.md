@@ -26,11 +26,13 @@ Release 5 economy features are **100% complete on the backend**. The full econom
 ### ✅ Completed Tasks (4 of 6)
 
 #### R5-T1: Currency Reward Application
+
 - **Status:** ✅ Complete (Oct 2025)
 - **Implemented:** Coin-based currency, Resources.Value tracking, story reward application
 - **Commit:** f36095ac
 
 #### R5-T2: Item Consumption System
+
 - **Status:** ✅ Complete (Nov 6, 2025)
 - **Implemented:**
   - `lambda/api_item_use.py` - API endpoint for item consumption
@@ -41,6 +43,7 @@ Release 5 economy features are **100% complete on the backend**. The full econom
 - **Lines of Code:** 410 lines
 
 #### R5-T3: Inventory Management
+
 - **Status:** ✅ Complete (Nov 6, 2025)
 - **Implemented:**
   - `lambda/api_item_discard.py` - Discard items with partial quantity support
@@ -52,6 +55,7 @@ Release 5 economy features are **100% complete on the backend**. The full econom
 - **Critical Fix:** Added 5 new functions to CDK deployment configuration
 
 #### R5-T5: Store System
+
 - **Status:** ✅ Complete (Nov 6, 2025)
 - **Implemented:**
   - `data/store_general.json` - Store inventory configuration
@@ -69,6 +73,7 @@ Release 5 economy features are **100% complete on the backend**. The full econom
 ### ❌ Pending Tasks (2 of 6)
 
 #### R5-T4: Item Visual Assets
+
 - **Status:** ❌ Not Implemented
 - **Priority:** P2 (Medium)
 - **What's Needed:**
@@ -79,6 +84,7 @@ Release 5 economy features are **100% complete on the backend**. The full econom
 - **Estimated Effort:** 4-6 hours
 
 #### R5-T6: Author Quick-Start Documentation
+
 - **Status:** ❌ Not Implemented
 - **Priority:** P1 (Low-Medium)
 - **What's Needed:**
@@ -93,31 +99,31 @@ Release 5 economy features are **100% complete on the backend**. The full econom
 
 ### New Lambda Functions (5 total)
 
-| Function | Purpose | Lines | API Endpoint |
-|----------|---------|-------|--------------|
-| `api_item_use.py` | Use consumable items | 185 | `POST /item/use` |
-| `api_item_discard.py` | Discard items | 185 | `POST /item/discard` |
-| `api_item_consolidate.py` | Consolidate stacks | 211 | `POST /item/consolidate` |
-| `api_store_list.py` | List store items | 79 | `GET /store/list` |
-| `api_store_purchase.py` | Purchase items | 111 | `POST /store/purchase` |
+| Function                  | Purpose              | Lines | API Endpoint             |
+| ------------------------- | -------------------- | ----- | ------------------------ |
+| `api_item_use.py`         | Use consumable items | 185   | `POST /item/use`         |
+| `api_item_discard.py`     | Discard items        | 185   | `POST /item/discard`     |
+| `api_item_consolidate.py` | Consolidate stacks   | 211   | `POST /item/consolidate` |
+| `api_store_list.py`       | List store items     | 79    | `GET /store/list`        |
+| `api_store_purchase.py`   | Purchase items       | 111   | `POST /store/purchase`   |
 
 ### New Library Modules (3 total)
 
-| Module | Purpose | Lines |
-|--------|---------|-------|
-| `eidolon/item_effects.py` | Effect application system | 225 |
-| `eidolon/store.py` | Store management | 295 |
-| `data/store_general.json` | Store inventory | ~50 |
+| Module                    | Purpose                   | Lines |
+| ------------------------- | ------------------------- | ----- |
+| `eidolon/item_effects.py` | Effect application system | 225   |
+| `eidolon/store.py`        | Store management          | 295   |
+| `data/store_general.json` | Store inventory           | ~50   |
 
 ### Deployment Configuration Updates
 
-| File | Changes |
-|------|---------|
-| `deployment/stacks/character_stack.py` | Added 5 functions to lambda_configs (7 → 12 functions) |
-| `deployment/stacks/api_stack.py` | Added 5 routes + logical IDs |
-| `deployment/character.py` | Updated validation (5 → 12 functions) |
-| `deployment/lambda_functions.py` | Added 5 functions to Phase 11 update list |
-| `documentation/incremental-openapi.yml` | Added 587 lines of API specs |
+| File                                    | Changes                                                |
+| --------------------------------------- | ------------------------------------------------------ |
+| `deployment/stacks/character_stack.py`  | Added 5 functions to lambda_configs (7 → 12 functions) |
+| `deployment/stacks/api_stack.py`        | Added 5 routes + logical IDs                           |
+| `deployment/character.py`               | Updated validation (5 → 12 functions)                  |
+| `deployment/lambda_functions.py`        | Added 5 functions to Phase 11 update list              |
+| `documentation/incremental-openapi.yml` | Added 587 lines of API specs                           |
 
 ---
 
@@ -136,6 +142,7 @@ The general store includes 5 items with varied pricing and stock:
 ## Key Features Implemented
 
 ### Item Consumption
+
 - **Dice Notation Parser**: Supports "2d4+2", "1d6", "3d8-1" formats
 - **Wound Healing**: Removes wounds from character's wound list
 - **Character Revival**: Dead characters revived if healed above 0 HP
@@ -143,6 +150,7 @@ The general store includes 5 items with varied pricing and stock:
 - **Extensible Design**: Ready for buffs, essence restoration, nutrition
 
 ### Store System
+
 - **Level Filtering**: Items only shown if character meets MinLevel requirement
 - **Stock Management**: -1 = unlimited, positive = limited stock
 - **Atomic Transactions**: Currency and inventory updated atomically
@@ -150,6 +158,7 @@ The general store includes 5 items with varied pricing and stock:
 - **Category System**: Items tagged with category (consumable, weapon, armor, etc.)
 
 ### Inventory Management
+
 - **Partial Discard**: Remove specific quantity from stackable items
 - **Full Discard**: Remove entire item stack at once
 - **Consolidate All**: Merge all stackable items with one API call
@@ -163,10 +172,12 @@ The general store includes 5 items with varied pricing and stock:
 **Issue Discovered:** 5 new Lambda functions were not registered in the CDK Character Stack configuration, preventing deployment to AWS.
 
 **Files Without Registration:**
+
 - `deployment/stacks/character_stack.py` - Missing function definitions
 - `deployment/character.py` - Validation only checked 5 of 12 functions
 
 **Fix Implemented (Commit 2a36366):**
+
 - Added all 5 functions to `lambda_configs` list in `character_stack.py`
 - Added logical ID mappings for all 5 functions
 - Updated validation to check all 12 functions
@@ -243,6 +254,7 @@ The general store includes 5 items with varied pricing and stock:
    - Character Stack updated with new functions
 
 2. **Deploy Character Stack:**
+
    ```bash
    cd deployment
    python deploy.py --mode incremental --stack character
@@ -266,6 +278,7 @@ The general store includes 5 items with varied pricing and stock:
 ### Backend API Testing
 
 **Store System:**
+
 ```bash
 # List store items
 GET https://api.darkrelics.net/store/list?StoreID=general-store&CharacterID=...
@@ -283,6 +296,7 @@ POST https://api.darkrelics.net/store/purchase
 ```
 
 **Item Consumption:**
+
 ```bash
 # Use healing potion
 POST https://api.darkrelics.net/item/use
@@ -296,6 +310,7 @@ POST https://api.darkrelics.net/item/use
 ```
 
 **Inventory Management:**
+
 ```bash
 # Discard item
 POST https://api.darkrelics.net/item/discard
@@ -322,6 +337,7 @@ POST https://api.darkrelics.net/item/consolidate
 **Status:** ⚠️ Partially Complete (2025-11-07)
 
 **Problem**: Two Lambda functions exceeded the 300-line guideline:
+
 - `api_segment_status.py`: 359 lines (59 over)
 - `ops_story_advance.py`: 315 lines (15 over)
 
@@ -330,6 +346,7 @@ POST https://api.darkrelics.net/item/consolidate
 Pragmatic refactoring focusing on extracting reusable utilities without introducing risk to complex working code.
 
 **Changes Made:**
+
 1. ✅ **Extracted Timestamp Coercion Utility**
    - Created `eidolon/time_utils.coerce_unix_timestamp()` (52 lines)
    - Handles DynamoDB Decimal types, strings, ints, floats, None values
@@ -343,6 +360,7 @@ Pragmatic refactoring focusing on extracting reusable utilities without introduc
    - Zero behavioral changes (pure refactoring)
 
 **Final State:**
+
 - `api_segment_status.py`: 342 lines (42 over guideline, 12% over)
 - `ops_story_advance.py`: 315 lines (15 over guideline, 5% over)
 - Both are **acceptable exceptions** due to complex orchestration logic
@@ -350,6 +368,7 @@ Pragmatic refactoring focusing on extracting reusable utilities without introduc
 **Rationale for Partial Completion:**
 
 The 300-line guideline is a guideline, not a hard rule. These functions are acceptable exceptions because:
+
 - Logic is well-organized with clear sections
 - Comprehensive comments explain each section
 - Behavior is correct and validated
@@ -357,6 +376,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 - Complex business logic best kept together for maintainability
 
 **Impact:**
+
 - ✅ Improved code reusability (DRY principle)
 - ✅ Better maintainability (single source of truth)
 - ✅ Enhanced documentation (comprehensive docstrings)
@@ -369,24 +389,28 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 ## Next Steps
 
 ### Immediate (Deploy Backend)
+
 1. Deploy Character Stack with 12 Lambda functions
 2. Test all 5 new API endpoints
 3. Verify store inventory loads correctly
 4. Test purchase transactions end-to-end
 
 ### Short-Term (Frontend Integration)
+
 1. Implement store UI screen (8-12 hours)
 2. Add item use button to inventory (2-4 hours)
 3. Add inventory management buttons (4-6 hours)
 4. Test full economy loop end-to-end
 
 ### Medium-Term (Polish)
+
 1. Add item visual assets (4-6 hours)
 2. Write author documentation (4-6 hours)
 3. Performance testing with large inventories
 4. Balance tuning (item prices, stock levels)
 
 ### Long-Term (Future Releases)
+
 1. Multiple stores (weapon shop, potion shop, etc.)
 2. Store refresh mechanics (daily inventory rotation)
 3. Item crafting system
@@ -408,15 +432,15 @@ The following documentation files have been updated to reflect R5 completion:
 
 ## Commits Summary
 
-| Commit | Date | Description | Files | Lines |
-|--------|------|-------------|-------|-------|
-| 17924fe | 2025-11-07 | Update documentation to reflect Release 5 completion status | 4 | +807/-162 |
-| 16685b9 | 2025-11-07 | Partial refactoring: Extract timestamp coercion to reusable utility | 2 | +55/-20 |
-| 09de080 | 2025-11-06 | Implement Task 7: Store System (R5-T5) | 7 | +485 |
-| 5111c5a | 2025-11-06 | Implement Task 6: Item Consumption System (R5-T2) | 7 | +410 |
-| a40cd44 | 2025-11-06 | Implement Task 3: Inventory Management (R5-T3) | 5 | +617 |
-| 2a36366 | 2025-11-06 | Fix deployment configuration for Lambda functions | 2 | +17 |
-| accfdf5 | Prior | Fix code quality regression: refactor item Lambdas | 2 | -44 |
+| Commit  | Date       | Description                                                         | Files | Lines     |
+| ------- | ---------- | ------------------------------------------------------------------- | ----- | --------- |
+| 17924fe | 2025-11-07 | Update documentation to reflect Release 5 completion status         | 4     | +807/-162 |
+| 16685b9 | 2025-11-07 | Partial refactoring: Extract timestamp coercion to reusable utility | 2     | +55/-20   |
+| 09de080 | 2025-11-06 | Implement Task 7: Store System (R5-T5)                              | 7     | +485      |
+| 5111c5a | 2025-11-06 | Implement Task 6: Item Consumption System (R5-T2)                   | 7     | +410      |
+| a40cd44 | 2025-11-06 | Implement Task 3: Inventory Management (R5-T3)                      | 5     | +617      |
+| 2a36366 | 2025-11-06 | Fix deployment configuration for Lambda functions                   | 2     | +17       |
+| accfdf5 | Prior      | Fix code quality regression: refactor item Lambdas                  | 2     | -44       |
 
 **Total:** 7 commits, 27 files modified, +2,347/-226 lines net
 
@@ -425,6 +449,7 @@ The following documentation files have been updated to reflect R5 completion:
 ## Success Metrics
 
 ### Code Quality
+
 - ✅ All new functions use `@authenticated_handler` decorator
 - ✅ Consistent error handling with string status codes
 - ✅ Comprehensive logging throughout
@@ -433,11 +458,13 @@ The following documentation files have been updated to reflect R5 completion:
 - ✅ Extensible design for future features
 
 ### Test Coverage
+
 - ✅ All critical paths covered by acceptance criteria
 - ✅ Error cases documented in OpenAPI specs
 - ✅ Edge cases handled (partial discard, stack overflow, etc.)
 
 ### Documentation
+
 - ✅ OpenAPI specs complete (587 lines added)
 - ✅ Project plan updated with detailed completion notes
 - ✅ Release report updated with implementation details

@@ -143,21 +143,21 @@ The deployment script automatically detects interactive vs. non-interactive mode
 
 All deployment parameters can be set via environment variables to enable automated deployments:
 
-| Environment Variable | Description | Required | Example |
-|---------------------|-------------|----------|---------|
-| `AWS_REGION` | AWS region to deploy to | Yes | `us-east-1` |
-| `EIDOLON_DEPLOYMENT_MODE` | Deployment mode | No | `incremental` |
-| `EIDOLON_S3_BUCKET` | S3 artifacts bucket name | Yes | `eidolon-artifacts-prod` |
-| `EIDOLON_SCRIPTS_BUCKET` | S3 scripts bucket (mud/hybrid only) | Conditional | `eidolon-scripts-prod` |
-| `EIDOLON_CLIENT_BUCKET` | S3 client bucket for portal | Yes | `eidolon-portal-prod` |
-| `GITHUB_OWNER` | GitHub repository owner | No | `robinje` |
-| `GITHUB_REPO` | GitHub repository name | No | `eidolon-engine` |
-| `GITHUB_BRANCH` | GitHub branch to deploy | No | `develop` |
-| `EIDOLON_DOMAIN` | Base domain for services | Yes | `darkrelics.net` |
-| `EIDOLON_HOSTED_ZONE_ID` | Route53 hosted zone ID | Yes | `Z1234567890ABC` |
-| `EIDOLON_API_HOST` | API subdomain | Yes | `api` |
-| `EIDOLON_CLIENT_HOST` | Client subdomain | Yes | `portal` |
-| `EIDOLON_REPLY_EMAIL` | Cognito reply email | No | `contact@darkrelics.net` |
+| Environment Variable      | Description                         | Required    | Example                  |
+| ------------------------- | ----------------------------------- | ----------- | ------------------------ |
+| `AWS_REGION`              | AWS region to deploy to             | Yes         | `us-east-1`              |
+| `EIDOLON_DEPLOYMENT_MODE` | Deployment mode                     | No          | `incremental`            |
+| `EIDOLON_S3_BUCKET`       | S3 artifacts bucket name            | Yes         | `eidolon-artifacts-prod` |
+| `EIDOLON_SCRIPTS_BUCKET`  | S3 scripts bucket (mud/hybrid only) | Conditional | `eidolon-scripts-prod`   |
+| `EIDOLON_CLIENT_BUCKET`   | S3 client bucket for portal         | Yes         | `eidolon-portal-prod`    |
+| `GITHUB_OWNER`            | GitHub repository owner             | No          | `robinje`                |
+| `GITHUB_REPO`             | GitHub repository name              | No          | `eidolon-engine`         |
+| `GITHUB_BRANCH`           | GitHub branch to deploy             | No          | `develop`                |
+| `EIDOLON_DOMAIN`          | Base domain for services            | Yes         | `darkrelics.net`         |
+| `EIDOLON_HOSTED_ZONE_ID`  | Route53 hosted zone ID              | Yes         | `Z1234567890ABC`         |
+| `EIDOLON_API_HOST`        | API subdomain                       | Yes         | `api`                    |
+| `EIDOLON_CLIENT_HOST`     | Client subdomain                    | Yes         | `portal`                 |
+| `EIDOLON_REPLY_EMAIL`     | Cognito reply email                 | No          | `contact@darkrelics.net` |
 
 ### Non-Interactive Mode Behavior
 
