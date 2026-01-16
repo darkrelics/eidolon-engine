@@ -465,6 +465,12 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
                 results["CharacterRemovedFromPlayer"] = player_result.get("Removed", False)
                 if player_result.get("Error"):
                     results["Errors"].append(player_result.get("Error"))
+                    # Abort deletion to prevent orphaned reference in player's CharacterList
+                    logger.error(
+                        f"Aborting character deletion for {character_id} - "
+                        f"failed to remove from player list, would create orphaned reference"
+                    )
+                    return results
 
         # Delete all character items
         items_result = delete_character_items(character)

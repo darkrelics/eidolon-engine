@@ -173,12 +173,14 @@ stateDiagram-v2
 Stories have a `StoryType` field that determines their repeatability:
 
 1. **one-time**: Can only be completed once per character
+
    - Added to CompletedStories on first start (not completion)
    - Permanently blocks subsequent attempts
    - Entry format: `{StoryID: {"StoryType": "one-time", "CompletedAt": timestamp}}`
    - Example: Discovery quests, unique narrative events
 
 2. **daily**: Can be repeated after 24-hour cooldown
+
    - Added to CompletedStories on start
    - Entry format: `{StoryID: {"StoryType": "daily", "CompletedAt": timestamp}}`
    - Automatically removed from CompletedStories after 24 hours (UTC)

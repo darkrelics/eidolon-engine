@@ -123,21 +123,25 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 **5-Stage Implementation Plan:**
 
 1. [COMPLETE] **Instrumentation** (Tasks 1-3) - COMPLETE
+
    - Created metrics collection infrastructure
    - Instrumented all API methods
    - Added segment boundary tracking
 
 2. [IN PROGRESS] **Baseline Measurement** (Task 4) - IN PROGRESS
+
    - Run test stories to document current API call patterns
    - Measure actual calls per segment (expecting 10-15+)
    - Document breakdown by endpoint
 
 3. [PAUSED] **Fix Core Timing Issues** (Tasks 5-7)
+
    - Remove client-side 60s delay
    - Use server-provided TimeRemaining
    - Implement server-authoritative polling pattern
 
 4. [PAUSED] **Remove Competing Systems** (Tasks 8-9)
+
    - Consolidate to single polling service
    - Remove duplicate timers and polling logic
    - Clean up provider-level polling

@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Player Deletion Handler
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to handle complete player deletion including all associated
 game data from both MUD and Incremental game tables. This ensures GDPR
@@ -35,7 +35,7 @@ def delete_player(player_id: str) -> dict:
         results: dict = delete_player_data(player_id)
     except ValueError as err:
         logger.error(f"Invalid player ID: {err}", exc_info=True)
-        return {}
+        raise
 
     logger.info(f"Player deletion completed: {player_id} results: {results}")
 

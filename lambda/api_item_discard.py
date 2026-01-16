@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to discard (delete) items from character inventory.
 Removes items permanently without applying any effects.

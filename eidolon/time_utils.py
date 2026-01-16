@@ -217,7 +217,7 @@ def past_unix(seconds: int) -> int:
     return int(past_time.timestamp())
 
 
-def coerce_unix_timestamp(timestamp_value: object, default=None) -> int | None:
+def coerce_unix_timestamp(timestamp_value: object, default=None):
     """
     Coerce various timestamp formats to Unix timestamp (int).
 

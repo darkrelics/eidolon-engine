@@ -653,11 +653,13 @@ else:
 **Security Hardening**:
 
 1. ✅ **Migrate secrets to AWS Secrets Manager** (3 hours)
+
    - Replace plaintext environment variables
    - Add KMS encryption at rest
    - Implement automatic credential rotation
 
 2. ✅ **Restore deployment approvals** (1 hour)
+
    - Change `--require-approval never` → `--require-approval any-change`
    - Add GitHub Actions environment protection rules
    - Require 1+ approval for production deployments
@@ -699,6 +701,7 @@ else:
 - Target: `api_item_consolidate.py`, `api_item_discard.py`, `api_item_use.py`
 
 9. ✅ **Optimize Lambda memory** (4 hours)
+
    - Test functions at 256MB, 512MB
    - Measure duration vs memory sweet spot
    - Reduce CloudWatch log retention (1 year → 30 days)
@@ -729,6 +732,7 @@ else:
 **Advanced Features**: 16. ✅ **Implement canary deployment** (16 hours) - SAM gradual deployment configuration - Lambda aliases with weighted routing - Automated rollback on metrics threshold
 
 17. ✅ **Add custom business metrics** (8 hours)
+
     - Track story completion rates
     - Monitor inventory operation sizes
     - Measure API latency percentiles

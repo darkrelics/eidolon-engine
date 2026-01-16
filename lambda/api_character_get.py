@@ -1,10 +1,13 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to get a character for the incremental game.
 Returns the full character data including active segments if any.
+
+Endpoint: GET /character/get
+Authentication: Cognito (required)
 """
 
 from eidolon.character_data import character_get, cleanup_expired_daily_stories

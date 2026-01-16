@@ -808,6 +808,7 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 This project contains TWO distinct game systems:
 
 1. **MUD Server** (Go) - Traditional text-based multi-user dungeon
+
    - Location: `server/` directory (62 Go files)
    - Features: Real-time combat, item stacking, crafting, trading, NPC merchants
    - Status: Many open feature requests (#638 crafting, #639 economy, #621 combat, #626 item generation)

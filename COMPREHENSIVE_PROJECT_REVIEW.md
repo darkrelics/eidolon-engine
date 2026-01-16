@@ -40,7 +40,7 @@ The **Eidolon Engine** is a **well-architected, production-ready cloud-native ga
 | Component          | Technology          | Version | Lines of Code |
 | ------------------ | ------------------- | ------- | ------------- |
 | **Backend**        | Python (AWS Lambda) | 3.12+   | ~15,000+      |
-| **Server**         | Go (SSH MUD)        | 1.24.0  | ~12,000+      |
+| **Server**         | Go (SSH MUD)        | 1.24.10 | ~12,000+      |
 | **Frontend**       | Flutter/Dart        | 3.32+   | ~8,000+       |
 | **Infrastructure** | AWS CDK (Python)    | 2.219.0 | ~6,000+       |
 | **Scripting**      | Lua                 | -       | ~500          |
@@ -742,7 +742,7 @@ The project follows an **opinionated, pragmatic testing philosophy** documented 
 
 **Key Packages:**
 
-- `boto3==1.40.45` - AWS SDK
+- `boto3==1.42.5` - AWS SDK
 - `aws-cdk-lib==2.219.0` - Infrastructure as Code
 - `bloom-filter==1.3.3` - Name validation
 - `defusedxml==0.8.0rc2` - Secure XML parsing
@@ -757,7 +757,7 @@ The project follows an **opinionated, pragmatic testing philosophy** documented 
 
 ✅ **Strengths:**
 
-- Go 1.24.0 (current, released Nov 2024)
+- Go 1.24.11 (current, released Dec 2025)
 - AWS SDK v2 (modern, actively maintained)
 - Modern crypto packages (`golang.org/x/crypto v0.43.0`)
 
@@ -1001,10 +1001,10 @@ The project follows an **opinionated, pragmatic testing philosophy** documented 
 | Technology | Current Version | Project Version | Status        |
 | ---------- | --------------- | --------------- | ------------- |
 | Python     | 3.13            | 3.12+           | ✅ Current    |
-| Go         | 1.23            | 1.24.0          | ✅ **Latest** |
+| Go         | 1.24            | 1.24.11         | ✅ **Latest** |
 | Flutter    | 3.32            | 3.32+           | ✅ Current    |
 | AWS CDK    | 2.x             | 2.219.0         | ✅ Current    |
-| Boto3      | 1.35+           | 1.40.45         | ✅ Current    |
+| Boto3      | 1.35+           | 1.42.5          | ✅ Current    |
 
 **Technology Currency:** **Excellent** - All technologies at current or latest versions
 
@@ -1050,11 +1050,13 @@ The project follows an **opinionated, pragmatic testing philosophy** documented 
 ### 12.1 Must-Do (Critical Path)
 
 1. ✅ **Refactor Lambda Handler Duplication**
+
    - Create decorator pattern
    - Apply to all 16 functions
    - Effort: 4-6 hours
 
 2. ✅ **Fix Dart Type Casting**
+
    - Add null checks before casting
    - Effort: 2-3 hours
 

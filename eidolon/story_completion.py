@@ -42,12 +42,32 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
     """
     Complete the story, apply rewards, and update character state.
 
+    Idempotent: safe to call multiple times. Rewards are only applied once.
+
     Args:
         character_id: Character UUID
         story_id: Story UUID
         story_instance_id: Story instance UUID
         outcome: Final outcome
     """
+    # Idempotency check: if story already completed, skip reward application
+    already_completed = False
+    if story_instance_id:
+        try:
+            existing_history = dynamo.get_item(
+                TableName.STORY_HISTORY,
+                {"CharacterID": character_id, "StoryInstanceID": story_instance_id}
+            )
+            if existing_history and existing_history.get("FinishedAt"):
+                logger.info(
+                    f"Story {story_instance_id} already completed for {character_id}, "
+                    f"skipping reward application (idempotency check)"
+                )
+                already_completed = True
+        except ClientError as err:
+            logger.warning(f"Failed idempotency check for story {story_instance_id}: {err}")
+            # Continue with completion - better to risk double rewards than fail
+
     complete_story_for_character(character_id)
 
     if story_instance_id:
@@ -96,6 +116,10 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
     else:
         segments_completed = 0
 
-    rewards = calculate_story_rewards(story_metadata, outcome, segments_completed)
-    if rewards.get("items") or rewards.get("currency", 0) > 0:
-        apply_story_rewards(character_id, rewards)
+    # Only apply rewards if not already completed (idempotency)
+    if not already_completed:
+        rewards = calculate_story_rewards(story_metadata, outcome, segments_completed)
+        if rewards.get("items") or rewards.get("currency", 0) > 0:
+            apply_story_rewards(character_id, rewards)
+    else:
+        logger.debug(f"Skipping rewards for {character_id} - story already completed")

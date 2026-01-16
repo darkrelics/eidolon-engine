@@ -343,16 +343,19 @@ Backend changes:
 **What's Missing (Frontend Only):**
 
 1. **Store UI Screen**
+
    - Need Flutter screen to browse store items
    - Need purchase confirmation dialogs
    - Need affordability indicators (can/cannot afford)
    - Backend API ready: `GET /store/list`, `POST /store/purchase`
 
 2. **Item Use Button**
+
    - Need "Use" button in inventory panel for consumables
    - Backend API ready: `POST /item/use`
 
 3. **Currency Display Enhancement**
+
    - Currently displays but could be more prominent
    - Currency amount in character panel/header
 
@@ -512,11 +515,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **Implemented:**
 
 1. ✅ Created `incremental/lib/repositories/item_repository.dart`
+
    - Three-tier loading: memory → IndexedDB → server
    - Provides `getEnrichedItem(String itemId)` method
    - Batch loading optimization for inventory
 
 2. ✅ Updated `incremental/lib/widgets/game/inventory_panel.dart`
+
    - Converted to StatefulWidget
    - Uses Item Repository for data loading
    - Displays item names, descriptions, quantities from cached prototypes
@@ -550,15 +555,18 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **What Was Implemented:**
 
 1. ✅ Item consumption classification in prototypes
+
    - Prototypes now have Consumable, Effects, and EffectType fields
    - Effect types supported: Healing, Essence, Buff
 
 2. ✅ Created `lambda/api_item_use.py` (185 lines)
+
    - Endpoint: `POST /item/use`
    - Body: `{"CharacterID": "...", "ItemID": "..."}`
    - Validates character ownership and item consumability
 
 3. ✅ Implemented effect system in `eidolon/item_effects.py` (225 lines)
+
    - Dice notation parsing: "2d4+2", "1d6", "3d8-1"
    - Healing: Removes wounds from character's wound list
    - Character revival: Dead characters revived if healed above 0 HP
@@ -581,17 +589,20 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **What Was Implemented:**
 
 1. ✅ Store data structure designed
+
    - Created `data/store_general_store.json` with 5 items
    - Store format: PrototypeID, PrototypeName, Price, Stock, MinLevel, Category, Featured
    - Global store model (single store for all players)
 
 2. ✅ Created `lambda/api_store_list.py` (79 lines)
+
    - Endpoint: `GET /store/list?StoreID=general-store&CharacterID=...`
    - Returns available items with full prototype details
    - Level filtering: Items only shown if character meets MinLevel requirement
    - Stock filtering: Out-of-stock items (Stock=0) hidden
 
 3. ✅ Created `lambda/api_store_purchase.py` (111 lines)
+
    - Endpoint: `POST /store/purchase`
    - Body: `{"CharacterID": "...", "PrototypeID": "...", "Quantity": 1}`
    - Validates sufficient currency (Resources.Value field)
@@ -624,6 +635,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **What Was Done:**
 
 1. ✅ Extracted reusable timestamp utility
+
    - Created `eidolon/time_utils.coerce_unix_timestamp()` (52 lines)
    - Handles DynamoDB Decimal types, strings, ints, floats, None values
    - Comprehensive documentation with examples
@@ -655,18 +667,21 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **Implementation:**
 
 1. Create CloudWatch dashboard
+
    - Lambda invocation metrics, error rates
    - DynamoDB operation metrics
    - API Gateway request/error rates
    - Custom business metrics (active stories, characters created)
 
 2. Set up alarms
+
    - Lambda error rate exceeds threshold
    - DynamoDB throttling events
    - API Gateway 5xx errors
    - Dead letter queue messages
 
 3. Add custom metric emission
+
    - Emit story start/completion events
    - Emit segment processing metrics
    - Use CloudWatch PutMetricData API
@@ -840,12 +855,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
 **Priority: High**
 
 1. ✅ COMPLETED: Fix inventory display showing UUIDs (2025-10-21)
+
    - ✅ Created item_repository.dart for Flutter caching
    - ✅ Updated inventory_panel.dart to display item names and quantities
    - ✅ Initialized IndexedDB on app startup
    - ✅ Implemented three-tier caching strategy
 
 2. Implement item consumption (NEXT PRIORITY)
+
    - Create api_item_consume.py backend endpoint
    - Add consumption effects (healing, essence restoration)
    - Add "Use" button in Flutter inventory

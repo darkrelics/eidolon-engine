@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Environment variable configuration for Lambda functions.
 Centralizes all environment variable access with defaults.
@@ -34,10 +34,11 @@ PROCESS_SEGMENT_FUNCTION = os.environ.get("PROCESS_SEGMENT_FUNCTION", "process-s
 DEFAULT_HEALTH = int(os.environ.get("DEFAULT_HEALTH", "10"))
 DEFAULT_ESSENCE = int(os.environ.get("DEFAULT_ESSENCE", "3"))
 MAX_CHARACTERS_PER_PLAYER = int(os.environ.get("MAX_CHARACTERS_PER_PLAYER", "1"))
+DEFAULT_SEGMENT_DURATION = int(os.environ.get("DEFAULT_SEGMENT_DURATION", "300"))
 
 
 # Logging Configuration
-def _validate_log_level(level_str: str) -> str:
+def validate_log_level(level_str: str) -> str:
     """Validate and normalize log level.
 
     Accepts:
@@ -62,7 +63,7 @@ def _validate_log_level(level_str: str) -> str:
         return upper_level if upper_level in valid_names else "INFO"
 
 
-LOG_LEVEL = _validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
+LOG_LEVEL = validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
 
 # AWS Environment Detection
 AWS_EXECUTION_ENV = os.environ.get("AWS_EXECUTION_ENV")

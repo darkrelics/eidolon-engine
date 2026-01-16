@@ -190,6 +190,7 @@ The general store includes 5 items with varied pricing and stock:
 ### High Priority (Required for MVP)
 
 1. **Store UI Screen** (~8-12 hours)
+
    - Browse store items with prices
    - Purchase confirmation dialog
    - Affordability indicators (can/cannot afford)
@@ -202,6 +203,7 @@ The general store includes 5 items with varied pricing and stock:
      ```
 
 2. **Item Use Button** (~2-4 hours)
+
    - "Use" button in inventory panel for consumables
    - Item consumption confirmation
    - Effect feedback (healing animation/message)
@@ -250,6 +252,7 @@ The general store includes 5 items with varied pricing and stock:
 ### Deployment Process
 
 1. **Ensure Prerequisites:**
+
    - Lambda Stack deployed (Phase 3)
    - Character Stack updated with new functions
 
@@ -261,6 +264,7 @@ The general store includes 5 items with varied pricing and stock:
    ```
 
 3. **Verify Deployment:**
+
    - Check all 12 functions exist in AWS Lambda console
    - Test each endpoint with Postman/curl
    - Verify store inventory loads correctly
@@ -348,6 +352,7 @@ Pragmatic refactoring focusing on extracting reusable utilities without introduc
 **Changes Made:**
 
 1. ✅ **Extracted Timestamp Coercion Utility**
+
    - Created `eidolon/time_utils.coerce_unix_timestamp()` (52 lines)
    - Handles DynamoDB Decimal types, strings, ints, floats, None values
    - Comprehensive documentation with examples

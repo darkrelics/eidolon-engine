@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_segment import update_character_active_segment
 from eidolon.dynamo import TableName, dynamo
-from eidolon.environment import SEGMENT_QUEUE_URL
+from eidolon.environment import DEFAULT_SEGMENT_DURATION, SEGMENT_QUEUE_URL
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
 from eidolon.segment_core import get_segment_definition
@@ -70,9 +70,15 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET #decision = :decision, #status = :completed",
+            UpdateExpression="SET #decision = :decision, #status = :completed, ProcessingStatus = :processed",
             ExpressionAttributeNames={"#decision": "Decision", "#status": "Status"},
-            ExpressionAttributeValues={":decision": decision_id, ":completed": "completed", ":active": "active", ":null": None},
+            ExpressionAttributeValues={
+                ":decision": decision_id,
+                ":completed": "completed",
+                ":processed": "processed",
+                ":active": "active",
+                ":null": None,
+            },
             ConditionExpression="(attribute_not_exists(#decision) OR #decision = :null) AND #status = :active",
         )
 
@@ -83,7 +89,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         return updated_segment
     except ClientError as err:
         # Check if this was a conditional check failure
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             # Try to determine which condition failed by checking current state
             current_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
             if current_segment:
@@ -164,7 +170,7 @@ def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
             return 0
         next_segment = get_story_segment(story_id, next_segment_id)
 
-        duration = int(next_segment.get("SegmentDuration", 300))
+        duration = int(next_segment.get("SegmentDuration", DEFAULT_SEGMENT_DURATION))
         return int(time.time()) + duration
 
     except (ValueError, RuntimeError) as err:
@@ -216,6 +222,9 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     active_segment["DecisionMadeAt"] = now_iso()
 
     story_instance_id = active_segment.get("StoryInstanceID")
+    if not story_instance_id:
+        logger.warning(f"StoryInstanceID missing for segment {active_segment_id}, history tracking may be incomplete")
+
     segment_id = active_segment.get("SegmentID")
     if not segment_id:
         raise ValueError("Segment ID not found in active segment")
@@ -264,7 +273,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
 
             update_character_active_segment(character_id, next_active_segment_id)
 
-            next_segment_duration = next_segment_def.get("SegmentDuration", 60)
+            next_segment_duration = next_segment_def.get("SegmentDuration", DEFAULT_SEGMENT_DURATION)
             response_data["NextSegmentTime"] = future_iso(next_segment_duration)
 
             # Return the next segment data so Flutter doesn't need to reload
@@ -305,8 +314,30 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                         # Send just the ActiveSegmentID string (what ops_segment_process expects)
                         send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
                         logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
+                    else:
+                        logger.error(f"SEGMENT_QUEUE_URL not configured, cannot queue {next_active_segment_id}")
+                        # Mark segment for retry by poller
+                        try:
+                            dynamo.update_item(
+                                TableName.ACTIVE_SEGMENTS,
+                                Key={"ActiveSegmentID": next_active_segment_id},
+                                UpdateExpression="SET RetryNeeded = :retry",
+                                ExpressionAttributeValues={":retry": True},
+                            )
+                        except ClientError:
+                            pass  # Best effort
                 except Exception as err:
-                    logger.warning(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}")
+                    logger.error(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}", exc_info=True)
+                    # Mark segment for retry by poller
+                    try:
+                        dynamo.update_item(
+                            TableName.ACTIVE_SEGMENTS,
+                            Key={"ActiveSegmentID": next_active_segment_id},
+                            UpdateExpression="SET RetryNeeded = :retry",
+                            ExpressionAttributeValues={":retry": True},
+                        )
+                    except ClientError:
+                        pass  # Best effort
         except Exception as err:
             logger.error(f"Failed to create next segment after decision for {next_segment_id} Error: {err}", exc_info=True)
             raise RuntimeError(f"Failed to create next segment: {err}") from err

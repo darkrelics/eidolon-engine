@@ -1,10 +1,13 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to start a story for a character.
 Validates character state, creates active segment, and returns first segment details.
+
+Endpoint: POST /story/start
+Authentication: Cognito (required)
 """
 
 from eidolon.character_data import character_get
@@ -76,8 +79,8 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
                     ExpressionAttributeValues={":stories": list(available_stories)},
                 )
                 logger.info(f"Removed invalid story {story_id} from character {character_id}")
-        except Exception as cleanup_err:
-            logger.error(f"Failed to remove invalid story from character: {cleanup_err}")
+        except Exception as err:
+            logger.error(f"Failed to remove invalid story from character: {err}")
         raise ValueError("404:Story no longer exists") from err
 
     # Create story instance

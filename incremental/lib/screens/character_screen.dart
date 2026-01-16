@@ -216,7 +216,6 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
 
   Future<void> _showAddCharacterDialog() async {
     final controller = context.read<CharacterScreenController>();
-    // First load archetypes
     List<ArchetypeInfo> archetypes = await controller.getArchetypes();
 
     if (!mounted) return;
@@ -226,107 +225,125 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create New Character'),
-        content: StatefulBuilder(
-          builder: (context, setDialogState) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Character Name', hintText: 'Enter character name'),
-                textCapitalization: TextCapitalization.words,
-              ),
-              if (archetypes.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                const Text('Archetype:'),
-                const SizedBox(height: 8),
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 300),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      children: archetypes.map((archetype) {
-                        final isSelected = selectedArchetype == archetype.name;
-                        return Card(
-                          elevation: isSelected ? 2 : 0,
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : Theme.of(context).colorScheme.surface,
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: ListTile(
-                            selected: isSelected,
-                            title: Text(
-                              archetype.name,
-                              style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
-                            ),
-                            subtitle: archetype.description.isNotEmpty
-                                ? Text(
-                                    archetype.description,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: Theme.of(context).textTheme.bodySmall,
-                                  )
-                                : null,
-                            onTap: () {
-                              setDialogState(() {
-                                selectedArchetype = archetype.name;
-                              });
-                            },
-                          ),
-                        );
-                      }).toList(),
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Create New Character'),
+          content: StatefulBuilder(
+            builder: (sbContext, setDialogState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Character Name',
+                      hintText: 'Enter character name',
                     ),
+                    textCapitalization: TextCapitalization.words,
+                    autofocus: true,
                   ),
-                ),
-              ] else ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'No archetypes available. Default stats will be used.',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  if (archetypes.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Text('Archetype:'),
+                    const SizedBox(height: 8),
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 300),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: archetypes.map((archetype) {
+                            final isSelected = selectedArchetype == archetype.name;
+                            return Card(
+                              elevation: isSelected ? 2 : 0,
+                              color: isSelected
+                                  ? Theme.of(sbContext).colorScheme.primaryContainer
+                                  : Theme.of(sbContext).colorScheme.surface,
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              child: ListTile(
+                                selected: isSelected,
+                                title: Text(
+                                  archetype.name,
+                                  style: TextStyle(
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                                subtitle: archetype.description.isNotEmpty
+                                    ? Text(
+                                        archetype.description,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(sbContext).textTheme.bodySmall,
+                                      )
+                                    : null,
+                                onTap: () {
+                                  setDialogState(() {
+                                    selectedArchetype = archetype.name;
+                                  });
+                                },
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              final name = nameController.text.trim();
-              if (name.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a character name')));
-                return;
-              }
-
-              Navigator.of(context).pop();
-              _createCharacter(context, name, selectedArchetype ?? 'default');
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(sbContext).colorScheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 20,
+                            color: Theme.of(sbContext).colorScheme.onSurfaceVariant,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No archetypes available. Default stats will be used.',
+                              style: Theme.of(sbContext).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(sbContext).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              );
             },
-            child: const Text('Create'),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                if (name.isEmpty) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Please enter a character name')),
+                  );
+                  return;
+                }
+                Navigator.of(dialogContext).pop();
+                _createCharacter(name, selectedArchetype ?? 'default');
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
     );
   }
 
-  Future<void> _createCharacter(BuildContext context, String name, String archetype) async {
+  Future<void> _createCharacter(String name, String archetype) async {
     final controller = context.read<CharacterScreenController>();
 
     await controller.createCharacter(
@@ -339,9 +356,9 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
       },
       onError: (error) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(error), backgroundColor: Theme.of(context).colorScheme.error));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error), backgroundColor: Theme.of(context).colorScheme.error),
+          );
         }
       },
     );

@@ -611,6 +611,7 @@ def test_use_decrements_quantity():
 **API Endpoints:**
 
 1. **Discard**: `POST /item/discard`
+
    - Body: `{"CharacterID": "uuid", "ItemID": "uuid", "Quantity": 2 (optional)}`
    - Returns: Item discarded, quantity removed, remaining quantity
    - Supports partial discard (e.g., discard 2 of 5 potions)
@@ -1206,6 +1207,7 @@ Minimum viable icon set (can use placeholder icons initially):
 **API Endpoints:**
 
 1. **List Store**: `GET /store/list?StoreID=general-store&CharacterID=uuid`
+
    - Returns: Store info, available items (filtered by level), prototype details
    - Level filtering: Only shows items character can use
    - Stock filtering: Hides out-of-stock items
@@ -1914,12 +1916,14 @@ def test_purchase_insufficient_funds():
 **Core Sections:**
 
 1. **Prerequisites**
+
    - Text editor setup
    - Python 3.12+ installation
    - Repository access
    - AWS CLI configuration
 
 2. **Story Creation Workflow**
+
    - Create story JSON
    - Define segments (mechanical, decision)
    - Add economy features (currency rewards, item drops)
@@ -1928,6 +1932,7 @@ def test_purchase_insufficient_funds():
    - Test in-game
 
 3. **Field Reference**
+
    - Story metadata fields explained
    - Segment types and fields
    - Challenge definitions
@@ -1936,17 +1941,20 @@ def test_purchase_insufficient_funds():
    - **NEW: Item drop configuration**
 
 4. **Copy-Paste Templates** (3 required)
+
    - Linear 3-segment story with currency reward
    - Branching story with 2 decision points and item drops
    - Combat story with skill challenge and mixed rewards
 
 5. **Common Patterns**
+
    - Simple quests
    - Branching narratives
    - Combat encounters
    - **NEW: Economy-focused stories (earn/spend loops)**
 
 6. **Balance Guidelines**
+
    - Segment durations by tier
    - Difficulty progression
    - **NEW: Currency reward scaling**

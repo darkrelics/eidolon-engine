@@ -290,23 +290,27 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Changes Made**:
 
 1. ✅ **IndexedDB Initialization** - Modified `incremental/lib/main.dart` (lines 28-32)
+
    - Added initialization on app startup for web platform
    - Includes platform check and debug logging
    - Executes before app launch to ensure caching available
 
 2. ✅ **Item Brief API Update** - Modified `eidolon/items.py` - `get_item_brief()` (lines 190-204)
+
    - Returns Quantity field for all items
    - Stackable items: Returns actual quantity (1+)
    - Non-stackable items: Returns 0 for API consistency
    - Storage: Quantity field only present for stackable items
 
 3. ✅ **Inventory Schema Implementation** - No migration needed (clean deployment)
+
    - New format: `{slot: {"ItemID": "...", "Quantity": int}}` for stackable
    - New format: `{slot: {"ItemID": "..."}}` for non-stackable (no Quantity field in storage)
    - Updated all inventory creation/manipulation functions
    - Backward compatibility intentionally omitted per deployment requirements
 
 4. ✅ **Item Repository Created** - `incremental/lib/repositories/item_repository.dart` (288 lines)
+
    - Three-tier caching strategy:
      - Memory cache for prototypes (<1ms)
      - IndexedDB cache for persistence (50-100ms)
@@ -319,6 +323,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
    - Batch optimization: 20 items with 5 unique prototypes = 5 API calls (75% reduction)
 
 5. ✅ **Inventory Panel Integration** - Modified `incremental/lib/widgets/game/inventory_panel.dart`
+
    - Converted from StatelessWidget to StatefulWidget
    - ItemRepository initialized in `initState()`
    - Enriched inventory loaded on mount
@@ -329,17 +334,20 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
    - Graceful degradation to UUID display on error
 
 6. ✅ **Frontend Models Updated** - Modified `incremental/lib/models/character.dart` (line 17)
+
    - Changed inventory type from `Map<String, String>` to `Map<String, dynamic>`
    - Supports new structure: `{slot: {"ItemID": "uuid", "Quantity": int}}`
    - Updated `fromJson()` and `toJson()` serialization
 
 7. ✅ **Backend Systems Updated** - Updated inventory handling across codebase
+
    - `eidolon/story_rewards.py` - Added `find_next_available_slot()`, updated reward application
    - `eidolon/items.py` - Updated `create_items_from_prototypes()`, `find_matching_stack()`, `get_inventory()`
    - `eidolon/player_character.py` - Updated `delete_character_items()` to extract ItemID from new format
    - `eidolon/character_story.py` - Updated `check_story_prerequisites()` for new inventory format
 
 8. ✅ **Bug Fixes** - Fixed type handling issues
+
    - `incremental/lib/repositories/character_repository.dart` (line 226) - Fixed inventory type from `Map<String, String>` to `Map<String, dynamic>`
 
 9. ✅ **Documentation Updated** - Modified `documentation/schema.md`
@@ -730,6 +738,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 **Implementation**:
 
 1. **Create CloudWatch dashboard**
+
    - Lambda invocation metrics
    - Lambda error rates
    - DynamoDB operation metrics
@@ -737,12 +746,14 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Custom business metrics (active stories, characters created)
 
 2. **Set up alarms**
+
    - Lambda error rate exceeds threshold
    - DynamoDB throttling events
    - API Gateway 5xx errors
    - Dead letter queue messages
 
 3. **Add custom metric emission**
+
    - Emit story start/completion events
    - Emit segment processing metrics
    - Use CloudWatch PutMetricData API
@@ -803,6 +814,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 **Implementation Completed**:
 
 1. **Change CompletedStories Structure** ✅
+
    - Change from SET of story_instance_id UUIDs to LIST of MAPs
    - New structure: `[{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]`
    - Only track "one-time" and "daily" stories in this list
@@ -810,6 +822,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Each list entry is a single-key map with story_id as key
 
 2. **Update state_machines.py** ✅
+
    - Modified `set_character_game_mode()` at line 142-165
    - Added story definition loading to get StoryType
    - Implemented conditional logic:
@@ -820,6 +833,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Uses UTC timestamp for CompletedAt
 
 3. **Add Daily Story Cleanup** ✅
+
    - Created `cleanup_expired_daily_stories()` in `eidolon/character_data.py`
    - Modified `lambda/api_character_get.py` to call cleanup before returning character
    - Cleanup logic:
@@ -829,6 +843,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
      - Uses 86400 seconds (24 hours) as threshold
 
 4. **Update Story Validation** ✅
+
    - Modified `eidolon/story_validation.py` - added CompletedStories checking
    - After checking AvailableStories: Iterates through CompletedStories list
    - For each entry, extracts story_id (the single key in each map)
@@ -837,23 +852,27 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
      - If StoryType is "daily": Raises error "Story available again tomorrow"
 
 5. **Remove AbandonedStories** ✅
+
    - Modified `lambda/api_story_abandon.py`
    - Removed AbandonedStories ADD operation from character update
    - Now only updates story history table
 
 6. **Update Character Schema Documentation** ✅
+
    - Modified `documentation/schema.md`
    - Updated CompletedStories field definition to LIST of MAPs format
    - Removed AbandonedStories field
    - Documented daily cleanup behavior (24 hours, UTC-based)
 
 7. **Frontend Updates** ✅
+
    - Modified `incremental/lib/models/character.dart`
    - Changed `completedStories` from `List<String>` to `List<Map<String, dynamic>>`
    - Removed `abandonedStories` field
    - Updated `fromJson()` and `toJson()` methods
 
 8. **Test File Updates** ✅
+
    - Fixed `incremental/test/integration/game_flow_test.dart` - Removed `abandonedStories` references
    - Fixed `incremental/test/widgets/story_panel_test.dart` - Updated `completedStories` format to new structure
    - Fixed type checking issues in `eidolon/state_machines.py`:
@@ -862,6 +881,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Verified with `ruff check` and `flutter analyze`
 
 9. **Documentation Updates** ✅
+
    - Updated `documentation/incremental-story.md` with Story Types section
    - Updated `documentation/incremental-api.md` with CompletedStories examples
    - Updated `documentation/architecture.md` state diagrams

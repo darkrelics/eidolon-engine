@@ -1,4 +1,14 @@
-"""Lambda function to add a new character for the incremental game."""
+"""
+Eidolon Engine - Incremental Game
+
+Copyright 2024-2026 Jason E. Robinson
+
+Lambda function to add a new character for the incremental game.
+Validates character name, checks bloom filter and character limit, then creates character.
+
+Endpoint: POST /character/add
+Authentication: Cognito (required)
+"""
 
 from eidolon.archetypes import get_archetype
 from eidolon.bloom import character_name_filter
@@ -60,17 +70,32 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
             logger.error(f"Failed to retrieve archetype: {err}")
             raise RuntimeError(f"Failed to retrieve archetype: {archetype_name}") from err
         if not archetype_data:
-            # Invalid archetype provided, use defaults
-            logger.info(f"Invalid archetype '{archetype_name}' provided, using defaults")
-            archetype_data = {}
+            # Invalid archetype provided, load actual default archetype
+            logger.warning(f"Invalid archetype '{archetype_name}' provided, loading default archetype")
+            try:
+                archetype_data = get_archetype("default")
+            except RuntimeError as err:
+                logger.error(f"Failed to load default archetype: {err}")
+                raise RuntimeError("Failed to load default archetype") from err
+            if not archetype_data:
+                logger.error("Default archetype not found in database")
+                raise RuntimeError("Default archetype not configured in database")
             archetype_name = "default"
         else:
             logger.info(
                 f"Archetype {archetype_name} found",
             )
     else:
-        # No archetype provided, use defaults
-        logger.info("No archetype specified, using defaults")
+        # No archetype provided, load default archetype
+        logger.info("No archetype specified, loading default archetype")
+        try:
+            archetype_data = get_archetype("default")
+        except RuntimeError as err:
+            logger.error(f"Failed to load default archetype: {err}")
+            raise RuntimeError("Failed to load default archetype") from err
+        if not archetype_data:
+            logger.error("Default archetype not found in database")
+            raise RuntimeError("Default archetype not configured in database")
         archetype_name = "default"
 
     # Create the character using the eidolon library function

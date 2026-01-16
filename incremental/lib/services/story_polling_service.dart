@@ -20,6 +20,7 @@ class StoryPollingService {
   String? _characterId;
   Timer? _pollingTimer;
   Timer? _completionTimer;
+  Timer? _recoveryTimer;
   bool _isPolling = false;
   int _consecutiveErrors = 0;
   String? _lastSeenActiveSegmentId;
@@ -29,6 +30,7 @@ class StoryPollingService {
   static const int _errorRetryDelaySeconds = 30;
   static const int _defaultPollDelaySeconds = 60;  // Fallback if no PollAfter
   static const int _initialPollDelaySeconds = 60;  // Backend design spec: INITIAL_POLL_DELAY
+  static const int _recoveryDelaySeconds = 300;  // 5 minutes before recovery attempt
 
   void dispose() {
     stopPolling();
@@ -39,6 +41,8 @@ class StoryPollingService {
     _pollingTimer = null;
     _completionTimer?.cancel();
     _completionTimer = null;
+    _recoveryTimer?.cancel();
+    _recoveryTimer = null;
     _isPolling = false;
     _characterId = null;
     _consecutiveErrors = 0;
@@ -158,7 +162,18 @@ class StoryPollingService {
       }
 
       if (activeSegmentId == null) {
-        debugPrint('StoryPollingService: Story complete - stopping polling');
+        debugPrint('StoryPollingService: Story complete - reloading character');
+
+        // Reload character to get authoritative state (XP, wounds, inventory)
+        try {
+          final character = await _apiService.getCharacter(characterId: characterId);
+          onCharacterReload(character);
+        } catch (e) {
+          debugPrint('StoryPollingService: Failed to reload character after completion: $e');
+          // Continue to onStoryComplete even if reload fails
+          onError?.call(e);
+        }
+
         stopPolling();
         onStoryComplete();
         return;
@@ -262,8 +277,15 @@ class StoryPollingService {
             // Retry with backoff
             _consecutiveErrors++;
             if (_consecutiveErrors >= _maxConsecutiveErrors) {
-              debugPrint('StoryPollingService: Too many consecutive errors - stopping');
-              stopPolling();
+              debugPrint('StoryPollingService: Too many consecutive errors - scheduling recovery in $_recoveryDelaySeconds seconds');
+              _scheduleRecovery(
+                characterId: characterId,
+                onStatusUpdate: onStatusUpdate,
+                onCharacterReload: onCharacterReload,
+                onSegmentComplete: onSegmentComplete,
+                onStoryComplete: onStoryComplete,
+                onError: onError,
+              );
               return;
             }
 
@@ -315,7 +337,18 @@ class StoryPollingService {
       // Check for "no active segment" which indicates story completion
       final errorMsg = e.toString().toLowerCase();
       if (errorMsg.contains('no active segment') || errorMsg.contains('404')) {
-        debugPrint('StoryPollingService: No active segment - story complete');
+        debugPrint('StoryPollingService: No active segment - story complete, reloading character');
+
+        // Reload character to get authoritative state (XP, wounds, inventory)
+        try {
+          final character = await _apiService.getCharacter(characterId: characterId);
+          onCharacterReload(character);
+        } catch (reloadErr) {
+          debugPrint('StoryPollingService: Failed to reload character after completion: $reloadErr');
+          // Continue to onStoryComplete even if reload fails
+          onError?.call(reloadErr);
+        }
+
         stopPolling();
         onStoryComplete();
         return;
@@ -324,10 +357,17 @@ class StoryPollingService {
       // Notify error handler
       onError?.call(e);
 
-      // Stop polling after too many consecutive errors
+      // Schedule recovery after too many consecutive errors
       if (_consecutiveErrors >= _maxConsecutiveErrors) {
-        debugPrint('StoryPollingService: Too many consecutive errors ($_consecutiveErrors) - stopping polling');
-        stopPolling();
+        debugPrint('StoryPollingService: Too many consecutive errors ($_consecutiveErrors) - scheduling recovery in $_recoveryDelaySeconds seconds');
+        _scheduleRecovery(
+          characterId: characterId,
+          onStatusUpdate: onStatusUpdate,
+          onCharacterReload: onCharacterReload,
+          onSegmentComplete: onSegmentComplete,
+          onStoryComplete: onStoryComplete,
+          onError: onError,
+        );
         return;
       }
 
@@ -357,6 +397,53 @@ class StoryPollingService {
   }) {
     _pollingTimer?.cancel();
     _pollingTimer = Timer(delay, () {
+      _pollOnce(
+        characterId: characterId,
+        onStatusUpdate: onStatusUpdate,
+        onCharacterReload: onCharacterReload,
+        onSegmentComplete: onSegmentComplete,
+        onStoryComplete: onStoryComplete,
+        onError: onError,
+      );
+    });
+  }
+
+  /// Schedule recovery attempt after too many consecutive errors.
+  ///
+  /// After hitting max consecutive errors, waits 5 minutes then attempts
+  /// to resume polling. This prevents permanent failure when the server
+  /// is temporarily unavailable.
+  void _scheduleRecovery({
+    required String characterId,
+    required void Function(Map<String, dynamic> status) onStatusUpdate,
+    required void Function(Map<String, dynamic> character) onCharacterReload,
+    required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
+    required void Function() onStoryComplete,
+    void Function(Object error)? onError,
+  }) {
+    // Cancel any existing timers but keep polling state
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+    _completionTimer?.cancel();
+    _completionTimer = null;
+    _recoveryTimer?.cancel();
+
+    // Schedule recovery attempt
+    _recoveryTimer = Timer(const Duration(seconds: _recoveryDelaySeconds), () {
+      _recoveryTimer = null;
+
+      // Check if polling was explicitly stopped
+      if (!_isPolling || _characterId != characterId) {
+        debugPrint('StoryPollingService: Recovery cancelled - polling stopped');
+        return;
+      }
+
+      debugPrint('StoryPollingService: Attempting recovery after extended timeout');
+
+      // Reset error counter for fresh start
+      _consecutiveErrors = 0;
+
+      // Resume polling immediately
       _pollOnce(
         characterId: characterId,
         onStatusUpdate: onStatusUpdate,

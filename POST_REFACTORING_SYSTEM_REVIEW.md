@@ -279,16 +279,19 @@ Operations Lambdas (3 total):
 **Code Smells Identified:**
 
 1. **Large Function - `api_segment_status.py`** (359 lines total, business logic function 245 lines)
+
    - Lines 45-290: Single function with complex nested logic
    - Multiple nested try-except blocks
    - Nested function definitions inside business logic
    - **Recommendation:** Break into smaller functions
 
 2. **Large Function - `api_segment_history.py`** (293 lines total)
+
    - Complex query logic with multiple database operations
    - **Recommendation:** Extract query builders
 
 3. **Inconsistent Null Handling**
+
    - Some functions check `if not value:`, others check `if value is None:`
    - **Recommendation:** Standardize null checking patterns
 
@@ -419,7 +422,7 @@ def test_authenticated_handler_with_valid_token():
 
 **Go (45 modules):**
 
-- ✅ Go 1.24.0 (latest)
+- ✅ Go 1.24.11 (latest)
 - ✅ AWS SDK v2 (modern)
 - ✅ Modern crypto packages
 - ⚠️ go-fuzzywuzzy v0.0.0 (pseudo-version) - verify maintenance

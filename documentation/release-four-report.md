@@ -193,6 +193,7 @@ The `_applyUpdates()` method applies field-level changes:
 **Server Fetch Points:**
 
 1. **Character Selection** (`loadPlayerCharacters()`):
+
    - Fetches list from server
    - Fetches full details for each character
    - Caches all characters in IndexedDB
@@ -227,6 +228,7 @@ The item loading system implements an efficient three-tier caching strategy that
 **Implementation Architecture:**
 
 1. **Item Repository Pattern** (`item_repository.dart`) - ✅ Implemented (288 lines)
+
    - Memory cache layer for prototypes (fastest access: <1ms)
    - IndexedDB persistence layer (fast: 50-100ms, survives page refresh)
    - Server fallback for cache misses (slowest: 200-500ms)
@@ -256,6 +258,7 @@ The item loading system implements an efficient three-tier caching strategy that
    ```
 
 3. **Batch Optimization** - ✅ Implemented
+
    - Collect all unique prototype IDs first
    - Pre-fetch all prototypes in parallel
    - Result: 20 items → ~5 prototype fetches (many items share prototypes)
@@ -839,12 +842,14 @@ The inventory management system with IndexedDB integration was completed with th
    ```
 
 2. **Backend Enhancements:** ✅
+
    - Added Quantity field to item brief API response
    - Updated character inventory schema to support quantities
    - Implemented new format: `{slot: {"ItemID": "...", "Quantity": int}}` for stackable items
    - No backward compatibility needed (clean deployment)
 
 3. **Item Repository Created:** ✅ (`incremental/lib/repositories/item_repository.dart`)
+
    - Three-tier loading strategy (memory → IndexedDB → server)
    - Memory + IndexedDB caching layers
    - Batch optimization for inventory loading

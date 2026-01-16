@@ -1,10 +1,13 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to list character names for an authenticated player.
 Returns only character names and death status from the player table.
+
+Endpoint: GET /character/list
+Authentication: Cognito (required)
 """
 
 from eidolon.lambda_handler import authenticated_handler

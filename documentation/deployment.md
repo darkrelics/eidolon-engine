@@ -11,6 +11,43 @@ This guide explains how to deploy the Eidolon Engine infrastructure using the mo
 - AWS CDK Bootstrap: Run `cdk bootstrap aws://ACCOUNT-ID/REGION` if not already done
 - Supported regions: us-east-1, us-east-2, us-west-2
 
+## Pre-Deployment Checklist
+
+Before running deployment, verify these requirements:
+
+### Required Infrastructure
+- [ ] AWS CLI configured with appropriate IAM permissions
+- [ ] AWS CDK CLI installed (`npm install -g aws-cdk`)
+- [ ] CDK bootstrapped in target region (`cdk bootstrap aws://ACCOUNT-ID/REGION`)
+- [ ] S3 artifacts bucket exists and is accessible
+- [ ] Route53 hosted zone configured for your domain
+
+### Required Permissions (IAM)
+- [ ] CloudFormation: CreateStack, UpdateStack, DeleteStack, DescribeStacks
+- [ ] S3: CreateBucket, PutObject, GetObject, ListBucket
+- [ ] Lambda: CreateFunction, UpdateFunctionCode, AddPermission
+- [ ] DynamoDB: CreateTable, DescribeTable, PutItem
+- [ ] IAM: CreateRole, AttachRolePolicy, CreatePolicy
+- [ ] Cognito: CreateUserPool, CreateUserPoolClient
+- [ ] API Gateway: CreateRestApi, CreateResource, PutMethod
+- [ ] CloudFront: CreateDistribution, CreateInvalidation
+- [ ] Route53: ChangeResourceRecordSets
+
+### Configuration Files
+- [ ] `config.yml` exists with valid settings (or use environment variables)
+- [ ] Cognito User Pool ARN available (for API authentication)
+
+### Pre-Deployment Validation
+
+The deployment script automatically validates:
+
+1. **S3 Artifacts Bucket**: Must exist and be accessible
+2. **Lambda Artifacts**: Warns if missing (CodeBuild will create them)
+3. **AWS Credentials**: Validates IAM identity
+4. **CDK Bootstrap**: Checks if CDK is bootstrapped in target region
+
+If validation fails with errors, deployment stops. Warnings allow you to proceed.
+
 ## Quick Start
 
 ```bash

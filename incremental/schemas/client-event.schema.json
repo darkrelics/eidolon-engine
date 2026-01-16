@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Client Event Schema",
+  "description": "Schema for client events in Eidolon Engine segments",
+  "type": "object",
+  "required": ["EventType", "Title", "Description"],
+  "properties": {
+    "EventType": {
+      "type": "string",
+      "description": "Type of event (Narrative, Decision, Combat, Challenge, Reward, etc.)"
+    },
+    "Title": {
+      "type": "string",
+      "description": "Title of the event to display to the player"
+    },
+    "Description": {
+      "type": "string",
+      "description": "Descriptive content or narrative text for the event"
+    },
+    "Data": {
+      "description": "Additional structured data for the event (optional)"
+    }
+  }
+}

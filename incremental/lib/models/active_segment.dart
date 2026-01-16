@@ -57,9 +57,7 @@ class ActiveSegment {
       startTime: _normalizeIsoTimestamp(json['StartTime']),
       endTime: _normalizeIsoTimestamp(json['EndTime']),
       challengeResults: json['ChallengeResults'] as List<dynamic>?,
-      outcome: json['Outcome'] is Map
-          ? (json['Outcome']['Type'] as String?)
-          : json['Outcome'] as String?,
+      outcome: _extractOutcome(json['Outcome']),
       decision: json['Decision'] as String?,
       decisionText: json['DecisionText'] as String?,
       decisionOptions: json['DecisionOptions'] as Map<String, dynamic>?,
@@ -112,5 +110,34 @@ String _normalizeIsoTimestamp(dynamic value) {
     return TimeUtils.fromUnix(value.toInt());
   }
 
-  return TimeUtils.nowIso();
+  // Return a timestamp 60 seconds in the future as safe fallback
+  // This prevents immediate expiration if EndTime is invalid
+  return TimeUtils.futureIso(60);
+}
+
+/// Extract outcome string from various formats.
+///
+/// Server may send Outcome as:
+/// - String: "normal", "exceptional", etc.
+/// - Map with Type field: {"Type": "normal", ...}
+/// - null or empty
+String? _extractOutcome(dynamic value) {
+  if (value == null) {
+    return null;
+  }
+
+  if (value is String) {
+    return value.isNotEmpty ? value : null;
+  }
+
+  if (value is Map) {
+    // Try common field names for outcome type
+    final type = value['Type'] ?? value['type'] ?? value['Outcome'] ?? value['outcome'];
+    if (type is String && type.isNotEmpty) {
+      return type;
+    }
+    return null;
+  }
+
+  return null;
 }

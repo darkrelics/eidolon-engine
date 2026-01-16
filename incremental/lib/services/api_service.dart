@@ -3,6 +3,7 @@ import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/utils/api_parser.dart';
 import 'package:eidolon_incremental/utils/api_validation.dart';
+import 'package:eidolon_incremental/utils/json_parser.dart';
 import 'base_api_service.dart';
 
 /// Character info for listing
@@ -119,6 +120,19 @@ class ApiService extends BaseApiService {
       }
       rethrow;
     }
+  }
+
+  /// Get raw character response including ActiveStory and ActiveSegment.
+  ///
+  /// Returns the complete API response with Character, ActiveStory, and ActiveSegment fields.
+  /// Used by polling service to get authoritative character state after story completion.
+  Future<Map<String, dynamic>> getCharacter({required String characterId}) async {
+    ApiMetrics.recordCall('GET /character (raw)', details: 'id=$characterId');
+
+    return await get<Map<String, dynamic>>(
+      '/character',
+      queryParams: {'CharacterID': characterId},
+    );
   }
 
   /// List all characters for the player.
@@ -372,6 +386,100 @@ class ApiService extends BaseApiService {
       body: {'CharacterID': characterId, 'ItemID': itemId},
     );
   }
+
+  /// Discard an inventory item.
+  ///
+  /// Removes an item from inventory. For stackable items, can discard
+  /// a partial quantity. Returns discard results.
+  ///
+  /// Parameters:
+  /// - [characterId]: Character UUID
+  /// - [itemId]: Item UUID to discard
+  /// - [slot]: Optional inventory slot for faster lookup
+  /// - [quantity]: Optional quantity to discard (for stackable items).
+  ///   If null or >= stack quantity, discards entire item.
+  Future<Map<String, dynamic>> discardItem({
+    required String characterId,
+    required String itemId,
+    String? slot,
+    int? quantity,
+  }) async {
+    ApiMetrics.recordCall(
+      'POST /item/discard',
+      details: 'characterId=$characterId, itemId=$itemId, slot=$slot, qty=$quantity',
+    );
+
+    final body = <String, dynamic>{
+      'CharacterID': characterId,
+      'ItemID': itemId,
+    };
+    if (slot != null) {
+      body['InventorySlot'] = slot;
+    }
+    if (quantity != null) {
+      body['Quantity'] = quantity;
+    }
+
+    return post<Map<String, dynamic>>('/item/discard', body: body);
+  }
+
+  /// Consolidate stackable item stacks.
+  ///
+  /// Merges multiple stacks of the same item type into fewer stacks,
+  /// respecting MaxStack limits.
+  ///
+  /// Parameters:
+  /// - [characterId]: Character UUID
+  /// - [prototypeId]: Optional - consolidate only stacks of this item type
+  /// - [consolidateAll]: If true, consolidates all stackable items (default)
+  Future<Map<String, dynamic>> consolidateStacks({
+    required String characterId,
+    String? prototypeId,
+    bool consolidateAll = true,
+  }) async {
+    ApiMetrics.recordCall(
+      'POST /item/consolidate',
+      details: 'characterId=$characterId, prototypeId=$prototypeId, all=$consolidateAll',
+    );
+
+    final body = <String, dynamic>{
+      'CharacterID': characterId,
+      'ConsolidateAll': consolidateAll,
+    };
+    if (prototypeId != null) {
+      body['PrototypeID'] = prototypeId;
+    }
+
+    return post<Map<String, dynamic>>('/item/consolidate', body: body);
+  }
+
+  /// Split a stackable item into two stacks.
+  ///
+  /// Creates a new stack with the specified quantity from an existing stack.
+  ///
+  /// Parameters:
+  /// - [characterId]: Character UUID
+  /// - [slot]: Inventory slot containing the stack to split
+  /// - [quantity]: Number of items to split into the new stack
+  Future<Map<String, dynamic>> splitStack({
+    required String characterId,
+    required String slot,
+    required int quantity,
+  }) async {
+    ApiMetrics.recordCall(
+      'POST /item/split',
+      details: 'characterId=$characterId, slot=$slot, qty=$quantity',
+    );
+
+    return post<Map<String, dynamic>>(
+      '/item/split',
+      body: {
+        'CharacterID': characterId,
+        'Slot': slot,
+        'Quantity': quantity,
+      },
+    );
+  }
 }
 
 /// Archetype info for character creation
@@ -394,12 +502,12 @@ class ArchetypeInfo {
 
   factory ArchetypeInfo.fromJson(Map<String, dynamic> json) {
     return ArchetypeInfo(
-      name: json['ArchetypeName'] as String,
-      description: json['Description'] as String? ?? '',
-      attributes: Map<String, dynamic>.from(json['Attributes'] ?? {}),
-      skills: Map<String, dynamic>.from(json['Skills'] ?? {}),
-      health: json['Health'] as int? ?? 10,
-      essence: json['Essence'] as int? ?? 3,
+      name: JsonParser.getString(json, 'ArchetypeName'),
+      description: JsonParser.getString(json, 'Description'),
+      attributes: JsonParser.getMap(json, 'Attributes'),
+      skills: JsonParser.getMap(json, 'Skills'),
+      health: JsonParser.getInt(json, 'Health', defaultValue: 10),
+      essence: JsonParser.getInt(json, 'Essence', defaultValue: 3),
     );
   }
 }

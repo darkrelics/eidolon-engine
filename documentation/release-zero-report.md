@@ -730,11 +730,13 @@ Deployment complete with all core infrastructure tested and operational. R1 work
 **In Progress:**
 
 1. **Inventory Display Fix**
+
    - Investigate get_inventory() returning empty InventoryDetails
    - Implement item_repository.dart in Flutter
    - Display item names instead of UUIDs
 
 2. **Store System**
+
    - Implement store endpoints (list, purchase)
    - Create Flutter store UI
    - Complete economy loop (earn → buy → use)

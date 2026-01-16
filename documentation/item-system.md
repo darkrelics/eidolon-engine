@@ -290,6 +290,7 @@ def validate_non_stackable_item(item: dict, prototype: dict) -> list:
 ### Database Changes Required
 
 1. **ITEM Table Schema**:
+
    - Add validation to enforce Quantity for stackable items
    - Add validation to prevent Quantity on non-stackable items
    - Index on (OwnerID, PrototypeID) for stack finding
@@ -300,11 +301,13 @@ def validate_non_stackable_item(item: dict, prototype: dict) -> list:
 ### API Changes Required
 
 1. **Inventory Endpoints**:
+
    - Display stacks with quantities
    - Handle stack splitting in trade/drop operations
    - Merge stacks automatically on pickup
 
 2. **Item Creation**:
+
    - Validate stackable/non-stackable rules
    - Auto-merge with existing stacks when creating stackable items
 
@@ -315,11 +318,13 @@ def validate_non_stackable_item(item: dict, prototype: dict) -> list:
 ### Code Changes Required
 
 1. **eidolon/items.py**:
+
    - Implement stack merging logic
    - Implement stack splitting logic
    - Add validation functions
 
 2. **eidolon/currency.py**:
+
    - Create coins as stackable items
    - Handle coin stack management
 

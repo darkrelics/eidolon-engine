@@ -24,7 +24,7 @@ class CacheService {
 
   Future<void> initialize() async {
     _prefs = await SharedPreferences.getInstance();
-    await _cleanExpiredCache();
+    await cleanExpiredCache();
   }
 
   /// Set the cleanup threshold for expired cache entries
@@ -76,7 +76,7 @@ class CacheService {
     // Check memory cache first
     if (_memoryCache.containsKey(key)) {
       final timestamp = _memoryCacheTimestamps[key];
-      if (timestamp != null && _isValid(timestamp, maxAge)) {
+      if (timestamp != null && isValid(timestamp, maxAge)) {
         return _memoryCache[key] as T?;
       }
     }
@@ -91,7 +91,7 @@ class CacheService {
     if (jsonString != null && timestampString != null) {
       final timestamp = DateTime.parse(timestampString);
 
-      if (_isValid(timestamp, maxAge)) {
+      if (isValid(timestamp, maxAge)) {
         try {
           final value = jsonDecode(jsonString);
           // Update memory cache
@@ -145,7 +145,7 @@ class CacheService {
   }
 
   /// Clean expired cache entries
-  Future<void> _cleanExpiredCache() async {
+  Future<void> cleanExpiredCache() async {
     final keys = _prefs.getKeys();
     final now = DateTime.now();
 
@@ -164,7 +164,7 @@ class CacheService {
     }
   }
 
-  bool _isValid(DateTime timestamp, Duration? maxAge) {
+  bool isValid(DateTime timestamp, Duration? maxAge) {
     if (maxAge == null) return true;
 
     final age = DateTime.now().difference(timestamp);
