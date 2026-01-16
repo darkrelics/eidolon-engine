@@ -88,6 +88,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Not an SQS event
         return lambda_response(400, {"Error": "Invalid event format"}, event)
 
+    # Track processing results for observability
+    # Note: We don't use batchItemFailures for retries - the poller handles stuck segments
+    success_count = 0
+    failure_count = 0
+    invalid_count = 0
+
     for record in event.get("Records", []):
         message_id = record.get("messageId", "unknown")
 
@@ -96,11 +102,13 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         if not active_segment_id:
             logger.warning(f"Empty message body for messageId={message_id}")
+            invalid_count += 1
             continue
 
         # Validate UUID format
         if not validate_uuid(active_segment_id):
             logger.warning(f"Invalid UUID format for messageId={message_id}: {active_segment_id}")
+            invalid_count += 1
             continue
 
         # Fetch the full active segment record from DynamoDB
@@ -109,10 +117,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         except ValueError as err:
             logger.warning(f"Active segment {active_segment_id} not found: {err}")
             # Don't retry - segment doesn't exist
+            invalid_count += 1
             continue
         except RuntimeError as err:
             logger.error(f"Database error fetching active segment {active_segment_id}: {err}")
             # Don't retry - DB errors need investigation
+            failure_count += 1
             continue
 
         logger.info(f"Processing segment: {active_segment_id}")
@@ -120,9 +130,18 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Process the segment
         try:
             process_segment(active_segment)
+            success_count += 1
         except Exception as err:
             logger.error(f"Failed to process segment {active_segment_id}: {err}", exc_info=True)
-            # Continue - poller will handle cleanup
+            failure_count += 1
+            # Don't add to batchItemFailures - poller will handle stuck segments
 
-    # Return empty dict for successful SQS batch processing
-    return {}
+    # Log summary
+    if invalid_count > 0 or failure_count > 0:
+        logger.warning(f"Batch processing summary: Success={success_count}, Failed={failure_count}, Invalid={invalid_count}")
+    else:
+        logger.info(f"Batch processing summary: Success={success_count}")
+
+    # Return proper SQS batch response format
+    # Empty batchItemFailures means all messages processed (no SQS retries - poller handles cleanup)
+    return {"batchItemFailures": []}

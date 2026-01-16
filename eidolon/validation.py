@@ -60,10 +60,6 @@ def validate_character_name(name: str) -> None:
         if name[i] == name[i + 1] == name[i + 2]:
             raise ValueError("Name cannot have more than 2 consecutive identical characters")
 
-    # Check letter ratio for short names with special chars
-    if len(name) <= 3 and any(c in "-'" for c in name):
-        raise ValueError("Short names cannot contain special characters")
-
     # Ensure reasonable letter-to-special-character ratio
     letter_count: int = sum(1 for c in name if c.isalpha())
     if letter_count / len(name) < 0.5:

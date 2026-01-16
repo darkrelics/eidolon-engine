@@ -12,7 +12,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_state import determine_character_state_from_wounds
 from eidolon.constants import DEFAULT_DEATH_ROOM_ID, MAX_SKILL_LEVEL, CharState
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes
 from eidolon.logger import logger
@@ -631,44 +631,77 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
         if new_state != character.get("CharState", CharState.STANDING.value):
             timestamp = datetime.now(timezone.utc).isoformat()
 
-            # Update character state
-            update_expression = "SET CharState = :state, UpdatedAt = :timestamp"
-            # Use a generic dict type to allow mixed value types (str, int)
-            expression_values: dict = {":state": new_state, ":timestamp": timestamp}
-
-            # If dead, also update location to death room
+            # If dead, use transaction to atomically update both CHARACTERS and PLAYERS tables
             if new_state == CharState.DEAD.value:
-                update_expression += ", RoomID = :room"
-                expression_values[":room"] = DEFAULT_DEATH_ROOM_ID  # Death room (NUMBER)
+                player_id = character.get("PlayerID")
+                character_name = character.get("CharacterName")
 
-            try:
-                dynamo.update_item(
-                    TableName.CHARACTERS,
-                    Key={"CharacterID": character_id},
-                    UpdateExpression=update_expression,
-                    ExpressionAttributeValues=expression_values,
-                )
-                logger.info(f"Updated character state to {new_state} for {character_id}")
+                if player_id and character_name:
+                    # Build transaction for atomic update of both tables
+                    transact_items = [
+                        {
+                            "Update": {
+                                "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
+                                "Key": {"CharacterID": {"S": character_id}},
+                                "UpdateExpression": "SET CharState = :state, UpdatedAt = :timestamp, RoomID = :room",
+                                "ExpressionAttributeValues": {
+                                    ":state": {"S": new_state},
+                                    ":timestamp": {"S": timestamp},
+                                    ":room": {"N": str(DEFAULT_DEATH_ROOM_ID)},
+                                },
+                            }
+                        },
+                        {
+                            "Update": {
+                                "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
+                                "Key": {"PlayerID": {"S": player_id}},
+                                "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :timestamp",
+                                "ExpressionAttributeNames": {"#name": character_name},
+                                "ExpressionAttributeValues": {
+                                    ":dead": {"BOOL": True},
+                                    ":timestamp": {"S": timestamp},
+                                },
+                            }
+                        },
+                    ]
 
-                # If dead, also update the Dead flag in player's CharacterList
-                if new_state == CharState.DEAD.value:
-                    player_id = character.get("PlayerID")
-                    character_name = character.get("CharacterName")
-                    if player_id and character_name:
+                    try:
+                        dynamo.transact_write_items(transact_items)
+                        logger.info(f"Atomically updated character state to dead and player CharacterList for {character_id}")
+                    except ClientError as err:
+                        logger.error(f"Failed to update death state for {character_id} Error: {err}", exc_info=True)
+                        raise
+                else:
+                    # Fallback: Update character only if player info missing
+                    logger.warning(f"Cannot update CharacterList - missing PlayerID or CharacterName for {character_id}")
+                    try:
                         dynamo.update_item(
-                            TableName.PLAYERS,
-                            Key={"PlayerID": player_id},
-                            UpdateExpression="SET CharacterList.#name.Dead = :dead, UpdatedAt = :timestamp",
-                            ExpressionAttributeNames={"#name": character_name},
-                            ExpressionAttributeValues={":dead": True, ":timestamp": timestamp},
+                            TableName.CHARACTERS,
+                            Key={"CharacterID": character_id},
+                            UpdateExpression="SET CharState = :state, UpdatedAt = :timestamp, RoomID = :room",
+                            ExpressionAttributeValues={
+                                ":state": new_state,
+                                ":timestamp": timestamp,
+                                ":room": DEFAULT_DEATH_ROOM_ID,
+                            },
                         )
-                        logger.info(f"Updated Dead flag in player's CharacterList for {character_name}")
-                    else:
-                        logger.warning(f"Cannot update CharacterList - missing PlayerID or CharacterName for {character_id}")
-
-            except ClientError as err:
-                logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
-                raise
+                        logger.info(f"Updated character state to {new_state} for {character_id} (player update skipped)")
+                    except ClientError as err:
+                        logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
+                        raise
+            else:
+                # Non-dead state change (e.g., unconscious) - single table update
+                try:
+                    dynamo.update_item(
+                        TableName.CHARACTERS,
+                        Key={"CharacterID": character_id},
+                        UpdateExpression="SET CharState = :state, UpdatedAt = :timestamp",
+                        ExpressionAttributeValues={":state": new_state, ":timestamp": timestamp},
+                    )
+                    logger.info(f"Updated character state to {new_state} for {character_id}")
+                except ClientError as err:
+                    logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
+                    raise
 
         return new_state
 

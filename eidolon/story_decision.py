@@ -315,31 +315,27 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                         send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
                         logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
                     else:
-                        logger.error(f"SEGMENT_QUEUE_URL not configured, cannot queue {next_active_segment_id}")
-                        # Mark segment for retry by poller
-                        try:
-                            dynamo.update_item(
-                                TableName.ACTIVE_SEGMENTS,
-                                Key={"ActiveSegmentID": next_active_segment_id},
-                                UpdateExpression="SET RetryNeeded = :retry",
-                                ExpressionAttributeValues={":retry": True},
-                            )
-                        except ClientError:
-                            pass  # Best effort
+                        # No queue URL - poller will pick up the segment based on ProcessingStatus
+                        logger.warning(f"SEGMENT_QUEUE_URL not configured, poller will handle {next_active_segment_id}")
                 except Exception as err:
-                    logger.error(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}", exc_info=True)
-                    # Mark segment for retry by poller
-                    try:
-                        dynamo.update_item(
-                            TableName.ACTIVE_SEGMENTS,
-                            Key={"ActiveSegmentID": next_active_segment_id},
-                            UpdateExpression="SET RetryNeeded = :retry",
-                            ExpressionAttributeValues={":retry": True},
-                        )
-                    except ClientError:
-                        pass  # Best effort
+                    # Queue failed - poller will pick up the segment based on ProcessingStatus
+                    logger.warning(f"Failed to queue mechanical segment {next_active_segment_id}, poller will handle: {err}")
         except Exception as err:
+            # Critical: Next segment creation failed after decision was recorded.
+            # Rollback segment status so poller can retry advancement.
+            # Keep the Decision field so player doesn't have to re-submit.
             logger.error(f"Failed to create next segment after decision for {next_segment_id} Error: {err}", exc_info=True)
+            try:
+                dynamo.update_item(
+                    TableName.ACTIVE_SEGMENTS,
+                    Key={"ActiveSegmentID": active_segment_id},
+                    UpdateExpression="SET #status = :active, ProcessingStatus = :pending",
+                    ExpressionAttributeNames={"#status": "Status"},
+                    ExpressionAttributeValues={":active": "active", ":pending": "pending"},
+                )
+                logger.warning(f"Rolled back segment {active_segment_id} status for poller retry (decision preserved)")
+            except ClientError as rollback_err:
+                logger.error(f"Failed to rollback segment status for {active_segment_id}: {rollback_err}")
             raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         complete_story(character_id, story_id, story_instance_id, "normal")

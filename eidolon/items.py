@@ -729,6 +729,10 @@ def get_inventory(inventory: dict) -> dict:
                     "Equipped": item.get("Equipped", item.get("IsWorn", False)),
                     "Mass": item.get("Mass", 0),
                     "Value": item.get("Value", 0),
+                    "Rarity": item.get("Rarity", "common"),
+                    "Type": item.get("Type", ""),
+                    "Consumable": item.get("Consumable", False),
+                    "WornOn": item.get("WornOn", ""),
                 }
 
                 # Assign to all slots with slot-specific quantity
@@ -764,6 +768,10 @@ def get_inventory(inventory: dict) -> dict:
                         "Equipped": item.get("Equipped", item.get("IsWorn", False)),
                         "Mass": item.get("Mass", 0),
                         "Value": item.get("Value", 0),
+                        "Rarity": item.get("Rarity", "common"),
+                        "Type": item.get("Type", ""),
+                        "Consumable": item.get("Consumable", False),
+                        "WornOn": item.get("WornOn", ""),
                     }
 
                     for slot, quantity in slot_data:
