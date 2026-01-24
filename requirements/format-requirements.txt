@@ -24,7 +24,7 @@ markdown-it-py==4.0.0
 mdurl==0.1.2
 msgpack==1.1.2
 mypy-extensions==1.1.0
-packageurl-python==0.17.5
+packageurl-python==0.17.6
 packaging==25.0
 pathspec==0.12.1
 pip-api==0.0.34
@@ -41,6 +41,6 @@ sortedcontainers==2.4.0
 tokenize-rt==6.2.0
 toml==0.10.2
 tomli==2.3.0
-urllib3==2.6.0
+urllib3==2.6.3
 webencodings==0.5.1
 zipp==3.23.0
