@@ -37,13 +37,13 @@ The **Eidolon Engine** is a **well-architected, production-ready cloud-native ga
 
 ### 1.2 Technology Stack
 
-| Component          | Technology          | Version | Lines of Code |
-| ------------------ | ------------------- | ------- | ------------- |
-| **Backend**        | Python (AWS Lambda) | 3.12+   | ~15,000+      |
-| **Server**         | Go (SSH MUD)        | 1.24.10 | ~12,000+      |
-| **Frontend**       | Flutter/Dart        | 3.32+   | ~8,000+       |
-| **Infrastructure** | AWS CDK (Python)    | 2.219.0 | ~6,000+       |
-| **Scripting**      | Lua                 | -       | ~500          |
+| Component | Technology | Version | Lines of Code |
+|-----------|-----------|---------|---------------|
+| **Backend** | Python (AWS Lambda) | 3.12+ | ~15,000+ |
+| **Server** | Go (SSH MUD) | 1.24.11 | ~12,000+ |
+| **Frontend** | Flutter/Dart | 3.32+ | ~8,000+ |
+| **Infrastructure** | AWS CDK (Python) | 2.219.0 | ~6,000+ |
+| **Scripting** | Lua | - | ~500 |
 
 **Total Source Files:** 272
 **Total Commits (6 months):** 336
@@ -737,7 +737,7 @@ The project follows an **opinionated, pragmatic testing philosophy** documented 
 
 - 100% exact version pinning (reproducible builds)
 - Zero conflicts detected by pip-compile
-- Boto3/Botocore synchronized (1.40.45)
+- Boto3/Botocore synchronized (1.42.39)
 - Security tools integrated: Bandit, Ruff, Vulture, pip-audit
 
 **Key Packages:**
@@ -998,13 +998,13 @@ The project follows an **opinionated, pragmatic testing philosophy** documented 
 
 ### 10.2 Technology Stack Currency
 
-| Technology | Current Version | Project Version | Status        |
-| ---------- | --------------- | --------------- | ------------- |
-| Python     | 3.13            | 3.12+           | ✅ Current    |
-| Go         | 1.24            | 1.24.11         | ✅ **Latest** |
-| Flutter    | 3.32            | 3.32+           | ✅ Current    |
-| AWS CDK    | 2.x             | 2.219.0         | ✅ Current    |
-| Boto3      | 1.35+           | 1.42.5          | ✅ Current    |
+| Technology | Current Version | Project Version | Status |
+|------------|-----------------|-----------------|--------|
+| Python | 3.13 | 3.12+ | ✅ Current |
+| Go | 1.24.11 | ✅ **Latest** |
+| Flutter | 3.32 | 3.32+ | ✅ Current |
+| AWS CDK | 2.x | 2.219.0 | ✅ Current |
+| Boto3 | 1.35+ | 1.40.45 | ✅ Current |
 
 **Technology Currency:** **Excellent** - All technologies at current or latest versions
 
