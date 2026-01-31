@@ -1,7 +1,7 @@
 # Directly called packages.
 autopep8==2.3.2
 black==25.9.0
-isort==6.1.0
+isort==7.0.0
 pip-audit==2.9.0
 pyupgrade==3.21.0
 ruff==0.14.10
