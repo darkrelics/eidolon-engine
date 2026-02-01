@@ -55,8 +55,7 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
     if story_instance_id:
         try:
             existing_history = dynamo.get_item(
-                TableName.STORY_HISTORY,
-                {"CharacterID": character_id, "StoryInstanceID": story_instance_id}
+                TableName.STORY_HISTORY, {"CharacterID": character_id, "StoryInstanceID": story_instance_id}
             )
             if existing_history and existing_history.get("FinishedAt"):
                 logger.info(

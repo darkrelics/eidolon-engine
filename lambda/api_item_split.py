@@ -143,10 +143,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Update inventory
     try:
         # Deep copy inventory to avoid mutating the original
-        updated_inventory = {
-            k: dict(v) if isinstance(v, dict) else v
-            for k, v in inventory.items()
-        }
+        updated_inventory = {k: dict(v) if isinstance(v, dict) else v for k, v in inventory.items()}
 
         # Update original slot with reduced quantity
         updated_inventory[slot]["Quantity"] = remaining_quantity

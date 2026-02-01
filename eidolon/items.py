@@ -121,9 +121,7 @@ def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int
             if item and item.get("PrototypeID") == prototype_id:
                 # Verify ownership if owner_id provided (prevents cross-character merge)
                 if owner_id and item.get("OwnerID") and item.get("OwnerID") != owner_id:
-                    logger.warning(
-                        f"Item {item_id} ownership mismatch: expected {owner_id}, found {item.get('OwnerID')}"
-                    )
+                    logger.warning(f"Item {item_id} ownership mismatch: expected {owner_id}, found {item.get('OwnerID')}")
                     continue
 
                 # Check if stack has room for the quantity

@@ -11,28 +11,48 @@ TRIALS = 1000
 # Archetypes with their relevant stats
 ARCHETYPES = {
     "Wizard": {
-        "Perception": 2.0, "Intelligence": 4.0, "Agility": 1.0, "Strength": 1.0,
-        "Investigation": 1.0, "Dodge": 0.0, "Arcane": 2.0, "Brawling": 0.0,
-        "Melee": 0.0, "Archery": 0.0, "Parry": 0.0
+        "Perception": 2.0,
+        "Intelligence": 4.0,
+        "Agility": 1.0,
+        "Strength": 1.0,
+        "Investigation": 1.0,
+        "Dodge": 0.0,
+        "Arcane": 2.0,
+        "Brawling": 0.0,
+        "Melee": 0.0,
+        "Archery": 0.0,
+        "Parry": 0.0,
     },
     "Rogue": {
-        "Perception": 2.0, "Intelligence": 1.0, "Agility": 3.0, "Strength": 1.0,
-        "Investigation": 0.0, "Dodge": 1.0, "Arcane": 0.0, "Brawling": 0.0,
-        "Melee": 0.0, "Archery": 0.0, "Parry": 0.0
+        "Perception": 2.0,
+        "Intelligence": 1.0,
+        "Agility": 3.0,
+        "Strength": 1.0,
+        "Investigation": 0.0,
+        "Dodge": 1.0,
+        "Arcane": 0.0,
+        "Brawling": 0.0,
+        "Melee": 0.0,
+        "Archery": 0.0,
+        "Parry": 0.0,
     },
     "Warrior": {
-        "Perception": 1.0, "Intelligence": 1.0, "Agility": 2.0, "Strength": 4.0,
-        "Investigation": 0.0, "Dodge": 1.0, "Arcane": 0.0, "Brawling": 1.0,
-        "Melee": 2.0, "Archery": 0.0, "Parry": 1.0
-    }
+        "Perception": 1.0,
+        "Intelligence": 1.0,
+        "Agility": 2.0,
+        "Strength": 4.0,
+        "Investigation": 0.0,
+        "Dodge": 1.0,
+        "Arcane": 0.0,
+        "Brawling": 1.0,
+        "Melee": 2.0,
+        "Archery": 0.0,
+        "Parry": 1.0,
+    },
 }
 
 # Gremlin stats
-GREMLIN = {
-    "OffensiveRating": 3,
-    "DefensiveRating": 3,
-    "Health": 2
-}
+GREMLIN = {"OffensiveRating": 3, "DefensiveRating": 3, "Health": 2}
 
 # Story segments
 CHALLENGES = [
@@ -207,8 +227,7 @@ def simulate_full_story(stats: dict, max_seg2_loops: int = 10) -> str:
     off_action, off_rating = get_best_offensive(stats)
     def_action, def_rating = get_defensive(off_action, stats)
 
-    combat = simulate_combat(off_rating, def_rating, GREMLIN["OffensiveRating"],
-                             GREMLIN["DefensiveRating"], GREMLIN["Health"])
+    combat = simulate_combat(off_rating, def_rating, GREMLIN["OffensiveRating"], GREMLIN["DefensiveRating"], GREMLIN["Health"])
 
     return f"combat_{combat['outcome']}"
 
@@ -238,7 +257,9 @@ def main():
     for name, stats in ARCHETYPES.items():
         off_action, off_rating = get_best_offensive(stats)
         def_action, def_rating = get_defensive(off_action, stats)
-        print(f"{name:<10} {off_action:<8} {off_rating:>2.0f} ({off_rating-3:+.0f})     {def_action:<8} {def_rating:>2.0f} ({def_rating-3:+.0f})")
+        print(
+            f"{name:<10} {off_action:<8} {off_rating:>2.0f} ({off_rating-3:+.0f})     {def_action:<8} {def_rating:>2.0f} ({def_rating-3:+.0f})"
+        )
 
     # Individual challenge simulations
     print(f"\n[INDIVIDUAL CHALLENGE SUCCESS RATES ({TRIALS} trials each)]")
@@ -255,11 +276,13 @@ def main():
                 outcomes[result["outcome"]] += 1
 
             success_rate = (outcomes["minimal"] + outcomes["normal"] + outcomes["exceptional"]) / TRIALS
-            print(f"  {challenge['name']:<10} (eff {effective:.0f} vs diff {challenge['difficulty']}): "
-                  f"Success {success_rate:>5.1%} | "
-                  f"Death {outcomes['death']/TRIALS:>4.1%} Fail {outcomes['failure']/TRIALS:>4.1%} "
-                  f"Min {outcomes['minimal']/TRIALS:>4.1%} Norm {outcomes['normal']/TRIALS:>4.1%} "
-                  f"Exc {outcomes['exceptional']/TRIALS:>4.1%}")
+            print(
+                f"  {challenge['name']:<10} (eff {effective:.0f} vs diff {challenge['difficulty']}): "
+                f"Success {success_rate:>5.1%} | "
+                f"Death {outcomes['death']/TRIALS:>4.1%} Fail {outcomes['failure']/TRIALS:>4.1%} "
+                f"Min {outcomes['minimal']/TRIALS:>4.1%} Norm {outcomes['normal']/TRIALS:>4.1%} "
+                f"Exc {outcomes['exceptional']/TRIALS:>4.1%}"
+            )
 
     # Full story simulations
     print(f"\n[FULL STORY OUTCOME ({TRIALS} trials each)]")
@@ -311,7 +334,8 @@ def main():
     print("\n" + "=" * 70)
     print("HYPOTHESIS")
     print("=" * 70)
-    print("""
+    print(
+        """
 Based on simulation results, the actual success rate is 72-85%, not 10%.
 
 If 90%+ failure is observed in practice, potential causes:
@@ -344,7 +368,8 @@ RECOMMENDATIONS:
 - Add Investigation skill to Rogue/Warrior starting skills
 - OR reduce challenge difficulties from 3 to 2
 - OR change outcome thresholds to be more forgiving
-""")
+"""
+    )
 
 
 if __name__ == "__main__":
