@@ -2,14 +2,34 @@
 
 This guide explains how Cross-Origin Resource Sharing (CORS) is configured for the Eidolon Engine's API Gateway and Lambda functions.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Current Implementation](#current-implementation)
+  - [API Gateway Configuration](#1-api-gateway-configuration)
+  - [Lambda Function Configuration](#2-lambda-function-configuration)
+  - [Centralized CORS Handler](#3-centralized-cors-handler)
+  - [Lambda Handler Decorator](#4-lambda-handler-decorator)
+  - [Response Helper Integration](#5-response-helper-integration)
+- [Deployment Configuration](#deployment-configuration)
+- [Security Implementation](#security-implementation)
+- [Lambda Function Integration](#lambda-function-integration)
+- [Troubleshooting](#troubleshooting)
+- [Development Configuration](#development-configuration)
+- [Code Reference](#code-reference)
+- [Best Practices](#best-practices)
+- [Architecture Notes](#architecture-notes)
+- [Migration Notes](#migration-notes)
+- [Related Documentation](#related-documentation)
+
 ## Overview
 
 CORS configuration is handled at two levels:
 
 1. **API Gateway**: Handles preflight OPTIONS requests with explicit origin
-2. **Lambda Functions**: Add CORS headers to all responses via centralized cors_handler utility
+2. **Lambda Functions**: Add CORS headers to all responses via `@authenticated_handler` decorator
 
-All CORS logic is centralized in `eidolon/cors.py` with automatic header injection via `eidolon/responses.py`.
+All CORS logic is centralized in `eidolon/cors.py` with automatic header injection via `eidolon/lambda_handler.py`.
 
 ## Current Implementation
 
@@ -18,7 +38,7 @@ All CORS logic is centralized in `eidolon/cors.py` with automatic header injecti
 The API Gateway is configured with explicit CORS settings based on deployment configuration:
 
 ```python
-# In deployment/stacks/api_stack.py:151-152
+# In deployment/stacks/api_stack.py
 default_cors_preflight_options=apigateway.CorsOptions(
     allow_origins=[client_origin],  # Explicit origin from deployment config
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -64,32 +84,36 @@ All CORS logic is centralized in `eidolon/cors.py`:
 4. If single origin configured: Return that origin with credentials (fallback for mismatched origin)
 5. If multiple origins configured and origin not in list: Return None (block request)
 
-### 4. Lambda Handler Pattern
+### 4. Lambda Handler Decorator
 
-All API Lambda functions follow this pattern:
+All API Lambda functions use the `@authenticated_handler` decorator from `eidolon/lambda_handler.py`, which encapsulates CORS handling, authentication, and error formatting:
 
 ```python
-from eidolon.cors import cors_handler
-from eidolon.responses import lambda_response
+from eidolon.lambda_handler import authenticated_handler
 
-def lambda_handler(event: dict, context: object) -> dict:
-    # Handle preflight OPTIONS requests
-    preflight_response = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
+    # Business logic here - no CORS or auth boilerplate needed
+    result = do_something(player_id)
 
-    # ... business logic ...
-
-    # Return response (CORS headers added automatically)
-    return lambda_response(200, response_data, event)
+    return {"status_code": 200, "body": result}
 ```
+
+**What the decorator handles:**
+
+1. Request logging via `log_lambda_statistics()`
+2. CORS preflight requests via `cors_handler.handle_preflight()`
+3. Authentication extraction from JWT via `extract_player_id()`
+4. Error handling with proper status codes
+5. Response formatting with CORS headers via `lambda_response()`
 
 **Key Points:**
 
-- No manual origin validation needed in handlers
-- No manual CORS header construction
-- `cors_handler.handle_preflight()` handles OPTIONS requests
-- `lambda_response()` automatically adds CORS headers via `cors_handler.add_cors_headers()`
+- No manual CORS handling needed in Lambda functions
+- No manual origin validation or header construction
+- Decorator extracts `player_id` from Cognito JWT and passes to handler
+- Return simple dict with `status_code` and `body` keys
+- Errors raised as `ValueError` (4xx) or `RuntimeError` (500) are handled automatically
 
 ### 5. Response Helper Integration
 
@@ -155,14 +179,14 @@ env_vars["ALLOWED_ORIGINS"] = ",".join(allowed_origins)
 
 The cors_handler implements strict origin validation:
 
-**From eidolon/cors.py:78-88:**
+**From eidolon/cors.py:**
 
 ```python
 def is_origin_allowed(self, origin: str) -> bool:
     return bool(origin and origin in self.allowed_origins)
 ```
 
-**From eidolon/cors.py:90-126:**
+**Origin resolution logic:**
 
 - Checks if origin is in allowed list
 - Falls back to single origin if only one configured
@@ -185,26 +209,46 @@ Preflight responses are cached for 24 hours (86400 seconds) as configured in COR
 
 ## Lambda Function Integration
 
-All 13 API Lambda functions use the same pattern:
+All 19 API Lambda functions use the `@authenticated_handler` decorator:
 
-**Functions Using cors_handler:**
+**Character Functions:**
 
-- api-archetype-list
 - api-character-add
 - api-character-delete
 - api-character-get
 - api-character-list
+
+**Archetype Functions:**
+
+- api-archetype-list
+
+**Item Functions:**
+
 - api-item-brief
-- api-item-prototype
+- api-item-consolidate
 - api-item-consume
+- api-item-discard
+- api-item-prototype
+- api-item-split
+
+**Store Functions:**
+
+- api-store-list
+- api-store-purchase
+
+**Segment Functions:**
+
 - api-segment-decision
 - api-segment-history
 - api-segment-status
+
+**Story Functions:**
+
 - api-story-abandon
 - api-story-history
 - api-story-start
 
-**Pattern Consistency:** 100% of API functions use cors_handler with identical pattern.
+**Pattern Consistency:** 100% of API functions use `@authenticated_handler` decorator.
 
 ## Troubleshooting
 
@@ -261,9 +305,9 @@ Expected response headers:
 
 **"No CORS headers in response":**
 
-- Lambda function not using cors_handler pattern
-- Verify function imports cors_handler
-- Verify function uses lambda_response() helper
+- Lambda function not using `@authenticated_handler` decorator
+- Verify function imports from `eidolon.lambda_handler`
+- Verify function returns dict with `status_code` and `body` keys
 
 **"Credentials not supported with wildcard":**
 
@@ -309,22 +353,23 @@ Or configure ALLOWED_ORIGINS to include localhost as shown above.
 **CORS Implementation Files:**
 
 - `eidolon/cors.py` - CorsHandler class with all CORS logic
-- `eidolon/responses.py` - lambda_response() and lambda_error() helpers
-- `deployment/stacks/api_stack.py:151-152` - API Gateway CORS configuration
-- `deployment/stacks/character_stack.py:148-152` - Lambda environment variables
-- `deployment/stacks/player_stack.py:218-222` - Lambda environment variables
-- `deployment/stacks/story_stack.py:258-262` - Lambda environment variables
+- `eidolon/lambda_handler.py` - `@authenticated_handler` decorator integrating CORS
+- `eidolon/responses.py` - `lambda_response()` and `lambda_error()` helpers
+- `deployment/stacks/api_stack.py` - API Gateway CORS configuration
+- `deployment/stacks/character_stack.py` - Lambda environment variables (ALLOWED_ORIGINS, etc.)
+- `deployment/stacks/player_stack.py` - Lambda environment variables
+- `deployment/stacks/story_stack.py` - Lambda environment variables
 
-**All Lambda Functions:** Import cors_handler and use standard pattern (13 API functions verified).
+**All Lambda Functions:** Use `@authenticated_handler` decorator (19 API functions verified).
 
 ## Best Practices
 
-1. **Use cors_handler Utility:** Never manually construct CORS headers
-2. **Use lambda_response() Helper:** Automatically adds CORS headers
-3. **Environment Variables:** Configure origins via ALLOWED_ORIGINS, never hardcode
-4. **Explicit Origins with Credentials:** Always use specific origins when credentials needed
-5. **Comma-Separated List:** Support multiple origins by separating with commas
-6. **HTTPS in Production:** Always use HTTPS origins for production deployments
+1. **Use @authenticated_handler Decorator:** Never manually handle CORS in Lambda functions
+2. **Environment Variables:** Configure origins via ALLOWED_ORIGINS, never hardcode
+3. **Explicit Origins with Credentials:** Always use specific origins when credentials needed
+4. **Comma-Separated List:** Support multiple origins by separating with commas
+5. **HTTPS in Production:** Always use HTTPS origins for production deployments
+6. **Simple Return Values:** Return dict with `status_code` and `body` from handlers
 
 ## Architecture Notes
 
@@ -346,10 +391,42 @@ Or configure ALLOWED_ORIGINS to include localhost as shown above.
 
 If updating from previous implementation:
 
-1. Verify all API Lambda functions import cors_handler
-2. Verify all API Lambda functions call handle_preflight()
-3. Verify all API Lambda functions use lambda_response() or lambda_error()
-4. Remove any manual CORS header construction
-5. Remove any manual origin validation logic
+1. Replace manual CORS handling with `@authenticated_handler` decorator
+2. Import from `eidolon.lambda_handler` instead of `eidolon.cors`
+3. Change handler signature to include `player_id` parameter
+4. Return simple dict with `status_code` and `body` keys
+5. Remove any manual CORS header construction
+6. Remove any manual origin validation logic
 
-**Current Status:** All 13 API functions already follow this pattern.
+**Example migration:**
+
+```python
+# Before (manual pattern)
+from eidolon.cors import cors_handler
+from eidolon.responses import lambda_response
+
+def lambda_handler(event: dict, context: object) -> dict:
+    preflight = cors_handler.handle_preflight(event)
+    if preflight:
+        return preflight
+    # ... auth extraction ...
+    return lambda_response(200, data, event)
+
+# After (decorator pattern)
+from eidolon.lambda_handler import authenticated_handler
+
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
+    # ... business logic only ...
+    return {"status_code": 200, "body": data}
+```
+
+**Current Status:** All 19 API functions use `@authenticated_handler` decorator.
+
+## Related Documentation
+
+- [Architecture](architecture.md) - System architecture overview
+- [Lambda Functions](lambda-functions.md) - Lambda function reference
+- [Incremental API](incremental-api.md) - API endpoint documentation
+- [Deployment](deployment.md) - Deployment configuration and procedures
+- [Eidolon Library](eidolon-library.md) - Shared library documentation

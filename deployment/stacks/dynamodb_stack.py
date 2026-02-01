@@ -23,7 +23,7 @@ class DynamoDBStack(Stack):
         super().__init__(scope, stack_id, **kwargs)
 
         # Add system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Initialize existing tables from context
         self.existing_tables = {}

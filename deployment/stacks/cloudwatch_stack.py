@@ -26,7 +26,7 @@ class CloudWatchStack(Stack):
         super().__init__(scope, stack_id, **kwargs)
 
         # Add system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Create or import log group
         self.log_group = self._create_log_group()

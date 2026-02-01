@@ -62,7 +62,7 @@ def get_lambda_function_arns(region: str) -> dict:
         # Item functions
         "api-item-brief",
         "api-item-prototype",
-        "api-item-use",
+        "api-item-consume",
         "api-item-discard",
         "api-item-consolidate",
         "api-item-split",

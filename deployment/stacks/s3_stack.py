@@ -32,7 +32,7 @@ class S3Stack(Stack):
         self.scripts_bucket_name = scripts_bucket
         super().__init__(scope, stack_id, **kwargs)
         # Apply system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Import existing bucket or create new one with fixed logical ID
         if bucket_exists:

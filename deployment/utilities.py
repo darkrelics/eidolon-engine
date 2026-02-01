@@ -276,6 +276,9 @@ def validate_lambda_artifacts(bucket_name: str, region: str, deployment_mode: st
         "lambda/api-item-brief.zip",
         "lambda/api-item-prototype.zip",
         "lambda/api-item-consume.zip",
+        "lambda/api-item-discard.zip",
+        "lambda/api-item-consolidate.zip",
+        "lambda/api-item-split.zip",
         "lambda/api-store-list.zip",
         "lambda/api-store-purchase.zip",
     ]

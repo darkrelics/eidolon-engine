@@ -36,9 +36,9 @@ def determine_character_state_from_wounds(max_health: int, wounds: list) -> str:
     Determine character state based on wounds.
 
     Implements the MUD damage system rules:
-    - If health > 0: standing
-    - If health = 0 with any bashing wounds: unconscious
-    - If health = 0 with only lethal/aggravated wounds: dead
+    - If lethal + aggravated wounds >= max_health: dead
+    - If total wounds >= max_health with any bashing: unconscious
+    - Otherwise: standing
 
     Args:
         max_health: Character's maximum health
@@ -50,15 +50,17 @@ def determine_character_state_from_wounds(max_health: int, wounds: list) -> str:
     if not wounds:
         return CharState.STANDING.value
 
-    current_health = max_health - len(wounds)
+    # Count deadly wounds (lethal and aggravated)
+    deadly_wounds = sum(1 for w in wounds if w.get("DamageType") in ["lethal", "aggravated"])
 
-    if current_health > 0:
-        return CharState.STANDING.value
-
-    # Health is 0 or less - check wound types
-    has_bashing = any(w.get("DamageType") == "bashing" for w in wounds)
-
-    if has_bashing:
-        return CharState.UNCONSCIOUS.value
-    else:
+    # If deadly wounds fill all health levels, character is dead
+    if deadly_wounds >= max_health:
         return CharState.DEAD.value
+
+    # Check if all health levels are filled
+    total_wounds = len(wounds)
+    if total_wounds >= max_health:
+        # Health track is full but has bashing - unconscious
+        return CharState.UNCONSCIOUS.value
+
+    return CharState.STANDING.value

@@ -12,13 +12,11 @@ Authentication: Cognito (required)
 
 import time
 
-from eidolon.cognito import extract_player_id
 from eidolon.constants import RETRY_POLL_DELAY
-from eidolon.cors import cors_handler
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check
 from eidolon.story_retrieval import get_story, get_story_segment
@@ -62,7 +60,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     """
     # Verify character ownership using player record
     if not verify_character_ownership(character_id, player_id):
-        raise ValueError("Character not owned by player")
+        raise ValueError("403:Access denied")
 
     # Try to get active segment
     try:
@@ -72,7 +70,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             # Return a friendly response when no active segment exists
             # This can happen after a rollback or when no story is active
             logger.info(f"No active segment for character {character_id} - likely rolled back or not started")
-            raise ValueError("No active story. Please select a story to begin your adventure.") from err
+            raise ValueError("404:No active segment found") from err
         raise
 
     now = time.time()
@@ -276,7 +274,8 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     return response
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Get status of active segment.
 
@@ -287,59 +286,16 @@ def lambda_handler(event: dict, context: object) -> dict:
         CharacterID: Character ID to check
 
     Returns:
-        200: Segment status data
-        404: No active segment found
-        400: Missing parameters or invalid request
-        401: Unauthorized
-        500: Internal error
+        Dict with status_code and body
     """
-    # Log invocation
-    log_lambda_statistics(event, context)
-
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    try:
-        # Extract player ID from JWT
-        player_id = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
-    # Get character ID from query parameters
     character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
-        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+        raise ValueError("Missing CharacterID parameter")
 
     if not validate_uuid(character_id):
-        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
+        raise ValueError("Invalid CharacterID format")
 
     logger.info(f"Checking segment status for character={character_id}")
 
-    # Call business logic
-    try:
-        response_data = get_segment_status_business_logic(character_id, player_id)
-        return lambda_response(200, response_data, event)
-    except ValueError as err:
-        logger.warning(f"Invalid request or not found for {character_id} Error: {err}")
-        error_msg = str(err)
-        # Return consistent 404 for no active segment/story
-        if "no active" in error_msg.lower() or "Please select" in error_msg:
-            return lambda_response(404, {"Error": "No active segment found"}, event)
-        elif "not found" in error_msg.lower():
-            return lambda_response(404, {"Error": "Character not found"}, event)
-        elif "not owned" in error_msg.lower():
-            return lambda_response(403, {"Error": "Access denied"}, event)
-        return lambda_response(400, {"Error": str(err)}, event)
-    except RuntimeError as err:
-        logger.error(
-            f"Failed to get segment status for {character_id} Error: {err}",
-            exc_info=True,
-        )
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    response_data = get_segment_status_business_logic(character_id, player_id)
+    return {"status_code": 200, "body": response_data}

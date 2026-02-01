@@ -35,7 +35,7 @@ class LambdaStack(Stack):
 
         super().__init__(scope, stack_id, description="Shared Lambda layer and execution role for Eidolon Engine", **kwargs)
         # Apply system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Create shared Lambda layer for all stacks
         self.lambda_layer = self._create_lambda_layer()

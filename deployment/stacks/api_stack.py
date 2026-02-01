@@ -65,7 +65,7 @@ class ApiStack(Stack):
         super().__init__(scope, stack_id, description="API Gateway with custom domain and Lambda integrations", **kwargs)
 
         # Add system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Create WAF Web ACL for API Gateway
         self.api_web_acl = self._create_api_waf_web_acl()
@@ -220,9 +220,9 @@ class ApiStack(Stack):
             prototype_resource = item_resource.add_resource("prototype")
             self._add_lambda_integration(prototype_resource, "GET", "api-item-prototype", authorizer)
 
-        if "api-item-use" in self.lambda_arns:
-            use_resource = item_resource.add_resource("use")
-            self._add_lambda_integration(use_resource, "POST", "api-item-use", authorizer)
+        if "api-item-consume" in self.lambda_arns:
+            consume_resource = item_resource.add_resource("consume")
+            self._add_lambda_integration(consume_resource, "POST", "api-item-consume", authorizer)
 
         if "api-item-discard" in self.lambda_arns:
             discard_resource = item_resource.add_resource("discard")
@@ -402,7 +402,7 @@ class ApiStack(Stack):
             "api-character-list": "ImportApiCharacterList",
             "api-item-brief": "ImportApiItemBrief",
             "api-item-prototype": "ImportApiItemPrototype",
-            "api-item-use": "ImportApiItemUse",
+            "api-item-consume": "ImportApiItemConsume",
             "api-item-discard": "ImportApiItemDiscard",
             "api-item-consolidate": "ImportApiItemConsolidate",
             "api-item-split": "ImportApiItemSplit",

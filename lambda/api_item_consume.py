@@ -9,72 +9,53 @@ Authentication: Cognito (required)
 """
 
 from eidolon.character_data import character_get
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
 from eidolon.items import consume_item
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.player import validate_player
 from eidolon.requests import parse_event_body
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.validation import validate_uuid
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Handle POST /item/consume requests.
 
     Args:
         event: API Gateway proxy event
         context: Lambda execution context
+        player_id: Authenticated player ID
 
     Returns:
-        API Gateway proxy response dict
+        Dict with status_code and body
     """
-    log_lambda_statistics(event, context)
-
-    preflight = cors_handler.handle_preflight(event)
-    if preflight:
-        return preflight
-
-    try:
-        player_id = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        logger.error(f"Failed to extract player ID: {err}", exc_info=True)
-        return lambda_error(event, err)
-
     try:
         if not validate_player(player_id):
             logger.error(f"Player {player_id} not found")
-            return lambda_response(401, {"Error": "Unauthorized"}, event)
+            raise ValueError("401:Unauthorized")
     except RuntimeError as err:
         logger.error(f"Failed to validate player {player_id}: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+        raise
 
     try:
         body = parse_event_body(event)
     except ValueError as err:
         logger.error(f"Failed to parse consume request body: {err}", exc_info=True)
-        return lambda_response(400, {"Error": "Invalid request body"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+        raise ValueError("Invalid request body") from err
 
     character_id = str(body.get("CharacterID", "")).strip()
     item_id = str(body.get("ItemID", "")).strip()
 
     if not character_id:
-        return lambda_response(400, {"Error": "CharacterID is required"}, event)
+        raise ValueError("CharacterID is required")
     if not item_id:
-        return lambda_response(400, {"Error": "ItemID is required"}, event)
+        raise ValueError("ItemID is required")
 
     if not validate_uuid(character_id):
-        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
+        raise ValueError("Invalid CharacterID format")
     if not validate_uuid(item_id):
-        return lambda_response(400, {"Error": "Invalid ItemID format"}, event)
+        raise ValueError("Invalid ItemID format")
 
     try:
         character_get(character_id, player_id)
@@ -83,17 +64,10 @@ def lambda_handler(event: dict, context: object) -> dict:
         normalized = message.lower()
         logger.warning(f"Character validation failed for consume request: {message}")
         if "not found" in normalized:
-            return lambda_response(404, {"Error": "Character not found"}, event)
+            raise ValueError("404:Character not found") from err
         if "not owned" in normalized:
-            return lambda_response(403, {"Error": "Access denied"}, event)
-        if "invalid character id format" in normalized:
-            return lambda_response(400, {"Error": message}, event)
-        return lambda_response(400, {"Error": message}, event)
-    except RuntimeError as err:
-        logger.error(f"Failed to validate character {character_id}: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+            raise ValueError("403:Access denied") from err
+        raise
 
     try:
         result = consume_item(character_id, item_id)
@@ -102,17 +76,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         normalized = message.lower()
         logger.warning(f"Consume item failed for character {character_id} item {item_id}: {message}")
         if "active story" in normalized:
-            return lambda_response(409, {"Error": message}, event)
+            raise ValueError(f"409:{message}") from err
         if "no effect" in normalized:
-            return lambda_response(409, {"Error": message}, event)
+            raise ValueError(f"409:{message}") from err
         if "not found" in normalized or "not in character inventory" in normalized:
-            return lambda_response(404, {"Error": message}, event)
-        return lambda_response(400, {"Error": message}, event)
-    except RuntimeError as err:
-        logger.error(f"Internal error consuming item {item_id} for {character_id}: {err}", exc_info=True)
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+            raise ValueError(f"404:{message}") from err
+        raise
 
     logger.info(f"Item {item_id} consumed for character {character_id}")
-    return lambda_response(200, result, event)
+    return {"status_code": 200, "body": result}

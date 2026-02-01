@@ -194,39 +194,6 @@ def distribute_into_stacks(total_quantity: int, max_stack: int) -> list:
     return stacks
 
 
-def create_coins_from_value(value: int) -> list[dict]:
-    """
-    Convert a value amount into coin item creation requests.
-    These are just regular item creation requests for coin prototypes.
-
-    Args:
-        value: Total value to convert to coins
-
-    Returns:
-        List of dicts with PrototypeID and Quantity for each coin type
-    """
-    if value <= 0:
-        return []
-
-    items_to_create = []
-
-    # Calculate optimal coin distribution
-    gold_coins = value // 2400
-    remainder = value % 2400
-    silver_coins = remainder // 120
-    bronze_coins = (remainder % 120) // 10
-
-    # Create coin item requests
-    if gold_coins > 0:
-        items_to_create.append({"PrototypeID": "6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d", "Quantity": gold_coins})
-    if silver_coins > 0:
-        items_to_create.append({"PrototypeID": "8f5b3c9e-2d7a-4f8e-b6c1-9a4e7d2b5f3c", "Quantity": silver_coins})
-    if bronze_coins > 0:
-        items_to_create.append({"PrototypeID": "3d8a6f2e-1c4b-4e9f-a5d2-7b3e9f0c1d8a", "Quantity": bronze_coins})
-
-    return items_to_create
-
-
 @cache
 def get_prototype(prototype_id: str) -> dict:
     """

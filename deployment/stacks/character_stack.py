@@ -45,7 +45,7 @@ class CharacterStack(Stack):
 
         super().__init__(scope, stack_id, **kwargs)
         # Apply system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Import shared Lambda layer and role from Lambda stack
         self.lambda_layer = self._import_lambda_layer()
@@ -96,7 +96,7 @@ class CharacterStack(Stack):
             ("api-archetype-list", "api_archetype_list.lambda_handler"),
             ("api-item-brief", "api_item_brief.lambda_handler"),
             ("api-item-prototype", "api_item_prototype.lambda_handler"),
-            ("api-item-use", "api_item_use.lambda_handler"),
+            ("api-item-consume", "api_item_consume.lambda_handler"),
             ("api-item-discard", "api_item_discard.lambda_handler"),
             ("api-item-consolidate", "api_item_consolidate.lambda_handler"),
             ("api-item-split", "api_item_split.lambda_handler"),
@@ -140,7 +140,7 @@ class CharacterStack(Stack):
             "api-archetype-list": "ApiArchetypeListFunction",
             "api-item-brief": "ApiItemBriefFunction",
             "api-item-prototype": "ApiItemPrototypeFunction",
-            "api-item-use": "ApiItemUseFunction",
+            "api-item-consume": "ApiItemConsumeFunction",
             "api-item-discard": "ApiItemDiscardFunction",
             "api-item-consolidate": "ApiItemConsolidateFunction",
             "api-item-split": "ApiItemSplitFunction",

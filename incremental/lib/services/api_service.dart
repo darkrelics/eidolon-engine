@@ -280,7 +280,12 @@ class ApiService extends BaseApiService {
 
     final json = await get<Map<String, dynamic>>('/archetype');
 
-    final archetypes = (json['Archetypes'] as List<dynamic>)
+    final archetypesData = json['Archetypes'] as List<dynamic>?;
+    if (archetypesData == null) {
+      throw FormatException('Missing Archetypes data in API response');
+    }
+
+    final archetypes = archetypesData
         .map((a) => ArchetypeInfo.fromJson(a as Map<String, dynamic>))
         .toList();
 

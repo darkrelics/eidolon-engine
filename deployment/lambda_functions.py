@@ -327,7 +327,7 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
         # Item functions
         "api-item-brief",
         "api-item-prototype",
-        "api-item-use",
+        "api-item-consume",
         "api-item-discard",
         "api-item-consolidate",
         "api-item-split",

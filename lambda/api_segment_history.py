@@ -12,13 +12,11 @@ Authentication: Cognito (required)
 
 from botocore.exceptions import ClientError
 
-from eidolon.cognito import extract_player_id
-from eidolon.cors import cors_handler
 from eidolon.dynamo import TableName, dynamo
-from eidolon.logger import log_lambda_statistics, logger
+from eidolon.lambda_handler import authenticated_handler
+from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
-from eidolon.responses import lambda_error, lambda_response
 from eidolon.time_utils import from_unix, now_iso
 from eidolon.validation import validate_uuid
 
@@ -40,7 +38,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
     """
     # Verify character ownership using player record
     if not verify_character_ownership(character_id, player_id):
-        raise ValueError("Character not owned by player")
+        raise ValueError("403:Access denied")
 
     # Get current active segment to find StoryInstanceID
     # This is more efficient than fetching entire character
@@ -86,7 +84,7 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
         try:
             character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
             if not character:
-                raise ValueError(f"Character not found: {character_id}")
+                raise ValueError(f"404:Character not found")
         except ClientError as err:
             logger.error(f"Failed to get character data: {err}")
             raise RuntimeError(f"Failed to load character: {err}") from err
@@ -230,7 +228,8 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
     return response
 
 
-def lambda_handler(event: dict, context: object) -> dict:
+@authenticated_handler
+def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     Get segment history for a character.
 
@@ -238,59 +237,19 @@ def lambda_handler(event: dict, context: object) -> dict:
     active story. Used by clients to display past outcomes and decisions.
 
     Query Parameters:
-        characterId: Character ID to get history for (supports both CharacterID and characterId)
+        CharacterID: Character ID to get history for
 
     Returns:
-        200: Segment history data
-        404: Character not found
-        400: Missing parameters or invalid request
-        401: Unauthorized
-        500: Internal error
+        Dict with status_code and body
     """
-    # Log invocation
-    log_lambda_statistics(event, context)
-
-    # Handle preflight
-    preflight_response: dict = cors_handler.handle_preflight(event)
-    if preflight_response:
-        return preflight_response
-
-    try:
-        # Extract player ID from JWT
-        player_id = extract_player_id(event)
-    except ValueError as err:
-        logger.warning(f"Authentication failed: {err}", exc_info=False)
-        return lambda_response(401, {"Error": "Unauthorized"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
-
-    # Get character ID from query parameters
     character_id = get_query_parameter(event, "CharacterID")
     if not character_id:
-        return lambda_response(400, {"Error": "Missing CharacterID parameter"}, event)
+        raise ValueError("Missing CharacterID parameter")
 
     if not validate_uuid(character_id):
-        return lambda_response(400, {"Error": "Invalid CharacterID format"}, event)
+        raise ValueError("Invalid CharacterID format")
 
     logger.info(f"Retrieving segment history for character={character_id}")
 
-    # Call business logic
-    try:
-        response_data = get_segment_history_business_logic(character_id, player_id)
-        return lambda_response(200, response_data, event)
-    except ValueError as err:
-        logger.warning(f"Invalid request for {character_id} Error: {err}")
-        error_msg = str(err).lower()
-        if "not found" in error_msg:
-            return lambda_response(404, {"Error": "Character not found"}, event)
-        elif "not owned" in error_msg:
-            return lambda_response(403, {"Error": "Access denied"}, event)
-        return lambda_response(400, {"Error": str(err)}, event)
-    except RuntimeError as err:
-        logger.error(
-            f"Failed to get segment history for {character_id} Error: {err}",
-            exc_info=True,
-        )
-        return lambda_response(500, {"Error": "Internal server error"}, event)
-    except Exception as err:
-        return lambda_error(event, err)
+    response_data = get_segment_history_business_logic(character_id, player_id)
+    return {"status_code": 200, "body": response_data}

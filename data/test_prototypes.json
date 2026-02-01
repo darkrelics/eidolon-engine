@@ -147,8 +147,7 @@
       "IsWorn": false,
       "CanPickUp": true,
       "Metadata": {
-        "PotionStrength": "minor",
-        "HealingAmount": "2d4+2"
+        "PotionStrength": "minor"
       }
     },
     {

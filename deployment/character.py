@@ -80,7 +80,7 @@ def validate_character_functions(region: str) -> dict:
         "api-archetype-list",
         "api-item-brief",
         "api-item-prototype",
-        "api-item-use",
+        "api-item-consume",
         "api-item-discard",
         "api-item-consolidate",
         "api-item-split",
