@@ -7,7 +7,7 @@ vulture==2.14
 # Supporting Libraries
 CacheControl==0.14.3
 PyYAML==6.0.3
-astroid==4.0.1
+astroid==4.0.3
 boolean.py==5.0
 certifi==2025.10.5
 charset-normalizer==3.4.3
