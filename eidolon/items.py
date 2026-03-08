@@ -877,9 +877,17 @@ def dynamo_typed_value(value) -> dict:
 
 
 def build_consume_transaction(
-    character_id: str, item_id: str, slot_key: str, inventory: dict,
-    update_expression_parts: list, expression_values: dict, expression_names: dict,
-    stackable: bool, item_removed: bool, remaining_quantity: int, timestamp: str,
+    character_id: str,
+    item_id: str,
+    slot_key: str,
+    inventory: dict,
+    update_expression_parts: list,
+    expression_values: dict,
+    expression_names: dict,
+    stackable: bool,
+    item_removed: bool,
+    remaining_quantity: int,
+    timestamp: str,
 ) -> list:
     """Build the list of transactional write items for consume_item."""
     # Convert expression values to DynamoDB typed format for transactions
@@ -903,24 +911,28 @@ def build_consume_transaction(
     transact_items = [character_update]
 
     if stackable and not item_removed:
-        transact_items.append({
-            "Update": {
-                "TableName": TABLE_ENV_MAP[TableName.ITEMS],
-                "Key": {"ItemID": {"S": item_id}},
-                "UpdateExpression": "SET Quantity = :quantity, UpdatedAt = :updated_at",
-                "ExpressionAttributeValues": {
-                    ":quantity": {"N": str(remaining_quantity)},
-                    ":updated_at": {"S": timestamp},
-                },
+        transact_items.append(
+            {
+                "Update": {
+                    "TableName": TABLE_ENV_MAP[TableName.ITEMS],
+                    "Key": {"ItemID": {"S": item_id}},
+                    "UpdateExpression": "SET Quantity = :quantity, UpdatedAt = :updated_at",
+                    "ExpressionAttributeValues": {
+                        ":quantity": {"N": str(remaining_quantity)},
+                        ":updated_at": {"S": timestamp},
+                    },
+                }
             }
-        })
+        )
     else:
-        transact_items.append({
-            "Delete": {
-                "TableName": TABLE_ENV_MAP[TableName.ITEMS],
-                "Key": {"ItemID": {"S": item_id}},
+        transact_items.append(
+            {
+                "Delete": {
+                    "TableName": TABLE_ENV_MAP[TableName.ITEMS],
+                    "Key": {"ItemID": {"S": item_id}},
+                }
             }
-        })
+        )
 
     return transact_items
 
@@ -1134,8 +1146,17 @@ def consume_item(character_id: str, item_id: str) -> dict:
 
     # Build transactional write to update character and item atomically
     transact_items = build_consume_transaction(
-        character_id, item_id, slot_key, inventory, update_expression_parts,
-        expression_values, expression_names, stackable, item_removed, remaining_quantity, timestamp,
+        character_id,
+        item_id,
+        slot_key,
+        inventory,
+        update_expression_parts,
+        expression_values,
+        expression_names,
+        stackable,
+        item_removed,
+        remaining_quantity,
+        timestamp,
     )
 
     # Include player update if character is being revived
@@ -1143,15 +1164,17 @@ def consume_item(character_id: str, item_id: str) -> dict:
         player_id = character.get("PlayerID")
         character_name = character.get("CharacterName")
         if player_id and character_name:
-            transact_items.append({
-                "Update": {
-                    "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
-                    "Key": {"PlayerID": {"S": player_id}},
-                    "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
-                    "ExpressionAttributeNames": {"#name": character_name},
-                    "ExpressionAttributeValues": {":dead": {"BOOL": False}, ":updated_at": {"S": timestamp}},
+            transact_items.append(
+                {
+                    "Update": {
+                        "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
+                        "Key": {"PlayerID": {"S": player_id}},
+                        "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
+                        "ExpressionAttributeNames": {"#name": character_name},
+                        "ExpressionAttributeValues": {":dead": {"BOOL": False}, ":updated_at": {"S": timestamp}},
+                    }
                 }
-            })
+            )
 
     try:
         dynamo.transact_write_items(transact_items)
