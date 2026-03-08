@@ -73,7 +73,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         split_quantity = int(split_quantity)
         if split_quantity < 1:
             raise ValueError("Quantity must be at least 1")
-    except (TypeError, ValueError) as err:
+    except TypeError as err:
+        raise ValueError("Invalid Quantity value") from err
+    except ValueError as err:
         raise ValueError("Invalid Quantity value") from err
 
     # Get character and verify ownership
@@ -177,8 +179,8 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             # Clean up the created item
             try:
                 dynamo.delete_item(TableName.ITEMS, {"ItemID": new_item_id})
-            except ClientError:
-                logger.error(f"Failed to clean up orphaned item {new_item_id}")
+            except ClientError as err:
+                logger.error(f"Failed to clean up orphaned item {new_item_id}: {err}")
             raise ValueError("409:Stack quantity changed during split. Please refresh your inventory.") from err
 
         logger.error(f"Failed to update inventory for {character_id}: {err}")

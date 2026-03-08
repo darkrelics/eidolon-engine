@@ -70,8 +70,8 @@ def validate_gamemode_transition(current_mode: str, new_mode: str) -> bool:
         allowed = VALID_GAMEMODE_TRANSITIONS.get(current, set())
         return new in allowed
 
-    except ValueError:
-        logger.error(f"Invalid GameMode value: current={current_mode}, new={new_mode}")
+    except ValueError as err:
+        logger.error(f"Invalid GameMode value: current={current_mode}, new={new_mode}: {err}")
         return False
 
 
@@ -108,8 +108,8 @@ def set_character_game_mode(
 
     try:
         new_game_mode = GameMode(new_mode)
-    except ValueError:
-        raise ValueError(f"Invalid GameMode: {new_mode}") from None
+    except ValueError as err:
+        raise ValueError(f"Invalid GameMode: {new_mode}") from err
 
     # Build update expression
     update_expression = "SET GameMode = :new_mode, UpdatedAt = :timestamp"
@@ -126,8 +126,8 @@ def set_character_game_mode(
             expected_mode = GameMode(expected_current)
             condition_parts.append("GameMode = :expected_mode")
             expression_values[":expected_mode"] = expected_mode.value
-        except ValueError:
-            raise ValueError(f"Invalid expected GameMode: {expected_current}") from None
+        except ValueError as err:
+            raise ValueError(f"Invalid expected GameMode: {expected_current}") from err
 
     # Special handling for Incremental mode
     if new_game_mode == GameMode.INCREMENTAL:

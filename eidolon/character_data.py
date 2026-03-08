@@ -27,11 +27,11 @@ def generate_character_id() -> str:
     Returns:
         A UUID string for the character ID.
     """
-    charater_uuid: str = str(uuid.uuid4())
+    character_uuid: str = str(uuid.uuid4())
 
-    logger.debug(f"Generated character ID: {charater_uuid}")
+    logger.debug(f"Generated character ID: {character_uuid}")
 
-    return charater_uuid
+    return character_uuid
 
 
 def check_character_limit(player_id: str) -> bool:
@@ -419,9 +419,9 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     # Create character record
     try:
         create_character_record(character_item)
-    except ValueError:
+    except ValueError as err:
         # Name already taken - re-raise as-is for proper HTTP status
-        raise
+        raise err
     except RuntimeError as err:
         # Other database failures
         logger.error(f"Failed to create character record: {err}")
@@ -602,6 +602,97 @@ def character_clear_story(character_id: str) -> None:
         # Don't raise - just log and return
 
 
+def apply_death_state(character_id: str, character: dict, new_state: str, timestamp: str) -> None:
+    """Apply death state to character, updating both character and player tables atomically.
+
+    If player info is available, uses a transaction to update both tables.
+    Falls back to character-only update if player info is missing.
+
+    Args:
+        character_id: Character UUID
+        character: Full character dict with PlayerID and CharacterName
+        new_state: The new state value (should be CharState.DEAD.value)
+        timestamp: ISO format timestamp
+
+    Raises:
+        ClientError: If database operation fails
+    """
+    player_id = character.get("PlayerID")
+    character_name = character.get("CharacterName")
+
+    if player_id and character_name:
+        transact_items = [
+            {
+                "Update": {
+                    "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
+                    "Key": {"CharacterID": {"S": character_id}},
+                    "UpdateExpression": "SET CharState = :state, UpdatedAt = :timestamp, RoomID = :room",
+                    "ExpressionAttributeValues": {
+                        ":state": {"S": new_state},
+                        ":timestamp": {"S": timestamp},
+                        ":room": {"N": str(DEFAULT_DEATH_ROOM_ID)},
+                    },
+                }
+            },
+            {
+                "Update": {
+                    "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
+                    "Key": {"PlayerID": {"S": player_id}},
+                    "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :timestamp",
+                    "ExpressionAttributeNames": {"#name": character_name},
+                    "ExpressionAttributeValues": {
+                        ":dead": {"BOOL": True},
+                        ":timestamp": {"S": timestamp},
+                    },
+                }
+            },
+        ]
+
+        try:
+            dynamo.transact_write_items(transact_items)
+            logger.info(f"Atomically updated character state to dead and player CharacterList for {character_id}")
+        except ClientError as err:
+            logger.error(f"Failed to update death state for {character_id} Error: {err}", exc_info=True)
+            raise RuntimeError(f"Failed to apply death state: {err}") from err
+    else:
+        logger.warning(f"Cannot update CharacterList - missing PlayerID or CharacterName for {character_id}")
+        apply_character_state_change(character_id, new_state, timestamp, include_room_reset=True)
+
+
+def apply_character_state_change(
+    character_id: str, new_state: str, timestamp: str, include_room_reset: bool = False
+) -> None:
+    """Apply a single character state change.
+
+    Args:
+        character_id: Character UUID
+        new_state: New CharState value
+        timestamp: ISO format timestamp
+        include_room_reset: Whether to reset RoomID to default death room
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    update_expr = "SET CharState = :state, UpdatedAt = :timestamp"
+    expr_values = {":state": new_state, ":timestamp": timestamp}
+
+    if include_room_reset:
+        update_expr += ", RoomID = :room"
+        expr_values[":room"] = DEFAULT_DEATH_ROOM_ID
+
+    try:
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues=expr_values,
+        )
+        logger.info(f"Updated character state to {new_state} for {character_id}")
+    except ClientError as err:
+        logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to update character state: {err}") from err
+
+
 def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: list) -> str:
     """
     Apply death or unconscious state to character based on outcome and wounds.
@@ -621,90 +712,22 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
         return CharState.STANDING.value  # Only death outcomes change state
 
     try:
-        # Get character to check current state and max health
         character = get_character(character_id)
-        max_health = character.get("MaxHealth", DEFAULT_HEALTH)
-
-        # Determine new state based on wounds
-        new_state = determine_character_state_from_wounds(max_health, wounds)
-
-        if new_state != character.get("CharState", CharState.STANDING.value):
-            timestamp = datetime.now(timezone.utc).isoformat()
-
-            # If dead, use transaction to atomically update both CHARACTERS and PLAYERS tables
-            if new_state == CharState.DEAD.value:
-                player_id = character.get("PlayerID")
-                character_name = character.get("CharacterName")
-
-                if player_id and character_name:
-                    # Build transaction for atomic update of both tables
-                    transact_items = [
-                        {
-                            "Update": {
-                                "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
-                                "Key": {"CharacterID": {"S": character_id}},
-                                "UpdateExpression": "SET CharState = :state, UpdatedAt = :timestamp, RoomID = :room",
-                                "ExpressionAttributeValues": {
-                                    ":state": {"S": new_state},
-                                    ":timestamp": {"S": timestamp},
-                                    ":room": {"N": str(DEFAULT_DEATH_ROOM_ID)},
-                                },
-                            }
-                        },
-                        {
-                            "Update": {
-                                "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
-                                "Key": {"PlayerID": {"S": player_id}},
-                                "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :timestamp",
-                                "ExpressionAttributeNames": {"#name": character_name},
-                                "ExpressionAttributeValues": {
-                                    ":dead": {"BOOL": True},
-                                    ":timestamp": {"S": timestamp},
-                                },
-                            }
-                        },
-                    ]
-
-                    try:
-                        dynamo.transact_write_items(transact_items)
-                        logger.info(f"Atomically updated character state to dead and player CharacterList for {character_id}")
-                    except ClientError as err:
-                        logger.error(f"Failed to update death state for {character_id} Error: {err}", exc_info=True)
-                        raise
-                else:
-                    # Fallback: Update character only if player info missing
-                    logger.warning(f"Cannot update CharacterList - missing PlayerID or CharacterName for {character_id}")
-                    try:
-                        dynamo.update_item(
-                            TableName.CHARACTERS,
-                            Key={"CharacterID": character_id},
-                            UpdateExpression="SET CharState = :state, UpdatedAt = :timestamp, RoomID = :room",
-                            ExpressionAttributeValues={
-                                ":state": new_state,
-                                ":timestamp": timestamp,
-                                ":room": DEFAULT_DEATH_ROOM_ID,
-                            },
-                        )
-                        logger.info(f"Updated character state to {new_state} for {character_id} (player update skipped)")
-                    except ClientError as err:
-                        logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
-                        raise
-            else:
-                # Non-dead state change (e.g., unconscious) - single table update
-                try:
-                    dynamo.update_item(
-                        TableName.CHARACTERS,
-                        Key={"CharacterID": character_id},
-                        UpdateExpression="SET CharState = :state, UpdatedAt = :timestamp",
-                        ExpressionAttributeValues={":state": new_state, ":timestamp": timestamp},
-                    )
-                    logger.info(f"Updated character state to {new_state} for {character_id}")
-                except ClientError as err:
-                    logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
-                    raise
-
-        return new_state
-
     except ClientError as err:
         logger.error(f"Failed to apply death/unconscious state for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply death/unconscious state: {err}") from err
+
+    max_health = character.get("MaxHealth", DEFAULT_HEALTH)
+    new_state = determine_character_state_from_wounds(max_health, wounds)
+
+    if new_state == character.get("CharState", CharState.STANDING.value):
+        return new_state
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    if new_state == CharState.DEAD.value:
+        apply_death_state(character_id, character, new_state, timestamp)
+    else:
+        apply_character_state_change(character_id, new_state, timestamp)
+
+    return new_state

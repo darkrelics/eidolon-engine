@@ -5,8 +5,8 @@ Handles store inventory management, item purchasing, and currency transactions.
 """
 
 import json
-import os
 from decimal import Decimal
+from pathlib import Path
 
 from botocore.exceptions import ClientError
 
@@ -38,11 +38,11 @@ def load_store_inventory(store_id: str) -> dict:
     """
     store_file = f"data/store_{store_id.replace('-', '_')}.json"
 
-    if not os.path.exists(store_file):
+    if not Path(store_file).exists():
         raise ValueError(f"Store '{store_id}' not found")
 
     try:
-        with open(store_file, encoding="utf-8") as f:
+        with Path(store_file).open(encoding="utf-8") as f:
             store_data = json.load(f)
 
         logger.info(f"Loaded store inventory for '{store_id}': {len(store_data.get('Inventory', []))} items")
@@ -91,8 +91,8 @@ def get_store_items(store_id: str, character_level: int = 0) -> dict:
         prototype_id = store_item.get("PrototypeID")
         try:
             prototype = get_item_prototype_full(prototype_id)
-        except ValueError:
-            logger.warning(f"Prototype {prototype_id} not found for store item, skipping")
+        except ValueError as err:
+            logger.warning(f"Prototype {prototype_id} not found for store item, skipping: {err}")
             continue
 
         # Combine store data with prototype details
@@ -173,7 +173,7 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     if current_currency < total_cost:
         raise ValueError(f"Insufficient funds: need {total_cost}, have {current_currency}")
 
-    # ✅ FIX BUG #4: Stock management documented as not implemented
+    # [FIX] BUG #4: Stock management documented as not implemented
     # Check stock availability (currently all items set to -1 = unlimited)
     # TODO: Implement proper stock management with DynamoDB table or atomic file updates
     stock = store_item.get("Stock", 0)
@@ -250,7 +250,7 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     # Calculate new currency value
     new_currency = current_currency - total_cost
 
-    # ✅ FIX BUG #1: Use conditional update to prevent race conditions
+    # [FIX] BUG #1: Use conditional update to prevent race conditions
     # Ensures currency hasn't changed since we read it (prevents double-purchase exploits)
     try:
         dynamo.update_item(

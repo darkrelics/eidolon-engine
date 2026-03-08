@@ -57,10 +57,13 @@ def validate_log_level(level_str: str) -> str:
     try:
         numeric_str = str(int(level_str))
         return numeric_levels.get(numeric_str, "INFO")
-    except (ValueError, TypeError):
-        # Not a number, check if it's a valid string name
+    except ValueError:
+        # Not a number, fall through to string name check
         upper_level = level_str.upper()
         return upper_level if upper_level in valid_names else "INFO"
+    except TypeError:
+        # None or non-string input, can't call .upper()
+        return "INFO"
 
 
 LOG_LEVEL = validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))

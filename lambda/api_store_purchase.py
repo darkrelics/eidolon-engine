@@ -81,8 +81,13 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Attempt purchase
     try:
         result = purchase_item(character_id, prototype_id, quantity)
+        total_cost = result.get("total_cost", 0)
+        item_ids = result.get("item_ids", [])
+        quantity_purchased = result.get("quantity", 0)
+        currency_remaining = result.get("currency_remaining", 0)
+
         logger.info(
-            f"Purchase successful: {quantity}x {prototype_id} " f"for character {character_id} (cost: {result['total_cost']})"
+            f"Purchase successful: {quantity}x {prototype_id} " f"for character {character_id} (cost: {total_cost})"
         )
 
         # Return purchase results
@@ -90,11 +95,11 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             "status_code": 200,
             "body": {
                 "Success": True,
-                "ItemIDs": result["item_ids"],
-                "Quantity": result["quantity"],
-                "TotalCost": result["total_cost"],
-                "CurrencyRemaining": result["currency_remaining"],
-                "Message": f"Successfully purchased {result['quantity']} item(s)",
+                "ItemIDs": item_ids,
+                "Quantity": quantity_purchased,
+                "TotalCost": total_cost,
+                "CurrencyRemaining": currency_remaining,
+                "Message": f"Successfully purchased {quantity_purchased} item(s)",
             },
         }
     except ValueError as err:

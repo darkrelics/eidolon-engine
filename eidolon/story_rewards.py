@@ -79,6 +79,32 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
     return rewards
 
 
+def update_reward_stack_quantity(item_id: str, new_quantity: int, character_id: str = "") -> None:
+    """Update an existing item stack's quantity in the Items table.
+
+    Non-fatal on failure since the inventory update will still set the correct quantity.
+
+    Args:
+        item_id: Item UUID to update
+        new_quantity: New stack quantity
+        character_id: Character UUID for OwnerID field
+    """
+    try:
+        item_update_expr = "SET Quantity = :quantity"
+        item_values = {":quantity": new_quantity}
+        if character_id:
+            item_update_expr += ", OwnerID = if_not_exists(OwnerID, :owner)"
+            item_values[":owner"] = character_id
+        dynamo.update_item(
+            TableName.ITEMS,
+            Key={"ItemID": item_id},
+            UpdateExpression=item_update_expr,
+            ExpressionAttributeValues=item_values,
+        )
+    except ClientError as err:
+        logger.error(f"Failed to update quantity for reward stack {item_id} Error: {err}", exc_info=True)
+
+
 def apply_story_rewards(character_id: str, rewards: dict) -> None:
     """
     Apply calculated rewards to a character.
@@ -168,25 +194,7 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                                 inventory[stack_slot] = {"ItemID": item_id, "Quantity": new_quantity}
 
                             if item_id:
-                                try:
-                                    item_update_expr = "SET Quantity = :quantity"
-                                    item_values = {":quantity": new_quantity}
-                                    if character_id:
-                                        item_update_expr += ", OwnerID = if_not_exists(OwnerID, :owner)"
-                                        item_values[":owner"] = character_id
-                                    dynamo.update_item(
-                                        TableName.ITEMS,
-                                        Key={"ItemID": item_id},
-                                        UpdateExpression=item_update_expr,
-                                        ExpressionAttributeValues=item_values,
-                                    )
-                                except ClientError as err:
-                                    logger.error(
-                                        "Failed to update quantity for reward stack %s Error: %s",
-                                        item_id,
-                                        err,
-                                        exc_info=True,
-                                    )
+                                update_reward_stack_quantity(item_id, new_quantity, character_id)
                             logger.info(f"Merged reward item with existing stack in slot {stack_slot}: +{add_qty}")
 
                         # Create new stacks for remaining quantity

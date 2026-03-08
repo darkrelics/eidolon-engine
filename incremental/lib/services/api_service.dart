@@ -243,11 +243,6 @@ class ApiService extends BaseApiService {
     }
   }
 
-  /// Get segment outcome for a completed segment.
-  ///
-  /// Fetches the results of a completed segment including
-  /// rewards, XP gained, and character updates.
-
   /// Abandon current story run.
   ///
   /// Ends the current story run early, allowing the character
@@ -265,9 +260,6 @@ class ApiService extends BaseApiService {
     debugPrint('ApiService: Story abandoned successfully');
     return json;
   }
-
-  /// Rest instead of continuing.
-  ///
 
   /// Get available archetypes.
   ///

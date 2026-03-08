@@ -128,7 +128,8 @@ def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int
                 current_quantity = item_data.get("Quantity", 1)
                 if can_add_to_stack(current_quantity, quantity_to_add, max_stack):
                     return (slot, item_data)
-        except ClientError:
+        except ClientError as err:
+            logger.debug(f"Failed to get item {item_id} for stacking: {err}")
             continue
 
     return ()
@@ -397,7 +398,7 @@ def find_next_available_slot(inventory: dict) -> str:
         index += 1
 
 
-def process_items_with_probability(items_data: list) -> list[str]:
+def process_items_with_probability(items_data: list) -> list:
     """
     Process Items field and determine which items to grant based on probability.
 
@@ -456,7 +457,7 @@ def process_items_with_probability(items_data: list) -> list[str]:
         return []
 
 
-def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[str]:
+def add_items_to_inventory(character_id: str, prototype_ids: list) -> list:
     """Create items from prototypes and append them to a character's inventory."""
 
     if not prototype_ids:
@@ -478,7 +479,7 @@ def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[
         inventory = {}
 
     normalized_inventory = {str(key): value for key, value in inventory.items()}
-    granted_items: list[str] = []
+    granted_items = []
 
     for prototype_id in prototype_ids:
         if not isinstance(prototype_id, str) or not prototype_id:
@@ -618,6 +619,53 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
         return {}
 
 
+def fetch_single_item_details(item_id: str, slot_data: list, enriched_inventory: dict) -> None:
+    """Fetch a single item from DynamoDB and populate its inventory slots.
+
+    Args:
+        item_id: Item UUID to fetch
+        slot_data: List of (slot, quantity) tuples for this item
+        enriched_inventory: Dict to populate with item details
+    """
+    try:
+        item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+    except ClientError as err:
+        logger.error(f"Failed to get item {item_id} Error: {err}")
+        for slot, quantity in slot_data:
+            enriched_inventory[slot] = {
+                "ItemID": item_id,
+                "Name": "Error Loading Item",
+                "Description": "Failed to load item details",
+                "Quantity": quantity,
+            }
+        return
+
+    if item:
+        base_item_details = {
+            "ItemID": item_id,
+            "Name": item.get("Name", "Unknown Item"),
+            "Description": item.get("Description", ""),
+            "Stackable": item.get("Stackable", False),
+            "Equipped": item.get("Equipped", item.get("IsWorn", False)),
+            "Mass": item.get("Mass", 0),
+            "Value": item.get("Value", 0),
+            "Rarity": item.get("Rarity", "common"),
+            "Type": item.get("Type", ""),
+            "Consumable": item.get("Consumable", False),
+            "WornOn": item.get("WornOn", ""),
+        }
+        for slot, quantity in slot_data:
+            enriched_inventory[slot] = {**base_item_details, "Quantity": quantity}
+    else:
+        for slot, quantity in slot_data:
+            enriched_inventory[slot] = {
+                "ItemID": item_id,
+                "Name": "Missing Item",
+                "Description": "This item could not be loaded",
+                "Quantity": quantity,
+            }
+
+
 def get_inventory(inventory: dict) -> dict:
     """
     Enrich inventory with item details for display.
@@ -721,47 +769,7 @@ def get_inventory(inventory: dict) -> dict:
         logger.error(f"Failed to batch get item details Error: {err}")
         # Fall back to individual lookups on batch failure
         for item_id, slot_data in item_slots.items():
-            try:
-                item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
-
-                if item:
-                    base_item_details = {
-                        "ItemID": item_id,
-                        "Name": item.get("Name", "Unknown Item"),
-                        "Description": item.get("Description", ""),
-                        "Stackable": item.get("Stackable", False),
-                        "Equipped": item.get("Equipped", item.get("IsWorn", False)),
-                        "Mass": item.get("Mass", 0),
-                        "Value": item.get("Value", 0),
-                        "Rarity": item.get("Rarity", "common"),
-                        "Type": item.get("Type", ""),
-                        "Consumable": item.get("Consumable", False),
-                        "WornOn": item.get("WornOn", ""),
-                    }
-
-                    for slot, quantity in slot_data:
-                        enriched_inventory[slot] = {
-                            **base_item_details,
-                            "Quantity": quantity,
-                        }
-                else:
-                    for slot, quantity in slot_data:
-                        enriched_inventory[slot] = {
-                            "ItemID": item_id,
-                            "Name": "Missing Item",
-                            "Description": "This item could not be loaded",
-                            "Quantity": quantity,
-                        }
-
-            except ClientError as individual_err:
-                logger.error(f"Failed to get item {item_id} Error: {individual_err}")
-                for slot, quantity in slot_data:
-                    enriched_inventory[slot] = {
-                        "ItemID": item_id,
-                        "Name": "Error Loading Item",
-                        "Description": "Failed to load item details",
-                        "Quantity": quantity,
-                    }
+            fetch_single_item_details(item_id, slot_data, enriched_inventory)
 
     return enriched_inventory
 
@@ -779,7 +787,11 @@ def coerce_int(value, default: int = 0) -> int:
     if isinstance(value, str):
         try:
             return int(float(value))
-        except (TypeError, ValueError):
+        except TypeError as err:
+            logger.debug(f"Type error parsing quantity value: {err}")
+            return default
+        except ValueError as err:
+            logger.debug(f"Value error parsing quantity value: {err}")
             return default
     return default
 
@@ -797,7 +809,7 @@ def normalize_effect_config(effects) -> dict:
     return normalized
 
 
-def remove_wounds(wounds: list, amount: int, priority=None) -> tuple[list, list]:
+def remove_wounds(wounds: list, amount: int, priority=None) -> tuple:
     """Remove up to `amount` wounds following optional priority ordering."""
     if amount <= 0 or not isinstance(wounds, list) or not wounds:
         return wounds or [], []
@@ -813,9 +825,9 @@ def remove_wounds(wounds: list, amount: int, priority=None) -> tuple[list, list]
     if not remaining:
         return [], []
 
-    removal_order: list[str] = []
+    removal_order = []
     if priority:
-        seen: set[str] = set()
+        seen = set()
         for entry in priority:
             entry_lower = str(entry).lower()
             if entry_lower not in seen:

@@ -73,7 +73,9 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
             record_story_abandonment(character_id, story_instance_id)
         else:
             logger.warning(f"No StoryInstanceID found for {character_id}, skipping history update")
-    except (ValueError, RuntimeError) as err:
+    except ValueError as err:
+        logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
+    except RuntimeError as err:
         logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
 
     # Record abandoned segment in history
@@ -132,8 +134,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     try:
         body = parse_event_body(event)
         character_id = body.get("CharacterID") if isinstance(body, dict) else None
-    except ValueError:
+    except ValueError as err:
         # Fall through to query string handling
+        logger.debug(f"No JSON body in abandon request: {err}")
         character_id = None
 
     # Fallback to query parameters for backward compatibility

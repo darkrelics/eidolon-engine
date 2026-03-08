@@ -9,9 +9,9 @@ unavailable.
 
 """
 
-import os
 import pickle
 from functools import cache
+from pathlib import Path
 
 from eidolon.logger import logger
 
@@ -24,12 +24,12 @@ def load_bloom_filter(filter_path: str):
     non-fatal; the caller will apply fail-safe restrictive behavior
     (reject names) when the filter is unavailable.
     """
-    if not os.path.exists(filter_path):
+    if not Path(filter_path).exists():
         logger.warning(f"Bloom filter file not found at {filter_path} - name restrictions disabled")
         return None
 
     try:
-        with open(filter_path, "rb") as f:
+        with Path(filter_path).open("rb") as f:
             bloom = pickle.load(f)
             logger.info(f"Successfully loaded character name bloom filter from {filter_path}")
             return bloom

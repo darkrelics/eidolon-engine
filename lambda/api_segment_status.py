@@ -43,6 +43,32 @@ def filter_decision_options(raw_options: dict) -> dict:
     }
 
 
+def get_next_segment_preview(story_id: str, next_segment_id: str) -> dict:
+    """Fetch preview data for the next segment. Returns empty dict on failure.
+
+    Args:
+        story_id: Story UUID
+        next_segment_id: Next segment UUID
+
+    Returns:
+        Preview dict with segment metadata, or empty dict on failure
+    """
+    try:
+        next_segment_def = get_story_segment(story_id, next_segment_id)
+        if not next_segment_def:
+            return {}
+        return {
+            "SegmentID": next_segment_id,
+            "SegmentType": next_segment_def.get("SegmentType", "mechanical"),
+            "SegmentDuration": next_segment_def.get("SegmentDuration", 60),
+            "SegmentTitle": next_segment_def.get("SegmentTitle", "Processing..."),
+            "SegmentActivity": next_segment_def.get("SegmentActivity", ""),
+        }
+    except Exception as err:
+        logger.debug(f"Could not fetch next segment preview: {err}")
+        return {}
+
+
 def get_segment_status_business_logic(character_id: str, player_id: str) -> dict:
     """
     Business logic for getting segment status.
@@ -71,7 +97,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
             # This can happen after a rollback or when no story is active
             logger.info(f"No active segment for character {character_id} - likely rolled back or not started")
             raise ValueError("404:No active segment found") from err
-        raise
+        raise err
 
     now = time.time()
     start_time_unix = coerce_unix_timestamp(active_segment.get("StartTime"), int(now))
@@ -86,7 +112,11 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         )
         try:
             duration = int(raw_duration)  # type: ignore
-        except (TypeError, ValueError):
+        except TypeError as err:
+            logger.debug(f"Duration type error: {err}")
+            duration = 60
+        except ValueError as err:
+            logger.debug(f"Duration value error: {err}")
             duration = 60
         if duration <= 0:
             duration = 60
@@ -192,19 +222,9 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
 
                 # Add NextSegmentPreview if there's a next segment
                 if next_segment_id and (processing_status == "processed" or active_segment.get("Status") == "completed"):
-                    try:
-                        next_segment_def = get_story_segment(story_id, next_segment_id)  # type: ignore
-                        if next_segment_def:
-                            response["NextSegmentPreview"] = {
-                                "SegmentID": next_segment_id,
-                                "SegmentType": next_segment_def.get("SegmentType", "mechanical"),
-                                "SegmentDuration": next_segment_def.get("SegmentDuration", 60),
-                                "SegmentTitle": next_segment_def.get("SegmentTitle", "Processing..."),
-                                "SegmentActivity": next_segment_def.get("SegmentActivity", ""),
-                            }
-                    except Exception as err:
-                        logger.debug(f"Could not fetch next segment preview: {err}")
-                        # Not critical, continue without preview
+                    preview = get_next_segment_preview(story_id, next_segment_id)  # type: ignore
+                    if preview:
+                        response["NextSegmentPreview"] = preview
 
             except Exception as err:
                 logger.warning(

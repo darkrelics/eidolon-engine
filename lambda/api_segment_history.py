@@ -76,15 +76,15 @@ def get_segment_history_business_logic(character_id: str, player_id: str) -> dic
                 story = dynamo.get_item(TableName.STORY, {"StoryID": story_id})
                 if story:
                     story_title = story.get("Title", "Unknown Story")
-            except ClientError:
-                logger.warning(f"Could not fetch story title for {story_id}")
+            except ClientError as err:
+                logger.warning(f"Could not fetch story title for {story_id}: {err}")
     else:
         logger.info(f"No active segment found for character={character_id}, loading latest story history")
 
         try:
             character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
             if not character:
-                raise ValueError(f"404:Character not found")
+                raise ValueError("404:Character not found")
         except ClientError as err:
             logger.error(f"Failed to get character data: {err}")
             raise RuntimeError(f"Failed to load character: {err}") from err

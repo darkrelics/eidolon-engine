@@ -36,7 +36,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             raise ValueError("401:Unauthorized")
     except RuntimeError as err:
         logger.error(f"Failed to validate player {player_id}: {err}", exc_info=True)
-        raise
+        raise err
 
     try:
         body = parse_event_body(event)
@@ -67,7 +67,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             raise ValueError("404:Character not found") from err
         if "not owned" in normalized:
             raise ValueError("403:Access denied") from err
-        raise
+        raise err
 
     try:
         result = consume_item(character_id, item_id)
@@ -81,7 +81,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             raise ValueError(f"409:{message}") from err
         if "not found" in normalized or "not in character inventory" in normalized:
             raise ValueError(f"404:{message}") from err
-        raise
+        raise err
 
     logger.info(f"Item {item_id} consumed for character {character_id}")
     return {"status_code": 200, "body": result}

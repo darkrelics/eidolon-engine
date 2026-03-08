@@ -86,7 +86,7 @@ def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
     client_events = []
 
     if decision and decision in decision_options:
-        option = decision_options[decision]
+        option = decision_options.get(decision, {})
         narrative = option.get("Narrative")
 
         if narrative:

@@ -4,11 +4,8 @@ Story and segment data retrieval.
 Provides functions for retrieving story and segment information.
 """
 
-from datetime import datetime, timezone
-
 from botocore.exceptions import ClientError
 
-from eidolon.character_story import get_story_history
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.segment_core import validate_segment_outcome_results
@@ -181,57 +178,6 @@ def get_story_and_first_segment(story_id: str) -> tuple:
     return story, first_segment
 
 
-def get_story_cooldown(character_id: str, story_id: str, story_type: str):
-    """
-    Calculate cooldown remaining for a story based on its type and last completion.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        story_type: Type of story (one-time, daily, repeatable)
-
-    Returns:
-        Seconds remaining on cooldown, 0 if playable, -1 if permanently unavailable
-    """
-    if story_type == "repeatable":
-        return 0
-
-    try:
-        history = get_story_history(character_id, story_id)
-
-        if not history:
-            return 0
-
-        if not history.get("FinishedAt"):
-            return 0
-
-        if story_type == "one-time":
-            outcome = history.get("FinalOutcome", "")
-            if outcome in ["normal", "exceptional", "minimal"]:
-                return -1
-            return 0
-
-        if story_type == "daily":
-            # Allow retry if story was abandoned
-            final_outcome = history.get("FinalOutcome", "")
-            if final_outcome == "abandoned":
-                return 0
-
-            finished_at = datetime.fromisoformat(history.get("FinishedAt", "").replace("Z", "+00:00"))
-            now = datetime.now(timezone.utc)
-
-            if finished_at.date() == now.date():
-                midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
-                midnight = midnight.replace(day=midnight.day + 1)
-                return int((midnight - now).total_seconds())
-
-            return 0
-
-    except Exception as err:
-        logger.error(f"Error checking story cooldown Error: {err}")
-        return 0
-
-
 def enrich_segment_with_narrative(segment_data: dict, active_segment: dict) -> dict:
     """
     Enrich segment data with narrative content, timestamps, and next segment information.
@@ -250,18 +196,22 @@ def enrich_segment_with_narrative(segment_data: dict, active_segment: dict) -> d
         Enriched segment_data dict with narrative and navigation data
     """
     # Convert Unix timestamps to ISO 8601
-    if "StartTime" in segment_data and segment_data["StartTime"] is not None:
+    start_time = segment_data.get("StartTime")
+    if start_time is not None:
         try:
-            unix_time = float(segment_data["StartTime"])
-            segment_data["StartTime"] = from_unix(int(unix_time))
-        except (ValueError, TypeError) as err:
+            segment_data["StartTime"] = from_unix(int(float(start_time)))
+        except ValueError as err:
+            logger.warning(f"Failed to convert StartTime: {err}")
+        except TypeError as err:
             logger.warning(f"Failed to convert StartTime: {err}")
 
-    if "EndTime" in segment_data and segment_data["EndTime"] is not None:
+    end_time = segment_data.get("EndTime")
+    if end_time is not None:
         try:
-            unix_time = float(segment_data["EndTime"])
-            segment_data["EndTime"] = from_unix(int(unix_time))
-        except (ValueError, TypeError) as err:
+            segment_data["EndTime"] = from_unix(int(float(end_time)))
+        except ValueError as err:
+            logger.warning(f"Failed to convert EndTime: {err}")
+        except TypeError as err:
             logger.warning(f"Failed to convert EndTime: {err}")
 
     # Add narrative data if segment is processed/completed

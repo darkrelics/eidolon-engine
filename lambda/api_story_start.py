@@ -27,6 +27,29 @@ from eidolon.story_validation import story_eligibility, validate_story_available
 from eidolon.validation import validate_uuid
 
 
+def remove_invalid_story_from_character(character: dict, character_id: str, story_id: str) -> None:
+    """Remove a story that no longer exists from a character's available stories. Non-fatal on failure.
+
+    Args:
+        character: Character data dict
+        character_id: Character UUID
+        story_id: Story UUID to remove
+    """
+    try:
+        available_stories = set(character.get("AvailableStories", []))
+        if story_id in available_stories:
+            available_stories.remove(story_id)
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression="SET AvailableStories = :stories",
+                ExpressionAttributeValues={":stories": list(available_stories)},
+            )
+            logger.info(f"Removed invalid story {story_id} from character {character_id}")
+    except Exception as err:
+        logger.error(f"Failed to remove invalid story from character: {err}")
+
+
 def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     """
     Business logic for starting a story - orchestrates the complete process.
@@ -66,21 +89,8 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     try:
         story, first_segment = get_story_and_first_segment(story_id)
     except ValueError as err:
-        # Story doesn't exist in database - remove it from character's available stories
         logger.warning(f"Story {story_id} not found in database, removing from character's available stories")
-        try:
-            available_stories = set(character.get("AvailableStories", []))
-            if story_id in available_stories:
-                available_stories.remove(story_id)
-                dynamo.update_item(
-                    TableName.CHARACTERS,
-                    Key={"CharacterID": character_id},
-                    UpdateExpression="SET AvailableStories = :stories",
-                    ExpressionAttributeValues={":stories": list(available_stories)},
-                )
-                logger.info(f"Removed invalid story {story_id} from character {character_id}")
-        except Exception as err:
-            logger.error(f"Failed to remove invalid story from character: {err}")
+        remove_invalid_story_from_character(character, character_id, story_id)
         raise ValueError("404:Story no longer exists") from err
 
     # Create story instance
@@ -96,10 +106,14 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
 
     try:
         story_update_character(character_id, story_id, active_segment_id, story_instance_id)
-    except (ValueError, RuntimeError) as err:
+    except ValueError as err:
         # Let ops_segment_poller handle cleanup of orphaned segments
         logger.error(f"Failed to update character state, segment {active_segment_id} will be cleaned up by poller: {err}")
-        raise
+        raise err
+    except RuntimeError as err:
+        # Let ops_segment_poller handle cleanup of orphaned segments
+        logger.error(f"Failed to update character state, segment {active_segment_id} will be cleaned up by poller: {err}")
+        raise err
 
     # Queue mechanical segments - critical for game to work
     if first_segment.get("SegmentType") == "mechanical":

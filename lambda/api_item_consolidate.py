@@ -152,7 +152,8 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             max_stack = prototype.get("MaxStack", 99)
             if max_stack <= 0:
                 max_stack = 99
-        except ValueError:
+        except ValueError as err:
+            logger.debug(f"Prototype lookup failed, using default max_stack: {err}")
             max_stack = 99
 
         # Sort by slot to keep the lowest slot numbers

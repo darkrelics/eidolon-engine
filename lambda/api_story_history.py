@@ -47,7 +47,8 @@ def extract_story_instance_ids(event: dict) -> list:
     # Fall back to request body JSON
     try:
         body = parse_event_body(event)
-    except ValueError:
+    except ValueError as err:
+        logger.debug(f"No JSON body in request: {err}")
         body = None
 
     if isinstance(body, dict):
@@ -107,7 +108,8 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         # Allow body-based CharacterID for flexibility
         try:
             body = parse_event_body(event)
-        except ValueError:
+        except ValueError as err:
+            logger.debug(f"No JSON body in request: {err}")
             body = None
         if isinstance(body, dict):
             character_id = body.get("CharacterID") or body.get("characterId")

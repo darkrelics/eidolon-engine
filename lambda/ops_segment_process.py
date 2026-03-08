@@ -46,9 +46,12 @@ def process_segment(active_segment: dict) -> None:
             active_segment.get("StoryID"),  # type: ignore
             active_segment.get("SegmentID"),  # type: ignore
         )
-    except (ValueError, RuntimeError) as err:
+    except ValueError as err:
         logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
-        raise
+        raise err
+    except RuntimeError as err:
+        logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
+        raise err
 
     # Get character
     character = get_character(active_segment.get("CharacterID"))  # type: ignore
@@ -59,9 +62,12 @@ def process_segment(active_segment: dict) -> None:
     # Persist results
     try:
         update_active_segment_outcome(active_segment_id, outcome, results, segment_def)  # type: ignore
-    except (ValueError, RuntimeError) as err:
+    except ValueError as err:
         logger.error(f"Failed to update segment outcome for {active_segment_id}: {err}", exc_info=True)
-        raise
+        raise err
+    except RuntimeError as err:
+        logger.error(f"Failed to update segment outcome for {active_segment_id}: {err}", exc_info=True)
+        raise err
 
     logger.info(f"Segment {active_segment_id} processed with outcome: {outcome}")
 

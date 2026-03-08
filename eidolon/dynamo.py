@@ -125,13 +125,13 @@ class ExponentialBackoff:
                     else:
                         # Non-retryable client error
                         logger.error(f"DynamoDB non-retryable client error Error: {err}", exc_info=True)
-                        raise
+                        raise err
                 except TypeError as err:
                     logger.error(f"DynamoDB type error Error: {err}", exc_info=True)
-                    raise
+                    raise err
                 except Exception as err:
                     logger.error(f"DynamoDB unexpected error, cannot retry Error: {err}", exc_info=True)
-                    raise
+                    raise err
 
             if not success:
                 logger.error("DynamoDB retry count exceeded")
@@ -287,7 +287,7 @@ class DynamoInterface:
             response = table.get_item(Key=key, **kwargs)
         except ClientError as err:
             logger.error(f"Error getting item from DynamoDB for {table_enum.value} Error: {err}")
-            raise
+            raise err
 
         item = response.get("Item", {})
         if not item:
@@ -322,7 +322,7 @@ class DynamoInterface:
             table.put_item(Item=cleaned_item, **kwargs)
         except ClientError as err:
             logger.error(f"Error putting item to DynamoDB for {table_enum.value} Error: {err}")
-            raise
+            raise err
 
         logger.debug("DB Interface: Put Item: Success")
 
@@ -353,9 +353,9 @@ class DynamoInterface:
         except ClientError as err:
             if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
                 logger.error(f"Condition check failed for {table_enum.value} Error: {err}")
-                raise
+                raise err
             logger.error(f"Error updating item in DynamoDB for {table_enum.value} Error: {err}")
-            raise
+            raise err
 
         logger.debug("DB Interface: Update Item: Response")
         return response
@@ -382,7 +382,7 @@ class DynamoInterface:
             response = table.delete_item(**kwargs)
         except ClientError as err:
             logger.error(f"Error deleting item from DynamoDB for {table_enum.value} Error: {err}")
-            raise
+            raise err
 
         logger.debug("DB Interface: Delete Item: Response")
         return response
@@ -407,26 +407,20 @@ class DynamoInterface:
 
         items = []
 
-        try:
-            response = table.query(**kwargs)
-        except ClientError as err:
-            logger.error(f"Error querying DynamoDB for {table_enum.value} Error: {err}")
-            raise
-
-        items.extend(response.get("Items", []))
-
-        # Handle pagination
-        while "LastEvaluatedKey" in response and response.get("LastEvaluatedKey"):
-            logger.debug("DB Interface: Query: Paginating...")
-            kwargs["ExclusiveStartKey"] = response.get("LastEvaluatedKey")
-
+        while True:
             try:
                 response = table.query(**kwargs)
             except ClientError as err:
-                logger.error(f"Error querying DynamoDB during pagination for {table_enum.value} Error: {err}")
-                raise
+                logger.error(f"Error querying DynamoDB for {table_enum.value} Error: {err}")
+                raise err
 
             items.extend(response.get("Items", []))
+
+            last_key = response.get("LastEvaluatedKey")
+            if not last_key:
+                break
+            kwargs["ExclusiveStartKey"] = last_key
+            logger.debug("DB Interface: Query: Paginating...")
 
         # Convert Decimal to float for JSON compatibility
         results = [decimal_to_float(item) for item in items]
@@ -458,7 +452,7 @@ class DynamoInterface:
             response = table.scan(**kwargs)
         except ClientError as err:
             logger.error(f"Error scanning DynamoDB for {table_enum.value} Error: {err}")
-            raise
+            raise err
 
         items = response.get("Items", [])
         last_evaluated_key = response.get("LastEvaluatedKey")
@@ -496,7 +490,7 @@ class DynamoInterface:
             response = table.scan(**kwargs)
         except ClientError as err:
             logger.error(f"Error scanning DynamoDB for {table_enum.value} Error: {err}")
-            raise
+            raise err
 
         items = response.get("Items", [])
         count = response.get("Count", 0)
@@ -540,7 +534,7 @@ class DynamoInterface:
                 response = self._client.batch_get_item(RequestItems=request)  # type: ignore
             except ClientError as err:
                 logger.error(f"Error in batch get operation for {table_enum.value} Error: {err}")
-                raise
+                raise err
 
             items = response.get("Responses", {}).get(table_name, [])
             result.extend([decimal_to_float(item) for item in items])
@@ -565,17 +559,12 @@ class DynamoInterface:
         try:
             with table.batch_writer() as batch:
                 for item in items:
-                    try:
-                        if operation == "put":
-                            batch.put_item(Item=clean_value(item))
-                        elif operation == "delete":
-                            batch.delete_item(Key=item)
-                    except Exception as err:
-                        logger.warning(f"Failed to process individual item in batch for {operation} Error: {err}")
+                    success = write_single_batch_item(batch, item, operation)
+                    if not success:
                         failed_items.append(item)
         except Exception as err:
             logger.error(f"Error creating batch writer for {table_enum.value} Error: {err}")
-            raise
+            raise err
 
         return failed_items
 
@@ -654,10 +643,32 @@ class DynamoInterface:
                 reason_codes = [r.get("Code", "Unknown") for r in reasons if r.get("Code")]
                 logger.error(f"Transaction cancelled: {reason_codes}")
             logger.error(f"Error in transact_write_items Error: {err}")
-            raise
+            raise err
 
         logger.debug("DB Interface: TransactWriteItems: Success")
         return response
+
+
+def write_single_batch_item(batch, item: dict, operation: str) -> bool:
+    """Write or delete a single item within a batch writer context.
+
+    Args:
+        batch: Active batch writer context
+        item: Item data to write or key to delete
+        operation: "put" or "delete"
+
+    Returns:
+        True if successful, False if failed
+    """
+    try:
+        if operation == "put":
+            batch.put_item(Item=clean_value(item))
+        elif operation == "delete":
+            batch.delete_item(Key=item)
+        return True
+    except Exception as err:
+        logger.warning(f"Failed to process individual item in batch for {operation} Error: {err}")
+        return False
 
 
 def clean_value(value: object) -> object:

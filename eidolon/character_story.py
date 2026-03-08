@@ -213,8 +213,8 @@ def get_stories(character_id: str, player_id: str, available_story_ids: list) ->
             stories.append(formatted_story)
             logger.debug(f"Story processed for {story_id}")
 
-        except ValueError:
-            logger.warning(f"Story not found for {story_id}")
+        except ValueError as err:
+            logger.warning(f"Story not found for {story_id}: {err}")
             continue
         except RuntimeError as err:
             logger.error(f"Error loading story for {story_id} Error: {err}")
@@ -289,8 +289,8 @@ def get_stories_with_character(character: dict, available_story_ids: list) -> li
             stories.append(formatted_story)
             logger.debug(f"Story processed for {story_id}")
 
-        except ValueError:
-            logger.warning(f"Story not found for {story_id}")
+        except ValueError as err:
+            logger.warning(f"Story not found for {story_id}: {err}")
             continue
         except RuntimeError as err:
             logger.error(f"Error loading story for {story_id} Error: {err}")

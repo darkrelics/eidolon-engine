@@ -75,7 +75,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             quantity_to_discard = int(quantity_to_discard)
             if quantity_to_discard < 1:
                 raise ValueError("Quantity must be at least 1")
-        except (TypeError, ValueError) as err:
+        except TypeError as err:
+            raise ValueError("Invalid Quantity value") from err
+        except ValueError as err:
             raise ValueError("Invalid Quantity value") from err
 
     # Get character and verify ownership
@@ -140,7 +142,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             logger.info(f"Decremented item {item_id} quantity: {item_quantity} -> " f"{item_quantity - quantity_to_discard}")
             item_fully_discarded = False
 
-        # ✅ FIX BUG #3: Use conditional update to prevent race conditions
+        # [FIX] BUG #3: Use conditional update to prevent race conditions
         # Ensures item still exists in the expected slot with expected ID
         dynamo.update_item(
             TableName.CHARACTERS,

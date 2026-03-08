@@ -89,9 +89,9 @@ def get_polling_state() -> str:
     try:
         state = get_parameter(SSM_POLLER_STATE_PARAMETER)
         return state
-    except ValueError:
+    except ValueError as err:
         # Parameter doesn't exist, create it with default value
-        logger.info("Polling state parameter not found, creating with default")
+        logger.info(f"Polling state parameter not found, creating with default: {err}")
         update_polling_state("run")
         return "run"
     except Exception as err:
