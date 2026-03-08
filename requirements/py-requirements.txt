@@ -3,7 +3,7 @@ bandit==1.8.6
 pip-audit==2.9.0
 pylint==4.0.2
 ruff==0.14.10
-vulture==2.14
+vulture==2.15
 # Supporting Libraries
 CacheControl==0.14.3
 PyYAML==6.0.3
@@ -34,7 +34,7 @@ py-serializable==2.1.0
 pygments==2.19.2
 pyparsing==3.2.5
 requests==2.32.5
-rich==14.2.0
+rich==14.3.3
 setuptools==80.9.0
 sortedcontainers==2.4.0
 stevedore==5.5.0
