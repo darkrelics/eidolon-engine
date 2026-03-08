@@ -153,7 +153,7 @@ Understand where your code belongs:
 
 ### Prerequisites
 
-- Python 3.12+
+- Python 3.12
 - Go 1.24+
 - Flutter 3.29+
 - AWS CLI configured

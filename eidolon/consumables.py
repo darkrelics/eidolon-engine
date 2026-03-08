@@ -452,7 +452,6 @@ def build_character_update_expression(
     new_essence: int,
     state_changed: bool,
     new_state: str,
-    old_state: str,
 ) -> dict:
     """Build the DynamoDB update expression for character changes after consumption.
 
@@ -465,7 +464,6 @@ def build_character_update_expression(
         new_essence: New essence value.
         state_changed: Whether character state changed.
         new_state: New character state value.
-        old_state: Previous character state value.
 
     Returns:
         Dict with keys: update_expression_parts, expression_values, expression_names.
@@ -580,7 +578,6 @@ def consume_item(character_id: str, item_id: str) -> dict:
         essence_result.get("new_essence", 0),
         state_changed,
         fx.get("new_char_state", ""),
-        fx.get("character_state_before", ""),
     )
 
     transact_items = build_consume_transaction(
