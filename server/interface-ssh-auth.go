@@ -70,11 +70,11 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 	}
 
 	// Split password and optional MFA code before authenticating.
-	// Format: "password" or "password/mfa_code" (split from last "/" to support passwords containing "/")
+	// Format: "password" or "password::mfa_code" (using "::" delimiter to avoid collision with passwords)
 	actualPassword := sanitizedPassword
 	mfaCode := ""
-	if lastSlash := strings.LastIndex(sanitizedPassword, "/"); lastSlash > 0 {
-		candidateCode := sanitizedPassword[lastSlash+1:]
+	if lastDelim := strings.LastIndex(sanitizedPassword, "::"); lastDelim > 0 {
+		candidateCode := sanitizedPassword[lastDelim+2:]
 		// MFA codes are 6 digits
 		if len(candidateCode) == 6 {
 			allDigits := true
@@ -85,7 +85,7 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 				}
 			}
 			if allDigits {
-				actualPassword = sanitizedPassword[:lastSlash]
+				actualPassword = sanitizedPassword[:lastDelim]
 				mfaCode = candidateCode
 			}
 		}

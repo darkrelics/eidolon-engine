@@ -9,7 +9,7 @@ Authentication: Cognito (required)
 """
 
 from eidolon.character_data import character_get
-from eidolon.items import consume_item
+from eidolon.consumables import consume_item
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player

@@ -4,6 +4,7 @@
 
 import 'package:eidolon_incremental/controllers/character_screen_controller.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
 import 'package:eidolon_incremental/providers/character_provider.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
@@ -216,7 +217,20 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
 
   Future<void> _showAddCharacterDialog() async {
     final controller = context.read<CharacterScreenController>();
-    List<ArchetypeInfo> archetypes = await controller.getArchetypes();
+    List<ArchetypeInfo> archetypes;
+    try {
+      archetypes = await controller.getArchetypes();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'loading archetypes')),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return;
+    }
 
     if (!mounted) return;
 

@@ -435,7 +435,7 @@ def delete_active_segments_for_character(character_id: str) -> int:
         logger.error(f"Error querying active segments for character {character_id}: {err}")
         return 0
 
-    delete_keys = [{"ActiveSegmentID": item.get("ActiveSegmentID")} for item in items if item.get("ActiveSegmentID")]
+    delete_keys = [{"ActiveSegmentID": item.get("ActiveSegmentID")} for item in (items or []) if item.get("ActiveSegmentID")]
 
     if not delete_keys:
         return 0
@@ -466,7 +466,7 @@ def delete_segment_history_for_character(character_id: str) -> int:
 
     delete_keys = [
         {"CharacterID": character_id, "ActiveSegmentID": item.get("ActiveSegmentID")}
-        for item in items
+        for item in (items or [])
         if item.get("ActiveSegmentID")
     ]
 

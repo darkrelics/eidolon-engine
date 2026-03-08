@@ -672,7 +672,7 @@ def apply_character_state_change(character_id: str, new_state: str, timestamp: s
         RuntimeError: If database operation fails
     """
     update_expr = "SET CharState = :state, UpdatedAt = :timestamp"
-    expr_values = {":state": new_state, ":timestamp": timestamp}
+    expr_values: dict = {":state": new_state, ":timestamp": timestamp}
 
     if include_room_reset:
         update_expr += ", RoomID = :room"

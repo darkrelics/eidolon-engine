@@ -160,7 +160,7 @@ class PasswordResetController extends ChangeNotifier {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'confirmPassword')),
+            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'resendCode')),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

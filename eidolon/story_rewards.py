@@ -91,7 +91,7 @@ def update_reward_stack_quantity(item_id: str, new_quantity: int, character_id: 
     """
     try:
         item_update_expr = "SET Quantity = :quantity"
-        item_values = {":quantity": new_quantity}
+        item_values: dict = {":quantity": new_quantity}
         if character_id:
             item_update_expr += ", OwnerID = if_not_exists(OwnerID, :owner)"
             item_values[":owner"] = character_id

@@ -182,6 +182,15 @@ func Authenticate(username, password, mfaCode string, ssh_interface *Interface_S
 		}
 
 		authOutput.AuthenticationResult = challengeOutput.AuthenticationResult
+	} else if authOutput.ChallengeName == types.ChallengeNameTypeSmsMfa {
+		Logger.Error("SMS MFA not supported", "username", username)
+		return false, uuid.Nil, fmt.Errorf("SMS-based MFA is not supported, please use an authenticator app")
+	} else if authOutput.ChallengeName == types.ChallengeNameTypeNewPasswordRequired {
+		Logger.Error("Password change required", "username", username)
+		return false, uuid.Nil, fmt.Errorf("password change required, please use the web client")
+	} else if authOutput.ChallengeName != "" {
+		Logger.Error("Unsupported auth challenge", "username", username, "challenge", string(authOutput.ChallengeName))
+		return false, uuid.Nil, fmt.Errorf("unsupported authentication challenge")
 	}
 
 	if authOutput.AuthenticationResult == nil {

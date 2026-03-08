@@ -94,6 +94,7 @@ func (c *Character) ApplyEvent(event events.Event) error {
 
 	default:
 		Logger.Warn("Unknown event type", "type", event.GetType())
+		return fmt.Errorf("unknown event type: %s", event.GetType())
 	}
 	return nil
 }

@@ -112,10 +112,13 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Get item brief and prototype to verify it's stackable
     try:
         item_brief = get_item_brief(item_id)
-        prototype_id = item_brief.get("PrototypeID")
+        prototype_id = item_brief.get("PrototypeID", "")
     except ValueError as err:
         logger.warning(f"Item brief not found for {item_id}: {err}")
         raise ValueError("404:Item not found") from err
+
+    if not prototype_id:
+        raise ValueError("404:Item prototype reference missing")
 
     prototype = get_prototype(prototype_id)
     if not prototype:

@@ -1,5 +1,6 @@
 import 'package:eidolon_incremental/providers/character_provider.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
+import 'package:eidolon_incremental/utils/error_handler.dart';
 import 'package:flutter/foundation.dart';
 
 class CharacterScreenController extends ChangeNotifier {
@@ -34,7 +35,7 @@ class CharacterScreenController extends ChangeNotifier {
       final characters = await _apiService.listCharacters();
       _characters = characters;
     } catch (e) {
-      _error = _getUserFriendlyErrorMessage(e);
+      _error = ErrorHandler.getUserFriendlyMessage(e, context: 'loading characters');
     } finally {
       _loadInProgress = false;
       _isLoading = false;
@@ -47,7 +48,7 @@ class CharacterScreenController extends ChangeNotifier {
       return await _apiService.getArchetypes();
     } catch (e) {
       debugPrint('Error loading archetypes: $e');
-      return [];
+      rethrow;
     }
   }
 
@@ -74,9 +75,9 @@ class CharacterScreenController extends ChangeNotifier {
       await loadCharacters();
       onSuccess(message);
     } catch (e) {
-      _isLoading = false; // loadCharacters handles this usually, but if we fail before...
+      _isLoading = false;
       notifyListeners();
-      onError(_getUserFriendlyErrorMessage(e, context: 'createCharacter'));
+      onError(ErrorHandler.getUserFriendlyMessage(e, context: 'creating character'));
     }
   }
 
@@ -105,14 +106,11 @@ class CharacterScreenController extends ChangeNotifier {
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      onError(_getUserFriendlyErrorMessage(e, context: 'deleteCharacter'));
+      onError(ErrorHandler.getUserFriendlyMessage(e, context: 'deleting character'));
     }
   }
 
   Future<void> enterGame(CharacterInfo character, {required VoidCallback onSuccess, required Function(String) onError}) async {
-    // Note: Loading state is handled by the UI dialog for this specific action
-    // because we want to show a specific "Entering Game" dialog, not the generic screen loader.
-
     try {
       final fullCharacter = await _apiService.getCharacterById(character.id);
 
@@ -120,37 +118,10 @@ class CharacterScreenController extends ChangeNotifier {
         await _characterProvider.updateCharacter(fullCharacter);
         onSuccess();
       } else {
-        // Fallback if full load fails but we have basic info?
-        // Actually getCharacterById returns null on failure usually or throws.
-        // If it returns null, we probably shouldn't proceed.
         onError('Failed to load character data');
       }
     } catch (e) {
-      onError(_getUserFriendlyErrorMessage(e, context: 'loading character'));
+      onError(ErrorHandler.getUserFriendlyMessage(e, context: 'loading character'));
     }
-  }
-
-  String _getUserFriendlyErrorMessage(dynamic e, {String? context}) {
-    final errorString = e.toString();
-    if (errorString.contains('Internal server error')) {
-      return 'Server error occurred. Please try again later.';
-    } else if (errorString.contains('Network')) {
-      return 'Connection error. Please check your internet connection.';
-    } else if (errorString.contains('Player account not found')) {
-      return 'We could not find your player data. Please sign out and back in.';
-    } else if (errorString.contains('Character name is already taken')) {
-      return 'That character name is already taken. Please choose another.';
-    } else if (errorString.contains('Character limit reached')) {
-      return 'You have reached the maximum number of characters.';
-    } else if (errorString.contains('Character name is not available')) {
-      return 'That character name is not available. Please choose another.';
-    } else if (errorString.contains('Character not found')) {
-      return 'Character not found';
-    } else if (errorString.contains('Access denied')) {
-      return 'You do not have permission to delete this character';
-    }
-
-    // Fallback to generic handler if available or simple string
-    return 'An error occurred: $errorString';
   }
 }

@@ -90,7 +90,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Find item in inventory
     inventory = character.get("Inventory", {})
     found_slot = None
-    item_quantity = None
+    item_quantity = 1
 
     if inventory_slot and inventory_slot in inventory:
         # Quick lookup using provided slot

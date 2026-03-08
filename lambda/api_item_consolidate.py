@@ -108,6 +108,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             orphaned_items.append({"Slot": slot, "ItemID": item_id, "Error": str(err)})
             continue
 
+        if not item_prototype_id:
+            continue
+
         # If filtering by prototype, skip non-matching items
         if prototype_id and item_prototype_id != prototype_id:
             continue

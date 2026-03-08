@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:eidolon_incremental/controllers/segment_history_manager.dart';
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/models/story.dart';
 import 'package:eidolon_incremental/repositories/character_repository.dart';
@@ -54,19 +55,12 @@ class GameScreenController extends ChangeNotifier {
   Timer? _statusUpdateDebounce;
 
   // Data
-  List<Map<String, dynamic>> _segmentHistory = const [];
+  late final SegmentHistoryManager _segmentHistory;
   Map<String, dynamic>? _lastStoryDetails;
-  int _segmentCounter = 0;
   String? _orchestratedSegmentId;
 
   // UI State
   int _selectedPanelIndex = 1; // 0: Character, 1: Story, 2: Inventory
-
-  // Caching
-  List<Map<String, dynamic>>? _cachedCompletedSegments;
-  String? _completedSegmentsCacheKey;
-  List<Map<String, dynamic>>? _cachedStoryHistory;
-  String? _storyHistoryCacheKey;
 
   // Getters
   Character? get character => _character;
@@ -75,12 +69,13 @@ class GameScreenController extends ChangeNotifier {
   String? get error => _error;
   bool get isSubmittingDecision => _isSubmittingDecision;
   StoryLifecycleState get storyLifecycleState => _storyLifecycleState;
-  List<Map<String, dynamic>> get segmentHistory => _segmentHistory;
+  List<Map<String, dynamic>> get segmentHistory => _segmentHistory.segments;
   int get selectedPanelIndex => _selectedPanelIndex;
 
   GameScreenController({required ApiService apiService, required CharacterRepository characterRepository})
       : _apiService = apiService,
         _characterRepository = characterRepository {
+    _segmentHistory = SegmentHistoryManager();
     _runtime = StoryPollingService(apiService: _apiService);
     _decisionDebouncer = Debouncer(delay: const Duration(milliseconds: 300));
     _refreshDebouncer = Debouncer(delay: const Duration(milliseconds: 500));
@@ -140,17 +135,9 @@ class GameScreenController extends ChangeNotifier {
         }
 
         if (completedSegments != null) {
-          _segmentHistory = completedSegments
-              .whereType<Map<String, dynamic>>()
-              .map((segment) {
-                final copy = Map<String, dynamic>.from(segment);
-                if (!copy.containsKey('_index')) {
-                  copy['_index'] = _segmentCounter++;
-                }
-                return copy;
-              })
-              .where(_isSegmentComplete)
-              .toList();
+          final typedSegments = completedSegments.whereType<Map<String, dynamic>>().toList();
+          final indexed = _segmentHistory.assignIndices(typedSegments);
+          _segmentHistory.segments = indexed.where(_segmentHistory.isSegmentComplete).toList();
         }
 
         _synchronizeStoryCompletionState();
@@ -201,78 +188,11 @@ class GameScreenController extends ChangeNotifier {
     _characterUpdateTimer?.cancel();
     _characterUpdateTimerCount = 0;
     _orchestratedSegmentId = null;
-    _segmentHistory = <Map<String, dynamic>>[];
-    _segmentCounter = 0;
+    _segmentHistory.reset();
     _lastStoryDetails = null;
     _storyCompletionNotified = false;
     _storyLifecycleState = StoryLifecycleState.none;
     _handlingStoryCompletion = false;
-    _invalidateCache();
-  }
-
-  void _invalidateCache() {
-    _cachedCompletedSegments = null;
-    _completedSegmentsCacheKey = null;
-    _cachedStoryHistory = null;
-    _storyHistoryCacheKey = null;
-  }
-
-  String _segmentIdentity(Map<String, dynamic> segment) {
-    // Primary key: ActiveSegmentID (unique execution identifier)
-    final activeSegmentId = segment['ActiveSegmentID'];
-    if (activeSegmentId != null) {
-      final idString = activeSegmentId.toString().trim();
-      if (idString.isNotEmpty) {
-        return 'active:$idString';
-      }
-    }
-
-    // Fallback: SegmentID (story definition identifier)
-    final segmentId = segment['SegmentID'];
-    if (segmentId != null) {
-      final idString = segmentId.toString().trim();
-      if (idString.isNotEmpty) {
-        return 'segment:$idString';
-      }
-    }
-
-    // Last resort: Composite key from available fields
-    final storyInstanceId = segment['StoryInstanceID']?.toString().trim();
-    final storyId = segment['StoryID']?.toString().trim();
-    final segmentActivity = segment['SegmentActivity']?.toString().trim();
-    final segmentTitle = segment['SegmentTitle']?.toString().trim();
-    final prompt = segment['Prompt']?.toString().trim();
-
-    final parts = <String>[
-      if (storyInstanceId != null && storyInstanceId.isNotEmpty) storyInstanceId,
-      if (storyId != null && storyId.isNotEmpty) storyId,
-      if (segmentActivity != null && segmentActivity.isNotEmpty) segmentActivity,
-      if (segmentTitle != null && segmentTitle.isNotEmpty) segmentTitle,
-      if (prompt != null && prompt.isNotEmpty) prompt,
-    ];
-
-    if (parts.isEmpty) {
-      return 'fallback:${segment.hashCode}';
-    }
-
-    return 'composite:${parts.join('|')}';
-  }
-
-  void _sortSegmentsChronologically(List<Map<String, dynamic>> segments, {bool newestFirst = false}) {
-    segments.sort((a, b) {
-      final aIndex = a['_index'] as int?;
-      final bIndex = b['_index'] as int?;
-
-      if (aIndex != null && bIndex != null) {
-        return newestFirst ? bIndex.compareTo(aIndex) : aIndex.compareTo(bIndex);
-      }
-
-      if (aIndex == null && bIndex == null) return 0;
-      if (aIndex == null) return 1;
-      if (bIndex == null) return -1;
-
-      return 0;
-    });
   }
 
   void _manageCharacterUpdateTimer() {
@@ -420,7 +340,7 @@ class GameScreenController extends ChangeNotifier {
 
     try {
       _isLoading = true;
-      _segmentHistory = [];
+      _segmentHistory.segments = [];
       _storyCompletionNotified = false;
       notifyListeners();
 
@@ -452,8 +372,7 @@ class GameScreenController extends ChangeNotifier {
       // Add initial segment to history for tracking
       final initialSegmentCopy = Map<String, dynamic>.from(initialSegment);
       initialSegmentCopy['StoryTitle'] = story.title;
-      initialSegmentCopy['_index'] = _segmentCounter++;
-      _segmentHistory = [initialSegmentCopy];
+      _segmentHistory.addOrUpdateSegment(initialSegmentCopy, _lastStoryDetails);
 
       _isLoading = false;
       _storyLifecycleState = StoryLifecycleState.running;
@@ -506,8 +425,8 @@ class GameScreenController extends ChangeNotifier {
       onStatusUpdate: (status) {
         if (_disposed || _character == null) return;
 
-        final segmentKey = _segmentIdentity(status);
-        final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
+        final segmentKey = _segmentHistory.segmentIdentity(status);
+        final exists = _segmentHistory.segments.any((s) => _segmentHistory.segmentIdentity(s) == segmentKey);
         final processingStatus = status['ProcessingStatus'];
 
         final currentActiveSegmentId = _character!.activeSegmentID;
@@ -515,28 +434,7 @@ class GameScreenController extends ChangeNotifier {
         final segmentChanged = currentActiveSegmentId != newActiveSegmentId;
         final statusChanged = processingStatus != _character!.storyState?['ActiveSegment']?['ProcessingStatus'];
 
-        if (!exists) {
-          final segmentCopy = Map<String, dynamic>.from(status);
-          if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-            segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-          }
-          segmentCopy['_index'] = _segmentCounter++;
-          _segmentHistory = [..._segmentHistory, segmentCopy];
-        } else {
-          _segmentHistory = _segmentHistory.map((s) {
-            if (_segmentIdentity(s) == segmentKey) {
-              final updated = Map<String, dynamic>.from(status);
-              if (!updated.containsKey('StoryTitle') && _lastStoryDetails != null) {
-                updated['StoryTitle'] = _lastStoryDetails!['Title'];
-              }
-              if (s.containsKey('_index')) {
-                updated['_index'] = s['_index'];
-              }
-              return updated;
-            }
-            return s;
-          }).toList();
-        }
+        _segmentHistory.addOrUpdateSegment(status, _lastStoryDetails);
 
         final storyState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{});
         storyState['ActiveSegment'] = status;
@@ -552,7 +450,7 @@ class GameScreenController extends ChangeNotifier {
           _statusUpdateDebounce = Timer(const Duration(milliseconds: 200), () {
             _character = _character!.copyWith(activeSegmentId: newActiveSegmentId, storyState: storyState);
             _error = null;
-            _invalidateCache();
+            _segmentHistory.invalidateCache();
             notifyListeners();
           });
         } else {
@@ -612,17 +510,7 @@ class GameScreenController extends ChangeNotifier {
           final newActiveSegment = updated.storyState?['ActiveSegment'] as Map<String, dynamic>?;
 
           if (newActiveSegment != null) {
-            final segmentKey = _segmentIdentity(newActiveSegment);
-            final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
-
-            if (!exists) {
-              final segmentCopy = Map<String, dynamic>.from(newActiveSegment);
-              if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-                segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-              }
-              segmentCopy['_index'] = _segmentCounter++;
-              _segmentHistory = [..._segmentHistory, segmentCopy];
-            }
+            _segmentHistory.addOrUpdateSegment(newActiveSegment, _lastStoryDetails);
           }
 
           _character = updated;
@@ -680,7 +568,7 @@ class GameScreenController extends ChangeNotifier {
   Future<void> _loadSegmentHistory({bool mergeWithExisting = false}) async {
     if (_character == null) {
       if (!mergeWithExisting) {
-        _segmentHistory = [];
+        _segmentHistory.segments = [];
         _synchronizeStoryCompletionState();
         notifyListeners();
       }
@@ -699,36 +587,28 @@ class GameScreenController extends ChangeNotifier {
         if (completedAt is String && completedAt.isNotEmpty) return true;
         if (completedAt is num && completedAt > 0) return true;
         if (segment['Status']?.toString().toLowerCase() == 'completed') return true;
-        return _isSegmentComplete(segment);
+        return _segmentHistory.isSegmentComplete(segment);
       }).toList();
 
       if (mergeWithExisting) {
         final mergedByKey = <String, Map<String, dynamic>>{};
-        for (final existing in _segmentHistory) {
-          mergedByKey[_segmentIdentity(existing)] = Map<String, dynamic>.from(existing);
+        for (final existing in _segmentHistory.segments) {
+          mergedByKey[_segmentHistory.segmentIdentity(existing)] = Map<String, dynamic>.from(existing);
         }
         for (final segment in history) {
-          final key = _segmentIdentity(segment);
+          final key = _segmentHistory.segmentIdentity(segment);
           final existingSegment = mergedByKey[key];
           final merged = Map<String, dynamic>.from(segment);
           if (existingSegment != null && existingSegment.containsKey('_index')) {
             merged['_index'] = existingSegment['_index'];
-          } else {
-            merged['_index'] = _segmentCounter++;
           }
           mergedByKey[key] = merged;
         }
         final mergedSegments = mergedByKey.values.toList();
-        _sortSegmentsChronologically(mergedSegments);
-        _segmentHistory = mergedSegments;
+        _segmentHistory.segments = _segmentHistory.assignIndices(mergedSegments);
+        _segmentHistory.sortSegmentsChronologically(_segmentHistory.segments);
       } else {
-        _segmentHistory = history.map((segment) {
-          final copy = Map<String, dynamic>.from(segment);
-          if (!copy.containsKey('_index')) {
-            copy['_index'] = _segmentCounter++;
-          }
-          return copy;
-        }).toList();
+        _segmentHistory.segments = _segmentHistory.assignIndices(history);
       }
       _synchronizeStoryCompletionState();
       notifyListeners();
@@ -737,52 +617,29 @@ class GameScreenController extends ChangeNotifier {
     }
   }
 
-  bool _isSegmentComplete(Map<String, dynamic> segment) {
-    final completedAt = segment['CompletedAt'];
-    if (completedAt is String && completedAt.isNotEmpty) return true;
-    if (completedAt is num && completedAt > 0) return true;
-    if (segment['Status']?.toString().toLowerCase() == 'completed') return true;
-
-    final processingStatus = segment['ProcessingStatus']?.toString().toLowerCase();
-    if (processingStatus == 'processed') {
-      final endTimeStr = segment['EndTime']?.toString();
-      if (endTimeStr != null && endTimeStr.isNotEmpty) {
-        try {
-          final endTime = DateTime.parse(endTimeStr).toUtc();
-          final now = DateTime.now().toUtc();
-          return now.isAfter(endTime) || now.isAtSameMomentAs(endTime);
-        } catch (e) {
-          // ignore
-        }
-      }
-      final timeRemaining = segment['TimeRemaining'];
-      if (timeRemaining is num) {
-        return timeRemaining <= 0;
-      }
-      return false;
+  void _synchronizeStoryCompletionState() {
+    final updated = _segmentHistory.synchronizeStoryCompletionState(_character, _lastStoryDetails);
+    if (updated != null) {
+      _character = updated;
     }
-
-    if (segment['StoryComplete'] == true) return true;
-
-    return false;
   }
 
-  void _synchronizeStoryCompletionState() {
-    if (_character == null || _segmentHistory.isEmpty) return;
-    if (_character!.activeSegmentID != null) return;
+  Map<String, dynamic>? _buildCompletedStoryState() {
+    final completedSegmentsCopy = _segmentHistory.segments.map((segment) => Map<String, dynamic>.from(segment)).toList();
+    _segmentHistory.sortSegmentsChronologically(completedSegmentsCopy);
 
-    final currentStoryState = _character!.storyState ?? <String, dynamic>{};
-    final updatedStoryState = Map<String, dynamic>.from(currentStoryState);
-
-    final synchronizedSegments = _segmentHistory.map((segment) => Map<String, dynamic>.from(segment)).toList();
-    _sortSegmentsChronologically(synchronizedSegments);
-    updatedStoryState['CompletedSegments'] = synchronizedSegments;
-
-    if (!updatedStoryState.containsKey('Story') && _lastStoryDetails != null) {
-      updatedStoryState['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
+    if (completedSegmentsCopy.isEmpty && _lastStoryDetails == null) {
+      return null;
     }
 
-    _character = _character!.copyWith(storyState: updatedStoryState);
+    final storyStateUpdate = <String, dynamic>{};
+    if (completedSegmentsCopy.isNotEmpty) {
+      storyStateUpdate['CompletedSegments'] = completedSegmentsCopy;
+    }
+    if (_lastStoryDetails != null) {
+      storyStateUpdate['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
+    }
+    return storyStateUpdate;
   }
 
   Future<void> handleDecisionSelect(BuildContext context, String choiceId) async {
@@ -807,52 +664,10 @@ class GameScreenController extends ChangeNotifier {
         final nextSegment = response['NextSegment'] as Map<String, dynamic>;
 
         if (completedSegment != null) {
-          final segmentCopy = Map<String, dynamic>.from(completedSegment);
-          if (!segmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-            segmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-          }
-
-          final segmentKey = _segmentIdentity(segmentCopy);
-          final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
-
-          if (!exists) {
-            segmentCopy['_index'] = _segmentCounter++;
-            _segmentHistory = [..._segmentHistory, segmentCopy];
-          } else {
-            _segmentHistory = _segmentHistory.map((s) {
-              if (_segmentIdentity(s) == segmentKey) {
-                if (s.containsKey('_index')) {
-                  segmentCopy['_index'] = s['_index'];
-                }
-                return segmentCopy;
-              }
-              return s;
-            }).toList();
-          }
+          _segmentHistory.addOrUpdateSegment(completedSegment, _lastStoryDetails);
         }
 
-        final nextSegmentCopy = Map<String, dynamic>.from(nextSegment);
-        if (!nextSegmentCopy.containsKey('StoryTitle') && _lastStoryDetails != null) {
-          nextSegmentCopy['StoryTitle'] = _lastStoryDetails!['Title'];
-        }
-
-        final nextKey = _segmentIdentity(nextSegmentCopy);
-        final nextExists = _segmentHistory.any((s) => _segmentIdentity(s) == nextKey);
-
-        if (!nextExists) {
-          nextSegmentCopy['_index'] = _segmentCounter++;
-          _segmentHistory = [..._segmentHistory, nextSegmentCopy];
-        } else {
-          _segmentHistory = _segmentHistory.map((s) {
-            if (_segmentIdentity(s) == nextKey) {
-              if (s.containsKey('_index')) {
-                nextSegmentCopy['_index'] = s['_index'];
-              }
-              return nextSegmentCopy;
-            }
-            return s;
-          }).toList();
-        }
+        _segmentHistory.addOrUpdateSegment(nextSegment, _lastStoryDetails);
 
         final updatedStoryState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{})
           ..['ActiveSegment'] = nextSegment;
@@ -934,31 +749,11 @@ class GameScreenController extends ChangeNotifier {
       }
 
       final activeSegment = finalActiveSegment ?? (_character?.storyState?['ActiveSegment'] as Map<String, dynamic>?);
-      final shouldIncludeFinalSegment = activeSegment != null && _isSegmentComplete(activeSegment);
+      final shouldIncludeFinalSegment = activeSegment != null && _segmentHistory.isSegmentComplete(activeSegment);
 
       try {
         if (shouldIncludeFinalSegment) {
-          final copy = Map<String, dynamic>.from(activeSegment);
-          if (!copy.containsKey('StoryTitle') && _lastStoryDetails != null && _lastStoryDetails!['Title'] is String) {
-            copy['StoryTitle'] = _lastStoryDetails!['Title'];
-          }
-
-          final segmentKey = _segmentIdentity(copy);
-          final exists = _segmentHistory.any((s) => _segmentIdentity(s) == segmentKey);
-          if (!exists) {
-            copy['_index'] = _segmentCounter++;
-            _segmentHistory = [..._segmentHistory, copy];
-          } else {
-            _segmentHistory = _segmentHistory.map((s) {
-              if (_segmentIdentity(s) == segmentKey) {
-                if (s.containsKey('_index')) {
-                  copy['_index'] = s['_index'];
-                }
-                return copy;
-              }
-              return s;
-            }).toList();
-          }
+          _segmentHistory.addOrUpdateSegment(activeSegment, _lastStoryDetails);
         }
 
         if (refreshCharacter) {
@@ -969,21 +764,12 @@ class GameScreenController extends ChangeNotifier {
       }
 
       if (_character != null) {
-        final completedSegmentsCopy = _segmentHistory.map((segment) => Map<String, dynamic>.from(segment)).toList();
-        _sortSegmentsChronologically(completedSegmentsCopy);
-
-        Map<String, dynamic>? storyStateUpdate;
-        if (completedSegmentsCopy.isNotEmpty || _lastStoryDetails != null) {
-          storyStateUpdate = <String, dynamic>{};
-          if (completedSegmentsCopy.isNotEmpty) {
-            storyStateUpdate['CompletedSegments'] = completedSegmentsCopy;
-          }
-          if (_lastStoryDetails != null) {
-            storyStateUpdate['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
-          }
-        }
-
-        _character = _character!.copyWith(activeStoryId: null, activeSegmentId: null, storyState: storyStateUpdate, gameMode: 'None');
+        _character = _character!.copyWith(
+          activeStoryId: null,
+          activeSegmentId: null,
+          storyState: _buildCompletedStoryState(),
+          gameMode: 'None',
+        );
       }
 
       _isLoading = false;
@@ -1025,24 +811,10 @@ class GameScreenController extends ChangeNotifier {
       }
 
       if (_character != null) {
-        final completedSegmentsCopy = _segmentHistory.map((segment) => Map<String, dynamic>.from(segment)).toList();
-        _sortSegmentsChronologically(completedSegmentsCopy);
-
-        Map<String, dynamic>? storyStateUpdate;
-        if (completedSegmentsCopy.isNotEmpty || _lastStoryDetails != null) {
-          storyStateUpdate = <String, dynamic>{};
-          if (completedSegmentsCopy.isNotEmpty) {
-            storyStateUpdate['CompletedSegments'] = completedSegmentsCopy;
-          }
-          if (_lastStoryDetails != null) {
-            storyStateUpdate['Story'] = Map<String, dynamic>.from(_lastStoryDetails!);
-          }
-        }
-
         _character = _character!.copyWith(
           activeStoryId: null,
           activeSegmentId: null,
-          storyState: storyStateUpdate,
+          storyState: _buildCompletedStoryState(),
           gameMode: 'None',
         );
       }
@@ -1054,7 +826,8 @@ class GameScreenController extends ChangeNotifier {
 
       if (!_storyCompletionNotified) {
         final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
-        final fallbackStoryTitle = _segmentHistory.isNotEmpty ? _segmentHistory.last['StoryTitle'] as String? : null;
+        final segments = _segmentHistory.segments;
+        final fallbackStoryTitle = segments.isNotEmpty ? segments.last['StoryTitle'] as String? : null;
         final storyTitle = storyData?['Title'] ?? fallbackStoryTitle ?? 'Story';
 
         onAbandon('$storyTitle abandoned');
@@ -1079,7 +852,7 @@ class GameScreenController extends ChangeNotifier {
 
     await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate, showLoadingIndicator: false);
 
-    _segmentHistory = [];
+    _segmentHistory.segments = [];
     _storyCompletionNotified = false;
     _lastStoryDetails = null;
     notifyListeners();
@@ -1088,71 +861,14 @@ class GameScreenController extends ChangeNotifier {
   }
 
   List<Map<String, dynamic>> getCompletedSegments() {
-    final activeSegmentId = _character?.activeSegmentID;
-    final cacheKey = '${activeSegmentId ?? 'none'}_${_segmentHistory.length}_${_segmentHistory.hashCode}';
-
-    if (_completedSegmentsCacheKey == cacheKey && _cachedCompletedSegments != null) {
-      return _cachedCompletedSegments!;
-    }
-
-    final completed = _segmentHistory.where((segment) {
-      final segmentActiveId = segment['ActiveSegmentID']?.toString() ?? segment['SegmentID']?.toString();
-      final isComplete = segmentActiveId != activeSegmentId && _isSegmentComplete(segment);
-      return isComplete;
-    }).toList();
-
-    _sortSegmentsChronologically(completed, newestFirst: true);
-
-    _completedSegmentsCacheKey = cacheKey;
-    _cachedCompletedSegments = completed;
-
-    return completed;
+    return _segmentHistory.getCompletedSegments(_character?.activeSegmentID);
   }
 
   List<Map<String, dynamic>> buildStoryHistoryArchive() {
-    final activeSegmentId = _character?.activeSegmentID;
-    final stateSegmentsHash = _character?.storyState?['CompletedSegments']?.hashCode ?? 0;
-    final cacheKey = '${activeSegmentId ?? 'none'}_${_segmentHistory.length}_${_segmentHistory.hashCode}_$stateSegmentsHash';
-
-    if (_storyHistoryCacheKey == cacheKey && _cachedStoryHistory != null) {
-      return _cachedStoryHistory!;
-    }
-
-    final Map<String, Map<String, dynamic>> deduped = {};
-
-    void addSegments(Iterable<Map<String, dynamic>> segments) {
-      for (final segment in segments) {
-        final copy = Map<String, dynamic>.from(segment);
-        final segmentActiveId = copy['ActiveSegmentID']?.toString() ?? copy['SegmentID']?.toString();
-        final key = _segmentIdentity(copy);
-
-        final isActiveSegment = activeSegmentId != null && segmentActiveId == activeSegmentId;
-        if (!isActiveSegment) {
-          deduped[key] = copy;
-        }
-      }
-    }
-
-    final completedSegmentsDynamic = _character?.storyState?['CompletedSegments'] as List<dynamic>?;
-    if (completedSegmentsDynamic != null) {
-      final completedSegments = completedSegmentsDynamic
-          .whereType<Map<String, dynamic>>()
-          .where(_isSegmentComplete)
-          .map((segment) => Map<String, dynamic>.from(segment));
-      addSegments(completedSegments);
-    }
-
-    if (_segmentHistory.isNotEmpty) {
-      final historyCopies = _segmentHistory.where(_isSegmentComplete).map((segment) => Map<String, dynamic>.from(segment));
-      addSegments(historyCopies);
-    }
-
-    final segments = deduped.values.toList();
-    _sortSegmentsChronologically(segments);
-
-    _storyHistoryCacheKey = cacheKey;
-    _cachedStoryHistory = segments;
-
-    return segments;
+    return _segmentHistory.buildStoryHistoryArchive(
+      _character?.activeSegmentID,
+      _character?.storyState,
+      _segmentHistory.segments,
+    );
   }
 }

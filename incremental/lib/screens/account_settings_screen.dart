@@ -8,7 +8,6 @@ import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/providers/theme_provider.dart';
 import 'package:eidolon_incremental/screens/mfa_setup_screen.dart';
 import 'package:eidolon_incremental/services/indexeddb_service.dart';
-import 'package:eidolon_incremental/utils/error_handler.dart';
 import 'package:eidolon_incremental/widgets/shared/keyboard_shortcuts.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -46,7 +45,7 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(ErrorHandler.getUserFriendlyMessage(error, context: 'signOut')),
+              content: Text(error),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
@@ -79,7 +78,7 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(ErrorHandler.getUserFriendlyMessage(error, context: 'deleteAccount')),
+              content: Text(error),
               backgroundColor: Theme.of(context).colorScheme.error,
             ),
           );
@@ -248,7 +247,7 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
                   ),
                   const Divider(),
                   ListTile(
-                    leading: const Icon(Icons.logout, color: Colors.red),
+                    leading: const Icon(Icons.lock_reset),
                     title: const Text('Change Password'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: isLoading
