@@ -9,7 +9,7 @@ from functools import cache
 from botocore.exceptions import ClientError
 
 from eidolon.constants import CharState
-from eidolon.dynamo import TableName, dynamo
+from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
 from eidolon.logger import logger
 from eidolon.character_state import determine_character_state_from_wounds
@@ -859,6 +859,72 @@ def remove_wounds(wounds: list, amount: int, priority=None) -> tuple:
     return remaining, removed
 
 
+def dynamo_typed_value(value) -> dict:
+    """Convert a Python value to a DynamoDB typed attribute value dict."""
+    if isinstance(value, str):
+        return {"S": value}
+    if isinstance(value, bool):
+        return {"BOOL": value}
+    if isinstance(value, (int, float, Decimal)):
+        return {"N": str(value)}
+    if isinstance(value, list):
+        return {"L": [dynamo_typed_value(v) for v in value]}
+    if isinstance(value, dict):
+        return {"M": {k: dynamo_typed_value(v) for k, v in value.items()}}
+    if value is None:
+        return {"NULL": True}
+    return {"S": str(value)}
+
+
+def build_consume_transaction(
+    character_id: str, item_id: str, slot_key: str, inventory: dict,
+    update_expression_parts: list, expression_values: dict, expression_names: dict,
+    stackable: bool, item_removed: bool, remaining_quantity: int, timestamp: str,
+) -> list:
+    """Build the list of transactional write items for consume_item."""
+    # Convert expression values to DynamoDB typed format for transactions
+    typed_values = {k: dynamo_typed_value(v) for k, v in expression_values.items()}
+    typed_values[":expected_item_id"] = {"S": item_id}
+
+    typed_names = dict(expression_names)
+    typed_names["#slot"] = slot_key
+
+    character_update = {
+        "Update": {
+            "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
+            "Key": {"CharacterID": {"S": character_id}},
+            "UpdateExpression": "SET " + ", ".join(update_expression_parts),
+            "ConditionExpression": "Inventory.#slot.ItemID = :expected_item_id",
+            "ExpressionAttributeValues": typed_values,
+            "ExpressionAttributeNames": typed_names,
+        }
+    }
+
+    transact_items = [character_update]
+
+    if stackable and not item_removed:
+        transact_items.append({
+            "Update": {
+                "TableName": TABLE_ENV_MAP[TableName.ITEMS],
+                "Key": {"ItemID": {"S": item_id}},
+                "UpdateExpression": "SET Quantity = :quantity, UpdatedAt = :updated_at",
+                "ExpressionAttributeValues": {
+                    ":quantity": {"N": str(remaining_quantity)},
+                    ":updated_at": {"S": timestamp},
+                },
+            }
+        })
+    else:
+        transact_items.append({
+            "Delete": {
+                "TableName": TABLE_ENV_MAP[TableName.ITEMS],
+                "Key": {"ItemID": {"S": item_id}},
+            }
+        })
+
+    return transact_items
+
+
 def consume_item(character_id: str, item_id: str) -> dict:
     """
     Consume an item from a character's inventory and apply its effects.
@@ -1066,62 +1132,39 @@ def consume_item(character_id: str, item_id: str) -> dict:
         update_expression_parts.append("CharState = :char_state")
         expression_values[":char_state"] = new_char_state
 
-    try:
-        # Add conditional expression to prevent race conditions
-        # Verify the item still exists in the expected slot
-        expression_names["#slot"] = slot_key
-        expression_values[":expected_item_id"] = item_id
+    # Build transactional write to update character and item atomically
+    transact_items = build_consume_transaction(
+        character_id, item_id, slot_key, inventory, update_expression_parts,
+        expression_values, expression_names, stackable, item_removed, remaining_quantity, timestamp,
+    )
 
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET " + ", ".join(update_expression_parts),
-            ConditionExpression="Inventory.#slot.ItemID = :expected_item_id",
-            ExpressionAttributeValues=expression_values,
-            ExpressionAttributeNames=expression_names,
-        )
-    except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
-        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning("Item %s already consumed (race condition) for character %s", item_id, character_id)
-            raise ValueError("Item has already been consumed") from err
-        logger.error("Failed to update character %s after consumption Error: %s", character_id, err, exc_info=True)
-        raise RuntimeError("Failed to update character after consumption") from err
-
-    # Keep player metadata in sync if character is no longer dead
+    # Include player update if character is being revived
     if character_state_before == CharState.DEAD.value and new_char_state != CharState.DEAD.value:
         player_id = character.get("PlayerID")
         character_name = character.get("CharacterName")
         if player_id and character_name:
-            try:
-                dynamo.update_item(
-                    TableName.PLAYERS,
-                    Key={"PlayerID": player_id},
-                    UpdateExpression="SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
-                    ExpressionAttributeNames={"#name": character_name},
-                    ExpressionAttributeValues={":dead": False, ":updated_at": timestamp},
-                )
-            except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
-                logger.error(
-                    "Failed to update player record for revived character %s Error: %s",
-                    character_id,
-                    err,
-                    exc_info=True,
-                )
+            transact_items.append({
+                "Update": {
+                    "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
+                    "Key": {"PlayerID": {"S": player_id}},
+                    "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
+                    "ExpressionAttributeNames": {"#name": character_name},
+                    "ExpressionAttributeValues": {":dead": {"BOOL": False}, ":updated_at": {"S": timestamp}},
+                }
+            })
 
-    # Update or delete the item instance
     try:
-        if stackable and not item_removed:
-            dynamo.update_item(
-                TableName.ITEMS,
-                Key={"ItemID": item_id},
-                UpdateExpression="SET Quantity = :quantity, UpdatedAt = :updated_at",
-                ExpressionAttributeValues={":quantity": Decimal(str(remaining_quantity)), ":updated_at": timestamp},
-            )
-        else:
-            dynamo.delete_item(TableName.ITEMS, {"ItemID": item_id})
+        dynamo.transact_write_items(transact_items)
     except ClientError as err:  # pragma: no cover - DynamoDB integrates at runtime
-        logger.error("Failed to update item %s after consumption Error: %s", item_id, err, exc_info=True)
-        raise RuntimeError("Failed to update item after consumption") from err
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code == "TransactionCanceledException":
+            reasons = err.response.get("CancellationReasons", [])
+            first_reason = reasons[0].get("Code", "") if reasons else ""
+            if first_reason == "ConditionalCheckFailed":
+                logger.warning("Item %s already consumed (race condition) for character %s", item_id, character_id)
+                raise ValueError("Item has already been consumed") from err
+        logger.error("Failed to consume item %s for character %s Error: %s", item_id, character_id, err, exc_info=True)
+        raise RuntimeError("Failed to update character after consumption") from err
 
     item_name = prototype.get("PrototypeName") or prototype.get("Name") or item.get("Name") or "item"
 

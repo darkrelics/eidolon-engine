@@ -118,8 +118,6 @@ func ProcessCommand(ctx context.Context, character *Character, input string) (bo
 		Response:   make(chan *CommandResponse, 1),
 		OriginIP:   character.player.remoteAddr,
 		SessionID:  character.player.id.String(),
-		OriginIP:   character.player.remoteAddr,
-		SessionID:  character.player.id.String(),
 		ClientType: character.player.clientType,
 	}
 

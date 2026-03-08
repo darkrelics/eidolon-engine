@@ -232,17 +232,14 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
                 # Special rule: bashing damage to unconscious characters converts existing bashing to lethal
                 if is_unconscious and damage_type == "bashing":
-                    # Find an existing bashing wound to convert
-                    converted = False
+                    # Find an existing bashing wound to convert to lethal
                     for wound in player_wounds:
                         if wound.get("DamageType") == "bashing":
                             wound["DamageType"] = "lethal"
                             wound["HealAt"] = calculate_heal_time("lethal")
-                            converted = True
                             break
-                    # If no bashing to convert, don't add new wound (character likely already dead)
-                    if converted:
-                        continue
+                    # Whether converted or not, don't add a new wound to an unconscious character
+                    continue
 
                 player_wounds.append({"DamageType": damage_type, "HealAt": calculate_heal_time(damage_type)})
 

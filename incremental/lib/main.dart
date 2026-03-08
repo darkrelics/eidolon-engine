@@ -55,6 +55,7 @@ void main() async {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => AuthProvider()),
+            Provider<CharacterRepository>.value(value: characterRepository),
             ChangeNotifierProvider(
               create: (_) => CharacterProvider(prefs: prefs, repository: characterRepository),
             ),

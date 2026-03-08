@@ -69,39 +69,35 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 		return nil, fmt.Errorf("invalid password format")
 	}
 
-	authenticated, userUUID, err := Authenticate(conn.User(), sanitizedPassword, "", sshInterface)
+	// Split password and optional MFA code before authenticating.
+	// Format: "password" or "password/mfa_code" (split from last "/" to support passwords containing "/")
+	actualPassword := sanitizedPassword
+	mfaCode := ""
+	if lastSlash := strings.LastIndex(sanitizedPassword, "/"); lastSlash > 0 {
+		candidateCode := sanitizedPassword[lastSlash+1:]
+		// MFA codes are 6 digits
+		if len(candidateCode) == 6 {
+			allDigits := true
+			for _, ch := range candidateCode {
+				if ch < '0' || ch > '9' {
+					allDigits = false
+					break
+				}
+			}
+			if allDigits {
+				actualPassword = sanitizedPassword[:lastSlash]
+				mfaCode = candidateCode
+			}
+		}
+	}
+
+	authenticated, userUUID, err := Authenticate(conn.User(), actualPassword, mfaCode, sshInterface)
 	if err != nil {
-		if err.Error() == "MFA_REQUIRED" {
-			// Prompt for MFA code (this is tricky in SSH PasswordCallBack as it doesn't support interactive prompts easily)
-			// However, standard practice for MFA over SSH password auth is to append the code to the password
-			// or use keyboard-interactive auth. Since we are in PasswordCallBack, we can't easily prompt.
-			// BUT, we can check if the password contains a separator (e.g., "/") and split it.
-			// Or, we can just fail and tell the user to append the code.
-			// Let's try to support "password/code" format.
-
-			// If we are here, it means the initial auth failed because MFA was required but not provided.
-			// We can't prompt the user here. We have to rely on them providing it in the password field.
-			// Let's check if they already provided it in "password/code" format.
-			parts := strings.Split(sanitizedPassword, "/")
-			if len(parts) == 2 {
-				// Retry with split password and code
-				authenticated, userUUID, err = Authenticate(conn.User(), parts[0], parts[1], sshInterface)
-			} else {
-				// Return a specific error message instructing the user
-				return nil, fmt.Errorf("MFA required. Please use format: password/mfa_code")
-			}
-		}
-
-		if err != nil {
-			sshInterface.recordFailedAttempt(clientIP)
-			sshInterface.recordFailedUserAttempt(username)
-			Logger.Info("Failed to authenticate player", "error", err)
-			// Return generic error to prevent user enumeration (unless it was the MFA instruction)
-			if err.Error() == "MFA_REQUIRED" {
-				return nil, fmt.Errorf("MFA required. Please use format: password/mfa_code")
-			}
-			return nil, fmt.Errorf("authentication failed")
-		}
+		sshInterface.recordFailedAttempt(clientIP)
+		sshInterface.recordFailedUserAttempt(username)
+		Logger.Info("Failed to authenticate player", "error", err)
+		// Return generic error to prevent user enumeration
+		return nil, fmt.Errorf("authentication failed")
 	}
 
 	if authenticated {

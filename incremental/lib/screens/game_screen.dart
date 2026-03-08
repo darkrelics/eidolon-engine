@@ -2,6 +2,7 @@ import 'package:eidolon_incremental/controllers/game_screen_controller.dart';
 import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/providers/character_provider.dart';
+import 'package:eidolon_incremental/repositories/character_repository.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:eidolon_incremental/widgets/game/character_panel.dart';
@@ -20,7 +21,10 @@ class GameScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => GameScreenController(apiService: ApiService(authService: AuthService.instance)),
+      create: (_) => GameScreenController(
+        apiService: ApiService(authService: AuthService.instance),
+        characterRepository: context.read<CharacterRepository>(),
+      ),
       child: const _GameScreenView(),
     );
   }

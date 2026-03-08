@@ -5,7 +5,6 @@ import 'package:eidolon_incremental/models/story.dart';
 import 'package:eidolon_incremental/repositories/character_repository.dart';
 import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
-import 'package:eidolon_incremental/services/indexeddb_service.dart';
 import 'package:eidolon_incremental/services/notification_service.dart';
 import 'package:eidolon_incremental/services/rate_limiter.dart';
 import 'package:eidolon_incremental/services/story_polling_service.dart';
@@ -31,7 +30,7 @@ enum StoryLifecycleState {
 class GameScreenController extends ChangeNotifier {
   final ApiService _apiService;
   late final StoryPollingService _runtime;
-  late final CharacterRepository _characterRepository;
+  final CharacterRepository _characterRepository;
   final GlobalRateLimiter _rateLimiter = GlobalRateLimiter();
 
   // State
@@ -45,6 +44,7 @@ class GameScreenController extends ChangeNotifier {
   StoryLifecycleState _storyLifecycleState = StoryLifecycleState.none;
   bool _disposed = false;
   bool _handlingStoryCompletion = false;
+  String? _initializedCharacterId;
 
   // Timer & Debouncers
   Timer? _characterUpdateTimer;
@@ -78,9 +78,10 @@ class GameScreenController extends ChangeNotifier {
   List<Map<String, dynamic>> get segmentHistory => _segmentHistory;
   int get selectedPanelIndex => _selectedPanelIndex;
 
-  GameScreenController({required ApiService apiService}) : _apiService = apiService {
+  GameScreenController({required ApiService apiService, required CharacterRepository characterRepository})
+      : _apiService = apiService,
+        _characterRepository = characterRepository {
     _runtime = StoryPollingService(apiService: _apiService);
-    _characterRepository = CharacterRepository(apiService: _apiService, indexedDBService: IndexedDBService());
     _decisionDebouncer = Debouncer(delay: const Duration(milliseconds: 300));
     _refreshDebouncer = Debouncer(delay: const Duration(milliseconds: 500));
   }
@@ -112,6 +113,14 @@ class GameScreenController extends ChangeNotifier {
   }
 
   void initialize(Character? character, CharacterInfo? info, {Character? savedCharacter}) {
+    // Determine the ID of the character being initialized
+    final incomingId = character?.id ?? info?.id ?? savedCharacter?.id;
+
+    // Skip re-initialization for the same character (prevents didChangeDependencies re-entry)
+    if (incomingId != null && _initializedCharacterId == incomingId) {
+      return;
+    }
+
     debugPrint('GameScreenController: initializing');
 
     if (character != null) {
@@ -145,6 +154,7 @@ class GameScreenController extends ChangeNotifier {
         }
 
         _synchronizeStoryCompletionState();
+        _initializedCharacterId = character.id;
         notifyListeners();
 
         _startOrchestrationIfNeeded();
@@ -158,6 +168,7 @@ class GameScreenController extends ChangeNotifier {
         _character = null;
         _isLoading = true;
         _error = null;
+        _initializedCharacterId = info.id;
         notifyListeners();
 
         _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate).then((_) => _loadSegmentHistory());
@@ -170,6 +181,7 @@ class GameScreenController extends ChangeNotifier {
       _characterInfo = CharacterInfo(name: savedCharacter.name, id: savedCharacter.id, dead: savedCharacter.health <= 0);
       _isLoading = false;
       _error = null;
+      _initializedCharacterId = savedCharacter.id;
       notifyListeners();
 
       _startOrchestrationIfNeeded();
