@@ -659,9 +659,7 @@ def apply_death_state(character_id: str, character: dict, new_state: str, timest
         apply_character_state_change(character_id, new_state, timestamp, include_room_reset=True)
 
 
-def apply_character_state_change(
-    character_id: str, new_state: str, timestamp: str, include_room_reset: bool = False
-) -> None:
+def apply_character_state_change(character_id: str, new_state: str, timestamp: str, include_room_reset: bool = False) -> None:
     """Apply a single character state change.
 
     Args:

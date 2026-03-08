@@ -86,9 +86,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         quantity_purchased = result.get("quantity", 0)
         currency_remaining = result.get("currency_remaining", 0)
 
-        logger.info(
-            f"Purchase successful: {quantity}x {prototype_id} " f"for character {character_id} (cost: {total_cost})"
-        )
+        logger.info(f"Purchase successful: {quantity}x {prototype_id} " f"for character {character_id} (cost: {total_cost})")
 
         # Return purchase results
         return {

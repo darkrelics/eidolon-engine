@@ -8,11 +8,11 @@ from functools import cache
 
 from botocore.exceptions import ClientError
 
+from eidolon.character_state import determine_character_state_from_wounds
 from eidolon.constants import CharState
 from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
 from eidolon.logger import logger
-from eidolon.character_state import determine_character_state_from_wounds
 
 
 def merge_stacks(item1: dict, item2: dict) -> dict:

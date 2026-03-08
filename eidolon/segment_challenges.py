@@ -7,13 +7,7 @@ Provides functions for processing skill challenges and determining outcomes.
 import math
 import random
 
-from eidolon.constants import (
-    SIGMA_CRITICAL_FAILURE,
-    SIGMA_DEATH_AVG,
-    SIGMA_FAILURE,
-    SIGMA_MINIMAL,
-    SIGMA_NORMAL,
-)
+from eidolon.constants import SIGMA_CRITICAL_FAILURE, SIGMA_DEATH_AVG, SIGMA_FAILURE, SIGMA_MINIMAL, SIGMA_NORMAL
 
 
 def process_skill_challenges(segment_def: dict, character: dict) -> tuple:

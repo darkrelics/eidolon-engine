@@ -268,11 +268,7 @@ def delete_character_active_segments(character_id: str) -> dict:
         return result
 
     if active_segments:
-        delete_keys = [
-            {"ActiveSegmentID": seg.get("ActiveSegmentID")}
-            for seg in active_segments
-            if seg.get("ActiveSegmentID")
-        ]
+        delete_keys = [{"ActiveSegmentID": seg.get("ActiveSegmentID")} for seg in active_segments if seg.get("ActiveSegmentID")]
         delete_result = batch_delete_with_fallback(TableName.ACTIVE_SEGMENTS, delete_keys, "active segment")
         result["DeletedCount"] = delete_result.get("DeletedCount", 0)
         result["Errors"].extend(delete_result.get("Errors", []))

@@ -300,7 +300,7 @@ def main():
 
         print(f"\n{name}:")
         print(f"  Overall Success: {success_count/TRIALS:>6.1%} | Overall Failure: {failure_count/TRIALS:>6.1%}")
-        print(f"  Breakdown:")
+        print("  Breakdown:")
         for outcome, count in sorted(outcomes.items(), key=lambda x: -x[1]):
             print(f"    {outcome:<20}: {count:>4} ({count/TRIALS:>5.1%})")
 
@@ -323,7 +323,7 @@ def main():
 
         print(f"\n{name}:")
         print(f"  Overall Success: {success_count/TRIALS:>6.1%} | Overall Failure: {failure_count/TRIALS:>6.1%}")
-        print(f"  Breakdown:")
+        print("  Breakdown:")
         for outcome, count in sorted(outcomes.items(), key=lambda x: -x[1])[:5]:
             print(f"    {outcome:<20}: {count:>4} ({count/TRIALS:>5.1%})")
 
