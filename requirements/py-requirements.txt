@@ -3,7 +3,7 @@ bandit==1.8.6
 pip-audit==2.9.0
 pylint==4.0.2
 ruff==0.14.10
-vulture==2.14
+vulture==2.15
 # Supporting Libraries
 CacheControl==0.14.3
 PyYAML==6.0.3
