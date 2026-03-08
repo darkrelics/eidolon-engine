@@ -243,7 +243,7 @@ def extract_character_updates_from_results(results: dict, segment_def: dict, out
                         "Defeated": True,
                         "OpponentData": opponent_data,
                     }
-            except Exception as err:
+            except ClientError as err:
                 logger.error(f"Failed to get opponent data for rewards for {opponent_id} Error: {err}", exc_info=True)
 
     if outcome in ["death", "failure", "minimal", "normal", "exceptional"]:

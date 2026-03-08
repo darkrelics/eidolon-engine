@@ -17,48 +17,29 @@ from eidolon.dynamo import TableName, dynamo
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
-from eidolon.requests import get_query_parameter, parse_event_body
+from eidolon.requests import get_query_parameter
 from eidolon.validation import validate_uuid
 
 MAX_HISTORY_IDS = 10
 
 
 def extract_story_instance_ids(event: dict) -> list:
-    """Extract up to MAX_HISTORY_IDS story instance IDs from the request."""
-
-    def clean_ids(ids) -> list:
-        seen = set()
-        ordered = []
-        for raw in ids:
-            candidate = (raw or "").strip()
-            if not candidate or candidate in seen:
-                continue
-            seen.add(candidate)
-            ordered.append(candidate)
-            if len(ordered) >= MAX_HISTORY_IDS:
-                break
-        return ordered
-
-    # Try query string first (comma-separated list)
+    """Extract up to MAX_HISTORY_IDS story instance IDs from the query string."""
     query_value = get_query_parameter(event, "StoryInstanceIDs")
-    if query_value:
-        return clean_ids(part.strip() for part in query_value.split(","))
+    if not query_value:
+        return []
 
-    # Fall back to request body JSON
-    try:
-        body = parse_event_body(event)
-    except ValueError as err:
-        logger.debug(f"No JSON body in request: {err}")
-        body = None
-
-    if isinstance(body, dict):
-        raw_ids = body.get("StoryInstanceIDs") or body.get("storyInstanceIds")
-        if isinstance(raw_ids, list):
-            return clean_ids(str(item) for item in raw_ids)
-        if isinstance(raw_ids, str):
-            return clean_ids(part.strip() for part in raw_ids.split(","))
-
-    return []
+    seen = set()
+    ordered = []
+    for part in query_value.split(","):
+        candidate = part.strip()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        ordered.append(candidate)
+        if len(ordered) >= MAX_HISTORY_IDS:
+            break
+    return ordered
 
 
 def get_story_history_entries(character_id: str, story_instance_ids: list) -> dict:
@@ -104,16 +85,6 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """Lambda handler for GET /story/history."""
 
     character_id = get_query_parameter(event, "CharacterID")
-    if not character_id:
-        # Allow body-based CharacterID for flexibility
-        try:
-            body = parse_event_body(event)
-        except ValueError as err:
-            logger.debug(f"No JSON body in request: {err}")
-            body = None
-        if isinstance(body, dict):
-            character_id = body.get("CharacterID") or body.get("characterId")
-
     if not character_id:
         raise ValueError("Missing CharacterID")
 

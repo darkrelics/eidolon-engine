@@ -4,6 +4,8 @@ Story validation and prerequisites.
 Provides functions for checking story availability and prerequisites.
 """
 
+from datetime import datetime, timezone
+
 from eidolon.constants import CharState
 from eidolon.logger import logger
 
@@ -75,7 +77,16 @@ def validate_story_available(character: dict, story_id: str) -> None:
                 raise ValueError("Story already completed")
 
             if story_type == "daily":
-                # This should have been cleaned up, but double-check as safety
+                # Check if cooldown has actually expired (cleanup may have missed this entry)
+                completed_at = story_data.get("CompletedAt", "")
+                if completed_at:
+                    try:
+                        finished = datetime.fromisoformat(completed_at)
+                        now = datetime.now(timezone.utc)
+                        if finished.date() < now.date():
+                            continue  # Cooldown expired, story is available
+                    except (ValueError, TypeError):
+                        pass  # Can't parse date, block to be safe
                 raise ValueError("Story available again tomorrow")
 
 

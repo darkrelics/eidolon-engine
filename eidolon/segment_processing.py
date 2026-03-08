@@ -44,6 +44,71 @@ def route_segment_processing(segment_def: dict, character: dict, active_segment:
         return "normal", {}
 
 
+def apply_segment_effects(character_id: str, results: dict) -> None:
+    """
+    Apply computed segment effects to the character in the database.
+
+    Called AFTER the segment outcome has been safely persisted to active_segments.
+    Attempts all effects even if some fail, then raises if any failed.
+
+    Args:
+        character_id: Character UUID
+        results: Results dict from process_mechanical_segment()
+
+    Raises:
+        RuntimeError: If any effect application failed (lists which ones)
+    """
+    if not character_id:
+        raise RuntimeError("Cannot apply segment effects: no character ID")
+
+    failed_effects = []
+
+    # Apply XP updates (skill and attribute increases)
+    xp_updates = results.get("XPUpdates")
+    if xp_updates:
+        try:
+            apply_character_updates(character_id, xp_updates)
+            logger.info(f"Applied skill and attribute XP for {character_id}")
+        except Exception as err:
+            logger.error(f"Failed to apply XP updates for {character_id} Error: {err}", exc_info=True)
+            failed_effects.append("XP")
+
+    # Apply combat wounds
+    wound_updates = results.get("WoundUpdates")
+    if wound_updates:
+        try:
+            apply_character_updates(character_id, wound_updates)
+            logger.info(f"Applied combat wounds for {character_id}")
+        except Exception as err:
+            logger.error(f"Failed to apply wounds for {character_id} Error: {err}", exc_info=True)
+            failed_effects.append("Wounds")
+
+    # Apply story outcome effects (room changes, story wounds)
+    story_effects = results.get("StoryEffects")
+    if story_effects:
+        try:
+            apply_story_outcome_effects(character_id, story_effects)
+            logger.info(f"Applied story outcome effects for {character_id}")
+        except Exception as err:
+            logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
+            failed_effects.append("StoryEffects")
+
+    # Create and grant items (opponent drops + story rewards)
+    item_prototypes = results.get("ItemPrototypes")
+    if item_prototypes:
+        try:
+            granted_items = add_items_to_inventory(character_id, item_prototypes)
+            if granted_items:
+                results["GrantedItemIDs"] = granted_items
+                logger.info(f"Granted {len(granted_items)} items for {character_id}")
+        except Exception as err:
+            logger.error(f"Failed to grant items for {character_id} Error: {err}", exc_info=True)
+            failed_effects.append("Items")
+
+    if failed_effects:
+        raise RuntimeError(f"Failed to apply segment effects: {', '.join(failed_effects)}")
+
+
 def process_decision_segment(active_segment: dict, segment_def: dict) -> str:
     """
     Process a decision segment and generate narrative events.
@@ -108,6 +173,10 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     """
     Process a mechanical segment containing skill challenges and/or combat.
 
+    Computes outcomes and collects effects WITHOUT applying them to the database.
+    Effects are applied separately via apply_segment_effects() after the outcome
+    is safely persisted, preventing orphaned effects on write failures.
+
     Args:
         segment_def: Segment definition from Segments table
         character: Character data
@@ -127,7 +196,7 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         results["ChallengeResults"] = challenge_results
         outcomes.append(challenge_outcome)
 
-        # Apply skill and attribute XP immediately
+        # Compute skill and attribute XP (stored in results, applied later)
         skill_xp = {}
         attribute_xp = {}
 
@@ -136,7 +205,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             attribute = challenge.get("Attribute")
             passed = challenge.get("Passed", False)
 
-            # Get the best attempt to calculate variance modifier
             attempts = challenge.get("Attempts", [])
             best_attempt = max((a for a in attempts if "Sigma" in a), key=lambda a: a["Sigma"], default=None)
 
@@ -144,18 +212,14 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 effective_score = best_attempt.get("EffectiveScore", 0)
                 difficulty = best_attempt.get("Difficulty", 0)
 
-                # Calculate skill increase directly using same formula as combat
-                # Get current skill and attribute values from character
                 current_skill = float(character.get("Skills", {}).get(skill, 0))
                 current_attribute = float(character.get("Attributes", {}).get(attribute, 0))
 
-                # Calculate skill increase
                 if skill:
                     skill_increase = calculate_skill_increase(effective_score, difficulty, current_skill, passed)
                     if skill_increase > 0:
                         skill_xp[skill] = skill_xp.get(skill, 0) + skill_increase
 
-                # Calculate attribute increase (uses attribute score for increment)
                 if attribute:
                     attr_increase = (
                         calculate_skill_increase(effective_score, difficulty, current_attribute, passed) * ATTRIBUTE_XP_RATIO
@@ -169,22 +233,10 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 xp_updates["SkillXP"] = skill_xp
             if attribute_xp:
                 xp_updates["AttributeXP"] = attribute_xp
-
-            # Apply XP immediately to database
-            try:
-                character_id = character.get("CharacterID")
-                if character_id:
-                    apply_character_updates(character_id, xp_updates)
-                logger.info(f"Applied skill and attribute XP to database for {character.get('CharacterID')}")
-            except Exception as err:
-                logger.error(f"Failed to apply XP updates for {character.get('CharacterID')} Error: {err}", exc_info=True)
-
-            # Also store XP in results for CharacterUpdates (for client display)
             results["XPUpdates"] = xp_updates
 
     # Process combat if present and has an opponent defined
     combat_config = segment_def.get("Combat", {})
-    # Check if combat config exists AND has an OpponentID
     has_opponent = combat_config and combat_config.get("OpponentID")
     if has_opponent:
         logger.info(f"Processing combat encounter for {segment_def.get('SegmentID')}")
@@ -192,46 +244,29 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
         results["CombatState"] = combat_state
         outcomes.append(combat_outcome)
 
-        # Apply wounds immediately to database
+        # Collect wound updates (applied later)
         player_wounds = combat_state.get("PlayerWounds", [])
         if player_wounds:
-            wound_updates = {"Wounds": player_wounds}
+            results["WoundUpdates"] = {"Wounds": player_wounds}
 
-            try:
-                character_id = character.get("CharacterID")
-                if character_id:
-                    apply_character_updates(character_id, wound_updates)
-                logger.info(f"Applied combat wounds to database for {character.get('CharacterID')}")
-            except Exception as err:
-                logger.error(f"Failed to apply wounds for {character.get('CharacterID')} Error: {err}", exc_info=True)
-
-            # Also store wounds in results for CharacterUpdates (for client display)
-            results["WoundUpdates"] = wound_updates
-
-        # Apply combat XP immediately to database
+        # Merge combat XP into results (applied later)
         combat_xp = combat_state.get("XPUpdates", {})
         if combat_xp:
-            try:
-                character_id = character.get("CharacterID")
-                if character_id:
-                    apply_character_updates(character_id, combat_xp)
-                logger.info(f"Applied combat XP to database for {character.get('CharacterID')}")
-            except Exception as err:
-                logger.error(f"Failed to apply combat XP for {character.get('CharacterID')} Error: {err}", exc_info=True)
-
-            # Merge combat XP into results (for client display)
             if "XPUpdates" in results:
-                # Merge with challenge XP
                 if "SkillXP" in combat_xp:
-                    for skill, xp in combat_xp["SkillXP"].items():
-                        results["XPUpdates"]["SkillXP"][skill] = results["XPUpdates"]["SkillXP"].get(skill, 0) + xp
+                    existing_skill_xp = results.get("XPUpdates", {}).get("SkillXP", {})
+                    for skill, xp in combat_xp.get("SkillXP", {}).items():
+                        existing_skill_xp[skill] = existing_skill_xp.get(skill, 0) + xp
+                    results["XPUpdates"]["SkillXP"] = existing_skill_xp
                 if "AttributeXP" in combat_xp:
-                    for attr, xp in combat_xp["AttributeXP"].items():
-                        results["XPUpdates"]["AttributeXP"][attr] = results["XPUpdates"]["AttributeXP"].get(attr, 0) + xp
+                    existing_attr_xp = results.get("XPUpdates", {}).get("AttributeXP", {})
+                    for attr, xp in combat_xp.get("AttributeXP", {}).items():
+                        existing_attr_xp[attr] = existing_attr_xp.get(attr, 0) + xp
+                    results["XPUpdates"]["AttributeXP"] = existing_attr_xp
             else:
                 results["XPUpdates"] = combat_xp
 
-        # Process opponent items if defeated
+        # Collect opponent item prototypes to grant (created later)
         opponent_defeated = combat_state.get("OpponentDefeated", False)
         if opponent_defeated:
             opponent_id = combat_state.get("OpponentID")
@@ -241,23 +276,15 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                     if opponent_data:
                         opponent_items = opponent_data.get("Items", [])
                         if opponent_items:
-                            character_id = character.get("CharacterID")
-                            if character_id:
-                                # Process opponent items with probability
-                                prototype_ids = process_items_with_probability(opponent_items)
-                                if prototype_ids:
-                                    granted_items = add_items_to_inventory(character_id, prototype_ids)
-                                    if granted_items:
-                                        # Merge with any items from story effects
-                                        existing_items = results.get("GrantedItemIDs", [])
-                                        results["GrantedItemIDs"] = existing_items + granted_items
-                                        logger.info(f"Granted {len(granted_items)} items from defeated opponent {opponent_id}")
+                            prototype_ids = process_items_with_probability(opponent_items)
+                            if prototype_ids:
+                                existing = results.get("ItemPrototypes", [])
+                                results["ItemPrototypes"] = existing + prototype_ids
                 except Exception as err:
-                    logger.error(f"Failed to process opponent items for {opponent_id} Error: {err}", exc_info=True)
+                    logger.error(f"Failed to resolve opponent items for {opponent_id} Error: {err}", exc_info=True)
 
     # Determine overall outcome
     if not outcomes:
-        # No challenges or combat configured - grant normal outcome to protect from content errors
         logger.error(
             f"Mechanical segment {segment_def.get('SegmentID')} has no challenges or combat - "
             f"segment definition is incomplete or corrupted"
@@ -269,7 +296,6 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
     elif "failure" in outcomes:
         overall_outcome = "failure"
     else:
-        # Take the worst non-failure outcome
         outcome_priority = ["minimal", "normal", "exceptional"]
         overall_outcome = "normal"
         for outcome in outcome_priority:
@@ -277,29 +303,24 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
                 overall_outcome = outcome
                 break
 
-    # Apply story outcome effects immediately (wounds, room changes, etc.)
+    # Collect story outcome effects (applied later)
     outcome_key = map_outcome_to_key(overall_outcome)
     outcome_results = segment_def.get("Results", {}).get(outcome_key, {})
     story_effects = outcome_results.get("Effects", {})
 
     if story_effects:
-        character_id = character.get("CharacterID")
-        if character_id:
-            try:
-                apply_story_outcome_effects(character_id, story_effects)
-                # Store effects in results for CharacterUpdates (for client display)
-                results["StoryEffects"] = story_effects
-            except Exception as err:
-                logger.error(f"Failed to apply story outcome effects for {character_id} Error: {err}", exc_info=True)
+        results["StoryEffects"] = story_effects
 
-            reward_items = story_effects.get("Items")
-            if reward_items:
-                # Process probability for items (handles both simple and probabilistic formats)
+        # Collect story reward item prototypes (created later)
+        reward_items = story_effects.get("Items")
+        if reward_items:
+            try:
                 prototype_ids = process_items_with_probability(reward_items)
                 if prototype_ids:
-                    granted_items = add_items_to_inventory(character_id, prototype_ids)
-                    if granted_items:
-                        results["GrantedItemIDs"] = granted_items
+                    existing = results.get("ItemPrototypes", [])
+                    results["ItemPrototypes"] = existing + prototype_ids
+            except Exception as err:
+                logger.error(f"Failed to resolve story reward items Error: {err}", exc_info=True)
 
     return overall_outcome, results
 
@@ -352,13 +373,13 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
                 # Convert decision branches to standard branch format for selection
                 weighted_branches = [
                     {
-                        "Decision": b["Decision"],
-                        "Weight": b["Weight"],
-                        "Label": f"timeout_{b['Decision']}",
+                        "Decision": b.get("Decision", ""),
+                        "Weight": b.get("Weight", 0),
+                        "Label": f"timeout_{b.get('Decision', '')}",
                         "NextSegmentID": (
-                            decision_options.get(b["Decision"], {}).get("NextSegmentID")
-                            if isinstance(decision_options.get(b["Decision"]), dict)
-                            else decision_options.get(b["Decision"])
+                            decision_options.get(b.get("Decision", ""), {}).get("NextSegmentID")
+                            if isinstance(decision_options.get(b.get("Decision", "")), dict)
+                            else decision_options.get(b.get("Decision", ""))
                         ),
                     }
                     for b in branches
@@ -368,12 +389,14 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
                 available = [(i, b) for i, b in enumerate(weighted_branches) if b.get("NextSegmentID")]
                 if available:
                     idx, selected = select_weighted_branch(available)
+                    next_id = selected.get("NextSegmentID")
+                    selected_decision = selected.get("Decision")
                     logger.info(
-                        f"Using weighted timeout for {active_segment_id}: decision={selected['Decision']}, next={selected['NextSegmentID']}"
+                        f"Using weighted timeout for {active_segment_id}: decision={selected_decision}, next={next_id}"
                     )
-                    return selected["NextSegmentID"], {
+                    return next_id, {
                         "SelectionMethod": "weighted_timeout",
-                        "Decision": selected["Decision"],
+                        "Decision": selected_decision,
                         "BranchIndex": idx,
                     }
 

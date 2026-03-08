@@ -70,25 +70,21 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
         response_data["ActiveStory"] = active_story
 
     if active_segment:
-        # active_segment already converted by get_active_story_and_segment
-        if isinstance(active_segment, dict):
-            segment_data = enrich_segment_with_narrative(active_segment, active_segment)
-        else:
-            segment_data = active_segment
+        segment_data = enrich_segment_with_narrative(active_segment, active_segment)
         response_data["ActiveSegment"] = segment_data
 
     # If there isn't an active story the available stories will be provided.
     if not active_story:
         # Get available stories from character
         available_story_ids = character.get("AvailableStories", [])
-        logger.info(f"Available stories for character for {character_id}")
+        logger.info(f"Available stories for {character_id}")
 
         # Get story details with prerequisite and cooldown checking
         # Use the character we already loaded to avoid a duplicate DB read
         stories: list = get_stories_with_character(character, available_story_ids)
 
         # Sort stories by availability and title
-        stories.sort(key=lambda s: (not s["Available"], s["Title"]))
+        stories.sort(key=lambda s: (not s.get("Available"), s.get("Title", "")))
 
         logger.debug(f"Stories retrieved successfully for {character_id}")
 

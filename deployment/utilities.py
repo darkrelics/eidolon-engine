@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+import sys
 import traceback
 from functools import cache
 from pathlib import Path
@@ -346,8 +347,13 @@ def run_cdk_deploy(stack_name: str, region: str, app_command: str, context_args=
     # Resolve cdk path for Windows compatibility (subprocess needs full path for .cmd shims)
     cdk_path = shutil.which("cdk") or "cdk"
 
+    # Replace python3 with current interpreter for Windows compatibility
+    # Quote the path to handle spaces (e.g., "D:\Program Files\Python312\python.exe")
+    quoted_python = f'"{sys.executable}"'
+    resolved_app_command = app_command.replace("python3 ", f"{quoted_python} ")
+
     # Build CDK command with context arguments
-    cdk_command = [cdk_path, "deploy", stack_name, "--require-approval", "never", "--region", region, "--app", app_command]
+    cdk_command = [cdk_path, "deploy", stack_name, "--require-approval", "never", "--region", region, "--app", resolved_app_command]
 
     # Add context arguments
     cdk_command.extend(context_args)

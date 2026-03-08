@@ -471,7 +471,7 @@ class DynamoInterface:
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
     def scan_all(self, table_enum: TableName, **kwargs) -> list:
         """
-        Scan a table and return all items (no pagination needed for small tables).
+        Scan a table and return all items with automatic pagination.
 
         Args:
             table_enum: TableName enum value
@@ -486,19 +486,22 @@ class DynamoInterface:
         table = self.get_table(table_enum)
         logger.debug(f"DB Interface: Scan All for {table_enum.value}")
 
+        results = []
         try:
             response = table.scan(**kwargs)
+            items = response.get("Items", [])
+            results.extend([decimal_to_float(item) for item in items])
+
+            while response.get("LastEvaluatedKey"):
+                kwargs["ExclusiveStartKey"] = response.get("LastEvaluatedKey")
+                response = table.scan(**kwargs)
+                items = response.get("Items", [])
+                results.extend([decimal_to_float(item) for item in items])
         except ClientError as err:
             logger.error(f"Error scanning DynamoDB for {table_enum.value} Error: {err}")
             raise err
 
-        items = response.get("Items", [])
-        count = response.get("Count", 0)
-
-        # Convert Decimal to float for JSON compatibility
-        results = [decimal_to_float(item) for item in items]
-
-        logger.info(f"DB Interface: Scan All: Records Collected {count}")
+        logger.info(f"DB Interface: Scan All: Records Collected {len(results)}")
         return results
 
     @ExponentialBackoff(expected_error_factory=ExpectedDynamoErrors)
@@ -538,6 +541,24 @@ class DynamoInterface:
 
             items = response.get("Responses", {}).get(table_name, [])
             result.extend([decimal_to_float(item) for item in items])
+
+            # Retry any unprocessed keys (throttling)
+            unprocessed = response.get("UnprocessedKeys", {}).get(table_name)
+            retries = 0
+            while unprocessed and retries < 3:
+                retries += 1
+                retry_request = {table_name: unprocessed}
+                try:
+                    response = self._client.batch_get_item(RequestItems=retry_request)  # type: ignore
+                except ClientError as err:
+                    logger.error(f"Error retrying unprocessed keys for {table_enum.value} Error: {err}")
+                    raise err
+                items = response.get("Responses", {}).get(table_name, [])
+                result.extend([decimal_to_float(item) for item in items])
+                unprocessed = response.get("UnprocessedKeys", {}).get(table_name)
+
+            if unprocessed:
+                logger.warning(f"Still have unprocessed keys after retries for {table_enum.value}")
 
         return result
 

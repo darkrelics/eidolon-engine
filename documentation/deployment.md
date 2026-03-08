@@ -392,7 +392,7 @@ Stores deployment parameters:
     "deployment_mode": "hybrid",
     "domain": "darkrelics.net",
     "hosted_zone_id": "Z1234567890ABC",
-    "github_owner": "robinje",
+    "github_owner": "darkrelics",
     "github_repo": "eidolon-engine",
     "github_branch": "develop",
     "s3_bucket": "eidolon-engine-lambda-542230992937"

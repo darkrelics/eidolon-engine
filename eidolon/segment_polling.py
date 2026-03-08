@@ -90,7 +90,7 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
             Limit=max_segments,
         )
 
-        segments = response.get("Items", [])  # type: ignore
+        segments = response.get("items", [])  # type: ignore
         logger.info(f"Found {len(segments)} stuck mechanical segments with time to retry")
         return segments
 
@@ -120,7 +120,7 @@ def check_active_segments_exist() -> bool:
 
     except ClientError as err:
         logger.error(f"Failed to check for active segments Error: {err}", exc_info=True)
-        return False
+        raise RuntimeError(f"Failed to check for active segments: {err}") from err
 
 
 def delete_active_segment(active_segment_id: str) -> None:

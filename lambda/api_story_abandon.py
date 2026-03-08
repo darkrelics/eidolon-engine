@@ -16,7 +16,7 @@ from eidolon.character_data import character_get
 from eidolon.dynamo import TableName, dynamo
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
-from eidolon.requests import get_query_parameter, parse_event_body
+from eidolon.requests import parse_event_body
 from eidolon.segment_history import record_abandoned_segment_history
 from eidolon.story_active import get_active_story_segment, mark_segment_as_abandoned
 from eidolon.story_history import record_story_abandonment
@@ -73,9 +73,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
             record_story_abandonment(character_id, story_instance_id)
         else:
             logger.warning(f"No StoryInstanceID found for {character_id}, skipping history update")
-    except ValueError as err:
-        logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
-    except RuntimeError as err:
+    except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
 
     # Record abandoned segment in history
@@ -127,21 +125,8 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     Returns:
         Dict with status_code and body
     """
-    # Get character ID from body or query parameters (body preferred per API contract)
-    character_id = None
-
-    # Attempt to read from request body first
-    try:
-        body = parse_event_body(event)
-        character_id = body.get("CharacterID") if isinstance(body, dict) else None
-    except ValueError as err:
-        # Fall through to query string handling
-        logger.debug(f"No JSON body in abandon request: {err}")
-        character_id = None
-
-    # Fallback to query parameters for backward compatibility
-    if not character_id:
-        character_id = get_query_parameter(event, "CharacterID")
+    body = parse_event_body(event)
+    character_id = body.get("CharacterID")
 
     if not character_id:
         raise ValueError("Missing CharacterID parameter")

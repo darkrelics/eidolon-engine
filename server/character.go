@@ -1,7 +1,7 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2026 Jason E. Robinson
+Copyright 2024-2026 Dark Relics Studio LLC
 
 */
 
@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid/v5"
-	"github.com/robinje/eidolon-engine/events"
+	"github.com/darkrelics/eidolon-engine/events"
 )
 
 // CanExecuteCommand checks if character can perform a command based on wait time and state
