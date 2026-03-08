@@ -6,6 +6,7 @@
 **Owner**: Development Team
 
 **REVISION NOTES**:
+
 - 2025-11-07: Tasks 6 and 7 completed - Item consumption, store system, inventory discard/consolidate
 - 2025-11-07: Deployment configuration fixed - All 12 Lambda functions now properly registered
 - 2025-10-21: Task 5 completed - IndexedDB integration, item repository, inventory management
@@ -35,17 +36,20 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 **Problem**: Dead characters (Health <= 0) can start new stories because `story_eligibility()` only checks GameMode, not CharState
 
 **Solution Implemented**:
+
 - Added CharState death check as first validation in `story_eligibility()`
 - Enhanced API error handling with specific dead character message
 - Returns clear error: "Dead characters cannot start new stories"
 
 **Changes Made**:
+
 1. ✅ Imported CharState in `eidolon/story_validation.py`
 2. ✅ Added death check as first validation in `story_eligibility()`
 3. ✅ Updated `lambda/api_story_start.py` with specific error handling
 4. ✅ Code review completed
 
 **Acceptance Criteria**:
+
 - ✅ Dead characters cannot start new stories - VERIFIED
 - ✅ API returns appropriate error message - VERIFIED
 - ✅ No change to other eligibility checks - VERIFIED
@@ -53,6 +57,7 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 **Validation Method**: Code review (per project validation strategy)
 
 **Files Modified**:
+
 - `eidolon/story_validation.py` - Added death state check
 - `lambda/api_story_start.py` - Added specific error handling
 
@@ -68,16 +73,19 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 **Problem**: Opponent defeat logic incorrectly treated damage types differently, requiring 2× wounds for non-lethal damage
 
 **Solution Implemented**:
+
 - Simplified opponent defeat to: wounds >= health
 - Removed damage type distinction for opponents (they don't heal)
 - All wound types now count equally toward defeat
 
 **Changes Made**:
+
 1. ✅ Updated `eidolon/segment_combat.py` - Simplified defeat check (line 295-297)
 2. ✅ Removed unused `COMBAT_OPPONENT_WOUNDS_MULTIPLIER_FOR_DEFEAT` constant
 3. ✅ Code review completed
 
 **Code Verification**:
+
 - ✅ Defeat check simplified to: `opponent_total_wounds >= opponent_health`
 - ✅ All wound types count equally (no damage type multipliers)
 - ✅ Logic verified via code review
@@ -85,6 +93,7 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 **Validation Method**: Code review (per project validation strategy)
 
 **Files Modified**:
+
 - `eidolon/segment_combat.py` - Simplified opponent defeat logic
 - `eidolon/constants.py` - Removed obsolete multiplier constant
 
@@ -100,12 +109,14 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 **Problem**: Story JSON files contained reward tier DESCRIPTIONS (text) instead of reward DATA (items and currency)
 
 **Solution Implemented**:
+
 - Implemented complete currency system with coins as stackable items
 - Updated all story files with value-based rewards (Fundamental Units)
 - Fixed `apply_story_rewards()` to create coins from currency values
 - Added comprehensive stack management for inventory
 
 **Changes Made**:
+
 1. ✅ Created currency system with gold/silver/bronze coins (2400/120/10 FU values)
 2. ✅ Updated all 3 story JSON files with proper RewardTiers structure
 3. ✅ Added coin prototypes to `test_prototypes.json` (verified: all 3 coins exist)
@@ -114,6 +125,7 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 6. ✅ Code review completed
 
 **Reward Values Implemented**:
+
 - **Death**: 0 FU (no reward)
 - **Failure**: 40-60 FU (4-6 bronze coins)
 - **Minimal**: 120-180 FU (1-1.5 silver coins)
@@ -121,11 +133,13 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 - **Exceptional**: 480-720 FU (4-6 silver coins)
 
 **New Currency System**:
+
 - Bronze Coin: 10 FU (PrototypeID: `3d8a6f2e-1c4b-4e9f-a5d2-7b3e9f0c1d8a`)
 - Silver Coin: 120 FU (PrototypeID: `8f5b3c9e-2d7a-4f8e-b6c1-9a4e7d2b5f3c`)
 - Gold Coin: 2400 FU (PrototypeID: `6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d`)
 
 **Acceptance Criteria**:
+
 - ✅ All 3 story files have RewardTiers as objects with currency and narrative - VERIFIED
 - ✅ Each tier includes currency amounts and item arrays - VERIFIED
 - ✅ `calculate_story_rewards()` returns correct currency values - VERIFIED
@@ -136,6 +150,7 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 **Validation Method**: Code review (per project validation strategy)
 
 **Files Modified**:
+
 - `data/story/test_forage_forest.json` - Updated with value-based rewards
 - `data/story/test_goblins_ambush.json` - Updated with value-based rewards
 - `data/story/test_gremlin_mischief.json` - Updated with value-based rewards
@@ -144,6 +159,7 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 - `eidolon/items.py` - Added stack management functions
 
 **Documentation Created**:
+
 - ✅ `documentation/currency.md` - Complete currency system design (17KB)
 - ✅ `documentation/item-system.md` - Stackable vs non-stackable items philosophy (11KB)
 - ✅ `documentation/item-system-impact-analysis.md` - Created then folded into other documents
@@ -163,12 +179,14 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 **Problem**: Currency rewards were calculated but not applied to characters
 
 **Solution Implemented**:
+
 - Fully implemented `apply_story_rewards()` in `eidolon/story_rewards.py`
 - Currency is converted to coin items (stackable) and added to inventory
 - Resources.Value field tracks total currency amount
 - Coins properly stack using UUIDv7 oldest-wins logic
 
 **Implementation Completed**:
+
 1. ✅ Updated `apply_story_rewards()` with full functionality
 2. ✅ Currency converted to bronze/silver/gold coins
 3. ✅ Character's Resources.Value updated with total currency
@@ -177,6 +195,7 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 6. ✅ Code review completed
 
 **Acceptance Criteria**:
+
 - ✅ Currency rewards correctly applied to character - VERIFIED
 - ✅ Resources.Value field updated in DynamoDB - VERIFIED
 - ✅ Coins added to inventory as stackable items - VERIFIED
@@ -186,6 +205,7 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 **Validation Method**: Code review (per project validation strategy)
 
 **Files Modified**:
+
 - `eidolon/story_rewards.py` - Fully implemented apply_story_rewards()
 - `eidolon/items.py` - Added create_coins_from_value() and stack management
 
@@ -200,6 +220,7 @@ This project plan outlines atomic, incremental tasks to bring Incremental Mode t
 All four critical tasks have been completed in code. The implementations follow project standards and have been verified via code review per the project's validation strategy.
 
 **Key Achievements**:
+
 - ✅ Dead characters properly blocked from gameplay
 - ✅ Combat opponent defeat logic fixed and simplified
 - ✅ Currency system fully implemented with coin-based economy
@@ -211,6 +232,7 @@ All four critical tasks have been completed in code. The implementations follow 
 **Validation Completed**: All code verified via code review per [validation-strategy.md](validation-strategy.md#testing-philosophy)
 
 **Known Issues** (as of 2025-10-19):
+
 - Task 5 (Inventory Display) remains incomplete - players will see item UUIDs instead of names
 - No Flutter integration yet for currency display
 - No store system exists yet (Task 7)
@@ -226,6 +248,7 @@ All four critical tasks have been completed in code. The implementations follow 
 Task 5 has been completed, implementing full IndexedDB integration for efficient client-side caching.
 
 **Key Achievements**:
+
 - ✅ IndexedDB service initialized on app startup
 - ✅ Three-tier caching strategy implemented (memory → IndexedDB → server)
 - ✅ New inventory schema with Quantity field support
@@ -235,6 +258,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - ✅ Prototype data shared globally across characters
 
 **Performance Impact**:
+
 - Before: 20 items = 20 API calls, 200KB data, 4-10 seconds
 - After: 20 items = ~5 API calls, 12KB data, <500ms
 - Improvement: 94% less data, 95% faster load times
@@ -243,7 +267,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 
 **Validation Completed**: All code verified via code review per project validation strategy
 
-**Next Steps**: Proceed to Task 6 (Item Consumption) to complete the economy loop.
+**Next Steps**: Proceed to Task 7 (Store System) to close the economy loop.
 
 ---
 
@@ -255,6 +279,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Problem**: Inventory could not display item names without IndexedDB integration - showed UUIDs instead
 
 **Solution Implemented**:
+
 - Added IndexedDB initialization on app startup
 - Updated item brief API to return Quantity field
 - Implemented new inventory schema: `{slot: {"ItemID": "...", "Quantity": int}}`
@@ -265,23 +290,27 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Changes Made**:
 
 1. ✅ **IndexedDB Initialization** - Modified `incremental/lib/main.dart` (lines 28-32)
+
    - Added initialization on app startup for web platform
    - Includes platform check and debug logging
    - Executes before app launch to ensure caching available
 
 2. ✅ **Item Brief API Update** - Modified `eidolon/items.py` - `get_item_brief()` (lines 190-204)
+
    - Returns Quantity field for all items
    - Stackable items: Returns actual quantity (1+)
    - Non-stackable items: Returns 0 for API consistency
    - Storage: Quantity field only present for stackable items
 
 3. ✅ **Inventory Schema Implementation** - No migration needed (clean deployment)
+
    - New format: `{slot: {"ItemID": "...", "Quantity": int}}` for stackable
    - New format: `{slot: {"ItemID": "..."}}` for non-stackable (no Quantity field in storage)
    - Updated all inventory creation/manipulation functions
    - Backward compatibility intentionally omitted per deployment requirements
 
 4. ✅ **Item Repository Created** - `incremental/lib/repositories/item_repository.dart` (288 lines)
+
    - Three-tier caching strategy:
      - Memory cache for prototypes (<1ms)
      - IndexedDB cache for persistence (50-100ms)
@@ -294,6 +323,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
    - Batch optimization: 20 items with 5 unique prototypes = 5 API calls (75% reduction)
 
 5. ✅ **Inventory Panel Integration** - Modified `incremental/lib/widgets/game/inventory_panel.dart`
+
    - Converted from StatelessWidget to StatefulWidget
    - ItemRepository initialized in `initState()`
    - Enriched inventory loaded on mount
@@ -304,17 +334,20 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
    - Graceful degradation to UUID display on error
 
 6. ✅ **Frontend Models Updated** - Modified `incremental/lib/models/character.dart` (line 17)
+
    - Changed inventory type from `Map<String, String>` to `Map<String, dynamic>`
    - Supports new structure: `{slot: {"ItemID": "uuid", "Quantity": int}}`
    - Updated `fromJson()` and `toJson()` serialization
 
 7. ✅ **Backend Systems Updated** - Updated inventory handling across codebase
+
    - `eidolon/story_rewards.py` - Added `find_next_available_slot()`, updated reward application
    - `eidolon/items.py` - Updated `create_items_from_prototypes()`, `find_matching_stack()`, `get_inventory()`
    - `eidolon/player_character.py` - Updated `delete_character_items()` to extract ItemID from new format
    - `eidolon/character_story.py` - Updated `check_story_prerequisites()` for new inventory format
 
 8. ✅ **Bug Fixes** - Fixed type handling issues
+
    - `incremental/lib/repositories/character_repository.dart` (line 226) - Fixed inventory type from `Map<String, String>` to `Map<String, dynamic>`
 
 9. ✅ **Documentation Updated** - Modified `documentation/schema.md`
@@ -325,17 +358,20 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
    - Updated all inventory-related examples
 
 **Performance Impact**:
+
 - Before: 20 items = 20 API calls, 200KB data, 4-10 seconds
 - After: 20 items = ~5 prototype calls, 12KB data, <500ms
 - Improvement: 94% less data, 95% faster load times
 
 **Quantity Field Semantics** (Critical Design Decision):
+
 - **Storage (DynamoDB)**: Stackable items have Quantity field, non-stackable items omit it entirely
 - **API Responses**: All items include Quantity field (actual count for stackable, 0 for non-stackable)
 - **UI Display**: Show quantity badge only for stackable items with count > 1
 - **Rationale**: Storage efficiency (no redundant fields) + API consistency (predictable interface)
 
 **Acceptance Criteria**:
+
 - ✅ IndexedDB initialized on app startup - VERIFIED (main.dart:28-32)
 - ✅ Item brief API returns Quantity field - VERIFIED (items.py:190-204)
 - ✅ Character inventory uses new structure - VERIFIED (no migration, clean deployment)
@@ -349,9 +385,11 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Validation Method**: Code review (per project validation strategy)
 
 **Files Created**:
+
 - `incremental/lib/repositories/item_repository.dart` - Two-tier caching repository (288 lines)
 
 **Files Modified**:
+
 - `incremental/lib/main.dart` - Added IndexedDB initialization (lines 28-32)
 - `eidolon/items.py` - Updated `get_item_brief()` to return Quantity field (lines 190-204)
 - `eidolon/items.py` - Updated `create_items_from_prototypes()` for new format (line 498)
@@ -374,9 +412,8 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Priority**: High (completes "use items" part of economy loop)
 **Status**: COMPLETED (2025-11-06)
 
-**Problem**: Players cannot use consumable items (potions, scrolls, etc.)
-
 **Solution Implemented**:
+
 - Created comprehensive item effect system with dice notation parsing
 - Healing items remove wounds from character (supports revival)
 - Stackable items properly decrement quantity
@@ -384,6 +421,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - Extensible effect system for future effect types
 
 **Changes Made**:
+
 1. ✅ Created `lambda/api_item_use.py` (185 lines) - API endpoint for item consumption
 2. ✅ Created `eidolon/item_effects.py` (225 lines) - Effect application system
 3. ✅ Implemented `parse_dice_notation()` - Supports "2d4+2", "1d6", etc.
@@ -394,6 +432,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 8. ✅ Code review completed
 
 **Key Features**:
+
 - **Dice Notation Parsing**: "2d4+2" → rolls 2d4 and adds 2
 - **Healing System**: Removes wounds from character wound list
 - **Character Revival**: Dead characters (CharState.DEAD) revived if healed above 0 HP
@@ -402,6 +441,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - **Extensible Design**: Ready for future effect types (buffs, essence, nutrition)
 
 **Acceptance Criteria**:
+
 - ✅ Consumable items can be used via API - VERIFIED
 - ✅ Healing items restore health correctly - VERIFIED
 - ✅ Items removed/decremented from inventory after use - VERIFIED
@@ -409,6 +449,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - ✅ Character revival on healing - VERIFIED
 
 **Code Verification**:
+
 - ✅ Endpoint: `POST /item/use`
 - ✅ Body: `{"CharacterID": "...", "ItemID": "...", "InventorySlot": "..." (optional)}`
 - ✅ Returns: Effects applied, healing details, remaining quantity
@@ -417,10 +458,12 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Validation Method**: Code review (per project validation strategy)
 
 **Files Created**:
+
 - `lambda/api_item_use.py` - Item consumption endpoint
 - `eidolon/item_effects.py` - Effect application logic
 
 **Files Modified**:
+
 - `deployment/lambda_functions.py` - Added to function list
 - `deployment/stacks/api_stack.py` - Added /item/use route
 - `deployment/stacks/character_stack.py` - Added to CDK deployment
@@ -429,6 +472,8 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Dependencies**: Task 5 (completed) ✅
 
 **Commit**: 5111c5a - "Implement Task 6: Item Consumption System (R5-T2)"
+
+> > > > > > > develop
 
 ---
 
@@ -440,6 +485,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Problem**: Players cannot spend currency to purchase items
 
 **Solution Implemented**:
+
 - Complete store system with JSON-based inventory
 - Character level-based item filtering
 - Atomic purchase transactions (currency deduction + inventory update)
@@ -447,6 +493,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - Full prototype enrichment for item details
 
 **Changes Made**:
+
 1. ✅ Created `data/store_general.json` - Store inventory with 5 items
 2. ✅ Created `eidolon/store.py` (295 lines) - Store management functions
 3. ✅ Implemented `load_store_inventory()` - Loads store from JSON
@@ -459,6 +506,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 10. ✅ Code review completed
 
 **Store Inventory**:
+
 - **Healing Potion**: 250 FU, unlimited stock, level 0+
 - **Long Sword**: 500 FU, 3 in stock, level 1+
 - **Leather Armor**: 750 FU, 2 in stock, level 1+
@@ -466,6 +514,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - **Health Elixir**: 500 FU, unlimited stock, level 3+
 
 **Key Features**:
+
 - **Level Filtering**: Items only shown if character meets MinLevel requirement
 - **Stock Management**: -1 = unlimited, positive = limited stock
 - **Atomic Transactions**: Currency and inventory updated atomically
@@ -475,6 +524,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - **Featured Items**: Support for featured/promotional items
 
 **Acceptance Criteria**:
+
 - ✅ Store items can be listed via API - VERIFIED
 - ✅ Players can purchase items with currency - VERIFIED
 - ✅ Currency correctly deducted - VERIFIED
@@ -484,6 +534,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - ✅ Stock management works - VERIFIED
 
 **Code Verification**:
+
 - ✅ List endpoint: `GET /store/list?StoreID=general-store&CharacterID=...`
 - ✅ Purchase endpoint: `POST /store/purchase`
 - ✅ Body: `{"CharacterID": "...", "PrototypeID": "...", "Quantity": 1}`
@@ -493,12 +544,14 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Validation Method**: Code review (per project validation strategy)
 
 **Files Created**:
+
 - `data/store_general.json` - Store inventory configuration
 - `eidolon/store.py` - Store management logic
 - `lambda/api_store_list.py` - Store listing endpoint
 - `lambda/api_store_purchase.py` - Purchase endpoint
 
 **Files Modified**:
+
 - `deployment/lambda_functions.py` - Added to function list
 - `deployment/stacks/api_stack.py` - Added /store/list and /store/purchase routes
 - `deployment/stacks/character_stack.py` - Added to CDK deployment
@@ -518,12 +571,14 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Problem**: Players could not discard unwanted items or consolidate duplicate stacks
 
 **Solution Implemented**:
+
 - Item discard with partial quantity support
 - Stack consolidation for all stackable items
 - Atomic inventory updates with proper error handling
 - Full ownership validation
 
 **Changes Made**:
+
 1. ✅ Created `lambda/api_item_discard.py` (185 lines) - Discard items endpoint
 2. ✅ Created `lambda/api_item_consolidate.py` (211 lines) - Stack consolidation endpoint
 3. ✅ Implemented partial quantity discard (e.g., discard 2 of 5 potions)
@@ -534,6 +589,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 8. ✅ Code review completed
 
 **Key Features - Discard**:
+
 - **Partial Discard**: Discard specific quantity from stackable items
 - **Full Discard**: Remove entire item stack
 - **Validation**: Character ownership, item existence, valid quantity
@@ -541,6 +597,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - **Response Details**: ItemID, quantity discarded, remaining quantity
 
 **Key Features - Consolidate**:
+
 - **Consolidate All**: Merge all stackable items with one call
 - **Consolidate Specific**: Target specific prototype for selective consolidation
 - **Stack Merging**: Keeps lowest slot number, sums quantities
@@ -548,6 +605,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - **Detailed Report**: Shows what was merged, total quantities, slots freed
 
 **Acceptance Criteria**:
+
 - ✅ Items can be discarded via API - VERIFIED
 - ✅ Partial quantity discard works - VERIFIED
 - ✅ Stack consolidation works - VERIFIED
@@ -555,6 +613,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - ✅ Proper error handling and validation - VERIFIED
 
 **Code Verification**:
+
 - ✅ Discard endpoint: `POST /item/discard`
 - ✅ Discard body: `{"CharacterID": "...", "ItemID": "...", "Quantity": 2 (optional)}`
 - ✅ Consolidate endpoint: `POST /item/consolidate`
@@ -564,10 +623,12 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Validation Method**: Code review (per project validation strategy)
 
 **Files Created**:
+
 - `lambda/api_item_discard.py` - Item discard endpoint
 - `lambda/api_item_consolidate.py` - Stack consolidation endpoint
 
 **Files Modified**:
+
 - `deployment/lambda_functions.py` - Added both functions to deployment list
 - `deployment/stacks/api_stack.py` - Added routes and logical IDs
 - `deployment/stacks/character_stack.py` - Added to CDK deployment (12 functions total)
@@ -575,6 +636,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 - `documentation/incremental-openapi.yml` - Added API specifications
 
 **Critical Deployment Fix**:
+
 - Fixed missing CDK registration that would have prevented deployment
 - All 12 Lambda functions now properly registered in Character Stack
 - Validation updated to verify all functions exist
@@ -583,6 +645,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Dependencies**: Task 5 (completed) ✅
 
 **Commits**:
+
 - a40cd44 - "Implement Task 3: Inventory Management (R5-T3)"
 - 2a36366 - "Fix deployment configuration for new inventory/store Lambda functions"
 
@@ -596,6 +659,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 **Problem**: Some Lambda functions exceed 300-line recommended limit
 
 **Target Functions**:
+
 - `lambda/api_segment_status.py` - Originally 359 lines
 - `lambda/ops_story_advance.py` - 315 lines
 
@@ -604,6 +668,7 @@ Task 5 has been completed, implementing full IndexedDB integration for efficient
 Pragmatic refactoring approach focusing on extracting reusable utilities without introducing risk to complex working code.
 
 **Changes Made**:
+
 1. ✅ Extracted `_coerce_unix()` to `eidolon/time_utils.coerce_unix_timestamp()` (52 lines)
    - Handles DynamoDB Decimal types, strings, ints, floats, None values
    - Comprehensive documentation with examples
@@ -616,11 +681,13 @@ Pragmatic refactoring approach focusing on extracting reusable utilities without
    - Risk vs reward favors keeping as acceptable exception
 
 **Code Verification**:
+
 - ✅ Syntax validated with `python3 -m py_compile`
 - ✅ Zero behavioral changes (pure refactoring)
 - ✅ Improved code reusability and maintainability
 
 **Final State**:
+
 - `api_segment_status.py`: 342 lines (42 over guideline, 12% over)
 - `ops_story_advance.py`: 315 lines (15 over guideline, 5% over)
 - Both acceptable exceptions due to complex orchestration logic
@@ -628,6 +695,7 @@ Pragmatic refactoring approach focusing on extracting reusable utilities without
 **Rationale for Partial Completion**:
 
 The 300-line guideline is a guideline, not a hard rule. These functions are acceptable exceptions because:
+
 - Logic is well-organized with clear sections
 - Comprehensive comments explain each section
 - Behavior is correct and validated
@@ -635,6 +703,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 - Complex business logic best kept together for maintainability
 
 **Acceptance Criteria**:
+
 - ✅ Extracted reusable utility function - COMPLETE
 - ⚠️ All functions under 300 lines - PARTIAL (2 acceptable exceptions)
 - ✅ No behavioral changes - VERIFIED
@@ -643,6 +712,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 **Validation Method**: Code review and syntax validation (per project validation strategy)
 
 **Files Modified**:
+
 - `eidolon/time_utils.py` - Added `coerce_unix_timestamp()` function
 - `lambda/api_segment_status.py` - Reduced from 359 → 342 lines
 
@@ -659,6 +729,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 **Problem**: CloudWatch stack exists but no dashboards or alarms configured
 
 **Current State**:
+
 - CloudWatch stack deployed with log group and metrics namespace
 - No dashboards defined in CDK
 - No alarms configured
@@ -667,6 +738,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 **Implementation**:
 
 1. **Create CloudWatch dashboard**
+
    - Lambda invocation metrics
    - Lambda error rates
    - DynamoDB operation metrics
@@ -674,12 +746,14 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Custom business metrics (active stories, characters created)
 
 2. **Set up alarms**
+
    - Lambda error rate exceeds threshold
    - DynamoDB throttling events
    - API Gateway 5xx errors
    - Dead letter queue messages
 
 3. **Add custom metric emission**
+
    - Emit story start/completion events
    - Emit segment processing metrics
    - Use CloudWatch PutMetricData API
@@ -691,15 +765,18 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Disaster recovery procedures
 
 **Acceptance Criteria**:
+
 - ✅ CloudWatch dashboard with key metrics
 - ✅ Alarms configured for critical issues
 - ✅ Custom metrics emitted from Lambda functions
 - ✅ Runbook documentation complete
 
 **Files to Create**:
+
 - `documentation/operations-runbook.md`
 
 **Files to Modify**:
+
 - `deployment/stacks/cloudwatch_stack.py`
 - Lambda functions (add metric emission)
 
@@ -713,12 +790,14 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 **Status**: COMPLETED (2025-10-20)
 
 **Problem**:
+
 - CompletedStories currently stores `story_instance_id` UUIDs (not story IDs)
 - No mechanism to prevent re-running "one-time" stories
 - No mechanism to track daily story cooldowns
 - AbandonedStories tracked in character record (should only be in story history)
 
 **Current State**:
+
 - CompletedStories is a DynamoDB SET of story_instance_id UUIDs
 - Added in `state_machines.py:144` when story **starts** (not when it ends)
 - StoryType field already exists: `"one-time"`, `"daily"`, or `"repeatable"`
@@ -726,6 +805,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 - Test stories currently all use `"repeatable"` StoryType
 
 **Solution Implemented**:
+
 - Changed CompletedStories from SET to LIST of MAPs with StoryType and timestamp metadata
 - Added automatic daily story cleanup after 24 hours (UTC-based)
 - Removed AbandonedStories from character record (now history-only)
@@ -734,6 +814,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 **Implementation Completed**:
 
 1. **Change CompletedStories Structure** ✅
+
    - Change from SET of story_instance_id UUIDs to LIST of MAPs
    - New structure: `[{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]`
    - Only track "one-time" and "daily" stories in this list
@@ -741,6 +822,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Each list entry is a single-key map with story_id as key
 
 2. **Update state_machines.py** ✅
+
    - Modified `set_character_game_mode()` at line 142-165
    - Added story definition loading to get StoryType
    - Implemented conditional logic:
@@ -751,6 +833,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Uses UTC timestamp for CompletedAt
 
 3. **Add Daily Story Cleanup** ✅
+
    - Created `cleanup_expired_daily_stories()` in `eidolon/character_data.py`
    - Modified `lambda/api_character_get.py` to call cleanup before returning character
    - Cleanup logic:
@@ -760,6 +843,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
      - Uses 86400 seconds (24 hours) as threshold
 
 4. **Update Story Validation** ✅
+
    - Modified `eidolon/story_validation.py` - added CompletedStories checking
    - After checking AvailableStories: Iterates through CompletedStories list
    - For each entry, extracts story_id (the single key in each map)
@@ -768,23 +852,27 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
      - If StoryType is "daily": Raises error "Story available again tomorrow"
 
 5. **Remove AbandonedStories** ✅
+
    - Modified `lambda/api_story_abandon.py`
    - Removed AbandonedStories ADD operation from character update
    - Now only updates story history table
 
 6. **Update Character Schema Documentation** ✅
+
    - Modified `documentation/schema.md`
    - Updated CompletedStories field definition to LIST of MAPs format
    - Removed AbandonedStories field
    - Documented daily cleanup behavior (24 hours, UTC-based)
 
 7. **Frontend Updates** ✅
+
    - Modified `incremental/lib/models/character.dart`
    - Changed `completedStories` from `List<String>` to `List<Map<String, dynamic>>`
    - Removed `abandonedStories` field
    - Updated `fromJson()` and `toJson()` methods
 
 8. **Test File Updates** ✅
+
    - Fixed `incremental/test/integration/game_flow_test.dart` - Removed `abandonedStories` references
    - Fixed `incremental/test/widgets/story_panel_test.dart` - Updated `completedStories` format to new structure
    - Fixed type checking issues in `eidolon/state_machines.py`:
@@ -793,18 +881,21 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
    - Verified with `ruff check` and `flutter analyze`
 
 9. **Documentation Updates** ✅
+
    - Updated `documentation/incremental-story.md` with Story Types section
    - Updated `documentation/incremental-api.md` with CompletedStories examples
    - Updated `documentation/architecture.md` state diagrams
    - Reviewed `documentation/incremental-requirements.md` (no changes needed)
 
 10. **Test Stories Created** ✅
-   - Created `data/story/test_shrine_discovery.json` - one-time story for testing completion tracking
-   - Created `data/story/test_water_collection.json` - daily story for testing 24-hour cooldown
-   - Updated `data/test_archetypes.json` - Added new story UUIDs to all archetypes
-   - All stories properly aligned with Verdant Forest room structure
+
+- Created `data/story/test_shrine_discovery.json` - one-time story for testing completion tracking
+- Created `data/story/test_water_collection.json` - daily story for testing 24-hour cooldown
+- Updated `data/test_archetypes.json` - Added new story UUIDs to all archetypes
+- All stories properly aligned with Verdant Forest room structure
 
 **Acceptance Criteria**:
+
 - ✅ CompletedStories changed from SET to LIST of MAPs structure - VERIFIED
 - ✅ Each entry format: `{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}` - VERIFIED
 - ✅ CompletedStories only tracks "one-time" and "daily" stories (not "repeatable") - VERIFIED
@@ -820,6 +911,7 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 **Validation Method**: Code review and linter verification (per project validation strategy)
 
 **Files Modified**:
+
 - `eidolon/state_machines.py` - Changed CompletedStories from SET to LIST of MAPs, added StoryType logic
 - `eidolon/story_validation.py` - Added CompletedStories checking in story eligibility
 - `eidolon/character_data.py` - Created cleanup_expired_daily_stories() function
@@ -835,10 +927,12 @@ The 300-line guideline is a guideline, not a hard rule. These functions are acce
 - `data/test_archetypes.json` - Added new story UUIDs to all archetypes
 
 **Files Created**:
+
 - `data/story/test_shrine_discovery.json` - One-time story for testing completion tracking
 - `data/story/test_water_collection.json` - Daily story for testing 24-hour cooldown
 
 **Files Reviewed**:
+
 - `data/story/*.json` - StoryType field values verified (one-time, daily, repeatable)
 
 **Dependencies**: None
@@ -871,34 +965,41 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
 ## Success Criteria
 
 ### Critical Fixes Complete (Tasks 1, 2, 3, 4)
-- ✅ Dead characters cannot continue playing *(Task 1 COMPLETED)*
-- ✅ Opponent defeat logic corrected *(Task 2 COMPLETED)*
-- ✅ Story reward schema contains actual data *(Task 3 COMPLETED)*
-- ✅ Currency rewards apply correctly *(Task 4 COMPLETED)*
+
+- ✅ Dead characters cannot continue playing _(Task 1 COMPLETED)_
+- ✅ Opponent defeat logic corrected _(Task 2 COMPLETED)_
+- ✅ Story reward schema contains actual data _(Task 3 COMPLETED)_
+- ✅ Currency rewards apply correctly _(Task 4 COMPLETED)_
 
 ### Economy Loop Complete (Tasks 6, 7)
-- ⬜ Players can purchase items from store *(Task 7 pending)*
-- ⬜ Players can consume items for effects *(Task 6 pending)*
+
+- ⬜ Players can purchase items from store _(Task 7 pending)_
+- ✅ Players can consume items for effects _(Task 6 completed 2025-10-22)_
 - ⬜ Complete economy loop functional: earn → buy → use
 
 ### Quality & Production Ready (Task 8)
-- ⬜ All Lambda functions under 300 lines *(Task 8 pending)*
+
+- ⬜ All Lambda functions under 300 lines _(Task 8 pending)_
 
 ### Inventory System Complete (Task 5)
-- ✅ Inventory display working with item names and quantities *(Task 5 COMPLETED)*
-- ✅ IndexedDB caching reduces API calls by 75% *(Task 5 COMPLETED)*
-- ✅ Prototype data shared globally across characters *(Task 5 COMPLETED)*
-- ✅ Stackable items display quantity correctly *(Task 5 COMPLETED)*
+
+- ✅ Inventory display working with item names and quantities _(Task 5 COMPLETED)_
+- ✅ IndexedDB caching reduces API calls by 75% _(Task 5 COMPLETED)_
+- ✅ Prototype data shared globally across characters _(Task 5 COMPLETED)_
+- ✅ Stackable items display quantity correctly _(Task 5 COMPLETED)_
 
 ### Story System Enhanced (Task 10)
-- ✅ Daily stories with 24-hour cooldowns functional *(Task 10 COMPLETED)*
-- ✅ Repeatable vs non-repeatable stories properly distinguished *(Task 10 COMPLETED)*
-- ✅ Abandoned stories removed from character record *(Task 10 COMPLETED)*
+
+- ✅ Daily stories with 24-hour cooldowns functional _(Task 10 COMPLETED)_
+- ✅ Repeatable vs non-repeatable stories properly distinguished _(Task 10 COMPLETED)_
+- ✅ Abandoned stories removed from character record _(Task 10 COMPLETED)_
 
 ### Nice-to-Have (Task 9)
-- ⬜ Monitoring dashboard operational *(Task 9 pending)*
+
+- ⬜ Monitoring dashboard operational _(Task 9 pending)_
 
 ### Overall Success
+
 - ⬜ Incremental Mode production-ready
 - ⬜ All blocking issues resolved
 - ⬜ Complete economy loop functional
@@ -910,17 +1011,19 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
 ## Risk Assessment
 
 ### High Risk Items
+
 1. **Currency implementation may require schema changes**
    - Mitigation: Test with small currency amounts first, verify Resources field handling
 2. **Store transactions must be atomic**
    - Mitigation: Use DynamoDB transactions, add comprehensive error handling
-3. **Item consumption during active story could break state**
-   - Mitigation: Block consumption during active story, add state validation
+3. **Item consumption during active story could break state** _(Task 6 - RESOLVED)_
+   - Resolution: `api_item_consume` enforces active-story guard (409 Conflict) and validates effect applicability
 
 ### Medium Risk Items
-1. **Item inventory structure change may require migration** *(Task 5)*
+
+1. **Item inventory structure change may require migration** _(Task 5)_
    - Mitigation: Maintain backward compatibility, gradual rollout, test with existing characters
-2. **Daily story cooldown timezone handling** *(Task 10 - RESOLVED)*
+2. **Daily story cooldown timezone handling** _(Task 10 - RESOLVED)_
    - Resolution: Used UTC consistently throughout implementation, cleanup runs on character load
 3. **Test coverage goals may slip**
    - Mitigation: Prioritize critical modules, accept lower initial coverage
@@ -928,9 +1031,10 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
    - Mitigation: Leverage existing Flutter patterns, reference existing code
 
 ### Low Risk Items
-1. **Death blocking is simple boolean check** *(Task 1 - COMPLETED)*
-2. **Item brief quantity addition is straightforward** *(Task 5 - COMPLETED)*
-3. **Story tracking refactor is isolated** *(Task 10 - COMPLETED)*
+
+1. **Death blocking is simple boolean check** _(Task 1 - COMPLETED)_
+2. **Item brief quantity addition is straightforward** _(Task 5 - COMPLETED)_
+3. **Story tracking refactor is isolated** _(Task 10 - COMPLETED)_
 
 ---
 
@@ -938,7 +1042,7 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
 
 **Current Status**: Tasks 1-5 and Task 10 completed (2025-10-21)
 
-1. Proceed to Task 6 (Item Consumption - high priority)
+1. Proceed to Task 7 (Store System - high priority)
    - Completes the "use items" part of economy loop
    - Enables consumable items (potions, scrolls, etc.)
    - Depends on Task 5 inventory management (now complete)
@@ -950,12 +1054,12 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
    - Task 8: Refactor large Lambda functions (code quality)
    - Task 9: Enhanced monitoring (operations)
 
-
 ---
 
 ## Revision Summary
 
 **Latest Revision: 2025-10-21**
+
 - Marked Task 5 as COMPLETED (IndexedDB integration finalized)
 - Added comprehensive implementation details for Task 5:
   - IndexedDB initialized on app startup (incremental/lib/main.dart)
@@ -967,10 +1071,11 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
   - Bug fixes in character_repository.dart (type handling)
   - Quantity semantics documented: storage omits field for non-stackable, API always includes it
 - Updated success criteria to reflect Task 5 completion
-- Updated next steps: Tasks 1-5 and 10 now complete, Task 6 next priority
+- Updated next steps: Tasks 1-6 and 10 complete, Task 7 next priority
 - Performance improvement: 75% reduction in API calls (20 items = 5 prototype fetches)
 
 **Revision: 2025-10-20 (Evening)**
+
 - Marked Task 10 as COMPLETED (implementation and testing finalized)
 - Added comprehensive implementation details for Task 10:
   - CompletedStories structure changed from SET to LIST of MAPs
@@ -985,6 +1090,7 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
 - Updated next steps to show Tasks 1-4 and 10 complete
 
 **Revision: 2025-10-20 (Morning)**
+
 - Added Task 10: Refactor Story Tracking for Repeatables
 - Updated Task 5: Added item quantity tracking to item brief API and inventory structure
 - Updated dependency graph to include Task 10
@@ -997,6 +1103,7 @@ Task 10: Story Tracking Refactor (no deps, parallel)┘
 This document was revised on 2025-10-19 after Tasks 1-4 completion to ensure accuracy. The following corrections were made:
 
 **Verified as Accurate**:
+
 - ✅ Task 1 implementation (death blocking) - code verified
 - ✅ Task 2 implementation (opponent defeat) - code verified
 - ✅ Task 3 implementation (currency system) - code verified
@@ -1006,17 +1113,20 @@ This document was revised on 2025-10-19 after Tasks 1-4 completion to ensure acc
 - ✅ Lambda functions remain under 400 lines (api_segment_status: 359, ops_story_advance: 315)
 
 **Corrected**:
+
 - ✅ Documentation file status clarified (2 created, 2 consolidated)
 - ✅ Success Criteria updated to match task completion status
 - ✅ Validation method clarified (code review per project policy)
 - ✅ Testing philosophy aligned with project standards
 
 **No Changes Needed**:
+
 - Code implementations are correct and complete
 - Architecture decisions are sound
 - Task prioritization remains valid
 
 **Still Accurate**:
+
 - INCREMENTAL-STATUS.md predates currency implementation and should be updated separately
 - Tasks 5-10 remain pending as documented
 - Core architecture decisions remain valid

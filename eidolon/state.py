@@ -21,9 +21,9 @@ class DeploymentState:
             state_file: Path to state file for persistence
         """
         self.state_file = Path(state_file)
-        self.state: dict = self._load_state()
+        self.state: dict = self.load_state()
 
-    def _load_state(self) -> dict:
+    def load_state(self) -> dict:
         """Load state from file or create new state."""
         if self.state_file.exists():
             with open(self.state_file, "r", encoding="utf-8") as f:
@@ -167,9 +167,9 @@ class ConfigurationManager:
             config_path: Path to server configuration file
         """
         self.config_path = Path(config_path)
-        self.config: dict = self._load_config()
+        self.config: dict = self.load_config()
 
-    def _load_config(self) -> dict:
+    def load_config(self) -> dict:
         """Load configuration from file."""
         if self.config_path.exists():
             with open(self.config_path, "r", encoding="utf-8") as f:
@@ -231,10 +231,10 @@ class ConfigurationManager:
                 template = yaml.safe_load(f) or {}
 
             # Deep merge template with existing config
-            self._deep_merge(template, self.config)
+            self.deep_merge(template, self.config)
             self.config = template
 
-    def _deep_merge(self, base: dict, override: dict) -> None:
+    def deep_merge(self, base: dict, override: dict) -> None:
         """Deep merge override dict into base dict.
 
         Recursively merges nested dictionaries, with values from override
@@ -246,6 +246,6 @@ class ConfigurationManager:
         """
         for key, value in override.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
-                self._deep_merge(base[key], value)
+                self.deep_merge(base[key], value)
             else:
                 base[key] = value

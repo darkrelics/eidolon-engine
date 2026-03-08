@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_segment import update_character_active_segment
 from eidolon.dynamo import TableName, dynamo
-from eidolon.environment import SEGMENT_QUEUE_URL
+from eidolon.environment import DEFAULT_SEGMENT_DURATION, SEGMENT_QUEUE_URL
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
 from eidolon.segment_core import get_segment_definition
@@ -23,6 +23,56 @@ from eidolon.story_active import get_active_decision_segment
 from eidolon.story_completion import complete_story
 from eidolon.story_retrieval import get_story_segment
 from eidolon.time_utils import future_iso, now_iso
+
+
+def cleanup_old_segment(active_segment_id: str, character_id: str) -> None:
+    """Delete old active segment after successful advancement. Non-fatal on failure.
+
+    Args:
+        active_segment_id: Segment to clean up
+        character_id: Character UUID for logging
+    """
+    try:
+        delete_active_segment(active_segment_id)
+        logger.info(f"Advanced to next segment after decision and deleted prior segment for {character_id}")
+    except Exception as err:
+        logger.warning(f"Failed to delete old active segment {active_segment_id} after successful advancement: {err}")
+        logger.info(f"Advanced to next segment after decision for {character_id} (old segment cleanup failed)")
+
+
+def queue_mechanical_segment(next_active_segment_id: str) -> None:
+    """Queue a mechanical segment for processing via SQS. Non-fatal on failure.
+
+    Args:
+        next_active_segment_id: Segment to queue
+    """
+    try:
+        if SEGMENT_QUEUE_URL:
+            send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
+            logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
+        else:
+            logger.warning(f"SEGMENT_QUEUE_URL not configured, poller will handle {next_active_segment_id}")
+    except Exception as err:
+        logger.warning(f"Failed to queue mechanical segment {next_active_segment_id}, poller will handle: {err}")
+
+
+def rollback_segment_status(active_segment_id: str) -> None:
+    """Rollback segment status so poller can retry. Non-fatal on failure.
+
+    Args:
+        active_segment_id: Segment to rollback
+    """
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET #status = :active, ProcessingStatus = :pending",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={":active": "active", ":pending": "pending"},
+        )
+        logger.warning(f"Rolled back segment {active_segment_id} status for poller retry (decision preserved)")
+    except ClientError as err:
+        logger.error(f"Failed to rollback segment status for {active_segment_id}: {err}")
 
 
 def validate_decision_option(active_segment: dict, decision_id: str) -> None:
@@ -70,9 +120,15 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET #decision = :decision, #status = :completed",
+            UpdateExpression="SET #decision = :decision, #status = :completed, ProcessingStatus = :processed",
             ExpressionAttributeNames={"#decision": "Decision", "#status": "Status"},
-            ExpressionAttributeValues={":decision": decision_id, ":completed": "completed", ":active": "active", ":null": None},
+            ExpressionAttributeValues={
+                ":decision": decision_id,
+                ":completed": "completed",
+                ":processed": "processed",
+                ":active": "active",
+                ":null": None,
+            },
             ConditionExpression="(attribute_not_exists(#decision) OR #decision = :null) AND #status = :active",
         )
 
@@ -83,7 +139,7 @@ def update_segment_decision(active_segment_id: str, decision_id: str) -> dict:
         return updated_segment
     except ClientError as err:
         # Check if this was a conditional check failure
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             # Try to determine which condition failed by checking current state
             current_segment = dynamo.get_item(TableName.ACTIVE_SEGMENTS, {"ActiveSegmentID": active_segment_id})
             if current_segment:
@@ -164,10 +220,13 @@ def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
             return 0
         next_segment = get_story_segment(story_id, next_segment_id)
 
-        duration = int(next_segment.get("SegmentDuration", 300))
+        duration = int(next_segment.get("SegmentDuration", DEFAULT_SEGMENT_DURATION))
         return int(time.time()) + duration
 
-    except (ValueError, RuntimeError) as err:
+    except ValueError as err:
+        logger.error(f"Failed to get next segment for {next_segment_id} Error: {err}")
+        return 0
+    except RuntimeError as err:
         logger.error(f"Failed to get next segment for {next_segment_id} Error: {err}")
         return 0
 
@@ -216,6 +275,9 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
     active_segment["DecisionMadeAt"] = now_iso()
 
     story_instance_id = active_segment.get("StoryInstanceID")
+    if not story_instance_id:
+        logger.warning(f"StoryInstanceID missing for segment {active_segment_id}, history tracking may be incomplete")
+
     segment_id = active_segment.get("SegmentID")
     if not segment_id:
         raise ValueError("Segment ID not found in active segment")
@@ -264,7 +326,7 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
 
             update_character_active_segment(character_id, next_active_segment_id)
 
-            next_segment_duration = next_segment_def.get("SegmentDuration", 60)
+            next_segment_duration = next_segment_def.get("SegmentDuration", DEFAULT_SEGMENT_DURATION)
             response_data["NextSegmentTime"] = future_iso(next_segment_duration)
 
             # Return the next segment data so Flutter doesn't need to reload
@@ -288,27 +350,13 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
                 response_data["NextSegment"]["DecisionOptions"] = next_segment_def.get("DecisionOptions", {})
                 response_data["NextSegment"]["DefaultDecision"] = next_segment_def.get("DefaultDecision")
 
-            # Attempt to delete the old segment, but treat failure as non-fatal
-            # since the story has already successfully advanced
-            try:
-                delete_active_segment(active_segment_id)
-                logger.info(f"Advanced to next segment after decision and deleted prior segment for {character_id}")
-            except Exception as err:
-                # Log warning but don't fail the request - the advancement was successful
-                # and the old segment will be cleaned up by the poller eventually
-                logger.warning(f"Failed to delete old active segment {active_segment_id} after successful advancement: {err}")
-                logger.info(f"Advanced to next segment after decision for {character_id} (old segment cleanup failed)")
+            cleanup_old_segment(active_segment_id, character_id)
 
             if next_segment_def.get("SegmentType") == "mechanical":
-                try:
-                    if SEGMENT_QUEUE_URL:
-                        # Send just the ActiveSegmentID string (what ops_segment_process expects)
-                        send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
-                        logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
-                except Exception as err:
-                    logger.warning(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}")
+                queue_mechanical_segment(next_active_segment_id)
         except Exception as err:
             logger.error(f"Failed to create next segment after decision for {next_segment_id} Error: {err}", exc_info=True)
+            rollback_segment_status(active_segment_id)
             raise RuntimeError(f"Failed to create next segment: {err}") from err
     else:
         complete_story(character_id, story_id, story_instance_id, "normal")

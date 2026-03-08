@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to discard (delete) items from character inventory.
 Removes items permanently without applying any effects.
@@ -75,7 +75,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             quantity_to_discard = int(quantity_to_discard)
             if quantity_to_discard < 1:
                 raise ValueError("Quantity must be at least 1")
-        except (TypeError, ValueError) as err:
+        except TypeError as err:
+            raise ValueError("Invalid Quantity value") from err
+        except ValueError as err:
             raise ValueError("Invalid Quantity value") from err
 
     # Get character and verify ownership
@@ -88,7 +90,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Find item in inventory
     inventory = character.get("Inventory", {})
     found_slot = None
-    item_quantity = None
+    item_quantity = 1
 
     if inventory_slot and inventory_slot in inventory:
         # Quick lookup using provided slot
@@ -140,7 +142,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             logger.info(f"Decremented item {item_id} quantity: {item_quantity} -> " f"{item_quantity - quantity_to_discard}")
             item_fully_discarded = False
 
-        # ✅ FIX BUG #3: Use conditional update to prevent race conditions
+        # [FIX] BUG #3: Use conditional update to prevent race conditions
         # Ensures item still exists in the expected slot with expected ID
         dynamo.update_item(
             TableName.CHARACTERS,

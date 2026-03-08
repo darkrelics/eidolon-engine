@@ -612,7 +612,6 @@ def display_exits(exits):
         print(f"  Visible: {exit_data['Visible']}")
         if exit_data.get("ScriptID"):
             print(f"  Script ID: {exit_data['ScriptID']}")
-        print()
 
 
 def display_rooms(rooms):
@@ -630,7 +629,6 @@ def display_rooms(rooms):
         print(f"  Exits: {', '.join(room.get('ExitID', []))}")
         print(f"  Persistent: {room.get('Persistent', False)}")
         print(f"  ScriptID: {room.get('ScriptID', '')}")
-        print()
 
 
 def display_archetypes(archetypes):
@@ -666,7 +664,6 @@ def display_archetypes(archetypes):
             print("  Available Stories:")
             for story_id in available_stories:
                 print(f"    {story_id}")
-        print()
 
 
 def display_item_prototypes(prototypes):
@@ -686,7 +683,6 @@ def display_item_prototypes(prototypes):
         print(f"  Wearable: {prototype.get('Wearable', False)}")
         if prototype.get("Wearable"):
             print(f"  Worn on: {', '.join(prototype.get('WornOn', []))}")
-        print()
 
 
 def display_opponents(opponents_data):
@@ -740,7 +736,6 @@ def display_opponents(opponents_data):
         tags = opponent.get("Tags", [])
         if tags:
             print(f"  Tags: {', '.join(tags)}")
-        print()
 
 
 def display_story(story_data):
@@ -760,7 +755,6 @@ def display_story(story_data):
         print(f"  Duration: {story.get('EstimatedDuration', 0)} seconds")
         print(f"  First Segment: {story.get('FirstSegmentID', 'None')}")
         print(f"  Version: {story.get('Version', 1)}")
-        print()
 
     # Display segments grouped by story
     print("Segments:")
@@ -797,7 +791,6 @@ def display_story(story_data):
             else:
                 print(f"    Unknown segment type: {segment.get('SegmentType')}")
                 print(f"    Next Segment: {segment.get('NextSegmentID', 'None')}")
-            print()
 
 
 def main():

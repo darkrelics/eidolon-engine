@@ -84,7 +84,7 @@ class PlayerStack(Stack):
         self.is_imported_pool = False  # Initialize flag
         super().__init__(scope, stack_id, **kwargs)
         # Apply system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Import shared Lambda layer and role from Character stack
         self.lambda_layer = self._import_lambda_layer()

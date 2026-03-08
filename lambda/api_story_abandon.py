@@ -1,10 +1,13 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to abandon an active story.
 Updates character state, marks active segments as abandoned, and updates history.
+
+Endpoint: POST /story/abandon
+Authentication: Cognito (required)
 """
 
 from botocore.exceptions import ClientError
@@ -63,7 +66,25 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
         logger.error(f"Failed to mark segment as abandoned for {active_segment_id} Error: {err}")
         # Continue anyway since we still want to update character state
 
-    # Update character: clear story state (AbandonedStories removed - only tracked in history)
+    # Record history BEFORE clearing character state (prevents data loss on failure)
+    # Record story abandonment in story history if we have instance ID
+    try:
+        if story_instance_id:
+            record_story_abandonment(character_id, story_instance_id)
+        else:
+            logger.warning(f"No StoryInstanceID found for {character_id}, skipping history update")
+    except ValueError as err:
+        logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
+    except RuntimeError as err:
+        logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
+
+    # Record abandoned segment in history
+    try:
+        record_abandoned_segment_history(character_id, story_id, active_segment)
+    except RuntimeError as err:
+        logger.error(f"Failed to record segment history but continuing for {character_id} Error: {err}")
+
+    # Update character: clear story state AFTER recording history
     try:
         # Clear GameMode, ActiveStoryID and ActiveSegmentID
         dynamo.update_item(
@@ -79,21 +100,6 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
     except ClientError as err:
         logger.error(f"Failed to update character abandoned state for {character_id} Error: {err}")
         raise RuntimeError(f"Failed to update character state: {err}") from err
-
-    # Record story abandonment in story history if we have instance ID
-    try:
-        if story_instance_id:
-            record_story_abandonment(character_id, story_instance_id)
-        else:
-            logger.warning(f"No StoryInstanceID found for {character_id}, skipping history update")
-    except (ValueError, RuntimeError) as err:
-        logger.error(f"Failed to update story history but continuing for {character_id} Error: {err}")
-
-    # Record abandoned segment in history
-    try:
-        record_abandoned_segment_history(character_id, story_id, active_segment)
-    except RuntimeError as err:
-        logger.error(f"Failed to record segment history but continuing for {character_id} Error: {err}")
 
     # Note: We do NOT delete the active segment - it remains with status="abandoned"
     # This preserves the record for history and analytics
@@ -128,8 +134,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     try:
         body = parse_event_body(event)
         character_id = body.get("CharacterID") if isinstance(body, dict) else None
-    except ValueError:
+    except ValueError as err:
         # Fall through to query string handling
+        logger.debug(f"No JSON body in abandon request: {err}")
         character_id = None
 
     # Fallback to query parameters for backward compatibility

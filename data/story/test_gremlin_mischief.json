@@ -243,9 +243,7 @@
           "Narrative": "You successfully subdue the gremlin with minimal injury in the small clearing! The open space and wildflowers give you room to maneuver around the fallen log. It scampers away defeated, dropping a small shiny trinket among the flowers in its haste to escape. You return victorious to the glade entrance, where birds sing overhead and the scent of flowers celebrates your success.",
           "Effects": {
             "Room": 1,
-            "Items": [
-              {"ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "Chance": 0.7}
-            ]
+            "Items": [{ "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "Chance": 0.7 }]
           },
           "NextSegmentID": null
         },
@@ -254,8 +252,8 @@
           "Effects": {
             "Room": 1,
             "Items": [
-              {"ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "Chance": 0.9},
-              {"ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481", "Chance": 0.6}
+              { "ItemID": "b47ac10b-58cc-4372-a567-0e02b2c3d483", "Chance": 0.9 },
+              { "ItemID": "d47ac10b-58cc-4372-a567-0e02b2c3d481", "Chance": 0.6 }
             ]
           },
           "NextSegmentID": null

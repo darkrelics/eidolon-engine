@@ -97,33 +97,40 @@ def record_segment_history(character_id: str, story_id: str, active_segment_id: 
     update_expressions.append("CharacterUpdates = :char_updates")
     expression_values[":char_updates"] = character_updates
 
-    if segment_data.get("ProcessedAt"):
+    processed_at = segment_data.get("ProcessedAt")
+    if processed_at:
         update_expressions.append("ProcessedAt = :processed_at")
-        expression_values[":processed_at"] = segment_data["ProcessedAt"]
+        expression_values[":processed_at"] = processed_at
 
-    if segment_data.get("ClientEvents"):
+    client_events = segment_data.get("ClientEvents")
+    if client_events:
         update_expressions.append("ClientEvents = :client_events")
-        expression_values[":client_events"] = segment_data["ClientEvents"]
+        expression_values[":client_events"] = client_events
 
-    if segment_data.get("ChallengeResults"):
+    challenge_results = segment_data.get("ChallengeResults")
+    if challenge_results:
         update_expressions.append("ChallengeResults = :challenge_results")
-        expression_values[":challenge_results"] = segment_data["ChallengeResults"]
+        expression_values[":challenge_results"] = challenge_results
 
-    if segment_data.get("CombatState"):
+    combat_state = segment_data.get("CombatState")
+    if combat_state:
         update_expressions.append("CombatState = :combat_state")
-        expression_values[":combat_state"] = segment_data["CombatState"]
+        expression_values[":combat_state"] = combat_state
 
-    if segment_data.get("Decision"):
+    decision = segment_data.get("Decision")
+    if decision:
         update_expressions.append("Decision = :decision")
-        expression_values[":decision"] = segment_data["Decision"]
+        expression_values[":decision"] = decision
 
-    if segment_data.get("DecisionMadeAt"):
+    decision_made_at = segment_data.get("DecisionMadeAt")
+    if decision_made_at:
         update_expressions.append("DecisionMadeAt = :decision_made_at")
-        expression_values[":decision_made_at"] = segment_data["DecisionMadeAt"]
+        expression_values[":decision_made_at"] = decision_made_at
 
-    if segment_data.get("BranchMetadata"):
+    branch_metadata = segment_data.get("BranchMetadata")
+    if branch_metadata:
         update_expressions.append("BranchMetadata = :branch_metadata")
-        expression_values[":branch_metadata"] = segment_data["BranchMetadata"]
+        expression_values[":branch_metadata"] = branch_metadata
 
     try:
         update_kwargs = {

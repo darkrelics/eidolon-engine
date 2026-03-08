@@ -77,7 +77,7 @@ class ClientStack(Stack):
         super().__init__(scope, stack_id, description="Portal S3 bucket, CloudFront CDN, and CodeBuild deployment", **kwargs)
 
         # Add system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Create WAF Web ACL for CloudFront
         self.web_acl = self._create_waf_web_acl()

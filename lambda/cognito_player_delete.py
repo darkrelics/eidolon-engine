@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Player Deletion Handler
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to handle complete player deletion including all associated
 game data from both MUD and Incremental game tables. This ensures GDPR
@@ -14,6 +14,22 @@ from eidolon.cognito import extract_player_id
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.player import delete_player_data
 from eidolon.responses import lambda_response
+
+
+def safe_extract_player_id(event: dict) -> str:
+    """Extract player ID from Cognito authorizer, returning empty string on failure.
+
+    Args:
+        event: API Gateway event with requestContext.authorizer
+
+    Returns:
+        Player ID string, or empty string if extraction fails
+    """
+    try:
+        return extract_player_id(event)
+    except ValueError as err:
+        logger.warning(f"Could not extract player ID from authorizer: {err}")
+        return ""
 
 
 def delete_player(player_id: str) -> dict:
@@ -35,7 +51,7 @@ def delete_player(player_id: str) -> dict:
         results: dict = delete_player_data(player_id)
     except ValueError as err:
         logger.error(f"Invalid player ID: {err}", exc_info=True)
-        return {}
+        raise err
 
     logger.info(f"Player deletion completed: {player_id} results: {results}")
 
@@ -77,10 +93,7 @@ def lambda_handler(event: dict, context: object) -> dict:
             player_id = event.get("player_id", "")
         elif "requestContext" in event and "authorizer" in event.get("requestContext", {}):
             # API Gateway with Cognito authorizer
-            try:
-                player_id = extract_player_id(event)
-            except ValueError:
-                player_id = ""
+            player_id = safe_extract_player_id(event)
 
         if not player_id:
             logger.error("No player ID provided in request")

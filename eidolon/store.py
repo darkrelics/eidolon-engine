@@ -5,15 +5,21 @@ Handles store inventory management, item purchasing, and currency transactions.
 """
 
 import json
-import os
 from decimal import Decimal
+from pathlib import Path
 
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
-from eidolon.items import get_item_prototype_full
+from eidolon.items import (
+    distribute_into_stacks,
+    find_matching_stack,
+    find_next_available_slot,
+    get_item_prototype_full,
+    get_stack_space,
+)
 from eidolon.logger import logger
-from eidolon.story_rewards import create_reward_item, find_next_available_slot
+from eidolon.story_rewards import create_reward_item
 
 
 def load_store_inventory(store_id: str) -> dict:
@@ -32,11 +38,11 @@ def load_store_inventory(store_id: str) -> dict:
     """
     store_file = f"data/store_{store_id.replace('-', '_')}.json"
 
-    if not os.path.exists(store_file):
+    if not Path(store_file).exists():
         raise ValueError(f"Store '{store_id}' not found")
 
     try:
-        with open(store_file, encoding="utf-8") as f:
+        with Path(store_file).open(encoding="utf-8") as f:
             store_data = json.load(f)
 
         logger.info(f"Loaded store inventory for '{store_id}': {len(store_data.get('Inventory', []))} items")
@@ -85,8 +91,8 @@ def get_store_items(store_id: str, character_level: int = 0) -> dict:
         prototype_id = store_item.get("PrototypeID")
         try:
             prototype = get_item_prototype_full(prototype_id)
-        except ValueError:
-            logger.warning(f"Prototype {prototype_id} not found for store item, skipping")
+        except ValueError as err:
+            logger.warning(f"Prototype {prototype_id} not found for store item, skipping: {err}")
             continue
 
         # Combine store data with prototype details
@@ -167,7 +173,7 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     if current_currency < total_cost:
         raise ValueError(f"Insufficient funds: need {total_cost}, have {current_currency}")
 
-    # ✅ FIX BUG #4: Stock management documented as not implemented
+    # [FIX] BUG #4: Stock management documented as not implemented
     # Check stock availability (currently all items set to -1 = unlimited)
     # TODO: Implement proper stock management with DynamoDB table or atomic file updates
     stock = store_item.get("Stock", 0)
@@ -193,26 +199,44 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     item_ids = []
 
     if is_stackable:
-        # For stackable items, try to find existing stack or create one stack
-        from eidolon.items import find_matching_stack
+        # For stackable items, respect MaxStack when adding to inventory
+        max_stack = prototype.get("MaxStack", 99)
+        if max_stack <= 0:
+            max_stack = 99
 
-        existing_stack = find_matching_stack(inventory, prototype_id)
+        remaining_quantity = quantity
 
-        if existing_stack:
-            # Add to existing stack
+        # First, try to add to existing stacks
+        while remaining_quantity > 0:
+            existing_stack = find_matching_stack(inventory, prototype_id, quantity_to_add=1)
+            if not existing_stack:
+                break
+
             stack_slot, stack_data = existing_stack
-            new_quantity = stack_data.get("Quantity", 1) + quantity
-            inventory[stack_slot]["Quantity"] = new_quantity
-            item_ids.append(stack_data["ItemID"])
-            logger.info(f"Added {quantity} to existing stack in slot {stack_slot}")
-        else:
-            # Create new stack
-            new_item = create_reward_item(prototype_id=prototype_id, quantity=quantity, owner_id=character_id)
-            item_id = new_item["ItemID"]
-            next_slot = find_next_available_slot(inventory)
-            inventory[next_slot] = {"ItemID": item_id, "Quantity": quantity}
-            item_ids.append(item_id)
-            logger.info(f"Created new stack in slot {next_slot}: {quantity} items")
+            current_qty = stack_data.get("Quantity", 1)
+            space_available = get_stack_space(current_qty, max_stack)
+
+            if space_available <= 0:
+                break
+
+            add_qty = min(remaining_quantity, space_available)
+            inventory[stack_slot]["Quantity"] = current_qty + add_qty
+            remaining_quantity -= add_qty
+
+            if stack_data["ItemID"] not in item_ids:
+                item_ids.append(stack_data["ItemID"])
+            logger.info(f"Added {add_qty} to existing stack in slot {stack_slot}")
+
+        # Create new stacks for remaining quantity
+        if remaining_quantity > 0:
+            stack_quantities = distribute_into_stacks(remaining_quantity, max_stack)
+            for stack_qty in stack_quantities:
+                new_item = create_reward_item(prototype_id=prototype_id, quantity=stack_qty, owner_id=character_id)
+                item_id = new_item["ItemID"]
+                next_slot = find_next_available_slot(inventory)
+                inventory[next_slot] = {"ItemID": item_id, "Quantity": stack_qty}
+                item_ids.append(item_id)
+                logger.info(f"Created new stack in slot {next_slot}: {stack_qty} items")
     else:
         # For non-stackable items, create separate item for each
         for _ in range(quantity):
@@ -226,7 +250,7 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     # Calculate new currency value
     new_currency = current_currency - total_cost
 
-    # ✅ FIX BUG #1: Use conditional update to prevent race conditions
+    # [FIX] BUG #1: Use conditional update to prevent race conditions
     # Ensures currency hasn't changed since we read it (prevents double-purchase exploits)
     try:
         dynamo.update_item(

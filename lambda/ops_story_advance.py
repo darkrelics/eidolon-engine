@@ -1,18 +1,17 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to advance stories after segment completion.
 Triggered by SQS to apply character updates and progress stories.
 """
 
-from eidolon.character_data import get_character
+from eidolon.character_data import apply_death_or_unconscious_outcome, get_character
 from eidolon.character_segment import update_character_active_segment
 from eidolon.dynamo import TableName, dynamo
 from eidolon.environment import SEGMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.mechanics import apply_death_or_unconscious_outcome
 from eidolon.polling import update_polling_state
 from eidolon.segment_core import get_active_segment, get_segment_definition, is_simple_segment
 from eidolon.segment_history import record_segment_history
@@ -24,6 +23,20 @@ from eidolon.story_completion import complete_story, complete_story_for_characte
 from eidolon.story_history import add_segment_to_history, update_story_history_xp
 from eidolon.story_rewards import apply_combat_rewards
 from eidolon.validation import validate_uuid
+
+
+def queue_next_mechanical_segment(next_active_segment_id: str) -> None:
+    """Queue a mechanical segment for processing via SQS. Non-fatal on failure.
+
+    Args:
+        next_active_segment_id: Segment to queue
+    """
+    try:
+        if SEGMENT_QUEUE_URL:
+            send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
+            logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
+    except Exception as err:
+        logger.warning(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}")
 
 
 def advance_story_business_logic(active_segment_id: str) -> dict:
@@ -45,9 +58,9 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
     # IDEMPOTENCY CHECK 1: Segment might already be deleted (already advanced)
     try:
         active_segment = get_active_segment(active_segment_id)
-    except ValueError:
+    except ValueError as err:
         # Segment doesn't exist - may be already processed, invalid, or corrupted
-        logger.info(f"Segment {active_segment_id} not found (may be already processed or invalid)")
+        logger.info(f"Segment {active_segment_id} not found (may be already processed or invalid): {err}")
         return {"success": True, "skipped": True, "reason": "Segment not found (may be already processed or invalid)"}
 
     # IDEMPOTENCY CHECK 2: Check segment status
@@ -210,15 +223,7 @@ def advance_story_business_logic(active_segment_id: str) -> dict:
 
             # Queue mechanical segments for immediate processing
             if next_segment_def.get("SegmentType") == "mechanical":
-                try:
-
-                    if SEGMENT_QUEUE_URL:
-                        # Send just the ActiveSegmentID string (what ops_segment_process expects)
-                        send_message(SEGMENT_QUEUE_URL, next_active_segment_id)
-                        logger.info(f"Queued next mechanical segment for processing for {next_active_segment_id}")
-                except Exception as err:
-                    # Non-critical - segment will be picked up by poller
-                    logger.warning(f"Failed to queue mechanical segment for {next_active_segment_id} Error: {err}")
+                queue_next_mechanical_segment(next_active_segment_id)
         except Exception as err:
             logger.error(f"Failed to create next segment for {next_segment_id} Error: {err}", exc_info=True)
             raise RuntimeError(f"Failed to create next segment: {err}") from err

@@ -10,9 +10,9 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_data import apply_character_updates, character_clear_story, character_get
 from eidolon.character_segment import character_get_active_segment
+from eidolon.character_state import calculate_heal_time
 from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
-from eidolon.mechanics import calculate_heal_time
 from eidolon.state_machines import GameMode, set_character_game_mode
 from eidolon.validation import validate_uuid
 
@@ -213,8 +213,8 @@ def get_stories(character_id: str, player_id: str, available_story_ids: list) ->
             stories.append(formatted_story)
             logger.debug(f"Story processed for {story_id}")
 
-        except ValueError:
-            logger.warning(f"Story not found for {story_id}")
+        except ValueError as err:
+            logger.warning(f"Story not found for {story_id}: {err}")
             continue
         except RuntimeError as err:
             logger.error(f"Error loading story for {story_id} Error: {err}")
@@ -289,8 +289,8 @@ def get_stories_with_character(character: dict, available_story_ids: list) -> li
             stories.append(formatted_story)
             logger.debug(f"Story processed for {story_id}")
 
-        except ValueError:
-            logger.warning(f"Story not found for {story_id}")
+        except ValueError as err:
+            logger.warning(f"Story not found for {story_id}: {err}")
             continue
         except RuntimeError as err:
             logger.error(f"Error loading story for {story_id} Error: {err}")

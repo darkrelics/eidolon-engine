@@ -93,6 +93,9 @@ Resources:
           RequireNumbers: true
           RequireSymbols: true
           RequireUppercase: true
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
       Schema:
         - Name: email
           AttributeDataType: String

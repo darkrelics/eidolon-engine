@@ -1,7 +1,7 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 */
 
@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/feature/dynamodb/attributevalue"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	cwtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 )
 
 type KeyPair struct {
@@ -25,9 +26,10 @@ type KeyPair struct {
 	maxRetries  int
 	baseBackoff time.Duration
 	tableNames  map[string]string
+	cloudWatch  *CloudWatch
 }
 
-func NewKeyPair(ctx context.Context, cfg *Configuration) (*KeyPair, error) {
+func NewKeyPair(ctx context.Context, cfg *Configuration, cloudWatch *CloudWatch) (*KeyPair, error) {
 
 	Logger.Info("Initializing DynamoDB client", "region", cfg.AWS.Region)
 
@@ -73,10 +75,28 @@ func NewKeyPair(ctx context.Context, cfg *Configuration) (*KeyPair, error) {
 		maxRetries:  3,
 		baseBackoff: time.Second,
 		tableNames:  tableNames,
+		cloudWatch:  cloudWatch,
 	}, nil
 }
 
 func (k *KeyPair) Put(ctx context.Context, tableName string, item interface{}) error {
+	start := time.Now()
+	defer func() {
+		if k.cloudWatch != nil {
+			dimensions := []cwtypes.Dimension{
+				{
+					Name:  aws.String("TableName"),
+					Value: aws.String(tableName),
+				},
+				{
+					Name:  aws.String("Operation"),
+					Value: aws.String("Put"),
+				},
+			}
+			k.cloudWatch.SendDurationMetric("DynamoDBOperationDuration", time.Since(start), dimensions)
+			k.cloudWatch.SendCountMetric("DynamoDBOperationCount", 1, dimensions)
+		}
+	}()
 
 	Logger.Info("Putting item into table", "tableName", tableName)
 
@@ -102,6 +122,20 @@ func (k *KeyPair) Put(ctx context.Context, tableName string, item interface{}) e
 
 // TransactWrite performs multiple write operations in a single transaction
 func (k *KeyPair) TransactWrite(ctx context.Context, items []types.TransactWriteItem) error {
+	start := time.Now()
+	defer func() {
+		if k.cloudWatch != nil {
+			dimensions := []cwtypes.Dimension{
+				{
+					Name:  aws.String("Operation"),
+					Value: aws.String("TransactWrite"),
+				},
+			}
+			k.cloudWatch.SendDurationMetric("DynamoDBOperationDuration", time.Since(start), dimensions)
+			k.cloudWatch.SendCountMetric("DynamoDBOperationCount", 1, dimensions)
+		}
+	}()
+
 	Logger.Info("Performing transactional write", "itemCount", len(items))
 
 	input := &dynamodb.TransactWriteItemsInput{
@@ -261,6 +295,23 @@ func (k *KeyPair) SaveCharacterWithInventory(ctx context.Context, characterData 
 
 // Get retrieves an item from the DynamoDB table.
 func (k *KeyPair) Get(ctx context.Context, tableName string, key map[string]types.AttributeValue, item interface{}) error {
+	start := time.Now()
+	defer func() {
+		if k.cloudWatch != nil {
+			dimensions := []cwtypes.Dimension{
+				{
+					Name:  aws.String("TableName"),
+					Value: aws.String(tableName),
+				},
+				{
+					Name:  aws.String("Operation"),
+					Value: aws.String("Get"),
+				},
+			}
+			k.cloudWatch.SendDurationMetric("DynamoDBOperationDuration", time.Since(start), dimensions)
+			k.cloudWatch.SendCountMetric("DynamoDBOperationCount", 1, dimensions)
+		}
+	}()
 
 	Logger.Info("Getting item from table", "tableName", tableName)
 
@@ -288,6 +339,23 @@ func (k *KeyPair) Get(ctx context.Context, tableName string, key map[string]type
 
 // Delete performs single-item removal from DynamoDB
 func (k *KeyPair) Delete(ctx context.Context, tableName string, key map[string]types.AttributeValue) error {
+	start := time.Now()
+	defer func() {
+		if k.cloudWatch != nil {
+			dimensions := []cwtypes.Dimension{
+				{
+					Name:  aws.String("TableName"),
+					Value: aws.String(tableName),
+				},
+				{
+					Name:  aws.String("Operation"),
+					Value: aws.String("Delete"),
+				},
+			}
+			k.cloudWatch.SendDurationMetric("DynamoDBOperationDuration", time.Since(start), dimensions)
+			k.cloudWatch.SendCountMetric("DynamoDBOperationCount", 1, dimensions)
+		}
+	}()
 
 	Logger.Info("Deleting item from table", "tableName", tableName)
 
@@ -307,6 +375,24 @@ func (k *KeyPair) Delete(ctx context.Context, tableName string, key map[string]t
 
 // Query performs a query operation on the DynamoDB table with pagination.
 func (k *KeyPair) Query(ctx context.Context, tableName string, keyConditionExpression string, expressionAttributeValues map[string]types.AttributeValue, items interface{}) error {
+	start := time.Now()
+	defer func() {
+		if k.cloudWatch != nil {
+			dimensions := []cwtypes.Dimension{
+				{
+					Name:  aws.String("TableName"),
+					Value: aws.String(tableName),
+				},
+				{
+					Name:  aws.String("Operation"),
+					Value: aws.String("Query"),
+				},
+			}
+			k.cloudWatch.SendDurationMetric("DynamoDBOperationDuration", time.Since(start), dimensions)
+			k.cloudWatch.SendCountMetric("DynamoDBOperationCount", 1, dimensions)
+		}
+	}()
+
 	Logger.Info("Querying table", "tableName", tableName)
 
 	input := &dynamodb.QueryInput{
@@ -367,6 +453,24 @@ func (k *KeyPair) Query(ctx context.Context, tableName string, keyConditionExpre
 
 // Scan performs a scan operation on the DynamoDB table with pagination..
 func (k *KeyPair) Scan(ctx context.Context, tableName string, items interface{}) error {
+	start := time.Now()
+	defer func() {
+		if k.cloudWatch != nil {
+			dimensions := []cwtypes.Dimension{
+				{
+					Name:  aws.String("TableName"),
+					Value: aws.String(tableName),
+				},
+				{
+					Name:  aws.String("Operation"),
+					Value: aws.String("Scan"),
+				},
+			}
+			k.cloudWatch.SendDurationMetric("DynamoDBOperationDuration", time.Since(start), dimensions)
+			k.cloudWatch.SendCountMetric("DynamoDBOperationCount", 1, dimensions)
+		}
+	}()
+
 	Logger.Info("Scanning table", "tableName", tableName)
 
 	input := &dynamodb.ScanInput{

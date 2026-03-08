@@ -53,7 +53,7 @@ class StoryStack(Stack):
 
         super().__init__(scope, stack_id, **kwargs)
         # Apply system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Create SSM Parameter for story configuration
         self.story_param = self._create_ssm_parameter()

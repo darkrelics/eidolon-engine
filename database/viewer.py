@@ -76,12 +76,11 @@ def view_table(table_name, table_enum):
         actual_table_name = TABLE_ENV_MAP[table_enum]
 
         print(f"\nContents of table: {table_name} ({actual_table_name})")
-        print("=" * 50)
+
         for item in items:
             print(item)
-        print("=" * 50)
+
         print(f"Total items: {len(items)}")
-        print()
     except ClientError as err:
         print(f"Error scanning table {table_name}: {err}")
     except Exception as err:

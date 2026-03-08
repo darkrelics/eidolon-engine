@@ -199,9 +199,6 @@ def update_story_history_xp(character_id: str, story_instance_id: str, skill_xp:
                 expression_names[f"#attr_{safe_attr}"] = attribute
                 expression_values[f":xp_attr_{safe_attr}"] = Decimal(str(xp_value))
 
-        if ":zero" not in expression_values:
-            expression_values[":zero"] = Decimal("0")
-
         update_expression = "SET " + ", ".join(update_expressions)
 
         dynamo.update_item(

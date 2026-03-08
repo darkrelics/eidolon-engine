@@ -290,21 +290,6 @@ class RpgIcons {
   }
 
   static IconData getArmorTypeIcon(String armorType) {
-    switch (armorType.toLowerCase()) {
-      case 'heavy':
-      case 'plate':
-        return RpgAwesome.vest;
-      case 'medium':
-      case 'chainmail':
-        return RpgAwesome.vest;
-      case 'light':
-      case 'leather':
-        return RpgAwesome.vest;
-      case 'robe':
-      case 'cloth':
-        return RpgAwesome.vest;
-      default:
-        return RpgAwesome.vest;
-    }
+    return RpgAwesome.vest;
   }
 }

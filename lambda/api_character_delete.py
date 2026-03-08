@@ -1,10 +1,13 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
+
+Endpoint: DELETE /character/delete
+Authentication: Cognito (required)
 """
 
 from eidolon.character_data import character_get

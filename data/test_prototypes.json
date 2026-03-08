@@ -124,6 +124,13 @@
       "Mass": 0.5,
       "Value": 250,
       "Stackable": true,
+      "Consumable": true,
+      "ConsumableEffects": {
+        "HealWounds": {
+          "Amount": 6,
+          "DamageTypes": ["aggravated", "lethal", "bashing"]
+        }
+      },
       "Quantity": 1,
       "Wearable": false,
       "WornOn": [],
@@ -140,8 +147,7 @@
       "IsWorn": false,
       "CanPickUp": true,
       "Metadata": {
-        "PotionStrength": "minor",
-        "HealingAmount": "2d4+2"
+        "PotionStrength": "minor"
       }
     },
     {
@@ -234,6 +240,16 @@
       "Mass": 0.2,
       "Value": 30,
       "Stackable": true,
+      "Consumable": true,
+      "ConsumableEffects": {
+        "HealWounds": {
+          "Amount": 1,
+          "DamageTypes": ["bashing"]
+        },
+        "RestoreEssence": {
+          "Amount": 1
+        }
+      },
       "Quantity": 1,
       "Wearable": false,
       "WornOn": [],
@@ -262,6 +278,13 @@
       "Mass": 0.1,
       "Value": 150,
       "Stackable": true,
+      "Consumable": true,
+      "ConsumableEffects": {
+        "HealWounds": {
+          "Amount": 2,
+          "DamageTypes": ["bashing", "lethal"]
+        }
+      },
       "Quantity": 1,
       "Wearable": false,
       "WornOn": [],
@@ -316,6 +339,13 @@
       "Mass": 0.5,
       "Value": 50,
       "Stackable": true,
+      "Consumable": true,
+      "ConsumableEffects": {
+        "HealWounds": {
+          "Amount": 1,
+          "DamageTypes": ["bashing"]
+        }
+      },
       "Quantity": 1,
       "Wearable": false,
       "WornOn": [],
@@ -344,6 +374,13 @@
       "Mass": 0.4,
       "Value": 200,
       "Stackable": true,
+      "Consumable": true,
+      "ConsumableEffects": {
+        "HealWounds": {
+          "Amount": 3,
+          "DamageTypes": ["lethal", "bashing"]
+        }
+      },
       "Quantity": 1,
       "Wearable": false,
       "WornOn": [],

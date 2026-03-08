@@ -3,6 +3,7 @@ import 'package:eidolon_incremental/models/character.dart';
 import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/utils/api_parser.dart';
 import 'package:eidolon_incremental/utils/api_validation.dart';
+import 'package:eidolon_incremental/utils/json_parser.dart';
 import 'base_api_service.dart';
 
 /// Character info for listing
@@ -121,6 +122,19 @@ class ApiService extends BaseApiService {
     }
   }
 
+  /// Get raw character response including ActiveStory and ActiveSegment.
+  ///
+  /// Returns the complete API response with Character, ActiveStory, and ActiveSegment fields.
+  /// Used by polling service to get authoritative character state after story completion.
+  Future<Map<String, dynamic>> getCharacter({required String characterId}) async {
+    ApiMetrics.recordCall('GET /character (raw)', details: 'id=$characterId');
+
+    return await get<Map<String, dynamic>>(
+      '/character',
+      queryParams: {'CharacterID': characterId},
+    );
+  }
+
   /// List all characters for the player.
   ///
   /// Returns a list of all characters owned by the authenticated player.
@@ -229,11 +243,6 @@ class ApiService extends BaseApiService {
     }
   }
 
-  /// Get segment outcome for a completed segment.
-  ///
-  /// Fetches the results of a completed segment including
-  /// rewards, XP gained, and character updates.
-
   /// Abandon current story run.
   ///
   /// Ends the current story run early, allowing the character
@@ -252,9 +261,6 @@ class ApiService extends BaseApiService {
     return json;
   }
 
-  /// Rest instead of continuing.
-  ///
-
   /// Get available archetypes.
   ///
   /// Fetches all archetypes available for character creation
@@ -266,7 +272,12 @@ class ApiService extends BaseApiService {
 
     final json = await get<Map<String, dynamic>>('/archetype');
 
-    final archetypes = (json['Archetypes'] as List<dynamic>)
+    final archetypesData = json['Archetypes'] as List<dynamic>?;
+    if (archetypesData == null) {
+      throw FormatException('Missing Archetypes data in API response');
+    }
+
+    final archetypes = archetypesData
         .map((a) => ArchetypeInfo.fromJson(a as Map<String, dynamic>))
         .toList();
 
@@ -356,6 +367,116 @@ class ApiService extends BaseApiService {
       queryParams: {'PrototypeID': prototypeId},
     );
   }
+
+  /// Consume an inventory item.
+  ///
+  /// Uses a consumable item and applies its effects server-side.
+  /// Returns effect summary and remaining quantity.
+  Future<Map<String, dynamic>> consumeItem({
+    required String characterId,
+    required String itemId,
+  }) async {
+    ApiMetrics.recordCall('POST /item/consume', details: 'characterId=$characterId, itemId=$itemId');
+
+    return post<Map<String, dynamic>>(
+      '/item/consume',
+      body: {'CharacterID': characterId, 'ItemID': itemId},
+    );
+  }
+
+  /// Discard an inventory item.
+  ///
+  /// Removes an item from inventory. For stackable items, can discard
+  /// a partial quantity. Returns discard results.
+  ///
+  /// Parameters:
+  /// - [characterId]: Character UUID
+  /// - [itemId]: Item UUID to discard
+  /// - [slot]: Optional inventory slot for faster lookup
+  /// - [quantity]: Optional quantity to discard (for stackable items).
+  ///   If null or >= stack quantity, discards entire item.
+  Future<Map<String, dynamic>> discardItem({
+    required String characterId,
+    required String itemId,
+    String? slot,
+    int? quantity,
+  }) async {
+    ApiMetrics.recordCall(
+      'POST /item/discard',
+      details: 'characterId=$characterId, itemId=$itemId, slot=$slot, qty=$quantity',
+    );
+
+    final body = <String, dynamic>{
+      'CharacterID': characterId,
+      'ItemID': itemId,
+    };
+    if (slot != null) {
+      body['InventorySlot'] = slot;
+    }
+    if (quantity != null) {
+      body['Quantity'] = quantity;
+    }
+
+    return post<Map<String, dynamic>>('/item/discard', body: body);
+  }
+
+  /// Consolidate stackable item stacks.
+  ///
+  /// Merges multiple stacks of the same item type into fewer stacks,
+  /// respecting MaxStack limits.
+  ///
+  /// Parameters:
+  /// - [characterId]: Character UUID
+  /// - [prototypeId]: Optional - consolidate only stacks of this item type
+  /// - [consolidateAll]: If true, consolidates all stackable items (default)
+  Future<Map<String, dynamic>> consolidateStacks({
+    required String characterId,
+    String? prototypeId,
+    bool consolidateAll = true,
+  }) async {
+    ApiMetrics.recordCall(
+      'POST /item/consolidate',
+      details: 'characterId=$characterId, prototypeId=$prototypeId, all=$consolidateAll',
+    );
+
+    final body = <String, dynamic>{
+      'CharacterID': characterId,
+      'ConsolidateAll': consolidateAll,
+    };
+    if (prototypeId != null) {
+      body['PrototypeID'] = prototypeId;
+    }
+
+    return post<Map<String, dynamic>>('/item/consolidate', body: body);
+  }
+
+  /// Split a stackable item into two stacks.
+  ///
+  /// Creates a new stack with the specified quantity from an existing stack.
+  ///
+  /// Parameters:
+  /// - [characterId]: Character UUID
+  /// - [slot]: Inventory slot containing the stack to split
+  /// - [quantity]: Number of items to split into the new stack
+  Future<Map<String, dynamic>> splitStack({
+    required String characterId,
+    required String slot,
+    required int quantity,
+  }) async {
+    ApiMetrics.recordCall(
+      'POST /item/split',
+      details: 'characterId=$characterId, slot=$slot, qty=$quantity',
+    );
+
+    return post<Map<String, dynamic>>(
+      '/item/split',
+      body: {
+        'CharacterID': characterId,
+        'Slot': slot,
+        'Quantity': quantity,
+      },
+    );
+  }
 }
 
 /// Archetype info for character creation
@@ -378,12 +499,12 @@ class ArchetypeInfo {
 
   factory ArchetypeInfo.fromJson(Map<String, dynamic> json) {
     return ArchetypeInfo(
-      name: json['ArchetypeName'] as String,
-      description: json['Description'] as String? ?? '',
-      attributes: Map<String, dynamic>.from(json['Attributes'] ?? {}),
-      skills: Map<String, dynamic>.from(json['Skills'] ?? {}),
-      health: json['Health'] as int? ?? 10,
-      essence: json['Essence'] as int? ?? 3,
+      name: JsonParser.getString(json, 'ArchetypeName'),
+      description: JsonParser.getString(json, 'Description'),
+      attributes: JsonParser.getMap(json, 'Attributes'),
+      skills: JsonParser.getMap(json, 'Skills'),
+      health: JsonParser.getInt(json, 'Health', defaultValue: 10),
+      essence: JsonParser.getInt(json, 'Essence', defaultValue: 3),
     );
   }
 }

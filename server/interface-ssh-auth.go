@@ -1,7 +1,7 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 */
 
@@ -69,7 +69,29 @@ func PasswordCallBack(conn ssh.ConnMetadata, password []byte, sshInterface *Inte
 		return nil, fmt.Errorf("invalid password format")
 	}
 
-	authenticated, userUUID, err := Authenticate(conn.User(), sanitizedPassword, sshInterface)
+	// Split password and optional MFA code before authenticating.
+	// Format: "password" or "password::mfa_code" (using "::" delimiter to avoid collision with passwords)
+	actualPassword := sanitizedPassword
+	mfaCode := ""
+	if lastDelim := strings.LastIndex(sanitizedPassword, "::"); lastDelim > 0 {
+		candidateCode := sanitizedPassword[lastDelim+2:]
+		// MFA codes are 6 digits
+		if len(candidateCode) == 6 {
+			allDigits := true
+			for _, ch := range candidateCode {
+				if ch < '0' || ch > '9' {
+					allDigits = false
+					break
+				}
+			}
+			if allDigits {
+				actualPassword = sanitizedPassword[:lastDelim]
+				mfaCode = candidateCode
+			}
+		}
+	}
+
+	authenticated, userUUID, err := Authenticate(conn.User(), actualPassword, mfaCode, sshInterface)
 	if err != nil {
 		sshInterface.recordFailedAttempt(clientIP)
 		sshInterface.recordFailedUserAttempt(username)

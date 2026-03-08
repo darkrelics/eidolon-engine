@@ -53,11 +53,23 @@ def get_lambda_function_arns(region: str) -> dict:
 
     # List of Lambda functions needed for API
     api_functions = [
+        # Character functions
         "api-archetype-list",
         "api-character-add",
         "api-character-get",
         "api-character-delete",
         "api-character-list",
+        # Item functions
+        "api-item-brief",
+        "api-item-prototype",
+        "api-item-consume",
+        "api-item-discard",
+        "api-item-consolidate",
+        "api-item-split",
+        # Store functions
+        "api-store-list",
+        "api-store-purchase",
+        # Story functions
         "api-story-start",
         "api-story-abandon",
         "api-story-history",
@@ -77,17 +89,37 @@ def get_lambda_function_arns(region: str) -> dict:
     return function_arns
 
 
-def deploy_api_stack(params, state: CDKState) -> dict:
-    """Deploy the API stack using CDK."""
+def deploy_api_stack(params, state: CDKState, allow_empty_lambdas: bool = False) -> dict:
+    """Deploy the API stack using CDK.
+
+    Args:
+        params: Deployment parameters
+        state: CDK state tracker
+        allow_empty_lambdas: If True, allows deployment without Lambda functions.
+                            Should only be True for initial infrastructure setup.
+
+    Returns:
+        Dict with success status and outputs
+
+    Raises:
+        ValueError: If no Lambda functions found and allow_empty_lambdas is False
+    """
     print("\nPreparing API Gateway deployment...")
 
     # Get Lambda function ARNs
     print("  Discovering Lambda functions for API integration...")
     lambda_arns = get_lambda_function_arns(params.region)
     if not lambda_arns:
-        print("  [WARNING] No Lambda functions found yet")
-        print("  API Gateway will be created without Lambda integrations")
-        print("  Lambda functions will be integrated after they are deployed")
+        if allow_empty_lambdas:
+            print("  [WARNING] No Lambda functions found yet (initial deployment)")
+            print("  API Gateway will be created without Lambda integrations")
+            print("  Re-run deployment after Lambda functions are deployed")
+        else:
+            raise ValueError(
+                "DEPLOYMENT ERROR: No Lambda functions found for API integration. "
+                "Lambda functions must be deployed before the API stack. "
+                "Ensure the Character and Story stacks deployed successfully."
+            )
     else:
         print(f"  Found {len(lambda_arns)} Lambda functions to integrate:")
         for func in lambda_arns:

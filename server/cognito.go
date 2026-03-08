@@ -1,7 +1,7 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 */
 
@@ -144,7 +144,7 @@ func handleCognitoError(err error, email string) error {
 	return fmt.Errorf("authentication failed")
 }
 
-func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool, uuid.UUID, error) {
+func Authenticate(username, password, mfaCode string, ssh_interface *Interface_SSH) (bool, uuid.UUID, error) {
 	authOutput, err := ssh_interface.server.cognito.InitiateAuth(ssh_interface.server.ctx, &cognitoidentityprovider.InitiateAuthInput{
 		AuthFlow: types.AuthFlowTypeUserPasswordAuth,
 		AuthParameters: map[string]string{
@@ -157,6 +157,40 @@ func Authenticate(username, password string, ssh_interface *Interface_SSH) (bool
 	if err != nil {
 		Logger.Error("authentication failed", "username", username, "error", err)
 		return false, uuid.Nil, err
+	}
+
+	// Handle MFA Challenge
+	if authOutput.ChallengeName == types.ChallengeNameTypeSoftwareTokenMfa {
+		if mfaCode == "" {
+			return false, uuid.Nil, fmt.Errorf("MFA_REQUIRED")
+		}
+
+		// Respond to MFA challenge
+		challengeOutput, err := ssh_interface.server.cognito.RespondToAuthChallenge(ssh_interface.server.ctx, &cognitoidentityprovider.RespondToAuthChallengeInput{
+			ChallengeName: types.ChallengeNameTypeSoftwareTokenMfa,
+			ClientId:      aws.String(ssh_interface.config.Cognito.UserPoolClientID),
+			ChallengeResponses: map[string]string{
+				"USERNAME":                username,
+				"SOFTWARE_TOKEN_MFA_CODE": mfaCode,
+			},
+			Session: authOutput.Session,
+		})
+
+		if err != nil {
+			Logger.Error("MFA validation failed", "username", username, "error", err)
+			return false, uuid.Nil, fmt.Errorf("invalid MFA code")
+		}
+
+		authOutput.AuthenticationResult = challengeOutput.AuthenticationResult
+	} else if authOutput.ChallengeName == types.ChallengeNameTypeSmsMfa {
+		Logger.Error("SMS MFA not supported", "username", username)
+		return false, uuid.Nil, fmt.Errorf("SMS-based MFA is not supported, please use an authenticator app")
+	} else if authOutput.ChallengeName == types.ChallengeNameTypeNewPasswordRequired {
+		Logger.Error("Password change required", "username", username)
+		return false, uuid.Nil, fmt.Errorf("password change required, please use the web client")
+	} else if authOutput.ChallengeName != "" {
+		Logger.Error("Unsupported auth challenge", "username", username, "challenge", string(authOutput.ChallengeName))
+		return false, uuid.Nil, fmt.Errorf("unsupported authentication challenge")
 	}
 
 	if authOutput.AuthenticationResult == nil {

@@ -1,7 +1,7 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 */
 
@@ -54,7 +54,7 @@ func NewSSHInterface(server *Server) (*Interface_SSH, error) {
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
 
-	art := "Eidolon Engine\nCopyright 2024-2025 Jason E. Robinson\n"
+	art := "Eidolon Engine\nCopyright 2024-2026 Jason E. Robinson\n"
 
 	ctx, cancel := context.WithCancel(server.ctx)
 
@@ -176,7 +176,7 @@ func (ssh_interface *Interface_SSH) handleConnection(conn net.Conn, ctx context.
 			continue
 		}
 
-		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ctx, userUUID)
+		player, err := NewPlayerSSH(ssh_interface.server, sshConn.User(), channel, ctx, userUUID, conn.RemoteAddr().String(), "SSH")
 		if err != nil {
 			Logger.Error("Failed to create player", "error", err)
 			if err := channel.Close(); err != nil {

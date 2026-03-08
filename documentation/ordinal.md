@@ -94,11 +94,13 @@ The backpack contains:
 **File:** server/command-parsing.go
 
 **Components:**
+
 - ordinalWords map: Maps "first" through "twentieth" to numeric values
 - ordinalIndex: Array for fuzzy matching
 - fuzzyMatchOrdinal(): Attempts fuzzy match on input string
 
 **Usage in Commands:**
+
 - get/drop/take commands check for ordinals
 - Container operations (put/take) support ordinals for both item and container
 - Exit selection supports ordinals for duplicate directions

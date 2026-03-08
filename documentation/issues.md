@@ -11,6 +11,7 @@
 ### Format
 
 Each issue includes:
+
 - **Issue Number** and current GitHub state
 - **Title**
 - **Brief Description**
@@ -534,6 +535,7 @@ Each issue includes:
 **Action:** NO ACTION
 
 **Justification:** Correctly closed. WAF implementation verified in `deployment/stacks/client_stack.py:82-105`. Creates WAF Web ACL from `waf/cloudfront-cdn.yml` configuration. Implementation includes:
+
 - `_create_waf_web_acl()` method loads YAML config
 - `waf_config.create_web_acl(scope="CLOUDFRONT", ...)` creates Web ACL
 - CloudFront distribution associates with WAF
@@ -548,6 +550,7 @@ Each issue includes:
 **Action:** NO ACTION
 
 **Justification:** Correctly closed. WAF implementation verified in `deployment/stacks/api_stack.py:70-123`. Creates TWO Web ACLs:
+
 - API Gateway WAF: `_create_api_waf_web_acl()` (line 88-98) from `waf/api-gateway.yml`
 - Cognito WAF: `_create_cognito_waf_web_acl()` (line 100-108) from `waf/cognito.yml`
 - Both use `wafv2.CfnWebACLAssociation` for resource attachment
@@ -572,10 +575,12 @@ Each issue includes:
 **Action:** NO ACTION
 
 **Justification:** Correctly closed. Caching verified in `eidolon/archetypes.py:68-80`:
+
 ```python
 @cache
 def get_archetype(archetype_name: str) -> dict:
 ```
+
 Uses `functools.cache` decorator (line 7 import, line 68 decoration) to cache archetype lookups per Lambda warm container. Function called from `lambda/api_character_add.py:60` during character creation. Cache persists across Lambda invocations in warm containers, reducing DynamoDB GetItem calls.
 
 ---
@@ -593,11 +598,13 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 **Justification:** **MUD server issue, NOT incremental game.** The incremental game HAS stacking implemented in `eidolon/story_rewards.py:121-136` using `find_matching_stack()` for coins and items. However, the MUD server (Go code in `server/`) does NOT have stack merging logic. Issue correctly remains open for MUD server implementation.
 
 **Evidence of incremental game stacking:**
+
 - `eidolon/items.py` contains `find_matching_stack()` function
 - `eidolon/story_rewards.py:121-136` merges coin stacks
 - `eidolon/story_rewards.py:158-164` merges item reward stacks
 
 **MUD server verification:**
+
 - Checked `server/item-data.go`, `server/item.go` - no stack merging logic found
 - Stackable fields exist in data structures but no merge behavior
 
@@ -612,12 +619,14 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 **Justification:** **MUD server feature, NOT incremental game.** The incremental game HAS currency (R5-T1 complete, coin-based system with Resources.Value tracking). The MUD server does NOT have this economic framework. Issue correctly remains open for MUD server economic design.
 
 **Incremental game currency (complete):**
+
 - `eidolon/story_rewards.py:109-147` implements coin-based economy
 - Bronze (10 FU), Silver (120 FU), Gold (2400 FU) coins
 - Resources.Value tracks total currency
 - Stack management and merging
 
 **MUD server verification:**
+
 - No economic system found in `server/` directory
 - Issue describes features not yet implemented for MUD
 
@@ -644,6 +653,7 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 **Justification:** **Partially implemented, correctly closed.** Abandon mechanics are COMPLETE with `lambda/api_story_abandon.py` (110+ lines implementing abandon business logic, history tracking, penalties). Rest segments were DEFERRED to separate issue #863 (Design: Rest Segment Implementation) which remains open for future work. Closing #611 was correct since abandon is complete and rest moved to dedicated design issue.
 
 **Evidence:**
+
 - Abandon implemented: `lambda/api_story_abandon.py:25-90` business logic
 - Functions: `mark_segment_as_abandoned()`, `record_story_abandonment()`, `record_abandoned_segment_history()`
 - Rest segments: #863 documents design, not yet implemented (no RestSegment type in stories, no POST /segment/rest endpoint)
@@ -717,6 +727,7 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 **Action:** NO ACTION
 
 **Justification:** Correctly closed. Flutter incremental game client exists with full implementation:
+
 - `incremental/lib/screens/game_screen.dart` (1785 lines) - main game UI
 - `incremental/lib/widgets/game/` - game widgets (inventory_panel, stats_panel, etc.)
 - `incremental/lib/providers/` - state management
@@ -732,6 +743,7 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 **Action:** NO ACTION
 
 **Justification:** Correctly closed. Tables verified in schema:
+
 - Characters table (documented in `documentation/schema.md`)
 - Stories, StoryHistory, SegmentHistory tables exist
 - CDK definitions in `deployment/stacks/` create tables
@@ -746,6 +758,7 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 **Action:** NO ACTION
 
 **Justification:** Correctly closed. `lambda/ops_story_advance.py` implements segment processing via EventBridge polling. Function handles:
+
 - Skill check evaluation
 - Outcome calculation
 - State updates
@@ -771,6 +784,7 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 **Action:** NO ACTION
 
 **Justification:** Correctly closed. CI implementation verified:
+
 - `.github/workflows/story-validation.yml` validates story JSON on PR
 - Runs validation scripts (`scripts_python/validate_story_content.py`, `scripts_python/validate_branching.py`)
 - GitHub Actions configured and operational
@@ -794,6 +808,7 @@ Many issues pertain to the **MUD server** (Go codebase in `server/`) vs the **In
 This project contains TWO distinct game systems:
 
 1. **MUD Server** (Go) - Traditional text-based multi-user dungeon
+
    - Location: `server/` directory (62 Go files)
    - Features: Real-time combat, item stacking, crafting, trading, NPC merchants
    - Status: Many open feature requests (#638 crafting, #639 economy, #621 combat, #626 item generation)
@@ -808,6 +823,7 @@ This project contains TWO distinct game systems:
 ### Issue Closure Accuracy
 
 Most closed issues are legitimately complete:
+
 - Infrastructure: WAF (#694, #695, #693), archetype caching (#743)
 - Core features: Flutter client (#602), CI/CD (#598), DynamoDB tables (#601)
 - Game mechanics: Abandon (#611 partial - rest deferred to #863), segment processing (#600)
@@ -815,6 +831,7 @@ Most closed issues are legitimately complete:
 ### Open Issues Correctly Remain Open
 
 Common themes in open issues:
+
 - **MUD Server Features**: Crafting (#638), economy (#639), NPCs (#636), quests (#637)
 - **Optimization**: Performance (#728), observability (#603), cost controls (#615)
 - **Tooling**: Admin CLI (#759), content pipeline (#604), room builder (#63)
@@ -825,6 +842,7 @@ Common themes in open issues:
 **Total Analyzed:** 70+ of 172 issues (40% coverage)
 
 **Recommended Actions:**
+
 - **CLOSE**: 2 issues
   - #874 - Death conditions (fixed 2025-10-19)
   - #726 - Story effects integration (R5-T1 complete)
@@ -841,12 +859,14 @@ Common themes in open issues:
   - Various closed MUD server issues
 
 **Verification Status:**
+
 - ✅ **Confirmed Complete** (10 issues): #695, #694, #693, #743, #611 (partial), #602, #601, #600, #598, #597
 - ✅ **Confirmed Open** (8 issues): #682, #639, #638, #863, #604, #603, #761, #729
 - ⏳ **Pending Verification** (8 issues): Listed above
 - 🔴 **Recommend Close** (2 issues): #874, #726
 
 **Key Findings:**
+
 - WAF implementation: Complete across CloudFront, API Gateway, Cognito
 - Archetype caching: Implemented with @cache decorator
 - Currency system: Incremental game complete (R5-T1), MUD server not started
@@ -856,6 +876,7 @@ Common themes in open issues:
 - Item stacking: Incremental game complete, MUD server pending
 
 **Analysis Coverage:**
+
 - Recent issues (2025-10-07 onwards): 100%
 - Closed issues in 600-700 range: 90%
 - Closed issues in 400-500 range: Sample verification
@@ -867,6 +888,7 @@ Common themes in open issues:
 ## Methodology
 
 **Analysis Approach:**
+
 1. Retrieved all 172 GitHub issues via `gh` CLI
 2. For each issue, verified claims against actual codebase:
    - Checked file existence (`Grep`, `Read`, `Bash ls`)
@@ -876,6 +898,7 @@ Common themes in open issues:
 4. Based recommendations on code evidence, not assumptions
 
 **Verification Examples:**
+
 - #695 WAF: Confirmed in `deployment/stacks/client_stack.py:82-105`
 - #743 Caching: Found `@cache` decorator in `eidolon/archetypes.py:68`
 - #726 Currency: Verified 199-line implementation in `eidolon/story_rewards.py:82-199`
@@ -883,6 +906,7 @@ Common themes in open issues:
 - #611 Abandon: Read `lambda/api_story_abandon.py` confirming business logic
 
 **Limitations:**
+
 - 40% coverage (70 of 172 issues analyzed)
 - Some closed issues flagged for deeper verification
 - Did not execute code or check deployment state
@@ -899,11 +923,13 @@ Common themes in open issues:
 ## Next Steps for Complete Analysis
 
 **Remaining Issues to Analyze (~100):**
+
 - Issues #1-#200 (early project issues, many may be stale)
 - Issues #450-#520 (MUD server improvements)
 - Open issues #200-#400 (mid-range features)
 
 **Verification Tasks:**
+
 - Confirm weighted branching implementation (#610)
 - Check story revision rollover logic (#607)
 - Verify story manifest generation (#605)

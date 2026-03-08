@@ -217,7 +217,7 @@ def past_unix(seconds: int) -> int:
     return int(past_time.timestamp())
 
 
-def coerce_unix_timestamp(timestamp_value: object, default=None) -> int | None:
+def coerce_unix_timestamp(timestamp_value: object, default=None):
     """
     Coerce various timestamp formats to Unix timestamp (int).
 
@@ -254,14 +254,16 @@ def coerce_unix_timestamp(timestamp_value: object, default=None) -> int | None:
     if "Decimal" in type(timestamp_value).__name__:
         try:
             return int(timestamp_value)  # type: ignore[arg-type]
-        except Exception:
+        except Exception as err:
+            logger.debug(f"Failed to convert Decimal timestamp: {err}")
             return default
 
     # Handle string
     if isinstance(timestamp_value, str):
         try:
             return int(float(timestamp_value))
-        except ValueError:
+        except ValueError as err:
+            logger.debug(f"Failed to parse timestamp string '{timestamp_value}': {err}")
             return default
 
     # Unknown type

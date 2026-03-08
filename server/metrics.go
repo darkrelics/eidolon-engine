@@ -1,7 +1,7 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 */
 
@@ -216,4 +216,26 @@ func (c *CloudWatch) AddMetric(metric types.MetricDatum) {
 	default:
 		Logger.Warn("Metrics channel full, dropping metric", "name", *metric.MetricName)
 	}
+}
+
+// SendDurationMetric sends a timing metric to CloudWatch
+func (c *CloudWatch) SendDurationMetric(name string, duration time.Duration, dimensions []types.Dimension) {
+	c.AddMetric(types.MetricDatum{
+		MetricName: aws.String(name),
+		Unit:       types.StandardUnitMilliseconds,
+		Value:      aws.Float64(float64(duration.Milliseconds())),
+		Dimensions: dimensions,
+		Timestamp:  aws.Time(time.Now()),
+	})
+}
+
+// SendCountMetric sends a count metric to CloudWatch
+func (c *CloudWatch) SendCountMetric(name string, count float64, dimensions []types.Dimension) {
+	c.AddMetric(types.MetricDatum{
+		MetricName: aws.String(name),
+		Unit:       types.StandardUnitCount,
+		Value:      aws.Float64(count),
+		Dimensions: dimensions,
+		Timestamp:  aws.Time(time.Now()),
+	})
 }

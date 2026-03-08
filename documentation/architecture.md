@@ -14,7 +14,7 @@ graph TB
 
     subgraph "AWS Cloud"
         APIGW[API Gateway<br/>api.domain]
-        Lambda[Lambda Functions<br/>18 Total]
+        Lambda[Lambda Functions<br/>24 Total]
         DynamoDB[(DynamoDB<br/>14 Tables)]
         EventBridge[EventBridge<br/>1 min Poller]
         ProcessQ[SQS Queue<br/>Processing]
@@ -42,10 +42,10 @@ graph TB
 
 - **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **23 Lambda Functions**: 22 deployed, 1 not deployed (cognito-player-delete reserved for future)
-  - Character Stack: 12 functions (character, archetype, item, store management)
-  - Story Stack: 9 functions (story, segment, decision processing)
-  - Player Stack: 1 function (cognito-player-new)
+- **24 Lambda Functions**: All deployed
+  - API Layer: 19 functions (character, archetype, item, store, story, segment)
+  - Operational Layer: 3 functions (polling, processing, advancement)
+  - Cognito Layer: 2 functions (player creation, player deletion)
 - **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
 - **2 SQS Queues**: Processing and advancement queues
 - **1 EventBridge Rule**: 1-minute polling for segment completion
@@ -117,14 +117,15 @@ See [schema.md](schema.md) for detailed table schemas.
 
 ### 3. Lambda Functions
 
-**Total Functions: 18 (17 deployed, 1 reserved)**
+**Total Functions: 24**
 
 All Lambda functions use `eidolon-lambda-execution-role` with:
+
 - DynamoDB access via managed policy `eidolon-dynamodb-policy`
 - CloudWatch Logs permissions
 - Additional policies attached by dependent stacks
 
-**API Layer (13 functions):**
+**API Layer (19 functions):**
 
 - `api-archetype-list`: List available archetypes
 - `api-character-add`: Create new character with name validation
@@ -132,10 +133,16 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 - `api-character-get`: Retrieve character details with GameMode cleanup
 - `api-character-list`: List player's characters
 - `api-item-brief`: Get lightweight item metadata for IndexedDB caching
+- `api-item-consolidate`: Merge stackable items in inventory
+- `api-item-consume`: Consume inventory items and apply effects
+- `api-item-discard`: Remove items from inventory
 - `api-item-prototype`: Get complete item prototype definition
+- `api-item-split`: Split item stacks in inventory
 - `api-segment-decision`: Record player choice in decision segment
-- `api-segment-history`: Get segment history
+- `api-segment-history`: Get segment history for character
 - `api-segment-status`: Get current segment status
+- `api-store-list`: List available store items
+- `api-store-purchase`: Purchase items from store
 - `api-story-abandon`: Mark story as abandoned and reset GameMode
 - `api-story-history`: Get story history
 - `api-story-start`: Initiate story and enable polling
@@ -148,8 +155,8 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 
 **Cognito Functions (2 functions):**
 
-- `cognito-player-new`: PostConfirmation trigger for new accounts (deployed)
-- `cognito-player-delete`: Player deletion handler (NOT DEPLOYED - reserved for future)
+- `cognito-player-new`: PostConfirmation trigger for new accounts
+- `cognito-player-delete`: Player deletion handler for GDPR compliance
 
 **Lambda Configuration:**
 
@@ -164,16 +171,19 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 The dual-queue design separates immediate mechanical processing from timed segment advancement:
 
 **processing-queue:**
+
 - Target: `ops-segment-process` Lambda
 - Purpose: Immediate processing of mechanical segments
 - Configuration: 4-day retention, 30-second visibility, 3 retries before DLQ
 
 **advancement-queue:**
+
 - Target: `ops-story-advance` Lambda
 - Purpose: Timed processing of all segment types
 - Configuration: 4-day retention, 30-second visibility, 3 retries before DLQ
 
 **Processing Flow:**
+
 1. Mechanical segments queued immediately at creation
 2. All segments queued to advancement when timer expires
 3. ProcessingStatus field ensures idempotent processing
@@ -181,11 +191,13 @@ The dual-queue design separates immediate mechanical processing from timed segme
 ### 5. Polling Infrastructure
 
 **EventBridge Rule:** `eidolon-story-poller`
+
 - Schedule: rate(1 minute)
 - Target: `ops-segment-poller` Lambda
 - State: DISABLED by default, enabled when stories start
 
 **SSM Parameter:** `/eidolon/story/config`
+
 - Values: "run" or "stop"
 - Controls polling execution
 - Auto-managed based on active segment count
@@ -591,14 +603,14 @@ The system uses DynamoDB conditional writes to ensure atomic state transitions a
 
 **Failure Scenarios and Handling:**
 
-| Failure Type | Detection | Recovery | Maximum Recovery Time |
-|-------------|-----------|----------|----------------------|
-| Client crash/network loss | Next API call | Automatic GameMode cleanup | Immediate |
-| Lambda timeout | Polling system | Retry with new Lambda | 1 minute |
-| Processing stuck | ProcessingStatus check | Reset to pending | 5 minutes |
-| Orphaned segments | EndTime exceeded | Mark exceptional | 2 minutes |
-| Queue message loss | Poller scan | Re-queue segment | 1 minute |
-| DLQ overflow | CloudWatch alarm | Manual intervention | N/A |
+| Failure Type              | Detection              | Recovery                   | Maximum Recovery Time |
+| ------------------------- | ---------------------- | -------------------------- | --------------------- |
+| Client crash/network loss | Next API call          | Automatic GameMode cleanup | Immediate             |
+| Lambda timeout            | Polling system         | Retry with new Lambda      | 1 minute              |
+| Processing stuck          | ProcessingStatus check | Reset to pending           | 5 minutes             |
+| Orphaned segments         | EndTime exceeded       | Mark exceptional           | 2 minutes             |
+| Queue message loss        | Poller scan            | Re-queue segment           | 1 minute              |
+| DLQ overflow              | CloudWatch alarm       | Manual intervention        | N/A                   |
 
 **Protection Mechanisms:**
 
@@ -610,28 +622,33 @@ The system uses DynamoDB conditional writes to ensure atomic state transitions a
 ## Performance Optimization
 
 **Database:**
+
 - Pay-per-request DynamoDB pricing (no capacity planning)
 - GSI for efficient secondary access patterns
 - Conditional writes prevent race conditions
 
 **Lambda:**
+
 - Cold start caching of archetype data
 - Shared dependency layer
 - 128MB memory, 30-second timeout
 - Post-deployment code updates from S3
 
 **Queue:**
+
 - Batch processing via SQS
 - Auto-disable polling when inactive
 - Immediate mechanical segment processing
 
 **Client:**
+
 - Front-loaded outcome calculation
 - Server-authoritative state (no client sync)
 - IndexedDB caching reduces API calls by 90%
 - Two-tier item loading strategy
 
 **IndexedDB Cache Domains:**
+
 - **Stories**: Historical preservation for offline access
 - **Characters**: Field-level updates (60+ calls/hour → 5-10)
 - **Items**: Prototype caching with memory layer
@@ -641,22 +658,26 @@ See [Incremental Design](incremental-design.md#indexeddb-cache-layer-integration
 ## Security Considerations
 
 **Authentication:**
+
 - Cognito User Pool (`eidolon-users`)
 - API Gateway Cognito authorizer
 - JWT validation on protected endpoints
 
 **IAM:**
+
 - Shared execution role: `eidolon-lambda-execution-role`
 - Managed policies only (no inline)
 - Least privilege per stack
 - Fixed logical IDs prevent recreation
 
 **CORS:**
+
 - Lambda-level validation
 - Environment variable configuration
 - Credentials support
 
 **State Protection:**
+
 - GameMode modifications restricted to authorized Lambdas
 - Conditional updates prevent race conditions
 - ProcessingStatus ensures single processing
@@ -665,11 +686,13 @@ See [Incremental Design](incremental-design.md#indexeddb-cache-layer-integration
 ## Monitoring and Observability
 
 **CloudWatch Integration:**
+
 - All Lambda functions log to CloudWatch
 - Structured logging with correlation IDs
 - Error tracking with stack traces
 
 **Metrics:**
+
 - Lambda: Duration, errors, throttles
 - DynamoDB: Read/write capacity, throttles
 - SQS: Message age, DLQ depth

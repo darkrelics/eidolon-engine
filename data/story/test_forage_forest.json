@@ -75,9 +75,7 @@
           "Narrative": "You struggle to identify edible plants in the dappled shadows cast by the canopy above. After much searching through the soft moss beneath your feet, you eventually spot some common berries growing near where the path forms a green tunnel into the forest. Better than nothing.",
           "Effects": {
             "Room": 2,
-            "Items": [
-              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7}
-            ]
+            "Items": [{ "ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7 }]
           },
           "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
         },
@@ -85,9 +83,7 @@
           "Narrative": "Your trained eye spots several promising foraging locations around the glade entrance. As birds sing in the branches and the scent of flowers fills your lungs, you gather quality berries from the moss-covered ground. You note the direction of other potential finds where the forest path leads deeper into the cool, damp woods.",
           "Effects": {
             "Room": 2,
-            "Items": [
-              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.9}
-            ]
+            "Items": [{ "ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.9 }]
           },
           "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
         },
@@ -96,8 +92,8 @@
           "Effects": {
             "Room": 2,
             "Items": [
-              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 1.0},
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+              { "ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 1.0 },
+              { "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6 }
             ]
           },
           "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
@@ -155,9 +151,7 @@
         "Failure": {
           "Narrative": "The babbling brook's tranquil beauty proves deceptive - the banks are treacherous and the moisture makes identification difficult. After slipping several times and finding little of value, you carefully retreat back to the path decision. Perhaps the ancient oak would be a better choice, or you could try the brook again more carefully.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 2
           },
           "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
@@ -165,13 +159,9 @@
         "Minimal": {
           "Narrative": "The babbling brook meanders peacefully through the trees, its clear waters sparkling invitingly, but the slippery rocks along the banks make foraging challenging. You manage to gather some wild vegetables from the moist soil, though you take several painful tumbles in the process.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 5,
-            "Items": [
-              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.5}
-            ]
+            "Items": [{ "ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.5 }]
           },
           "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
         },
@@ -180,8 +170,8 @@
           "Effects": {
             "Room": 5,
             "Items": [
-              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.8},
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+              { "ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.8 },
+              { "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6 }
             ]
           },
           "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
@@ -191,9 +181,9 @@
           "Effects": {
             "Room": 5,
             "Items": [
-              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.9},
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.8},
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.5}
+              { "ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.9 },
+              { "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.8 },
+              { "ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.5 }
             ]
           },
           "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
@@ -227,9 +217,7 @@
         "Failure": {
           "Narrative": "Despite the oak's promise - its massive trunk twisted and gnarled by centuries of growth - the area beneath proves overgrown and difficult to navigate. Thorny undergrowth hidden beneath the carpet of leaves scratches you repeatedly. You find nothing of value and retreat back to the path decision. Perhaps the babbling brook would be better, or you could try the oak area again with more care.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 2
           },
           "NextSegmentID": "7f8a9b0c-1d2e-4f5a-9b0c-1d2e3f4a5b6c"
@@ -237,13 +225,9 @@
         "Minimal": {
           "Narrative": "The ancient oak stands as a sentinel, its widespread branches providing shade over the soft carpet of leaves and acorns below. You struggle to identify the mushrooms growing around the massive, time-gnarled trunk, settling for only the most obvious edible specimens. Hidden thorns leave you with several scratches.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 4,
-            "Items": [
-              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.5}
-            ]
+            "Items": [{ "ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.5 }]
           },
           "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
         },
@@ -252,8 +236,8 @@
           "Effects": {
             "Room": 4,
             "Items": [
-              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7},
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7}
+              { "ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7 },
+              { "ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7 }
             ]
           },
           "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
@@ -263,9 +247,9 @@
           "Effects": {
             "Room": 4,
             "Items": [
-              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.9},
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.9},
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+              { "ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.9 },
+              { "ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.9 },
+              { "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6 }
             ]
           },
           "NextSegmentID": "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f"
@@ -307,9 +291,7 @@
           "Narrative": "The tranquil mossy grove's ethereal atmosphere is both beautiful and challenging. As the hum of insects fills the air and sunlight breaks through in patches, you carefully gather what you can identify with certainty. The thick moss and shadows make identification difficult, but you manage to find some basic berries and herbs before searching for other treasures hidden here.",
           "Effects": {
             "Room": 7,
-            "Items": [
-              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7}
-            ]
+            "Items": [{ "ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7 }]
           },
           "NextSegmentID": "3e4f5a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b"
         },
@@ -318,8 +300,8 @@
           "Effects": {
             "Room": 7,
             "Items": [
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7},
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
+              { "ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7 },
+              { "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6 }
             ]
           },
           "NextSegmentID": "3e4f5a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b"
@@ -329,8 +311,8 @@
           "Effects": {
             "Room": 7,
             "Items": [
-              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.8},
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.8}
+              { "ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.8 },
+              { "ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.8 }
             ]
           },
           "NextSegmentID": "3e4f5a6b-7c8d-9e0f-1a2b-3c4d5e6f7a8b"
@@ -372,9 +354,7 @@
           "Narrative": "You carefully investigate the mossy grove, and your persistence pays off slightly. The thick moss blanketing the floor conceals a few missed berries, and the scent of damp earth leads you to one additional medicinal herb growing in a shadowed corner. The peaceful haven yields a bit more before you continue your journey.",
           "Effects": {
             "Room": 7,
-            "Items": [
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
-            ]
+            "Items": [{ "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6 }]
           },
           "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
         },
@@ -383,8 +363,8 @@
           "Effects": {
             "Room": 7,
             "Items": [
-              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7},
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.7}
+              { "ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7 },
+              { "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.7 }
             ]
           },
           "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
@@ -393,9 +373,7 @@
           "Narrative": "Your exceptional investigation uncovers the grove's greatest secret! In one perfect shaft of light breaking through the canopy, casting an ethereal glow on the thick moss, you discover a legendary moonpetal flower - a treasure most foragers will never see in their lifetime! The tranquil atmosphere, the hum of insects, and the scent of damp earth all seem to celebrate this remarkable find. This peaceful haven has revealed its ultimate gift to you.",
           "Effects": {
             "Room": 7,
-            "Items": [
-              {"ItemID": "2b9a4f6e-7d8c-9b3d-f0a4-1a6b3d7e4f8b", "Chance": 0.4}
-            ]
+            "Items": [{ "ItemID": "2b9a4f6e-7d8c-9b3d-f0a4-1a6b3d7e4f8b", "Chance": 0.4 }]
           },
           "NextSegmentID": "5d6e7f8a-9b0c-4d1e-2f3a-4b5c6d7e8f9a"
         }
@@ -428,10 +406,7 @@
         "Failure": {
           "Narrative": "The path leads you into the damp gully filled with lush ferns, but the demanding journey saps your remaining strength. The cool, moist air and scent of decay seem oppressive rather than refreshing. Despite the otherworldly glow as sunlight filters through the canopy, you're too exhausted and discouraged to continue. You abandon your expedition and make your way back home.",
           "Effects": {
-            "Wounds": [
-              "bashing",
-              "bashing"
-            ],
+            "Wounds": ["bashing", "bashing"],
             "Room": 1
           },
           "NextSegmentID": null
@@ -439,13 +414,9 @@
         "Minimal": {
           "Narrative": "The fern gully's delicate fronds create a sea of green that makes navigation difficult. The cool, moist air and occasional drip of water add to the challenge, but you push through with determination. In the otherworldly glow created by filtered sunlight, you manage to gather a few medicinal herbs before exhaustion sets in.",
           "Effects": {
-            "Wounds": [
-              "bashing"
-            ],
+            "Wounds": ["bashing"],
             "Room": 9,
-            "Items": [
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6}
-            ]
+            "Items": [{ "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.6 }]
           },
           "NextSegmentID": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b"
         },
@@ -454,8 +425,8 @@
           "Effects": {
             "Room": 9,
             "Items": [
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.8},
-              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7}
+              { "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.8 },
+              { "ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.7 }
             ]
           },
           "NextSegmentID": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b"
@@ -465,9 +436,9 @@
           "Effects": {
             "Room": 9,
             "Items": [
-              {"ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.9},
-              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7},
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.6}
+              { "ItemID": "8d5f0b2e-3c4a-5d9f-b6e0-7c2e9f3a0b4d", "Chance": 0.9 },
+              { "ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.7 },
+              { "ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.6 }
             ]
           },
           "NextSegmentID": "6e7f8a9b-0c1d-4e2f-3a4b-5c6d7e8f9a0b"
@@ -509,9 +480,7 @@
           "Narrative": "Hidden among the trees, you discover the abandoned campsite. A fire pit, now cold and overgrown, sits at the center surrounded by crude shelter remains. Where the old garden once stood, you find a few wild vegetables still growing. The site whispers of past adventurers as you gather these forgotten supplies - a decent end to your foraging journey, though you can't help but wonder about the untold stories this place holds.",
           "Effects": {
             "Room": 10,
-            "Items": [
-              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.6}
-            ]
+            "Items": [{ "ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.6 }]
           },
           "NextSegmentID": null
         },
@@ -520,8 +489,8 @@
           "Effects": {
             "Room": 10,
             "Items": [
-              {"ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.8},
-              {"ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.7}
+              { "ItemID": "7c4e9a1f-2d3b-4c8e-a5f9-6b1d8e2f9a3c", "Chance": 0.8 },
+              { "ItemID": "0f7e2d4c-5b6a-7f1b-d8e2-9e4f1b5c2d6f", "Chance": 0.7 }
             ]
           },
           "NextSegmentID": null
@@ -531,8 +500,8 @@
           "Effects": {
             "Room": 10,
             "Items": [
-              {"ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.8},
-              {"ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7}
+              { "ItemID": "9e6f1c3d-4a5b-6e0a-c7f1-8d3f0a4b1c5e", "Chance": 0.8 },
+              { "ItemID": "1a8f3e5d-6c7b-8a2c-e9f3-0f5a2c6d3e7a", "Chance": 0.7 }
             ]
           },
           "NextSegmentID": null

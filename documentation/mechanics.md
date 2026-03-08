@@ -5,6 +5,7 @@
 This document describes the complete game mechanics and experience system specification for the Eidolon Engine. This specification applies to both MUD and Incremental game modes.
 
 **Implementation:**
+
 - MUD Server (Go): server/experience.go - ResolveOpposedCheckWithXP, ResolveStaticCheckWithXP
 - Incremental (Python): eidolon/mechanics.py - resolve_opposed_check_with_xp, calculate_skill_increase
 
@@ -56,7 +57,6 @@ The `Outcome` struct provides:
 The system uses a normal distribution with two key transformations:
 
 1. **Mean Shift (μ)**: Based on the rating difference (Δ = aggressor - defender)
-
    - μ = kShift × Δ
    - Shifts the probability curve to favor the higher-rated participant
 
@@ -69,6 +69,7 @@ The system uses a normal distribution with two key transformations:
 The mechanics system integrates with the experience system to provide character progression. Mathematical formulas, experience calculations, and implementation constants are documented in the sections below.
 
 **Implementation Files:**
+
 - Go (MUD): server/experience.go
 - Python (Incremental): eidolon/mechanics.py
 - Constants: eidolon/constants.py (shared values)
@@ -197,7 +198,6 @@ Located in `eidolon/constants.py`:
 The failure penalty varies based on challenge difficulty relative to character capability:
 
 - **When S > D** (character stronger than challenge): **0% XP on failure**
-
   - Rationale: Failing an easy task provides no learning opportunity
   - Example: S=8, D=5, failed → 0 XP
 

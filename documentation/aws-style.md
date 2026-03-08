@@ -126,7 +126,7 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str):
 - Use ARM-based Graviton2 processors where compatible
 - Implement appropriate timeout values to prevent runaway costs
 
-### 8. Security Standards
+### 7. Security Standards
 
 #### Data Handling Style
 
@@ -135,17 +135,17 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str):
 - Environment variables for non-sensitive configuration
 - Implement least-privilege IAM with managed policies
 
-### 9. Resource Tagging Standards
+### 8. Resource Tagging Standards
 
 All resources must include:
 
 ```yaml
 Tags:
-  - Key: Project
+  - Key: System
     Value: eidolon
 ```
 
-### 10. Code Quality Standards
+### 9. Code Quality Standards
 
 #### General Guidelines
 

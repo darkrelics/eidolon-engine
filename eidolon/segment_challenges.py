@@ -7,6 +7,8 @@ Provides functions for processing skill challenges and determining outcomes.
 import math
 import random
 
+from eidolon.constants import SIGMA_CRITICAL_FAILURE, SIGMA_DEATH_AVG, SIGMA_FAILURE, SIGMA_MINIMAL, SIGMA_NORMAL
+
 
 def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
     """
@@ -89,8 +91,8 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
             if sigma > best_sigma:
                 best_sigma = sigma
 
-            # Track critical failures
-            if sigma < -2.0:
+            # Track critical failures (any sigma <= SIGMA_CRITICAL_FAILURE causes death per design doc)
+            if sigma <= SIGMA_CRITICAL_FAILURE:
                 critical_failures += 1
 
             total_attempts += 1
@@ -118,14 +120,14 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
     avg_sigma = total_sigma / total_attempts
 
-    # Map sigma values to story outcomes
-    if critical_failures >= 2 or avg_sigma < -2.0:
+    # Map sigma values to story outcomes (per design doc incremental-design.md)
+    if critical_failures >= 1 or avg_sigma < SIGMA_DEATH_AVG:
         outcome = "death"
-    elif avg_sigma < -1.0:
+    elif avg_sigma < SIGMA_FAILURE:
         outcome = "failure"
-    elif avg_sigma < 0:
+    elif avg_sigma < SIGMA_MINIMAL:
         outcome = "minimal"
-    elif avg_sigma < 1.0:
+    elif avg_sigma < SIGMA_NORMAL:
         outcome = "normal"
     else:
         outcome = "exceptional"

@@ -42,7 +42,7 @@ class CodeBuildStack(Stack):
         self.github_branch = github_branch
         super().__init__(scope, stack_id, **kwargs)
         # Apply system tag to all resources in this stack
-        Tags.of(self).add("System", "Eidolon")
+        Tags.of(self).add("System", "eidolon")
 
         # Import existing bucket or create new one with fixed logical ID
         if bucket_exists:
