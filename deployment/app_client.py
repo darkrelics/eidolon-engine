@@ -23,7 +23,7 @@ client_host = app.node.try_get_context("client_host") or "portal"
 client_bucket = app.node.try_get_context("client_bucket") or ""
 api_url = app.node.try_get_context("api_url") or f"https://{api_host}.{domain}"
 deployment_mode = app.node.try_get_context("deployment_mode") or "hybrid"
-github_owner = app.node.try_get_context("github_owner") or "robinje"
+github_owner = app.node.try_get_context("github_owner") or "darkrelics"
 github_repo = app.node.try_get_context("github_repo") or "eidolon-engine"
 github_branch = app.node.try_get_context("github_branch") or "develop"
 

@@ -8,7 +8,7 @@ app = cdk.App()
 # Get parameters from context
 region = app.node.try_get_context("region") or "us-east-1"
 s3_bucket = app.node.try_get_context("s3_bucket") or ""
-github_owner = app.node.try_get_context("github_owner") or "robinje"
+github_owner = app.node.try_get_context("github_owner") or "darkrelics"
 github_repo = app.node.try_get_context("github_repo") or "eidolon-engine"
 github_branch = app.node.try_get_context("github_branch") or "develop"
 bucket_exists = app.node.try_get_context("bucket_exists") == "true"

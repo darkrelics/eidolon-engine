@@ -41,7 +41,7 @@ class DeploymentParams:
     s3_bucket: str = ""
     scripts_bucket: str = ""
     client_bucket: str = ""
-    github_owner: str = "robinje"
+    github_owner: str = "darkrelics"
     github_repo: str = "eidolon-engine"
     github_branch: str = "develop"
     domain: str = "darkrelics.net"

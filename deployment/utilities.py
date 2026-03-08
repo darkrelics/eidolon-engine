@@ -1,5 +1,6 @@
 """Utility functions for deployment scripts."""
 
+import shutil
 import subprocess
 import traceback
 from functools import cache
@@ -55,15 +56,20 @@ def verify_aws_credentials() -> bool:
 
 def verify_cdk_installed() -> bool:
     """Check if AWS CDK is installed."""
+    cdk_path = shutil.which("cdk")
+    if not cdk_path:
+        print("Error: AWS CDK is not installed")
+        print("Install it with: npm install -g aws-cdk")
+        return False
+
     try:
-        result = subprocess.run(["cdk", "--version"], capture_output=True, text=True, check=False)
+        result = subprocess.run([cdk_path, "--version"], capture_output=True, text=True, check=False)
         if result.returncode == 0:
             print(f"CDK Version: {result.stdout.strip()}")
             return True
-        else:
-            print("Error: AWS CDK is not installed")
-            print("Install it with: npm install -g aws-cdk")
-            return False
+        print("Error: AWS CDK is not installed")
+        print("Install it with: npm install -g aws-cdk")
+        return False
     except FileNotFoundError:
         print("Error: AWS CDK is not installed")
         print("Install it with: npm install -g aws-cdk")
@@ -337,8 +343,11 @@ def run_cdk_deploy(stack_name: str, region: str, app_command: str, context_args=
 
     context_args = context_args or []
 
+    # Resolve cdk path for Windows compatibility (subprocess needs full path for .cmd shims)
+    cdk_path = shutil.which("cdk") or "cdk"
+
     # Build CDK command with context arguments
-    cdk_command = ["cdk", "deploy", stack_name, "--require-approval", "never", "--region", region, "--app", app_command]
+    cdk_command = [cdk_path, "deploy", stack_name, "--require-approval", "never", "--region", region, "--app", app_command]
 
     # Add context arguments
     cdk_command.extend(context_args)

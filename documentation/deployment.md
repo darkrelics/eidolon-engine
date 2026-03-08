@@ -16,6 +16,7 @@ This guide explains how to deploy the Eidolon Engine infrastructure using the mo
 Before running deployment, verify these requirements:
 
 ### Required Infrastructure
+
 - [ ] AWS CLI configured with appropriate IAM permissions
 - [ ] AWS CDK CLI installed (`npm install -g aws-cdk`)
 - [ ] CDK bootstrapped in target region (`cdk bootstrap aws://ACCOUNT-ID/REGION`)
@@ -23,6 +24,7 @@ Before running deployment, verify these requirements:
 - [ ] Route53 hosted zone configured for your domain
 
 ### Required Permissions (IAM)
+
 - [ ] CloudFormation: CreateStack, UpdateStack, DeleteStack, DescribeStacks
 - [ ] S3: CreateBucket, PutObject, GetObject, ListBucket
 - [ ] Lambda: CreateFunction, UpdateFunctionCode, AddPermission
@@ -34,6 +36,7 @@ Before running deployment, verify these requirements:
 - [ ] Route53: ChangeResourceRecordSets
 
 ### Configuration Files
+
 - [ ] `config.yml` exists with valid settings (or use environment variables)
 - [ ] Cognito User Pool ARN available (for API authentication)
 
@@ -187,7 +190,7 @@ All deployment parameters can be set via environment variables to enable automat
 | `EIDOLON_S3_BUCKET`       | S3 artifacts bucket name            | Yes         | `eidolon-artifacts-prod` |
 | `EIDOLON_SCRIPTS_BUCKET`  | S3 scripts bucket (mud/hybrid only) | Conditional | `eidolon-scripts-prod`   |
 | `EIDOLON_CLIENT_BUCKET`   | S3 client bucket for portal         | Yes         | `eidolon-portal-prod`    |
-| `GITHUB_OWNER`            | GitHub repository owner             | No          | `robinje`                |
+| `GITHUB_OWNER`            | GitHub repository owner             | No          | `darkrelics`             |
 | `GITHUB_REPO`             | GitHub repository name              | No          | `eidolon-engine`         |
 | `GITHUB_BRANCH`           | GitHub branch to deploy             | No          | `develop`                |
 | `EIDOLON_DOMAIN`          | Base domain for services            | Yes         | `darkrelics.net`         |

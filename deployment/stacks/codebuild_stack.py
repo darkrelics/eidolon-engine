@@ -16,7 +16,7 @@ class CodeBuildStack(Stack):
         stack_id: str,
         region_name: str = "us-east-1",
         s3_bucket: str = "",
-        github_owner: str = "robinje",
+        github_owner: str = "darkrelics",
         github_repo: str = "eidolon-engine",
         github_branch: str = "develop",
         bucket_exists: bool = False,
