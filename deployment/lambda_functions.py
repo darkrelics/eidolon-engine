@@ -83,6 +83,18 @@ def verify_lambda_deployment(params) -> dict:
     return validation
 
 
+def check_iam_policy_exists(iam_client, policy_arn: str) -> bool:
+    """Check if an IAM policy exists. Returns False if not found, raises on other errors."""
+    try:
+        iam_client.get_policy(PolicyArn=policy_arn)
+        return True
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code == "NoSuchEntity":
+            return False
+        raise
+
+
 def attach_story_policy_to_lambda_role(params, state: CDKState) -> bool:
     """Attach Story policy to shared Lambda execution role using boto3.
 
@@ -113,18 +125,15 @@ def attach_story_policy_to_lambda_role(params, state: CDKState) -> bool:
     try:
         iam_client = boto3.client("iam", region_name=params.region)
 
-        # Check if story policy exists
-        try:
-            iam_client.get_policy(PolicyArn=f"arn:aws:iam::{params.account_id}:policy/eidolon-story-policy")
-        except ClientError:
+        story_policy_arn = f"arn:aws:iam::{params.account_id}:policy/eidolon-story-policy"
+        if not check_iam_policy_exists(iam_client, story_policy_arn):
             print("  [INFO] Story policy not yet created, skipping attachment")
             return True
 
         # Get current attached policies
         response = iam_client.list_attached_role_policies(RoleName=role_name)
-        attached_policies = [p["PolicyArn"] for p in response.get("AttachedManagedPolicies", [])]
+        attached_policies = [p.get("PolicyArn", "") for p in response.get("AttachedManagedPolicies", [])]
 
-        story_policy_arn = f"arn:aws:iam::{params.account_id}:policy/eidolon-story-policy"
         if story_policy_arn in attached_policies:
             print(f"  [OK] Story policy already attached to {role_name}")
             return True
@@ -174,20 +183,14 @@ def ensure_dynamodb_policy_attached(params, state: CDKState) -> bool:
     try:
         iam_client = boto3.client("iam", region_name=params.region)
 
-        # Check if DynamoDB policy exists
         dynamodb_policy_arn = f"arn:aws:iam::{params.account_id}:policy/eidolon-dynamodb-policy"
-        try:
-            iam_client.get_policy(PolicyArn=dynamodb_policy_arn)
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "NoSuchEntity":
-                print("  [INFO] DynamoDB policy not yet created, skipping attachment")
-                return True
-            raise
+        if not check_iam_policy_exists(iam_client, dynamodb_policy_arn):
+            print("  [INFO] DynamoDB policy not yet created, skipping attachment")
+            return True
 
         # Get current attached policies
         response = iam_client.list_attached_role_policies(RoleName=role_name)
-        attached_policies = [p["PolicyArn"] for p in response.get("AttachedManagedPolicies", [])]
+        attached_policies = [p.get("PolicyArn", "") for p in response.get("AttachedManagedPolicies", [])]
 
         if dynamodb_policy_arn in attached_policies:
             print(f"  [OK] DynamoDB policy already attached to {role_name}")
@@ -207,6 +210,15 @@ def ensure_dynamodb_policy_attached(params, state: CDKState) -> bool:
         return False
 
 
+def check_s3_object_exists(s3_client, bucket: str, key: str) -> bool:
+    """Check if an S3 object exists."""
+    try:
+        s3_client.head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError:
+        return False
+
+
 def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, state_path: Path) -> bool:
     """Deploy and verify Lambda stack."""
     phase = get_stack_phase_number("lambda", params.deployment_mode)
@@ -218,36 +230,31 @@ def deploy_lambda(params, _config: Config, state: CDKState, _config_path: Path, 
     try:
         s3 = boto3.client("s3", region_name=params.region)
         s3.head_bucket(Bucket=params.s3_bucket)
-
-        # Check if Lambda layer artifact exists
-        print("\nChecking for Lambda layer artifact...")
-        artifacts_exist = False
-        try:
-            s3.head_object(Bucket=params.s3_bucket, Key="lambda-layer/lambda-layer.zip")
-            print("Lambda layer artifact found")
-            artifacts_exist = True
-        except ClientError:
-            print("Lambda layer artifact missing")
-
-        if not artifacts_exist:
-            print("\nLambda layer artifact missing. Running CodeBuild to create it...")
-            build_success = execute_lambda_builds(params.region)
-
-            if not build_success:
-                print("\nError: Failed to build Lambda artifacts")
-                return False
-
-            # Verify artifact was created
-            try:
-                s3.head_object(Bucket=params.s3_bucket, Key="lambda-layer/lambda-layer.zip")
-                print("Lambda layer artifact created")
-            except ClientError:
-                print("\nError: Build succeeded but layer artifact still missing")
-                return False
     except ClientError:
         print(f"\nError: S3 bucket {params.s3_bucket} not accessible")
         print("Please ensure CodeBuild stack has been deployed")
         return False
+
+    # Check if Lambda layer artifact exists
+    print("\nChecking for Lambda layer artifact...")
+    artifacts_exist = check_s3_object_exists(s3, params.s3_bucket, "lambda-layer/lambda-layer.zip")
+    if artifacts_exist:
+        print("Lambda layer artifact found")
+    else:
+        print("Lambda layer artifact missing")
+        print("\nLambda layer artifact missing. Running CodeBuild to create it...")
+        build_success = execute_lambda_builds(params.region)
+
+        if not build_success:
+            print("\nError: Failed to build Lambda artifacts")
+            return False
+
+        # Verify artifact was created
+        if check_s3_object_exists(s3, params.s3_bucket, "lambda-layer/lambda-layer.zip"):
+            print("Lambda layer artifact created")
+        else:
+            print("\nError: Build succeeded but layer artifact still missing")
+            return False
 
     # Deploy stack
     result = deploy_lambda_stack(params)
@@ -310,7 +317,7 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
         if not response.get("LayerVersions"):
             print("  [ERROR] No layer versions found for eidolon-dependencies")
             return False
-        new_layer_arn = response["LayerVersions"][0]["LayerVersionArn"]
+        new_layer_arn = response.get("LayerVersions", [{}])[0].get("LayerVersionArn", "")
         print(f"  [OK] Using layer version: {new_layer_arn}")
     except ClientError as err:
         print(f"  [ERROR] Failed to get layer version: {err}")
@@ -368,14 +375,14 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
         failed_functions: set[str] = set()
 
         for function_name in lambda_functions:
-            state = function_states[function_name]
+            state = function_states.get(function_name, {})
 
             # Skip functions that were never deployed
-            if state["skipped"]:
+            if state.get("skipped", False):
                 continue
 
             # Skip functions that already finished successfully
-            if state["code_updated"] and state["layer_updated"]:
+            if state.get("code_updated", False) and state.get("layer_updated", False):
                 continue
 
             print(f"  Updating {function_name}...")
@@ -396,7 +403,7 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
             needs_layer_update = not any(layer.get("Arn") == new_layer_arn for layer in current_layers)
 
             # Update function code if needed
-            if not state["code_updated"]:
+            if not state.get("code_updated", False):
                 try:
                     lambda_client.update_function_code(
                         FunctionName=function_name,
@@ -437,7 +444,7 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
                     print(f"    [ERROR] Failed to update {function_name} layer: {err}")
                     failed_functions.add(function_name)
 
-        retry_candidates = [f for f in failed_functions if not function_states[f]["skipped"]]
+        retry_candidates = [f for f in failed_functions if not function_states.get(f, {}).get("skipped", False)]
         if not retry_candidates:
             break
 
@@ -451,12 +458,12 @@ def update_lambda_functions_directly(params, region: str, s3_bucket: str) -> boo
             print(f"  [ERROR] {len(retry_candidates)} functions still pending after {max_attempts} attempts")
 
     # Summary
-    updated_count = sum(1 for state in function_states.values() if state["code_updated"] and state["layer_updated"])
-    skipped_count = sum(1 for state in function_states.values() if state["skipped"])
+    updated_count = sum(1 for state in function_states.values() if state.get("code_updated", False) and state.get("layer_updated", False))
+    skipped_count = sum(1 for state in function_states.values() if state.get("skipped", False))
     failed_functions_final = [
         function_name
         for function_name, state in function_states.items()
-        if not state["skipped"] and not (state["code_updated"] and state["layer_updated"])
+        if not state.get("skipped", False) and not (state.get("code_updated", False) and state.get("layer_updated", False))
     ]
     failed_count = len(failed_functions_final)
 

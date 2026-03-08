@@ -81,7 +81,7 @@ def get_lambda_function_arns(region: str) -> dict:
     for function_name in api_functions:
         try:
             response = lambda_client.get_function(FunctionName=function_name)
-            function_arns[function_name] = response["Configuration"]["FunctionArn"]
+            function_arns[function_name] = response.get("Configuration", {}).get("FunctionArn", "")
         except ClientError:
             # Function doesn't exist yet - that's ok
             pass
@@ -146,10 +146,11 @@ def deploy_api_stack(params, state: CDKState, allow_empty_lambdas: bool = False)
         context_args.extend(["-c", f"lambda_arns={json.dumps(lambda_arns)}"])
 
     # Add Cognito settings from state
-    if state.stacks.get("player", {}).get("outputs", {}).get("UserPoolId"):
-        context_args.extend(["-c", f"cognito_user_pool_id={state.stacks['player']['outputs']['UserPoolId']}"])
-        context_args.extend(["-c", f"cognito_client_id={state.stacks['player']['outputs']['UserPoolClientId']}"])
-        context_args.extend(["-c", f"cognito_user_pool_arn={state.stacks['player']['outputs']['UserPoolArn']}"])
+    player_outputs = state.stacks.get("player", {}).get("outputs", {})
+    if player_outputs.get("UserPoolId"):
+        context_args.extend(["-c", f"cognito_user_pool_id={player_outputs.get('UserPoolId', '')}"])
+        context_args.extend(["-c", f"cognito_client_id={player_outputs.get('UserPoolClientId', '')}"])
+        context_args.extend(["-c", f"cognito_user_pool_arn={player_outputs.get('UserPoolArn', '')}"])
 
     app_command = "python3 app_api.py"
     return run_cdk_deploy("api", params.region, app_command, context_args)

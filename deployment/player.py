@@ -214,16 +214,16 @@ def get_shared_resources(params, state: CDKState) -> dict:
             print("  Using Lambda role ARN from state")
 
     # If not in state, try to get from Lambda stack CloudFormation outputs
-    if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
+    if not resources.get("lambda_layer_arn") or not resources.get("lambda_role_arn"):
         try:
             lambda_outputs = extract_stack_outputs("lambda", params.region)
 
-            if not resources["lambda_layer_arn"] and lambda_outputs.get("LambdaLayerArn"):
-                resources["lambda_layer_arn"] = lambda_outputs["LambdaLayerArn"]
+            if not resources.get("lambda_layer_arn") and lambda_outputs.get("LambdaLayerArn"):
+                resources["lambda_layer_arn"] = lambda_outputs.get("LambdaLayerArn", "")
                 print("  Using Lambda layer ARN from Lambda stack outputs")
 
-            if not resources["lambda_role_arn"] and lambda_outputs.get("LambdaRoleArn"):
-                resources["lambda_role_arn"] = lambda_outputs["LambdaRoleArn"]
+            if not resources.get("lambda_role_arn") and lambda_outputs.get("LambdaRoleArn"):
+                resources["lambda_role_arn"] = lambda_outputs.get("LambdaRoleArn", "")
                 print("  Using Lambda role ARN from Lambda stack outputs")
         except Exception as e:
             print(f"  Warning: Could not get shared resources from Lambda stack: {e}")
@@ -243,7 +243,7 @@ def get_cognito_player_new_arn(region: str) -> str:
     try:
         lambda_client = boto3.client("lambda", region_name=region)
         response = lambda_client.get_function(FunctionName="cognito-player-new")
-        arn = response["Configuration"]["FunctionArn"]
+        arn = response.get("Configuration", {}).get("FunctionArn", "")
         return arn
     except ClientError as err:
         error_code = err.response.get("Error", {}).get("Code", "")
@@ -297,9 +297,9 @@ def deploy_player_stack(params, state: CDKState) -> dict:
         "-c",
         f"dynamodb_tables={tables_json}",
         "-c",
-        f"lambda_layer_arn={resources['lambda_layer_arn']}",
+        f"lambda_layer_arn={resources.get('lambda_layer_arn', '')}",
         "-c",
-        f"lambda_role_arn={resources['lambda_role_arn']}",
+        f"lambda_role_arn={resources.get('lambda_role_arn', '')}",
         "-c",
         f"reply_email={params.reply_email}",
     ]
@@ -428,6 +428,15 @@ def verify_user_pool_trigger_configuration(user_pool_id: str, expected_lambda_ar
     return trigger_ok, permissions_ok
 
 
+def remove_cognito_invoke_permission(lambda_client) -> None:
+    """Remove existing Cognito invoke permission if it exists."""
+    try:
+        lambda_client.remove_permission(FunctionName="cognito-player-new", StatementId="CognitoInvokePermission")
+        print("  [INFO] Removed existing Lambda permission")
+    except ClientError:
+        pass  # Permission doesn't exist, which is fine
+
+
 def configure_lambda_permissions_and_verify(user_pool_id: str, lambda_arn: str, region: str) -> bool:
     """Configure Lambda permissions and verify User Pool trigger configuration.
 
@@ -442,58 +451,52 @@ def configure_lambda_permissions_and_verify(user_pool_id: str, lambda_arn: str, 
     Returns:
         True if permissions configured and trigger verified successfully
     """
+    # STEP 1: PERMISSIONS - Ensure Lambda has permission to be invoked by Cognito
+    # This is needed even if the trigger is already configured, as permissions can be lost
+    # when Lambda functions are redeployed or recreated
+    print("  Configuring Lambda invoke permissions...")
+    lambda_client = boto3.client("lambda", region_name=region)
+
     try:
-        # STEP 1: PERMISSIONS - Ensure Lambda has permission to be invoked by Cognito
-        # This is needed even if the trigger is already configured, as permissions can be lost
-        # when Lambda functions are redeployed or recreated
-        print("  Configuring Lambda invoke permissions...")
-        lambda_client = boto3.client("lambda", region_name=region)
         sts_client = boto3.client("sts")
-        account_id = sts_client.get_caller_identity()["Account"]
-
-        try:
-            # First, try to remove any existing permission to avoid conflicts
-            try:
-                lambda_client.remove_permission(FunctionName="cognito-player-new", StatementId="CognitoInvokePermission")
-                print("  [INFO] Removed existing Lambda permission")
-            except ClientError:
-                pass  # Permission doesn't exist, which is fine
-
-            # Now add the correct permission
-            lambda_client.add_permission(
-                FunctionName="cognito-player-new",
-                StatementId="CognitoInvokePermission",
-                Action="lambda:InvokeFunction",
-                Principal="cognito-idp.amazonaws.com",
-                SourceArn=f"arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id}",
-            )
-            print("  [OK] Lambda invoke permission granted to Cognito")
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code", "")
-            if error_code == "ResourceConflictException":
-                print("  [INFO] Permission already exists")
-            else:
-                print(f"  [ERROR] Could not add Lambda permission: {err}")
-                return False
-
-        # STEP 2: VERIFY - Confirm trigger and permissions are configured correctly
-        print("  Verifying trigger and permission configuration...")
-        trigger_ok, permissions_ok = verify_user_pool_trigger_configuration(user_pool_id, lambda_arn, region)
-
-        if trigger_ok and permissions_ok:
-            print("  [OK] Trigger and permissions verified successfully")
-            return True
-
-        if not trigger_ok:
-            print("  [ERROR] Trigger verification failed")
-        if not permissions_ok:
-            print("  [ERROR] Permissions verification failed")
-
-        return False
-
+        account_id = sts_client.get_caller_identity().get("Account", "")
     except ClientError as err:
-        print(f"  [ERROR] Failed to configure User Pool trigger: {err}")
+        print(f"  [ERROR] Failed to get AWS account ID: {err}")
         return False
+
+    remove_cognito_invoke_permission(lambda_client)
+
+    try:
+        lambda_client.add_permission(
+            FunctionName="cognito-player-new",
+            StatementId="CognitoInvokePermission",
+            Action="lambda:InvokeFunction",
+            Principal="cognito-idp.amazonaws.com",
+            SourceArn=f"arn:aws:cognito-idp:{region}:{account_id}:userpool/{user_pool_id}",
+        )
+        print("  [OK] Lambda invoke permission granted to Cognito")
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code == "ResourceConflictException":
+            print("  [INFO] Permission already exists")
+        else:
+            print(f"  [ERROR] Could not add Lambda permission: {err}")
+            return False
+
+    # STEP 2: VERIFY - Confirm trigger and permissions are configured correctly
+    print("  Verifying trigger and permission configuration...")
+    trigger_ok, permissions_ok = verify_user_pool_trigger_configuration(user_pool_id, lambda_arn, region)
+
+    if trigger_ok and permissions_ok:
+        print("  [OK] Trigger and permissions verified successfully")
+        return True
+
+    if not trigger_ok:
+        print("  [ERROR] Trigger verification failed")
+    if not permissions_ok:
+        print("  [ERROR] Permissions verification failed")
+
+    return False
 
 
 def verify_player_deployment(params) -> dict:
@@ -552,11 +555,11 @@ def deploy_player(params, config: Config, state: CDKState, config_path: Path, st
             print("\nConfiguring User Pool settings (trigger, auto-verify, email template)...")
 
             # Configure all settings together to prevent AWS from resetting values
-            settings_configured = configure_user_pool_settings(validation["user_pool_id"], lambda_arn, params.region)
+            settings_configured = configure_user_pool_settings(validation.get("user_pool_id", ""), lambda_arn, params.region)
 
             if settings_configured:
                 # Configure Lambda permissions and verify settings
-                trigger_configured = configure_lambda_permissions_and_verify(validation["user_pool_id"], lambda_arn, params.region)
+                trigger_configured = configure_lambda_permissions_and_verify(validation.get("user_pool_id", ""), lambda_arn, params.region)
                 if not trigger_configured:
                     print("  [ERROR] Failed to configure permissions or verify trigger - new user registration may not work")
                     print("  [ERROR] Deployment continuing with errors")

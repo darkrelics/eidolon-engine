@@ -40,16 +40,16 @@ def get_shared_resources(params, state: CDKState) -> dict:
             print("  Using Lambda role ARN from state")
 
     # If not in state, try to get from Lambda stack CloudFormation outputs
-    if not resources["lambda_layer_arn"] or not resources["lambda_role_arn"]:
+    if not resources.get("lambda_layer_arn") or not resources.get("lambda_role_arn"):
         try:
             lambda_outputs = extract_stack_outputs("lambda", params.region)
 
-            if not resources["lambda_layer_arn"] and lambda_outputs.get("LambdaLayerArn"):
-                resources["lambda_layer_arn"] = lambda_outputs["LambdaLayerArn"]
+            if not resources.get("lambda_layer_arn") and lambda_outputs.get("LambdaLayerArn"):
+                resources["lambda_layer_arn"] = lambda_outputs.get("LambdaLayerArn", "")
                 print("  Using Lambda layer ARN from Lambda stack outputs")
 
-            if not resources["lambda_role_arn"] and lambda_outputs.get("LambdaRoleArn"):
-                resources["lambda_role_arn"] = lambda_outputs["LambdaRoleArn"]
+            if not resources.get("lambda_role_arn") and lambda_outputs.get("LambdaRoleArn"):
+                resources["lambda_role_arn"] = lambda_outputs.get("LambdaRoleArn", "")
                 print("  Using Lambda role ARN from Lambda stack outputs")
         except Exception as e:
             print(f"  Warning: Could not get shared resources from Lambda stack: {e}")
@@ -88,9 +88,9 @@ def deploy_story_stack(params, state: CDKState) -> dict:
         "-c",
         f"dynamodb_tables={tables_json}",
         "-c",
-        f"lambda_layer_arn={resources['lambda_layer_arn']}",
+        f"lambda_layer_arn={resources.get('lambda_layer_arn', '')}",
         "-c",
-        f"lambda_role_arn={resources['lambda_role_arn']}",
+        f"lambda_role_arn={resources.get('lambda_role_arn', '')}",
     ]
 
     # App command is just the Python script, context goes to CDK
@@ -187,6 +187,28 @@ def validate_eventbridge_rule(rule_name: str, region: str) -> bool:
         return False
 
 
+def get_lambda_policy_statements(lambda_client, function_name: str) -> list:
+    """Get Lambda resource policy statements. Returns empty list if no policy exists."""
+    try:
+        response = lambda_client.get_policy(FunctionName=function_name)
+        policy = json.loads(response.get("Policy", "{}"))
+        return policy.get("Statement", [])
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code") != "ResourceNotFoundException":
+            raise
+        return []
+
+
+def remove_lambda_permission_safe(lambda_client, function_name: str, statement_id: str) -> None:
+    """Remove a Lambda permission by statement ID, ignoring if it does not exist."""
+    try:
+        lambda_client.remove_permission(FunctionName=function_name, StatementId=statement_id)
+        print(f"  Removed existing permission '{statement_id}'")
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code") != "ResourceNotFoundException":
+            raise
+
+
 def fix_eventbridge_lambda_permission(params) -> bool:
     """Fix EventBridge permission to invoke ops-segment-poller Lambda.
 
@@ -209,42 +231,29 @@ def fix_eventbridge_lambda_permission(params) -> bool:
     statement_id = "EventBridgeInvokePermission"
 
     try:
-        # First check if the permission already exists
-        try:
-            response = lambda_client.get_policy(FunctionName=function_name)
-            policy = json.loads(response["Policy"])
+        # Check if the permission already exists
+        statements = get_lambda_policy_statements(lambda_client, function_name)
+        for stmt in statements:
+            if stmt.get("Sid") == statement_id:
+                print(f"  [OK] Permission '{statement_id}' already exists")
 
-            # Check if EventBridge permission already exists
-            for stmt in policy.get("Statement", []):
-                if stmt.get("Sid") == statement_id:
-                    print(f"  [OK] Permission '{statement_id}' already exists")
-
-                    # Verify the target is configured
-                    targets_response = events_client.list_targets_by_rule(Rule=rule_name)
-                    targets = targets_response.get("Targets", [])
-                    if targets:
-                        print(f"  [OK] EventBridge rule has {len(targets)} target(s)")
-                        return True
-                    else:
-                        print("  [WARNING] EventBridge rule has no targets")
-                        # Continue to add the target
-                        break
-        except ClientError as e:
-            if e.response["Error"]["Code"] != "ResourceNotFoundException":
-                raise
-            # No policy exists yet, continue to add permission
+                # Verify the target is configured
+                targets_response = events_client.list_targets_by_rule(Rule=rule_name)
+                targets = targets_response.get("Targets", [])
+                if targets:
+                    print(f"  [OK] EventBridge rule has {len(targets)} target(s)")
+                    return True
+                else:
+                    print("  [WARNING] EventBridge rule has no targets")
+                    # Continue to add the target
+                    break
 
         # Get the rule ARN
         rule_response = events_client.describe_rule(Name=rule_name)
-        rule_arn = rule_response["Arn"]
+        rule_arn = rule_response.get("Arn", "")
 
         # Remove any existing permission with the same statement ID
-        try:
-            lambda_client.remove_permission(FunctionName=function_name, StatementId=statement_id)
-            print(f"  Removed existing permission '{statement_id}'")
-        except ClientError as e:
-            if e.response["Error"]["Code"] != "ResourceNotFoundException":
-                raise
+        remove_lambda_permission_safe(lambda_client, function_name, statement_id)
 
         # Add the permission
         lambda_client.add_permission(
@@ -259,7 +268,7 @@ def fix_eventbridge_lambda_permission(params) -> bool:
         # Always update/ensure the target is properly configured
         # Get the Lambda function ARN
         function_response = lambda_client.get_function(FunctionName=function_name)
-        function_arn = function_response["Configuration"]["FunctionArn"]
+        function_arn = function_response.get("Configuration", {}).get("FunctionArn", "")
 
         # Check existing targets
         targets_response = events_client.list_targets_by_rule(Rule=rule_name)
@@ -267,7 +276,7 @@ def fix_eventbridge_lambda_permission(params) -> bool:
 
         # Remove any existing targets (to ensure clean configuration)
         if existing_targets:
-            target_ids = [t["Id"] for t in existing_targets]
+            target_ids = [t.get("Id", "") for t in existing_targets]
             events_client.remove_targets(Rule=rule_name, Ids=target_ids)
             print(f"  Removed {len(target_ids)} existing target(s)")
 
@@ -292,7 +301,7 @@ def fix_eventbridge_lambda_permission(params) -> bool:
 
         # Check the permission is set
         response = lambda_client.get_policy(FunctionName=function_name)
-        policy = json.loads(response["Policy"])
+        policy = json.loads(response.get("Policy", "{}"))
         has_permission = any(
             stmt.get("Sid") == statement_id and stmt.get("Principal", {}).get("Service") == "events.amazonaws.com"
             for stmt in policy.get("Statement", [])

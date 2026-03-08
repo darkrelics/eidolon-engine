@@ -39,6 +39,21 @@ def check_existing_tables(region: str) -> dict:
     return existing_tables
 
 
+def check_dynamodb_table_exists(dynamodb_client, table_name: str) -> bool:
+    """Check if a DynamoDB table physically exists.
+
+    Returns True if the table exists or the check fails (assumes exists on error).
+    Returns False only when the table is confirmed missing.
+    """
+    try:
+        dynamodb_client.describe_table(TableName=table_name)
+        return True
+    except dynamodb_client.exceptions.ResourceNotFoundException:
+        return False
+    except ClientError:
+        return True  # Assume exists on check errors
+
+
 def remove_orphaned_stack_resources(region: str) -> bool:
     """Remove CloudFormation tracking for tables that no longer exist physically.
 
@@ -68,15 +83,9 @@ def remove_orphaned_stack_resources(region: str) -> bool:
                 physical_id = resource.get("PhysicalResourceId", "")
                 logical_id = resource.get("LogicalResourceId", "")
 
-                if physical_id:
-                    # Check if the physical table actually exists
-                    try:
-                        dynamodb_client.describe_table(TableName=physical_id)
-                    except dynamodb_client.exceptions.ResourceNotFoundException:
-                        print(f"  Found orphaned CloudFormation resource: {logical_id} -> {physical_id} (table doesn't exist)")
-                        orphaned_resources.append(logical_id)
-                    except ClientError:
-                        pass  # Ignore check errors
+                if physical_id and not check_dynamodb_table_exists(dynamodb_client, physical_id):
+                    print(f"  Found orphaned CloudFormation resource: {logical_id} -> {physical_id} (table doesn't exist)")
+                    orphaned_resources.append(logical_id)
 
         if not orphaned_resources:
             return False

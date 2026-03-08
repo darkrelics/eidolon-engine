@@ -214,6 +214,18 @@ def validate_s3_bucket(bucket_name: str, region: str) -> bool:
         return False
 
 
+def check_s3_artifact_status(s3_client, bucket: str, key: str) -> bool:
+    """Check if an S3 artifact exists, with error reporting for non-404 failures."""
+    try:
+        s3_client.head_object(Bucket=bucket, Key=key)
+        return True
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code != "404":
+            print(f"  [ERROR] Cannot check artifact {key}: {error_code}")
+        return False
+
+
 def validate_s3_artifacts(bucket_name: str, region: str, required_artifacts: list) -> dict:
     """Validate that required Lambda artifacts exist in S3 bucket.
 
@@ -225,26 +237,15 @@ def validate_s3_artifacts(bucket_name: str, region: str, required_artifacts: lis
     Returns:
         Dict with artifact keys as keys and bool status as values
     """
-    results = {}
-
     try:
         s3 = boto3.client("s3", region_name=region)
-
-        for artifact_key in required_artifacts:
-            try:
-                s3.head_object(Bucket=bucket_name, Key=artifact_key)
-                results[artifact_key] = True
-            except ClientError as err:
-                error_code = err.response.get("Error", {}).get("Code", "")
-                if error_code == "404":
-                    results[artifact_key] = False
-                else:
-                    print(f"  [ERROR] Cannot check artifact {artifact_key}: {error_code}")
-                    results[artifact_key] = False
-
     except ClientError as err:
         print(f"  [ERROR] Cannot access S3 bucket {bucket_name}: {err}")
         return {key: False for key in required_artifacts}
+
+    results = {}
+    for artifact_key in required_artifacts:
+        results[artifact_key] = check_s3_artifact_status(s3, bucket_name, artifact_key)
 
     return results
 

@@ -53,7 +53,7 @@ def validate_codebuild_projects(project_names: list[str], region: str) -> dict:
     results = {}
     try:
         response = codebuild.batch_get_projects(names=project_names)
-        existing_projects = {p["name"] for p in response.get("projects", [])}
+        existing_projects = {p.get("name", "") for p in response.get("projects", [])}
 
         for project_name in project_names:
             if project_name in existing_projects:
@@ -107,7 +107,7 @@ def start_build(project_name: str, region: str) -> str:
         codebuild = boto3.client("codebuild", region_name=region)
         print(f"  Starting build: {project_name}")
         response = codebuild.start_build(projectName=project_name)
-        build_id = response["build"]["id"]
+        build_id = response.get("build", {}).get("id", "")
         print(f"  Build started: {build_id}")
         return build_id
     except ClientError as err:
@@ -136,11 +136,12 @@ def monitor_build(build_id: str, region: str, timeout_minutes: int = 30) -> bool
     while True:
         try:
             response = codebuild.batch_get_builds(ids=[build_id])
-            if not response["builds"]:
+            builds = response.get("builds", [])
+            if not builds:
                 print(f"  [ERROR] Build not found: {build_id}")
                 return False
 
-            build = response["builds"][0]
+            build = builds[0]
             status = build.get("buildStatus", "UNKNOWN")
             phase = build.get("currentPhase", "UNKNOWN")
 
@@ -183,10 +184,11 @@ def print_build_logs(build_id: str, region: str, tail_lines: int = 50) -> None:
         codebuild = boto3.client("codebuild", region_name=region)
         response = codebuild.batch_get_builds(ids=[build_id])
 
-        if not response["builds"]:
+        builds = response.get("builds", [])
+        if not builds:
             return
 
-        build = response["builds"][0]
+        build = builds[0]
         log_info = build.get("logs", {})
 
         if not log_info.get("streamName"):
@@ -196,7 +198,7 @@ def print_build_logs(build_id: str, region: str, tail_lines: int = 50) -> None:
         # Get logs from CloudWatch
         logs = boto3.client("logs", region_name=region)
         group_name = log_info.get("groupName", "/aws/codebuild/eidolon")
-        stream_name = log_info["streamName"]
+        stream_name = log_info.get("streamName", "")
 
         print(f"\n  Last {tail_lines} lines of build logs:")
         print("  " + "-" * 56)
@@ -205,7 +207,7 @@ def print_build_logs(build_id: str, region: str, tail_lines: int = 50) -> None:
 
         events = response.get("events", [])
         for event in events[-tail_lines:]:
-            print(f"  {event['message'].rstrip()}")
+            print(f"  {event.get('message', '').rstrip()}")
 
         print("  " + "-" * 56)
 

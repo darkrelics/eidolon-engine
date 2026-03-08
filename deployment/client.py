@@ -66,8 +66,9 @@ def deploy_client_stack(params, state: CDKState) -> dict:
     """Deploy the Client stack using CDK."""
     # Get API URL from API stack outputs
     api_url = ""
-    if state.stacks.get("api", {}).get("outputs", {}).get("ApiUrl"):
-        api_url = state.stacks["api"]["outputs"]["ApiUrl"]
+    api_outputs = state.stacks.get("api", {}).get("outputs", {})
+    if api_outputs.get("ApiUrl"):
+        api_url = api_outputs.get("ApiUrl", "")
     else:
         # Fallback to default if API stack hasn't been deployed yet
         api_url = f"https://{params.api_host}.{params.domain}"
@@ -105,10 +106,11 @@ def deploy_client_stack(params, state: CDKState) -> dict:
     context_args.extend(["-c", f"api_url={api_url}"])
 
     # Add Cognito settings from state
-    if state.stacks.get("player", {}).get("outputs", {}).get("UserPoolId"):
-        context_args.extend(["-c", f"cognito_user_pool_id={state.stacks['player']['outputs']['UserPoolId']}"])
-        context_args.extend(["-c", f"cognito_client_id={state.stacks['player']['outputs']['UserPoolClientId']}"])
-        context_args.extend(["-c", f"cognito_user_pool_arn={state.stacks['player']['outputs']['UserPoolArn']}"])
+    player_outputs = state.stacks.get("player", {}).get("outputs", {})
+    if player_outputs.get("UserPoolId"):
+        context_args.extend(["-c", f"cognito_user_pool_id={player_outputs.get('UserPoolId', '')}"])
+        context_args.extend(["-c", f"cognito_client_id={player_outputs.get('UserPoolClientId', '')}"])
+        context_args.extend(["-c", f"cognito_user_pool_arn={player_outputs.get('UserPoolArn', '')}"])
 
     app_command = "python3 app_client.py"
     return run_cdk_deploy("client", params.region, app_command, context_args)
@@ -130,7 +132,7 @@ def execute_codebuild_project(project_name: str, region: str) -> bool:
         print(f"\nStarting CodeBuild project: {project_name}")
         response = codebuild.start_build(projectName=project_name)
 
-        build_id = response["build"]["id"]
+        build_id = response.get("build", {}).get("id", "")
         build_number = build_id.split(":")[-1]
 
         print(f"  [OK] Build started: #{build_number}")
@@ -147,11 +149,12 @@ def execute_codebuild_project(project_name: str, region: str) -> bool:
         while True:
             try:
                 response = codebuild.batch_get_builds(ids=[build_id])
-                if not response["builds"]:
+                builds = response.get("builds", [])
+                if not builds:
                     print(f"  [ERROR] Build not found: {build_id}")
                     return False
 
-                build = response["builds"][0]
+                build = builds[0]
                 status = build.get("buildStatus", "UNKNOWN")
                 phase = build.get("currentPhase", "UNKNOWN")
 
@@ -190,6 +193,46 @@ def execute_codebuild_project(project_name: str, region: str) -> bool:
         return False
 
 
+def get_cloudfront_oai_id(distribution_id: str, bucket_name: str) -> str:
+    """Get the OAI ID from a CloudFront distribution for the given S3 bucket.
+
+    Returns:
+        OAI ID string, or empty string if not found or on error.
+    """
+    try:
+        cloudfront_client = boto3.client("cloudfront", region_name="us-east-1")  # CloudFront is global
+        dist_response = cloudfront_client.get_distribution(Id=distribution_id)
+        origins = dist_response.get("Distribution", {}).get("DistributionConfig", {}).get("Origins", {}).get("Items", [])
+
+        for origin in origins:
+            if bucket_name in origin.get("DomainName", ""):
+                s3_origin_config = origin.get("S3OriginConfig", {})
+                oai = s3_origin_config.get("OriginAccessIdentity", "")
+                if oai:
+                    oai_id = oai.split("/")[-1] if "/" in oai else oai
+                    return oai_id
+        return ""
+    except ClientError as err:
+        print(f"  [ERROR] Failed to get distribution details: {err}")
+        return ""
+
+
+def load_existing_bucket_policy(s3_client, bucket_name: str) -> dict:
+    """Load existing S3 bucket policy. Returns empty policy structure if none exists.
+
+    Raises ClientError for unexpected S3 errors.
+    """
+    try:
+        existing_policy = s3_client.get_bucket_policy(Bucket=bucket_name)
+        if existing_policy.get("Policy"):
+            return json.loads(existing_policy.get("Policy", "{}"))
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code")
+        if error_code not in {"NoSuchBucketPolicy", "NoSuchBucket"}:
+            raise
+    return {"Version": "2012-10-17", "Statement": []}
+
+
 def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, region: str) -> bool:
     """Update S3 bucket policy to allow CloudFront access.
 
@@ -201,64 +244,34 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, 
     Returns:
         True if policy was updated successfully
     """
+    oai_id = get_cloudfront_oai_id(distribution_id, bucket_name)
+    if not oai_id:
+        print(f"  [WARNING] No OAI found for distribution {distribution_id}")
+        print("  CloudFront may be using OAC or public access")
+        return False
+
+    # Desired statements for CloudFront access
+    desired_statements = [
+        {
+            "Sid": "AllowCloudFrontOAIAccess",
+            "Effect": "Allow",
+            "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
+            "Action": "s3:GetObject",
+            "Resource": f"arn:aws:s3:::{bucket_name}/*",
+        },
+        {
+            "Sid": "AllowCloudFrontOAIListBucket",
+            "Effect": "Allow",
+            "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
+            "Action": "s3:ListBucket",
+            "Resource": f"arn:aws:s3:::{bucket_name}",
+        },
+    ]
+
     try:
         s3_client = boto3.client("s3", region_name=region)
-        cloudfront_client = boto3.client("cloudfront", region_name="us-east-1")  # CloudFront is global
 
-        # Get the distribution to find the OAI
-        try:
-            dist_response = cloudfront_client.get_distribution(Id=distribution_id)
-            origins = dist_response.get("Distribution", {}).get("DistributionConfig", {}).get("Origins", {}).get("Items", [])
-
-            # Find the S3 origin and its OAI
-            oai_id = None
-            for origin in origins:
-                if bucket_name in origin.get("DomainName", ""):
-                    s3_origin_config = origin.get("S3OriginConfig", {})
-                    oai = s3_origin_config.get("OriginAccessIdentity", "")
-                    if oai:
-                        # Extract OAI ID from the full path
-                        oai_id = oai.split("/")[-1] if "/" in oai else oai
-                        break
-
-            if not oai_id:
-                print(f"  [WARNING] No OAI found for distribution {distribution_id}")
-                print("  CloudFront may be using OAC or public access")
-                return False
-
-        except ClientError as err:
-            print(f"  [ERROR] Failed to get distribution details: {err}")
-            return False
-
-        # Desired statements for CloudFront access
-        desired_statements = [
-            {
-                "Sid": "AllowCloudFrontOAIAccess",
-                "Effect": "Allow",
-                "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
-                "Action": "s3:GetObject",
-                "Resource": f"arn:aws:s3:::{bucket_name}/*",
-            },
-            {
-                "Sid": "AllowCloudFrontOAIListBucket",
-                "Effect": "Allow",
-                "Principal": {"AWS": f"arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity {oai_id}"},
-                "Action": "s3:ListBucket",
-                "Resource": f"arn:aws:s3:::{bucket_name}",
-            },
-        ]
-
-        # Load existing bucket policy (if any) so we do not clobber unrelated statements
-        bucket_policy = {"Version": "2012-10-17", "Statement": []}
-        try:
-            existing_policy = s3_client.get_bucket_policy(Bucket=bucket_name)
-            if existing_policy.get("Policy"):
-                bucket_policy = json.loads(existing_policy["Policy"])
-        except ClientError as err:
-            error_code = err.response.get("Error", {}).get("Code")
-            if error_code not in {"NoSuchBucketPolicy", "NoSuchBucket"}:
-                print(f"  [ERROR] Failed to read existing bucket policy: {err}")
-                return False
+        bucket_policy = load_existing_bucket_policy(s3_client, bucket_name)
 
         # Normalise statements to a list before mutation
         statements = bucket_policy.get("Statement", [])
@@ -397,7 +410,7 @@ def start_portal_build(region: str) -> str:
         project_name = "eidolon-portal-build"
         print(f"\n  Starting portal build: {project_name}")
         response = codebuild.start_build(projectName=project_name)
-        build_id = response["build"]["id"]
+        build_id = response.get("build", {}).get("id", "")
         print(f"  Build started: {build_id}")
         return build_id
     except ClientError as err:
@@ -429,11 +442,12 @@ def monitor_portal_build(build_id: str, region: str, timeout_minutes: int = 30) 
     while True:
         try:
             response = codebuild.batch_get_builds(ids=[build_id])
-            if not response["builds"]:
+            builds = response.get("builds", [])
+            if not builds:
                 print(f"  [ERROR] Build not found: {build_id}")
                 return False
 
-            build = response["builds"][0]
+            build = builds[0]
             status = build.get("buildStatus", "UNKNOWN")
             phase = build.get("currentPhase", "UNKNOWN")
 
@@ -476,10 +490,11 @@ def print_portal_build_logs(build_id: str, region: str, tail_lines: int = 50) ->
         codebuild = boto3.client("codebuild", region_name=region)
         response = codebuild.batch_get_builds(ids=[build_id])
 
-        if not response["builds"]:
+        builds = response.get("builds", [])
+        if not builds:
             return
 
-        build = response["builds"][0]
+        build = builds[0]
         log_info = build.get("logs", {})
 
         if not log_info.get("streamName"):
@@ -489,7 +504,7 @@ def print_portal_build_logs(build_id: str, region: str, tail_lines: int = 50) ->
         # Get logs from CloudWatch
         logs = boto3.client("logs", region_name=region)
         group_name = log_info.get("groupName", "/aws/codebuild/eidolon-portal-build")
-        stream_name = log_info["streamName"]
+        stream_name = log_info.get("streamName", "")
 
         print(f"\n  Last {tail_lines} lines of build logs:")
         print("  " + "-" * 56)
@@ -498,7 +513,7 @@ def print_portal_build_logs(build_id: str, region: str, tail_lines: int = 50) ->
 
         events = response.get("events", [])
         for event in events[-tail_lines:]:
-            print(f"  {event['message'].rstrip()}")
+            print(f"  {event.get('message', '').rstrip()}")
 
         print("  " + "-" * 56)
 
