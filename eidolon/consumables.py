@@ -116,9 +116,17 @@ def dynamo_typed_value(value) -> dict:
 
 
 def build_consume_transaction(
-    character_id: str, item_id: str, slot_key: str, inventory: dict,
-    update_expression_parts: list, expression_values: dict, expression_names: dict,
-    stackable: bool, item_removed: bool, remaining_quantity: int, timestamp: str,
+    character_id: str,
+    item_id: str,
+    slot_key: str,
+    inventory: dict,
+    update_expression_parts: list,
+    expression_values: dict,
+    expression_names: dict,
+    stackable: bool,
+    item_removed: bool,
+    remaining_quantity: int,
+    timestamp: str,
 ) -> list:
     """Build the list of transactional write items for consume_item."""
     # Convert expression values to DynamoDB typed format for transactions
@@ -142,24 +150,28 @@ def build_consume_transaction(
     transact_items = [character_update]
 
     if stackable and not item_removed:
-        transact_items.append({
-            "Update": {
-                "TableName": TABLE_ENV_MAP[TableName.ITEMS],
-                "Key": {"ItemID": {"S": item_id}},
-                "UpdateExpression": "SET Quantity = :quantity, UpdatedAt = :updated_at",
-                "ExpressionAttributeValues": {
-                    ":quantity": {"N": str(remaining_quantity)},
-                    ":updated_at": {"S": timestamp},
-                },
+        transact_items.append(
+            {
+                "Update": {
+                    "TableName": TABLE_ENV_MAP[TableName.ITEMS],
+                    "Key": {"ItemID": {"S": item_id}},
+                    "UpdateExpression": "SET Quantity = :quantity, UpdatedAt = :updated_at",
+                    "ExpressionAttributeValues": {
+                        ":quantity": {"N": str(remaining_quantity)},
+                        ":updated_at": {"S": timestamp},
+                    },
+                }
             }
-        })
+        )
     else:
-        transact_items.append({
-            "Delete": {
-                "TableName": TABLE_ENV_MAP[TableName.ITEMS],
-                "Key": {"ItemID": {"S": item_id}},
+        transact_items.append(
+            {
+                "Delete": {
+                    "TableName": TABLE_ENV_MAP[TableName.ITEMS],
+                    "Key": {"ItemID": {"S": item_id}},
+                }
             }
-        })
+        )
 
     return transact_items
 
@@ -243,8 +255,7 @@ def load_item_and_prototype(item_id: str) -> dict:
         raise ValueError("Item is not consumable")
 
     effects_config = (
-        prototype.get("ConsumableEffects") or item.get("ConsumableEffects")
-        or prototype.get("Effects") or item.get("Effects")
+        prototype.get("ConsumableEffects") or item.get("ConsumableEffects") or prototype.get("Effects") or item.get("Effects")
     )
     effects = normalize_effect_config(effects_config)
     if not effects:
@@ -385,7 +396,11 @@ def apply_essence_effect(effects: dict, character: dict) -> dict:
 
 
 def update_inventory_for_consumption(
-    inventory: dict, slot_key: str, slot_entry: dict, item: dict, item_id: str,
+    inventory: dict,
+    slot_key: str,
+    slot_entry: dict,
+    item: dict,
+    item_id: str,
 ) -> dict:
     """Handle stackable and non-stackable item consumption in inventory.
 
@@ -429,10 +444,15 @@ def update_inventory_for_consumption(
 
 
 def build_character_update_expression(
-    inventory_changed: bool, inventory: dict,
-    wounds_changed: bool, new_wounds: list,
-    essence_changed: bool, new_essence: int,
-    state_changed: bool, new_state: str, old_state: str,
+    inventory_changed: bool,
+    inventory: dict,
+    wounds_changed: bool,
+    new_wounds: list,
+    essence_changed: bool,
+    new_essence: int,
+    state_changed: bool,
+    new_state: str,
+    old_state: str,
 ) -> dict:
     """Build the DynamoDB update expression for character changes after consumption.
 
@@ -542,41 +562,72 @@ def consume_item(character_id: str, item_id: str) -> dict:
     fx = apply_consumable_effects(ctx)
 
     inv_result = update_inventory_for_consumption(
-        ctx.get("inventory", {}), ctx.get("slot_key", ""), ctx.get("slot_entry", {}), item, item_id,
+        ctx.get("inventory", {}),
+        ctx.get("slot_key", ""),
+        ctx.get("slot_entry", {}),
+        item,
+        item_id,
     )
 
     state_changed = fx.get("new_char_state") != fx.get("character_state_before")
     essence_result = fx.get("essence_result", {})
     expr = build_character_update_expression(
-        inv_result.get("inventory_changed", False), inv_result.get("inventory", {}),
-        fx.get("wounds_changed", False), fx.get("new_wounds", []),
-        essence_result.get("essence_changed", False), essence_result.get("new_essence", 0),
-        state_changed, fx.get("new_char_state", ""), fx.get("character_state_before", ""),
+        inv_result.get("inventory_changed", False),
+        inv_result.get("inventory", {}),
+        fx.get("wounds_changed", False),
+        fx.get("new_wounds", []),
+        essence_result.get("essence_changed", False),
+        essence_result.get("new_essence", 0),
+        state_changed,
+        fx.get("new_char_state", ""),
+        fx.get("character_state_before", ""),
     )
 
     transact_items = build_consume_transaction(
-        character_id, item_id, ctx.get("slot_key", ""), inv_result.get("inventory", {}),
-        expr.get("update_expression_parts", []), expr.get("expression_values", {}),
-        expr.get("expression_names", {}), bool(item.get("Stackable")),
-        inv_result.get("item_removed", False), inv_result.get("remaining_quantity", 0),
+        character_id,
+        item_id,
+        ctx.get("slot_key", ""),
+        inv_result.get("inventory", {}),
+        expr.get("update_expression_parts", []),
+        expr.get("expression_values", {}),
+        expr.get("expression_names", {}),
+        bool(item.get("Stackable")),
+        inv_result.get("item_removed", False),
+        inv_result.get("remaining_quantity", 0),
         expr.get("timestamp", ""),
     )
 
     execute_consume_transaction(
-        transact_items, fx.get("character_state_before", ""), fx.get("new_char_state", ""),
-        ctx.get("character", {}), expr.get("timestamp", ""), character_id, item_id,
+        transact_items,
+        fx.get("character_state_before", ""),
+        fx.get("new_char_state", ""),
+        ctx.get("character", {}),
+        expr.get("timestamp", ""),
+        character_id,
+        item_id,
     )
 
     return build_consume_result(
-        ctx.get("prototype", {}), item, fx.get("effect_summary", {}),
-        inv_result.get("remaining_quantity", 0), inv_result.get("item_removed", False),
-        fx.get("new_char_state", ""), character_id, item.get("PrototypeID", ""), item_id,
+        ctx.get("prototype", {}),
+        item,
+        fx.get("effect_summary", {}),
+        inv_result.get("remaining_quantity", 0),
+        inv_result.get("item_removed", False),
+        fx.get("new_char_state", ""),
+        character_id,
+        item.get("PrototypeID", ""),
+        item_id,
     )
 
 
 def execute_consume_transaction(
-    transact_items: list, character_state_before: str, new_char_state: str,
-    character: dict, timestamp: str, character_id: str, item_id: str,
+    transact_items: list,
+    character_state_before: str,
+    new_char_state: str,
+    character: dict,
+    timestamp: str,
+    character_id: str,
+    item_id: str,
 ) -> None:
     """Execute the DynamoDB transaction for item consumption.
 
@@ -600,15 +651,17 @@ def execute_consume_transaction(
         player_id = character.get("PlayerID")
         character_name = character.get("CharacterName")
         if player_id and character_name:
-            transact_items.append({
-                "Update": {
-                    "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
-                    "Key": {"PlayerID": {"S": player_id}},
-                    "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
-                    "ExpressionAttributeNames": {"#name": character_name},
-                    "ExpressionAttributeValues": {":dead": {"BOOL": False}, ":updated_at": {"S": timestamp}},
+            transact_items.append(
+                {
+                    "Update": {
+                        "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
+                        "Key": {"PlayerID": {"S": player_id}},
+                        "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
+                        "ExpressionAttributeNames": {"#name": character_name},
+                        "ExpressionAttributeValues": {":dead": {"BOOL": False}, ":updated_at": {"S": timestamp}},
+                    }
                 }
-            })
+            )
 
     try:
         dynamo.transact_write_items(transact_items)
@@ -625,9 +678,15 @@ def execute_consume_transaction(
 
 
 def build_consume_result(
-    prototype: dict, item: dict, effect_summary: dict,
-    remaining_quantity: int, item_removed: bool,
-    new_char_state: str, character_id: str, prototype_id: str, item_id: str,
+    prototype: dict,
+    item: dict,
+    effect_summary: dict,
+    remaining_quantity: int,
+    item_removed: bool,
+    new_char_state: str,
+    character_id: str,
+    prototype_id: str,
+    item_id: str,
 ) -> dict:
     """Build the result dict returned from consume_item.
 
@@ -658,7 +717,10 @@ def build_consume_result(
 
     logger.info(
         "Character %s consumed %s (item %s). Effects: %s",
-        character_id, prototype_id, item_id, effect_summary,
+        character_id,
+        prototype_id,
+        item_id,
+        effect_summary,
     )
 
     return {
