@@ -39,5 +39,5 @@ setuptools==80.9.0
 sortedcontainers==2.4.0
 stevedore==5.5.0
 toml==0.10.2
-tomlkit==0.13.3
+tomlkit==0.14.0
 urllib3==2.6.3
