@@ -174,7 +174,7 @@ class SegmentHistoryManager {
 
   /// Returns completed segments, excluding the currently active segment.
   List<Map<String, dynamic>> getCompletedSegments(String? activeSegmentId) {
-    final cacheKey = '${activeSegmentId ?? 'none'}_${_segments.length}_${_segments.hashCode}';
+    final cacheKey = '${activeSegmentId ?? 'none'}_${_segments.length}_$_segmentCounter';
 
     if (_completedSegmentsCacheKey == cacheKey && _cachedCompletedSegments != null) {
       return _cachedCompletedSegments!;
@@ -201,8 +201,8 @@ class SegmentHistoryManager {
     Map<String, dynamic>? storyState,
     List<Map<String, dynamic>> segmentHistory,
   ) {
-    final stateSegmentsHash = storyState?['CompletedSegments']?.hashCode ?? 0;
-    final cacheKey = '${activeSegmentId ?? 'none'}_${segmentHistory.length}_${segmentHistory.hashCode}_$stateSegmentsHash';
+    final stateSegmentsLength = (storyState?['CompletedSegments'] as List?)?.length ?? 0;
+    final cacheKey = '${activeSegmentId ?? 'none'}_${segmentHistory.length}_${_segmentCounter}_$stateSegmentsLength';
 
     if (_storyHistoryCacheKey == cacheKey && _cachedStoryHistory != null) {
       return _cachedStoryHistory!;

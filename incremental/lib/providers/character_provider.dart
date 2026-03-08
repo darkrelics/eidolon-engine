@@ -85,13 +85,13 @@ class CharacterProvider extends BaseProvider {
 
   /// Set active segment (in-memory only).
   /// Segment persistence is handled by the server/repository state.
-  Future<void> setActiveSegment(ActiveSegment segment) async {
+  void setActiveSegment(ActiveSegment segment) {
     _activeSegment = segment;
     notifyListeners();
   }
 
   /// Clear active segment.
-  Future<void> clearActiveSegment() async {
+  void clearActiveSegment() {
     _activeSegment = null;
     notifyListeners();
   }

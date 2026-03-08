@@ -1,3 +1,4 @@
+import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import 'package:eidolon_incremental/providers/auth_provider.dart';
 import 'package:eidolon_incremental/utils/error_handler.dart';
 import 'package:flutter/material.dart';
@@ -44,10 +45,7 @@ class LoginScreenController extends ChangeNotifier {
       debugPrint('LoginScreenController: Error message: $e');
 
       if (context.mounted) {
-        // Check for MFA requirement
-        // Note: We check the string representation or specific error type if available
-        // Since we rethrow CognitoClientException with code 'MFA_REQUIRED'
-        final isMfaRequired = e.toString().contains('MFA_REQUIRED');
+        final isMfaRequired = e is CognitoClientException && e.code == 'MFA_REQUIRED';
 
         if (isMfaRequired) {
           _isLoading = false;

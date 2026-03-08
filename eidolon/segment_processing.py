@@ -257,13 +257,13 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
 
     # Determine overall outcome
     if not outcomes:
-        # No challenges or combat configured - give player best outcome to protect from content errors
+        # No challenges or combat configured - grant normal outcome to protect from content errors
         logger.error(
             f"Mechanical segment {segment_def.get('SegmentID')} has no challenges or combat - "
             f"segment definition is incomplete or corrupted"
         )
-        overall_outcome = "exceptional"
-        results["SystemNote"] = "This segment had no challenges configured. Exceptional outcome granted."
+        overall_outcome = "normal"
+        results["SystemNote"] = "This segment had no challenges configured. Normal outcome granted."
     elif "death" in outcomes:
         overall_outcome = "death"
     elif "failure" in outcomes:
