@@ -1,0 +1,17 @@
+region: us-east-1
+deployment_mode: hybrid
+
+s3_bucket: eidolon-engine-lambda-542230992937
+client_bucket: darkrelics-portal
+scripts_bucket: darkrelics-scripts
+
+github_owner: darkrelics
+github_repo: eidolon-engine
+github_branch: develop
+
+domain: darkrelics.net
+route53_zone_id: Z3GI01OR7CZLE7
+api_host: api
+client_host: portal
+
+reply_email: contact@darkrelics.net

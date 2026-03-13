@@ -1,0 +1,38 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: S3 bucket for Eidolon game scripts
+
+Parameters:
+  ScriptsBucketName:
+    Type: String
+    Description: Name for the scripts S3 bucket
+
+Resources:
+  ScriptsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Ref ScriptsBucketName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: System
+          Value: eidolon
+
+Outputs:
+  ScriptsBucketName:
+    Description: Name of the scripts bucket
+    Value: !Ref ScriptsBucket
+
+  ScriptsBucketArn:
+    Description: ARN of the scripts bucket
+    Value: !GetAtt ScriptsBucket.Arn

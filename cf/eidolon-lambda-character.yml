@@ -1,0 +1,502 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Lambda functions for character, item, and store API endpoints
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: S3 bucket containing Lambda deployment packages
+
+  LambdaLayerArn:
+    Type: String
+    Description: ARN of the Lambda dependencies layer
+
+  LambdaExecutionRoleArn:
+    Type: String
+    Description: ARN of the Lambda execution role
+
+  AllowedOrigins:
+    Type: String
+    Description: Allowed CORS origins
+
+Resources:
+  ApiCharacterAddFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-character-add
+      Description: Create a new character
+      Runtime: python3.12
+      Handler: api_character_add.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-character-add.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiCharacterDeleteFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-character-delete
+      Description: Delete a character
+      Runtime: python3.12
+      Handler: api_character_delete.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-character-delete.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiCharacterGetFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-character-get
+      Description: Get character details
+      Runtime: python3.12
+      Handler: api_character_get.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-character-get.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiCharacterListFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-character-list
+      Description: List characters for a player
+      Runtime: python3.12
+      Handler: api_character_list.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-character-list.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiArchetypeListFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-archetype-list
+      Description: List available archetypes
+      Runtime: python3.12
+      Handler: api_archetype_list.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-archetype-list.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiItemBriefFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-item-brief
+      Description: Get brief item information
+      Runtime: python3.12
+      Handler: api_item_brief.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-item-brief.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiItemPrototypeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-item-prototype
+      Description: Get item prototype details
+      Runtime: python3.12
+      Handler: api_item_prototype.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-item-prototype.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiItemConsumeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-item-consume
+      Description: Consume an inventory item
+      Runtime: python3.12
+      Handler: api_item_consume.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-item-consume.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiItemDiscardFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-item-discard
+      Description: Discard an inventory item
+      Runtime: python3.12
+      Handler: api_item_discard.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-item-discard.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiItemConsolidateFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-item-consolidate
+      Description: Consolidate inventory item stacks
+      Runtime: python3.12
+      Handler: api_item_consolidate.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-item-consolidate.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiItemSplitFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-item-split
+      Description: Split an inventory item stack
+      Runtime: python3.12
+      Handler: api_item_split.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-item-split.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiStoreListFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-store-list
+      Description: List store inventory
+      Runtime: python3.12
+      Handler: api_store_list.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-store-list.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiStorePurchaseFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-store-purchase
+      Description: Purchase an item from the store
+      Runtime: python3.12
+      Handler: api_store_purchase.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-store-purchase.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          players_table: players
+          characters_table: characters
+          archetypes_table: archetypes
+          items_table: items
+          prototypes_table: prototypes
+      Tags:
+        - Key: System
+          Value: eidolon
+
+Outputs:
+  ApiCharacterAddArn:
+    Description: ARN of api-character-add function
+    Value: !GetAtt ApiCharacterAddFunction.Arn
+
+  ApiCharacterDeleteArn:
+    Description: ARN of api-character-delete function
+    Value: !GetAtt ApiCharacterDeleteFunction.Arn
+
+  ApiCharacterGetArn:
+    Description: ARN of api-character-get function
+    Value: !GetAtt ApiCharacterGetFunction.Arn
+
+  ApiCharacterListArn:
+    Description: ARN of api-character-list function
+    Value: !GetAtt ApiCharacterListFunction.Arn
+
+  ApiArchetypeListArn:
+    Description: ARN of api-archetype-list function
+    Value: !GetAtt ApiArchetypeListFunction.Arn
+
+  ApiItemBriefArn:
+    Description: ARN of api-item-brief function
+    Value: !GetAtt ApiItemBriefFunction.Arn
+
+  ApiItemPrototypeArn:
+    Description: ARN of api-item-prototype function
+    Value: !GetAtt ApiItemPrototypeFunction.Arn
+
+  ApiItemConsumeArn:
+    Description: ARN of api-item-consume function
+    Value: !GetAtt ApiItemConsumeFunction.Arn
+
+  ApiItemDiscardArn:
+    Description: ARN of api-item-discard function
+    Value: !GetAtt ApiItemDiscardFunction.Arn
+
+  ApiItemConsolidateArn:
+    Description: ARN of api-item-consolidate function
+    Value: !GetAtt ApiItemConsolidateFunction.Arn
+
+  ApiItemSplitArn:
+    Description: ARN of api-item-split function
+    Value: !GetAtt ApiItemSplitFunction.Arn
+
+  ApiStoreListArn:
+    Description: ARN of api-store-list function
+    Value: !GetAtt ApiStoreListFunction.Arn
+
+  ApiStorePurchaseArn:
+    Description: ARN of api-store-purchase function
+    Value: !GetAtt ApiStorePurchaseFunction.Arn

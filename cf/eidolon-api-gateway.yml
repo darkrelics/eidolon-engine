@@ -1,0 +1,1545 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: API Gateway REST API with Cognito auth, custom domain, WAF, and CORS
+
+Parameters:
+  UserPoolArn:
+    Type: String
+    Description: ARN of the Cognito User Pool for authorization
+
+  ApiCertificateArn:
+    Type: String
+    Description: ARN of the ACM certificate for the API custom domain
+
+  Route53ZoneId:
+    Type: String
+    Description: Route53 hosted zone ID for DNS records
+
+  ApiDomainName:
+    Type: String
+    Description: FQDN for API custom domain (e.g. api.darkrelics.net)
+
+  AllowedOrigins:
+    Type: String
+    Description: Allowed CORS origin (e.g. https://portal.darkrelics.net)
+
+  StoryEndpointsEnabled:
+    Type: String
+    Default: "false"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Whether to include story and segment API endpoints
+
+Conditions:
+  HasStoryEndpoints: !Equals
+    - !Ref StoryEndpointsEnabled
+    - "true"
+
+Resources:
+  # ============================================================
+  # REST API and Authorizer
+  # ============================================================
+  EidolonApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: eidolon-api
+      Description: Eidolon Engine API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: eidolon-api-authorizer
+      RestApiId: !Ref EidolonApi
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      ProviderARNs:
+        - !Ref UserPoolArn
+
+  # ============================================================
+  # Gateway Responses (CORS headers on errors)
+  # ============================================================
+  GatewayResponseDefault4XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResponseType: DEFAULT_4XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        gatewayresponse.header.Vary: "'Origin'"
+
+  GatewayResponseDefault5XX:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResponseType: DEFAULT_5XX
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        gatewayresponse.header.Vary: "'Origin'"
+
+  GatewayResponseUnauthorized:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResponseType: UNAUTHORIZED
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        gatewayresponse.header.Vary: "'Origin'"
+
+  GatewayResponseAccessDenied:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResponseType: ACCESS_DENIED
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        gatewayresponse.header.Vary: "'Origin'"
+
+  GatewayResponseExpiredToken:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResponseType: EXPIRED_TOKEN
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        gatewayresponse.header.Vary: "'Origin'"
+
+  GatewayResponseInvalidApiKey:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResponseType: INVALID_API_KEY
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        gatewayresponse.header.Vary: "'Origin'"
+
+  GatewayResponseMissingAuthToken:
+    Type: AWS::ApiGateway::GatewayResponse
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResponseType: MISSING_AUTHENTICATION_TOKEN
+      ResponseParameters:
+        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
+        gatewayresponse.header.Vary: "'Origin'"
+
+  # ============================================================
+  # / (root) - OPTIONS only
+  # ============================================================
+  RootOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !GetAtt EidolonApi.RootResourceId
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  # ============================================================
+  # /archetype - GET -> api-archetype-list
+  # ============================================================
+  ArchetypeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !GetAtt EidolonApi.RootResourceId
+      PathPart: archetype
+
+  ArchetypeOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ArchetypeResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ArchetypeGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ArchetypeResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-archetype-list/invocations"
+
+  # ============================================================
+  # /character - POST -> api-character-add, GET -> api-character-get, DELETE -> api-character-delete
+  # ============================================================
+  CharacterResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !GetAtt EidolonApi.RootResourceId
+      PathPart: character
+
+  CharacterOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref CharacterResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  CharacterPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref CharacterResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-character-add/invocations"
+
+  CharacterGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref CharacterResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-character-get/invocations"
+
+  CharacterDelete:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref CharacterResource
+      HttpMethod: DELETE
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-character-delete/invocations"
+
+  # ============================================================
+  # /character/list - GET -> api-character-list
+  # ============================================================
+  CharacterListResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref CharacterResource
+      PathPart: list
+
+  CharacterListOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref CharacterListResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  CharacterListGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref CharacterListResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-character-list/invocations"
+
+  # ============================================================
+  # /item - OPTIONS only (parent for item endpoints)
+  # ============================================================
+  ItemResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !GetAtt EidolonApi.RootResourceId
+      PathPart: item
+
+  ItemOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  # ============================================================
+  # /item/brief - GET -> api-item-brief
+  # ============================================================
+  ItemBriefResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: brief
+
+  ItemBriefOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemBriefResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemBriefGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemBriefResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-brief/invocations"
+
+  # ============================================================
+  # /item/prototype - GET -> api-item-prototype
+  # ============================================================
+  ItemPrototypeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: prototype
+
+  ItemPrototypeOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemPrototypeResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemPrototypeGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemPrototypeResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-prototype/invocations"
+
+  # ============================================================
+  # /item/consume - POST -> api-item-consume
+  # ============================================================
+  ItemConsumeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: consume
+
+  ItemConsumeOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemConsumeResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemConsumePost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemConsumeResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-consume/invocations"
+
+  # ============================================================
+  # /item/discard - POST -> api-item-discard
+  # ============================================================
+  ItemDiscardResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: discard
+
+  ItemDiscardOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemDiscardResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemDiscardPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemDiscardResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-discard/invocations"
+
+  # ============================================================
+  # /item/consolidate - POST -> api-item-consolidate
+  # ============================================================
+  ItemConsolidateResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: consolidate
+
+  ItemConsolidateOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemConsolidateResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemConsolidatePost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemConsolidateResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-consolidate/invocations"
+
+  # ============================================================
+  # /item/split - POST -> api-item-split
+  # ============================================================
+  ItemSplitResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: split
+
+  ItemSplitOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemSplitResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemSplitPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemSplitResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-split/invocations"
+
+  # ============================================================
+  # /store (parent resource, no methods)
+  # ============================================================
+  StoreResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !GetAtt EidolonApi.RootResourceId
+      PathPart: store
+
+  # ============================================================
+  # /store/list - GET -> api-store-list
+  # ============================================================
+  StoreListResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref StoreResource
+      PathPart: list
+
+  StoreListOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StoreListResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  StoreListGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StoreListResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-store-list/invocations"
+
+  # ============================================================
+  # /store/purchase - POST -> api-store-purchase
+  # ============================================================
+  StorePurchaseResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref StoreResource
+      PathPart: purchase
+
+  StorePurchaseOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StorePurchaseResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  StorePurchasePost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StorePurchaseResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-store-purchase/invocations"
+
+  # ============================================================
+  # /story (parent resource, conditional)
+  # ============================================================
+  StoryResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !GetAtt EidolonApi.RootResourceId
+      PathPart: story
+
+  # /story/start - POST -> api-story-start
+  StoryStartResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref StoryResource
+      PathPart: start
+
+  StoryStartOptions:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StoryStartResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  StoryStartPost:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StoryStartResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-story-start/invocations"
+
+  # /story/abandon - POST -> api-story-abandon
+  StoryAbandonResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref StoryResource
+      PathPart: abandon
+
+  StoryAbandonOptions:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StoryAbandonResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  StoryAbandonPost:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StoryAbandonResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-story-abandon/invocations"
+
+  # /story/history - GET -> api-story-history
+  StoryHistoryResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref StoryResource
+      PathPart: history
+
+  StoryHistoryOptions:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StoryHistoryResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  StoryHistoryGet:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref StoryHistoryResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-story-history/invocations"
+
+  # ============================================================
+  # /segment (parent resource, conditional)
+  # ============================================================
+  SegmentResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !GetAtt EidolonApi.RootResourceId
+      PathPart: segment
+
+  # /segment/decision - POST -> api-segment-decision
+  SegmentDecisionResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref SegmentResource
+      PathPart: decision
+
+  SegmentDecisionOptions:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref SegmentDecisionResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  SegmentDecisionPost:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref SegmentDecisionResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-segment-decision/invocations"
+
+  # /segment/status - GET -> api-segment-status
+  SegmentStatusResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref SegmentResource
+      PathPart: status
+
+  SegmentStatusOptions:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref SegmentStatusResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  SegmentStatusGet:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref SegmentStatusResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-segment-status/invocations"
+
+  # /segment/history - GET -> api-segment-history
+  SegmentHistoryResource:
+    Type: AWS::ApiGateway::Resource
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref SegmentResource
+      PathPart: history
+
+  SegmentHistoryOptions:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref SegmentHistoryResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  SegmentHistoryGet:
+    Type: AWS::ApiGateway::Method
+    Condition: HasStoryEndpoints
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref SegmentHistoryResource
+      HttpMethod: GET
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-segment-history/invocations"
+
+  # ============================================================
+  # Lambda Permissions (always-present functions)
+  # ============================================================
+  ApiArchetypeListPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-archetype-list
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiCharacterAddPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-character-add
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiCharacterGetPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-character-get
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiCharacterDeletePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-character-delete
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiCharacterListPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-character-list
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiItemBriefPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-brief
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiItemPrototypePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-prototype
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiItemConsumePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-consume
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiItemDiscardPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-discard
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiItemConsolidatePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-consolidate
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiItemSplitPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-split
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiStoreListPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-store-list
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiStorePurchasePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-store-purchase
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  # ============================================================
+  # Lambda Permissions (story/segment functions, conditional)
+  # ============================================================
+  ApiStoryStartPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasStoryEndpoints
+    Properties:
+      FunctionName: api-story-start
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiStoryAbandonPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasStoryEndpoints
+    Properties:
+      FunctionName: api-story-abandon
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiStoryHistoryPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasStoryEndpoints
+    Properties:
+      FunctionName: api-story-history
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiSegmentDecisionPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasStoryEndpoints
+    Properties:
+      FunctionName: api-segment-decision
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiSegmentStatusPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasStoryEndpoints
+    Properties:
+      FunctionName: api-segment-status
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  ApiSegmentHistoryPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasStoryEndpoints
+    Properties:
+      FunctionName: api-segment-history
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  # ============================================================
+  # Deployment and Stage
+  # ============================================================
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - RootOptions
+      - ArchetypeOptions
+      - ArchetypeGet
+      - CharacterOptions
+      - CharacterPost
+      - CharacterGet
+      - CharacterDelete
+      - CharacterListOptions
+      - CharacterListGet
+      - ItemOptions
+      - ItemBriefOptions
+      - ItemBriefGet
+      - ItemPrototypeOptions
+      - ItemPrototypeGet
+      - ItemConsumeOptions
+      - ItemConsumePost
+      - ItemDiscardOptions
+      - ItemDiscardPost
+      - ItemConsolidateOptions
+      - ItemConsolidatePost
+      - ItemSplitOptions
+      - ItemSplitPost
+      - StoreListOptions
+      - StoreListGet
+      - StorePurchaseOptions
+      - StorePurchasePost
+    Properties:
+      RestApiId: !Ref EidolonApi
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref EidolonApi
+      DeploymentId: !Ref ApiDeployment
+      StageName: prod
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  # ============================================================
+  # Custom Domain, Base Path Mapping, Route53
+  # ============================================================
+  ApiDomain:
+    Type: AWS::ApiGateway::DomainName
+    Properties:
+      DomainName: !Ref ApiDomainName
+      RegionalCertificateArn: !Ref ApiCertificateArn
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      SecurityPolicy: TLS_1_2
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Properties:
+      DomainName: !Ref ApiDomain
+      RestApiId: !Ref EidolonApi
+      Stage: !Ref ApiStage
+
+  ApiDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref Route53ZoneId
+      Name: !Ref ApiDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
+
+  # ============================================================
+  # WAF WebACL for API Gateway
+  # ============================================================
+  ApiGatewayWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: EidolonApiGatewayWebACL
+      Description: WAF protection for API Gateway REST endpoints
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: EidolonApiGatewayWebACL
+      Rules:
+        - Name: RateLimitAuthenticated
+          Priority: 0
+          Action:
+            Block:
+              CustomResponse:
+                ResponseCode: 429
+                ResponseHeaders:
+                  - Name: X-WAF-Block-Reason
+                    Value: rate-limit-exceeded
+                  - Name: Retry-After
+                    Value: "300"
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              AggregateKeyType: CUSTOM_KEYS
+              CustomKeys:
+                - Header:
+                    Name: Authorization
+                    TextTransformations:
+                      - Priority: 0
+                        Type: NONE
+              ScopeDownStatement:
+                ByteMatchStatement:
+                  SearchString: Bearer
+                  FieldToMatch:
+                    SingleHeader:
+                      Name: authorization
+                  TextTransformations:
+                    - Priority: 0
+                      Type: NONE
+                  PositionalConstraint: STARTS_WITH
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: ApiRateLimitAuth
+
+        - Name: RateLimitAnonymous
+          Priority: 1
+          Action:
+            Block:
+              CustomResponse:
+                ResponseCode: 429
+                ResponseHeaders:
+                  - Name: X-WAF-Block-Reason
+                    Value: rate-limit-exceeded
+                  - Name: Retry-After
+                    Value: "300"
+          Statement:
+            RateBasedStatement:
+              Limit: 20
+              AggregateKeyType: IP
+              ScopeDownStatement:
+                NotStatement:
+                  Statement:
+                    ByteMatchStatement:
+                      SearchString: Bearer
+                      FieldToMatch:
+                        SingleHeader:
+                          Name: authorization
+                      TextTransformations:
+                        - Priority: 0
+                          Type: NONE
+                      PositionalConstraint: STARTS_WITH
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: ApiRateLimitAnon
+
+        - Name: RequestSizeLimit
+          Priority: 2
+          Action:
+            Block: {}
+          Statement:
+            SizeConstraintStatement:
+              FieldToMatch:
+                Body: {}
+              ComparisonOperator: GT
+              Size: 10240
+              TextTransformations:
+                - Priority: 0
+                  Type: NONE
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: ApiRequestSizeBlock
+
+        - Name: AWSManagedRulesCoreRuleSet
+          Priority: 3
+          OverrideAction:
+            Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: ApiCoreRuleSet
+
+        - Name: AWSManagedRulesIPReputation
+          Priority: 4
+          OverrideAction:
+            Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: ApiIPReputation
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiWafAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub "arn:aws:apigateway:${AWS::Region}::/restapis/${EidolonApi}/stages/${ApiStage}"
+      WebACLArn: !GetAtt ApiGatewayWebACL.Arn
+
+Outputs:
+  RestApiId:
+    Description: API Gateway REST API ID
+    Value: !Ref EidolonApi
+
+  ApiUrl:
+    Description: API Gateway prod stage URL
+    Value: !Sub "https://${EidolonApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
+
+  ApiCustomUrl:
+    Description: API custom domain URL
+    Value: !Sub "https://${ApiDomainName}"
+
+  StageName:
+    Description: API Gateway stage name
+    Value: prod

@@ -1,0 +1,97 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CodeBuild project for Eidolon portal build and deployment
+
+Parameters:
+  CodeBuildRoleArn:
+    Type: String
+    Description: ARN of the CodeBuild service role
+
+  ClientBucketName:
+    Type: String
+    Description: S3 bucket for portal client assets
+
+  DistributionId:
+    Type: String
+    Description: CloudFront distribution ID for cache invalidation
+
+  CognitoUserPoolId:
+    Type: String
+    Description: Cognito User Pool ID
+
+  CognitoClientId:
+    Type: String
+    Description: Cognito User Pool Client ID
+
+  ApiDomain:
+    Type: String
+    Description: API Gateway custom domain (e.g. api.darkrelics.net)
+
+  GitHubOwner:
+    Type: String
+    Description: GitHub repository owner
+
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+
+  GitHubBranch:
+    Type: String
+    Description: GitHub branch to build from
+
+  DeploymentMode:
+    Type: String
+    AllowedValues:
+      - mud
+      - incremental
+      - hybrid
+    Description: Deployment mode (determines which buildspec to use)
+
+Conditions:
+  UseMudBuildspec: !Equals
+    - !Ref DeploymentMode
+    - mud
+
+Resources:
+  PortalBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: eidolon-portal-build
+      Description: Build project for Eidolon Engine portal
+      ServiceRole: !Ref CodeBuildRoleArn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: S3_BUCKET
+            Value: !Ref ClientBucketName
+          - Name: USER_POOL_ID
+            Value: !Ref CognitoUserPoolId
+          - Name: CLIENT_ID
+            Value: !Ref CognitoClientId
+          - Name: API_DOMAIN
+            Value: !Ref ApiDomain
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref "AWS::Region"
+          - Name: CLOUDFRONT_DISTRIBUTION_ID
+            Value: !Ref DistributionId
+      Source:
+        Type: GITHUB
+        Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
+        BuildSpec: !If
+          - UseMudBuildspec
+          - buildspec/portal.yml
+          - buildspec/incremental.yml
+        GitCloneDepth: 1
+      SourceVersion: !Ref GitHubBranch
+      TimeoutInMinutes: 15
+      Tags:
+        - Key: System
+          Value: eidolon
+
+Outputs:
+  PortalBuildProjectName:
+    Description: CodeBuild project name for portal build
+    Value: !Ref PortalBuildProject
