@@ -1492,31 +1492,6 @@ Resources:
             CloudWatchMetricsEnabled: true
             MetricName: ApiRequestSizeBlock
 
-        - Name: AWSManagedRulesCoreRuleSet
-          Priority: 3
-          OverrideAction:
-            Count: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: ApiCoreRuleSet
-
-        - Name: AWSManagedRulesIPReputation
-          Priority: 4
-          OverrideAction:
-            Count: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesAmazonIpReputationList
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: ApiIPReputation
       Tags:
         - Key: System
           Value: eidolon

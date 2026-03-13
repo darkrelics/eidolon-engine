@@ -95,11 +95,11 @@ def validate_config(config: dict) -> bool:
         print(f"  Valid modes: {', '.join(VALID_DEPLOYMENT_MODES)}")
         return False
 
-    if not validate_s3_bucket_name(config.get("s3_bucket")):
+    if not validate_s3_bucket_name(config.get("s3_bucket", "")):
         print(f"Error: Invalid S3 bucket name: {config.get('s3_bucket')}")
         return False
 
-    if not validate_s3_bucket_name(config.get("client_bucket")):
+    if not validate_s3_bucket_name(config.get("client_bucket", "")):
         print(f"Error: Invalid client bucket name: {config.get('client_bucket')}")
         return False
 
@@ -125,11 +125,11 @@ def validate_config(config: dict) -> bool:
         print(f"Error: Invalid client domain: {client_domain}")
         return False
 
-    if not validate_zone_id(config.get("route53_zone_id")):
+    if not validate_zone_id(config.get("route53_zone_id", "")):
         print(f"Error: Invalid Route53 zone ID: {config.get('route53_zone_id')}")
         return False
 
-    if not validate_email(config.get("reply_email")):
+    if not validate_email(config.get("reply_email", "")):
         print(f"Error: Invalid reply email: {config.get('reply_email')}")
         return False
 
@@ -188,9 +188,9 @@ def validate_resources(config: dict) -> bool:
     Returns:
         bool: True if all resources exist
     """
-    region = config.get("region")
-    s3_bucket = config.get("s3_bucket")
-    route53_zone_id = config.get("route53_zone_id")
+    region = config.get("region", "")
+    s3_bucket = config.get("s3_bucket", "")
+    route53_zone_id = config.get("route53_zone_id", "")
 
     print("Validating AWS resources...")
 

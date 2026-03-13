@@ -29,7 +29,6 @@ def retry_on_transient_error(func, max_retries: int = 3, base_delay: float = 2.0
     Raises:
         ClientError: If all retries exhausted or non-transient error
     """
-    last_error = None
     for attempt in range(max_retries + 1):
         try:
             return func()
@@ -39,7 +38,6 @@ def retry_on_transient_error(func, max_retries: int = 3, base_delay: float = 2.0
                 delay = base_delay * (2**attempt)
                 print(f"    Transient error ({error_code}), retrying in {delay:.1f}s...")
                 time.sleep(delay)
-                last_error = err
             else:
                 raise err from err
-    raise last_error
+    raise ClientError({"Error": {"Code": "RetriesExhausted", "Message": "All retries exhausted"}}, "Unknown")

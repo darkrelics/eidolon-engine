@@ -19,8 +19,8 @@ def wait_for_cloudfront_operational(domain: str, timeout_minutes: int = 35) -> b
     url = f"https://{domain}/"
     max_attempts = timeout_minutes * 6
     attempt = 0
-    last_error = None
-    last_error_type = None
+    last_error = ""
+    last_error_type = ""
     start_time = time.time()
 
     ssl_context = ssl.create_default_context()

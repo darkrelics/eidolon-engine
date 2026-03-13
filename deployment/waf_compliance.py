@@ -10,7 +10,7 @@ import sys
 import boto3
 from botocore.exceptions import ClientError
 
-from deployment.stacks.waf_config import load_waf_config
+from stacks.waf_config import load_waf_config
 
 
 def get_waf_client(scope: str) -> tuple:

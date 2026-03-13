@@ -71,18 +71,6 @@ Resources:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: CloudFrontRateLimitGeneral
-        - Name: AWSManagedRulesIPReputation
-          Priority: 1
-          OverrideAction:
-            Count: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesAmazonIpReputationList
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: CloudFrontIPReputation
       Tags:
         - Key: System
           Value: eidolon

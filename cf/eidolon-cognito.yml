@@ -174,18 +174,6 @@ Resources:
             SampledRequestsEnabled: true
             CloudWatchMetricsEnabled: true
             MetricName: CognitoRateLimit
-        - Name: AWSManagedRulesIPReputation
-          Priority: 1
-          OverrideAction:
-            Count: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesAmazonIpReputationList
-          VisibilityConfig:
-            SampledRequestsEnabled: true
-            CloudWatchMetricsEnabled: true
-            MetricName: CognitoIPReputation
       Tags:
         - Key: System
           Value: eidolon
