@@ -685,18 +685,7 @@ def delete_player_data(player_id: str) -> dict:
         "Errors": [],
     }
 
-    # Delete player record first
-    try:
-        delete_player_record(player_id)
-        results["Deletions"]["PlayerRecord"] = True
-    except RuntimeError as err:
-        logger.error(f"Failed to delete player record for {player_id} Error: {err}")
-        results["Errors"].append(f"Player record: {err}")
-    except Exception as err:
-        logger.error(f"Unexpected error deleting player record Error: {err}", exc_info=True)
-        results["Errors"].append(f"Player record: {err}")
-
-    # Delete all characters and their associated data
+    # Delete all characters and their associated data (BEFORE deleting player record)
     try:
         char_deletion_results = delete_all_characters_for_player(player_id)
         results["Deletions"]["Characters"] = char_deletion_results.get("CharactersDeleted", 0)
@@ -727,6 +716,17 @@ def delete_player_data(player_id: str) -> dict:
     except Exception as err:
         logger.error(f"Unexpected error deleting character history Error: {err}", exc_info=True)
         results["Errors"].append(f"Character history: {err}")
+
+    # Delete player record LAST (after reading CharacterList for cleanup above)
+    try:
+        delete_player_record(player_id)
+        results["Deletions"]["PlayerRecord"] = True
+    except RuntimeError as err:
+        logger.error(f"Failed to delete player record for {player_id} Error: {err}")
+        results["Errors"].append(f"Player record: {err}")
+    except Exception as err:
+        logger.error(f"Unexpected error deleting player record Error: {err}", exc_info=True)
+        results["Errors"].append(f"Player record: {err}")
 
     # Log summary
     logger.info(f"Deletion complete for {player_id}")

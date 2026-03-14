@@ -121,7 +121,7 @@ S3:
 
 # GitHub configuration
 GitHub:
-  Owner: robinje
+  Owner: darkrelics
   Repo: eidolon-engine
   Branch: develop
 

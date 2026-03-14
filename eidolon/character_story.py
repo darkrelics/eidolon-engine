@@ -403,9 +403,9 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
             apply_character_updates(character_id, character_updates)
             logger.info(f"Applied story outcome effects for {character_id}")
 
-    except ClientError as err:
+    except RuntimeError as err:
         logger.error(f"Failed to apply outcome effects for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to apply outcome effects: {err}") from err
+        raise
 
 
 def get_active_story_and_segment(character: dict) -> tuple:
@@ -444,8 +444,8 @@ def get_active_story_and_segment(character: dict) -> tuple:
         character_clear_story(character_id)
         return {}, {}
 
-    active_story_id = character.get("ActiveStoryID")
-    active_segment_id = character.get("ActiveSegmentID")
+    active_story_id: str = character.get("ActiveStoryID", "")
+    active_segment_id: str = character.get("ActiveSegmentID", "")
 
     # Validate both IDs are present and valid UUIDs
     story_valid = validate_uuid(active_story_id)
@@ -481,11 +481,6 @@ def get_active_story_and_segment(character: dict) -> tuple:
     if not active_segment:
         # Segment ID was valid but segment not found = broken chain
         logger.warning(f"Segment {active_segment_id} not found for character {character_id}")
-        character_clear_story(character_id)
-        return {}, {}
-
-    if not isinstance(active_story_id, str):
-        logger.warning(f"ActiveStoryID for character {character_id} is not a string; clearing story state")
         character_clear_story(character_id)
         return {}, {}
 

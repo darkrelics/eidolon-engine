@@ -711,7 +711,7 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
 
     try:
         character = get_character(character_id)
-    except ClientError as err:
+    except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to apply death/unconscious state for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply death/unconscious state: {err}") from err
 

@@ -41,6 +41,14 @@ class StoryLifecycle(str, Enum):
     ABANDONED = "Abandoned"
 
 
+# Valid ProcessingStatus transitions
+VALID_PROCESSING_TRANSITIONS = {
+    ProcessingStatus.PENDING: {ProcessingStatus.PROCESSING, ProcessingStatus.PROCESSED},
+    ProcessingStatus.PROCESSING: {ProcessingStatus.PROCESSED, ProcessingStatus.PENDING},
+    ProcessingStatus.PROCESSED: set(),
+}
+
+
 # Valid GameMode transitions
 VALID_GAMEMODE_TRANSITIONS = {
     GameMode.NONE: {GameMode.INCREMENTAL, GameMode.MUD},
@@ -270,89 +278,3 @@ def claim_segment_for_processing(active_segment_id: str) -> bool:
 
         logger.error(f"Failed to claim segment for processing {active_segment_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to claim segment: {err}") from err
-
-
-def mark_segment_processed(active_segment_id: str, outcome: str, character_updates: dict) -> bool:
-    """
-    Mark segment as processed (processing → processed).
-
-    Idempotent: safe to call multiple times.
-
-    Args:
-        active_segment_id: Active segment UUID
-        outcome: Segment outcome (normal/exceptional/minimal/failure/death)
-        character_updates: Dict of character updates to store
-
-    Returns:
-        True if update successful, False if already processed
-
-    Raises:
-        ValueError: If segment ID is empty
-        RuntimeError: If database error occurs
-    """
-    if not active_segment_id:
-        raise ValueError("Active segment ID cannot be empty")
-
-    try:
-        dynamo.update_item(
-            TableName.ACTIVE_SEGMENTS,
-            Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :processed, #outcome = :outcome_value, CharacterUpdates = :updates, ProcessedAt = :timestamp",
-            ConditionExpression="ProcessingStatus = :processing OR ProcessingStatus = :processed",
-            ExpressionAttributeNames={"#outcome": "Outcome"},
-            ExpressionAttributeValues={
-                ":processed": ProcessingStatus.PROCESSED.value,
-                ":processing": ProcessingStatus.PROCESSING.value,
-                ":outcome_value": outcome,
-                ":updates": character_updates,
-                ":timestamp": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-
-        logger.info(f"Marked segment as processed: {active_segment_id}, outcome={outcome}")
-        return True
-
-    except ClientError as err:
-        error_code = err.response.get("Error", {}).get("Code", "Unknown")
-
-        if error_code == "ConditionalCheckFailedException":
-            logger.warning(f"Segment not in processing state: {active_segment_id}")
-            return False
-
-        logger.error(f"Failed to mark segment processed {active_segment_id}: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to mark segment processed: {err}") from err
-
-
-def reset_segment_to_pending(active_segment_id: str) -> bool:
-    """
-    Reset segment back to pending state for retry.
-
-    Used by segment recovery logic when processing gets stuck.
-
-    Args:
-        active_segment_id: Active segment UUID
-
-    Returns:
-        True if reset successful
-
-    Raises:
-        ValueError: If segment ID is empty
-        RuntimeError: If database error occurs
-    """
-    if not active_segment_id:
-        raise ValueError("Active segment ID cannot be empty")
-
-    try:
-        dynamo.update_item(
-            TableName.ACTIVE_SEGMENTS,
-            Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :pending REMOVE ProcessingStartedAt, ProcessedAt",
-            ExpressionAttributeValues={":pending": ProcessingStatus.PENDING.value},
-        )
-
-        logger.info(f"Reset segment to pending for retry: {active_segment_id}")
-        return True
-
-    except ClientError as err:
-        logger.error(f"Failed to reset segment to pending {active_segment_id}: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to reset segment: {err}") from err

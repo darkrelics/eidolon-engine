@@ -48,8 +48,6 @@ def character_deletion(player_id: str, character_id: str) -> dict:
     # Delete the character
     deletion_result: dict = delete_character(character_id, remove_from_player_list=True)
 
-    logger.info(f"Character deletion completed for {character_id}")
-
     # Check if deletion was successful
     if not deletion_result.get("CharacterDeleted", False):
         error_msg = "Failed to delete character"
@@ -75,9 +73,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         Dict with status_code and body
     """
     # Get character ID from query parameters
-    character_id = get_query_parameter(event, "CharacterID")
-    if not character_id:
-        raise ValueError("Missing CharacterID parameter")
+    character_id: str = get_query_parameter(event, "CharacterID", required=True)
 
     if not validate_uuid(character_id):
         raise ValueError("Invalid CharacterID format")

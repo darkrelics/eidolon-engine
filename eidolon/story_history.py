@@ -14,7 +14,7 @@ from eidolon.logger import logger
 from eidolon.time_utils import now_iso
 
 
-def create_story_history_entry(character_id: str, story_id: str, story: dict) -> str:
+def create_story_history_entry(character_id: str, story_id: str, story: dict, story_instance_id: str = "") -> str:
     """
     Create initial history entry for story tracking with new schema.
 
@@ -22,6 +22,7 @@ def create_story_history_entry(character_id: str, story_id: str, story: dict) ->
         character_id: Character UUID
         story_id: Story UUID
         story: Story data from database containing Title and StoryType
+        story_instance_id: Pre-generated StoryInstanceID (optional, generates new if empty)
 
     Returns:
         StoryInstanceID (UUIDv7) for this story execution
@@ -33,7 +34,8 @@ def create_story_history_entry(character_id: str, story_id: str, story: dict) ->
     story_type = story.get("StoryType", "repeatable")
 
     try:
-        story_instance_id = str(uuid7())
+        if not story_instance_id:
+            story_instance_id = str(uuid7())
 
         history_entry = {
             "CharacterID": character_id,
@@ -199,55 +201,22 @@ def update_story_history_xp(character_id: str, story_instance_id: str, skill_xp:
                 expression_names[f"#attr_{safe_attr}"] = attribute
                 expression_values[f":xp_attr_{safe_attr}"] = Decimal(str(xp_value))
 
+        if not update_expressions:
+            return
+
         update_expression = "SET " + ", ".join(update_expressions)
 
-        dynamo.update_item(
-            TableName.STORY_HISTORY,
-            Key={"CharacterID": character_id, "StoryInstanceID": story_instance_id},
-            UpdateExpression=update_expression,
-            ExpressionAttributeNames=expression_names if expression_names else None,
-            ExpressionAttributeValues=expression_values,
-        )
+        update_kwargs = {
+            "Key": {"CharacterID": character_id, "StoryInstanceID": story_instance_id},
+            "UpdateExpression": update_expression,
+            "ExpressionAttributeValues": expression_values,
+        }
+        if expression_names:
+            update_kwargs["ExpressionAttributeNames"] = expression_names
+
+        dynamo.update_item(TableName.STORY_HISTORY, **update_kwargs)
 
         logger.info(f"Updated story history with XP for {character_id}")
     except ClientError as err:
         logger.error(f"Failed to update story history XP for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update story history XP: {err}") from err
-
-
-def ensure_story_history_exists(character_id: str, story_id: str, story_title: str) -> None:
-    """
-    Ensure story history record exists.
-
-    Creates a new story history record if one doesn't exist.
-
-    Args:
-        character_id: Character UUID
-        story_id: Story UUID
-        story_title: Story title for display
-
-    Raises:
-        RuntimeError: If database operations fail
-    """
-    try:
-        history = dynamo.get_item(
-            TableName.STORY_HISTORY,
-            {"CharacterID": character_id, "StoryID": story_id},
-        )
-
-        if not history:
-            dynamo.put_item(
-                TableName.STORY_HISTORY,
-                {
-                    "CharacterID": character_id,
-                    "StoryID": story_id,
-                    "StoryTitle": story_title,
-                    "StartedAt": now_iso(),
-                    "SkillXPAwarded": {},
-                    "AttributeXPAwarded": {},
-                },
-            )
-            logger.info(f"Created story history record for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to ensure story history exists for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to ensure story history exists: {err}") from err

@@ -39,12 +39,8 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
         ValueError: If character name is invalid, unavailable, or limit reached
         RuntimeError: If database operations fail
     """
-    # Validate character name format - let it raise ValueError
-    try:
-        validate_character_name(character_name)
-    except ValueError as err:
-        logger.warning(f"Character name validation failed for '{character_name}': {err}")
-        raise ValueError(f"Invalid character name: {err}") from err
+    # Validate character name format - raises ValueError on failure
+    validate_character_name(character_name)
 
     # Check bloom filter for restricted names (approve returns True when allowed)
     if not character_name_filter.approve(character_name.lower()):
@@ -52,51 +48,33 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
 
     # Check character limit
     can_create = check_character_limit(player_id)
-
-    logger.debug(f"Character limit check for {player_id}")
-
     if not can_create:
         raise ValueError("Character limit reached")
 
-    # Validate archetype or use defaults
+    # Look up requested archetype, falling back to default
     archetype_data: dict = {}
 
     if archetype_name:
-        # Try to get the archetype data
         logger.info(f"Looking up archetype: {archetype_name}")
         try:
             archetype_data = get_archetype(archetype_name)
         except RuntimeError as err:
             logger.error(f"Failed to retrieve archetype: {err}")
             raise RuntimeError(f"Failed to retrieve archetype: {archetype_name}") from err
-        if not archetype_data:
-            # Invalid archetype provided, load actual default archetype
-            logger.warning(f"Invalid archetype '{archetype_name}' provided, loading default archetype")
-            try:
-                archetype_data = get_archetype("default")
-            except RuntimeError as err:
-                logger.error(f"Failed to load default archetype: {err}")
-                raise RuntimeError("Failed to load default archetype") from err
-            if not archetype_data:
-                logger.error("Default archetype not found in database")
-                raise RuntimeError("Default archetype not configured in database")
-            archetype_name = "default"
+        if archetype_data:
+            logger.info(f"Archetype {archetype_name} found")
         else:
-            logger.info(
-                f"Archetype {archetype_name} found",
-            )
-    else:
-        # No archetype provided, load default archetype
-        logger.info("No archetype specified, loading default archetype")
+            logger.warning(f"Invalid archetype '{archetype_name}' provided, falling back to default")
+
+    if not archetype_data:
+        archetype_name = "default"
         try:
             archetype_data = get_archetype("default")
         except RuntimeError as err:
             logger.error(f"Failed to load default archetype: {err}")
             raise RuntimeError("Failed to load default archetype") from err
         if not archetype_data:
-            logger.error("Default archetype not found in database")
             raise RuntimeError("Default archetype not configured in database")
-        archetype_name = "default"
 
     # Create the character using the eidolon library function
     result: dict = create_character(player_id, character_name, archetype_name, archetype_data)

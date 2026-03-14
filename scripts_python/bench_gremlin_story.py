@@ -334,8 +334,7 @@ def main():
     print("\n" + "=" * 70)
     print("HYPOTHESIS")
     print("=" * 70)
-    print(
-        """
+    print("""
 Based on simulation results, the actual success rate is 72-85%, not 10%.
 
 If 90%+ failure is observed in practice, potential causes:
@@ -368,8 +367,7 @@ RECOMMENDATIONS:
 - Add Investigation skill to Rogue/Warrior starting skills
 - OR reduce challenge difficulties from 3 to 2
 - OR change outcome thresholds to be more forgiving
-"""
-    )
+""")
 
 
 if __name__ == "__main__":

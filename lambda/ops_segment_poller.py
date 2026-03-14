@@ -81,8 +81,12 @@ def poll_segments() -> None:
                 # Normal advancement - send just the ActiveSegmentID string
                 advancement_messages.append({"body": active_segment_id})
                 logger.debug(f"Segment ready for advancement: {active_segment_id}")
+            elif processing_status == "processing":
+                # Worker is actively processing - do not interfere
+                # The stuck-segment handler will deal with this if it takes too long
+                logger.debug(f"Segment still being processed, skipping: {active_segment_id}")
             else:
-                # Not processed in time - check segment type before marking exceptional
+                # Not processed in time (pending) - check segment type before marking exceptional
                 segment_type = segment.get("SegmentType")
 
                 if segment_type == "mechanical":
@@ -104,10 +108,10 @@ def poll_segments() -> None:
 
         if advancement_messages:
             if not STORY_ADVANCEMENT_QUEUE_URL:
-                raise RuntimeError("STORY_ADVANCEMENT_QUEUE_URL environment variable not set")
-
-            result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
-            segments_to_advance = result.get("successful", 0)
+                logger.error("STORY_ADVANCEMENT_QUEUE_URL not set, cannot advance segments")
+            else:
+                result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
+                segments_to_advance = result.get("successful", 0)
 
     except Exception as err:
         logger.error(f"Failed to process expiring segments: {err}", exc_info=True)
@@ -191,10 +195,7 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         return {"statusCode": 200, "body": {"Message": "Segment polling completed"}}
 
-    except ClientError as err:
-        logger.error(f"Segment polling failed: {err}", exc_info=True)
-        return {"statusCode": 500, "body": {"Message": "Segment polling failed", "Error": str(err)}}
-    except RuntimeError as err:
+    except (ClientError, RuntimeError) as err:
         logger.error(f"Segment polling failed: {err}", exc_info=True)
         return {"statusCode": 500, "body": {"Message": "Segment polling failed", "Error": str(err)}}
     except Exception as err:

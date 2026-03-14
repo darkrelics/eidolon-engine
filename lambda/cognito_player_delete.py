@@ -46,15 +46,8 @@ def delete_player(player_id: str) -> dict:
         ValueError: If player_id is invalid
         RuntimeError: If deletion operations fail
     """
-    # Use the eidolon library to orchestrate complete player deletion
-    try:
-        results: dict = delete_player_data(player_id)
-    except ValueError as err:
-        logger.error(f"Invalid player ID: {err}", exc_info=True)
-        raise err
-
+    results: dict = delete_player_data(player_id)
     logger.info(f"Player deletion completed: {player_id} results: {results}")
-
     return results
 
 
@@ -83,17 +76,22 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Extract player ID based on event source
         if "detail" in event and "requestParameters" in event.get("detail", {}):
             # CloudWatch Events from Cognito
-            player_id: str = event.get("detail", {}).get("requestParameters", {}).get("username")
-        elif "body" in event:
-            # API Gateway or direct invocation
-            body: dict = event.get("body", {})
-            player_id = body.get("player_id", "") if body else ""
-        elif "player_id" in event:
-            # Direct invocation
-            player_id = event.get("player_id", "")
+            player_id = event.get("detail", {}).get("requestParameters", {}).get("username", "")
         elif "requestContext" in event and "authorizer" in event.get("requestContext", {}):
             # API Gateway with Cognito authorizer
             player_id = safe_extract_player_id(event)
+        elif "body" in event:
+            # Direct invocation with body
+            body = event.get("body", {})
+            if isinstance(body, str):
+                try:
+                    body = json.loads(body)
+                except (json.JSONDecodeError, TypeError):
+                    body = {}
+            player_id = body.get("player_id", "") if isinstance(body, dict) else ""
+        elif "player_id" in event:
+            # Direct invocation
+            player_id = event.get("player_id", "")
 
         if not player_id:
             logger.error("No player ID provided in request")

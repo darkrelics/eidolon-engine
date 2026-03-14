@@ -1,4 +1,4 @@
-module github.com/robinje/eidolon-engine
+module github.com/darkrelics/eidolon-engine
 
 go 1.24.13
 

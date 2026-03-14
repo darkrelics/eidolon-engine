@@ -85,7 +85,7 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 
 **Priority:** CRITICAL
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/695
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/695
 
 #### Implementation Summary
 
@@ -147,7 +147,7 @@ cloudfront.Distribution(
 
 **Priority:** CRITICAL
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/694
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/694
 
 #### Implementation Summary
 
@@ -210,7 +210,7 @@ def _associate_api_waf(self):
 
 **Priority:** CRITICAL
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/693
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/693
 
 #### Implementation Summary
 
@@ -346,7 +346,7 @@ python deployment/waf_compliance.py --check-all
 
 **Priority:** CRITICAL
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/616
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/616
 
 #### Audit Scope
 
@@ -449,7 +449,7 @@ safety check
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/603
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/603
 
 #### Dashboard Requirements
 
@@ -658,7 +658,7 @@ def create_alarms(self):
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/729
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/729
 
 #### Document Outline
 
@@ -743,7 +743,7 @@ def create_alarms(self):
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/729
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/729
 
 #### Document Outline
 
@@ -827,7 +827,7 @@ def create_alarms(self):
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/729
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/729
 
 #### Document Outline
 
@@ -916,7 +916,7 @@ def create_alarms(self):
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/729
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/729
 
 #### Document Outline
 
@@ -989,7 +989,7 @@ def create_alarms(self):
 
 **Priority:** HIGH (Critical for R2 user experience)
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/722
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/722
 
 ---
 
@@ -1949,7 +1949,7 @@ Based on user requirements, implemented a minimal, surgical enhancement to the e
 
 **Priority:** DEFERRED
 **Status:** ⏸️ Deferred until principle development complete
-**Issue:** https://github.com/robinje/eidolon-engine/issues/606
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/606
 
 **Rationale:** Story discovery is a quality-of-life feature. Core gameplay loop (character management → story selection → progression) works without advanced filtering. Players can still start stories from the character screen's available story list. This feature will be implemented once principle development is complete and user feedback identifies the most valuable filtering/search capabilities.
 
@@ -2043,7 +2043,7 @@ List<Story> _filterStories(List<Story> stories) {
 
 **Priority:** MEDIUM
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/703
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/703
 
 #### Problem Statement
 
@@ -2128,7 +2128,7 @@ Template automatically:
 
 **Priority:** DEFERRED
 **Status:** ⏸️ Deferred until principle development complete
-**Issue:** https://github.com/robinje/eidolon-engine/issues/615
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/615
 
 **Rationale:** Basic cost awareness can be achieved through AWS billing console monitoring during beta. Automated budget controls will be implemented once principle development is complete and cost patterns are established.
 

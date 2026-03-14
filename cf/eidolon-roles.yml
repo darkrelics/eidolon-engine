@@ -1,0 +1,306 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: IAM roles and policies for Eidolon Engine
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: S3 bucket for Lambda artifacts
+  ClientBucketName:
+    Type: String
+    Description: S3 bucket for portal client assets
+  ScriptsBucketName:
+    Type: String
+    Description: S3 bucket for Lua scripts
+    Default: ""
+
+Conditions:
+  HasScriptsBucket: !Not [!Equals [!Ref ScriptsBucketName, ""]]
+
+Resources:
+  # DynamoDB access policy for all 14 game tables + indexes
+  DynamoDBAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: eidolon-dynamodb-policy
+      Description: Read/write access to Eidolon Engine DynamoDB tables
+      Path: /
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:DescribeTable
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+              - dynamodb:DeleteItem
+              - dynamodb:Query
+              - dynamodb:Scan
+              - dynamodb:BatchGetItem
+              - dynamodb:BatchWriteItem
+            Resource:
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/players"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/characters"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/characters/index/CharacterNameIndex"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/rooms"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/exits"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/items"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prototypes"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/archetypes"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/motd"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/story"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/segments"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/active_segments"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/active_segments/index/CharacterID-index"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/active_segments/index/EndTimeIndex"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/story_history"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/segment_history"
+              - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/opponents"
+
+  # CloudWatch Logs permissions for Lambda functions
+  LambdaLogsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: eidolon-lambda-logs-policy
+      Description: CloudWatch Logs permissions for Lambda functions
+      Path: /
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: logs:CreateLogGroup
+            Resource:
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*:*"
+
+  # Story processing permissions: SSM, SQS, EventBridge
+  StoryPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: eidolon-story-policy
+      Description: Permissions for story processing operations
+      Path: /
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:PutParameter
+            Resource:
+              - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/eidolon/story/*"
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:GetQueueAttributes
+              - sqs:GetQueueUrl
+            Resource:
+              - !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:eidolon-processing-queue"
+              - !Sub "arn:aws:sqs:${AWS::Region}:${AWS::AccountId}:eidolon-advancement-queue"
+          - Effect: Allow
+            Action:
+              - events:EnableRule
+              - events:DisableRule
+            Resource:
+              - !Sub "arn:aws:events:${AWS::Region}:${AWS::AccountId}:rule/eidolon-story-poller"
+
+  # CloudWatch policy for server log group and metrics
+  CloudWatchPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: eidolon-cloudwatch-policy
+      Description: CloudWatch access for Eidolon server
+      Path: /
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+            Resource:
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/eidolon/server:*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/eidolon/server:*:*"
+          - Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: eidolon/metrics
+            Resource: "*"
+
+  # Scripts S3 bucket access policy
+  ScriptsS3Policy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: HasScriptsBucket
+    Properties:
+      ManagedPolicyName: eidolon-scripts-s3-policy
+      Description: Read/write access to scripts bucket
+      Path: /
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${ScriptsBucketName}"
+              - !Sub "arn:${AWS::Partition}:s3:::${ScriptsBucketName}/*"
+
+  # CodeBuild CloudWatch Logs policy
+  CodeBuildLogsPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: eidolon-codebuild-logs-policy
+      Description: CloudWatch Logs permissions for CodeBuild projects
+      Path: /
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*"
+              - !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/*:*"
+
+  # CodeBuild S3 access policy (lambda, portal, scripts buckets)
+  CodeBuildS3Policy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: eidolon-codebuild-s3-policy
+      Description: S3 access for CodeBuild projects
+      Path: /
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${S3BucketName}"
+              - !Sub "arn:${AWS::Partition}:s3:::${S3BucketName}/*"
+              - !Sub "arn:${AWS::Partition}:s3:::${ClientBucketName}"
+              - !Sub "arn:${AWS::Partition}:s3:::${ClientBucketName}/*"
+          - Effect: Allow
+            Action:
+              - cloudfront:CreateInvalidation
+            Resource:
+              - !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*"
+
+  # Lambda execution role - shared by all Eidolon Lambda functions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eidolon-lambda-execution-role
+      Description: Shared execution role for all Eidolon Engine Lambda functions
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref LambdaLogsPolicy
+        - !Ref DynamoDBAccessPolicy
+        - !Ref StoryPolicy
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaSQSQueueExecutionRole
+      Path: /
+
+  # CodeBuild service role - shared by all CodeBuild projects
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eidolon-codebuild-role
+      Description: Service role for Eidolon CodeBuild projects
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Ref CodeBuildLogsPolicy
+        - !Ref CodeBuildS3Policy
+      Path: /
+
+  # Server execution role - for Go SSH server on EC2/ECS
+  ServerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: eidolon-server-execution-role
+      Description: Execution role for Eidolon SSH game server
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+                - ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+        - !Ref DynamoDBAccessPolicy
+        - !Ref CloudWatchPolicy
+        - !If [HasScriptsBucket, !Ref ScriptsS3Policy, !Ref "AWS::NoValue"]
+      Path: /
+
+  ServerInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: eidolon-server-instance-profile
+      Roles:
+        - !Ref ServerExecutionRole
+
+Outputs:
+  LambdaExecutionRoleArn:
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt LambdaExecutionRole.Arn
+
+  CodeBuildRoleArn:
+    Description: ARN of the CodeBuild service role
+    Value: !GetAtt CodeBuildRole.Arn
+
+  ServerExecutionRoleArn:
+    Description: ARN of the server execution role
+    Value: !GetAtt ServerExecutionRole.Arn
+
+  DynamoDBPolicyArn:
+    Description: ARN of the DynamoDB access policy
+    Value: !Ref DynamoDBAccessPolicy
+
+  StoryPolicyArn:
+    Description: ARN of the story processing policy
+    Value: !Ref StoryPolicy
+
+  CloudWatchPolicyArn:
+    Description: ARN of the CloudWatch policy
+    Value: !Ref CloudWatchPolicy
+
+  ScriptsS3PolicyArn:
+    Condition: HasScriptsBucket
+    Description: ARN of the scripts S3 access policy
+    Value: !Ref ScriptsS3Policy
+
+  ServerInstanceProfileArn:
+    Description: ARN of the server instance profile
+    Value: !GetAtt ServerInstanceProfile.Arn
