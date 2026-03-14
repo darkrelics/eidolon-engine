@@ -19,26 +19,15 @@ Parameters:
     Description: FQDN for portal (e.g. portal.darkrelics.net)
 
 Resources:
-  # Origin Access Identity for S3
-  PortalOAI:
-    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+  # Origin Access Control for S3
+  PortalOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
     Properties:
-      CloudFrontOriginAccessIdentityConfig:
-        Comment: !Sub "OAI for ${ClientBucketName} portal"
-
-  # Bucket policy granting OAI access to portal bucket
-  PortalBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ClientBucketName
-      PolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              CanonicalUser: !GetAtt PortalOAI.S3CanonicalUserId
-            Action: s3:GetObject
-            Resource: !Sub "arn:aws:s3:::${ClientBucketName}/*"
+      OriginAccessControlConfig:
+        Name: EidolonPortalOAC
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
 
   # WAF WebACL for CloudFront (must be CLOUDFRONT scope in us-east-1)
   CloudFrontWebACL:
@@ -91,7 +80,8 @@ Resources:
           - Id: S3Origin
             DomainName: !Sub "${ClientBucketName}.s3.${AWS::Region}.amazonaws.com"
             S3OriginConfig:
-              OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${PortalOAI}"
+              OriginAccessIdentity: ""
+            OriginAccessControlId: !Ref PortalOriginAccessControl
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
           CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6

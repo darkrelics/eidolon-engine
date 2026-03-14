@@ -25,7 +25,6 @@ REQUIRED_TEMPLATES = [
 
 CONDITIONAL_TEMPLATES = {
     "cf/eidolon-lambda-story.yml": ["incremental", "hybrid"],
-    "cf/eidolon-s3-scripts.yml": ["mud", "hybrid"],
     "cf/eidolon-cloudwatch.yml": ["mud", "hybrid"],
 }
 
@@ -46,12 +45,6 @@ def validate_zone_id(zone_id: str) -> bool:
     """Validate Route53 hosted zone ID format."""
     pattern = r"^Z[A-Z0-9]{1,31}$"
     return bool(re.match(pattern, zone_id))
-
-
-def validate_email(email: str) -> bool:
-    """Validate email address format."""
-    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-    return bool(re.match(pattern, email))
 
 
 def validate_config(config: dict) -> bool:
@@ -75,7 +68,6 @@ def validate_config(config: dict) -> bool:
         "route53_zone_id",
         "api_host",
         "client_host",
-        "reply_email",
     ]
 
     missing_fields = []
@@ -127,10 +119,6 @@ def validate_config(config: dict) -> bool:
 
     if not validate_zone_id(config.get("route53_zone_id", "")):
         print(f"Error: Invalid Route53 zone ID: {config.get('route53_zone_id')}")
-        return False
-
-    if not validate_email(config.get("reply_email", "")):
-        print(f"Error: Invalid reply email: {config.get('reply_email')}")
         return False
 
     return True
@@ -198,6 +186,20 @@ def validate_resources(config: dict) -> bool:
         print(f"Error: Lambda S3 bucket does not exist: {s3_bucket}")
         return False
     print(f"  Lambda S3 bucket: {s3_bucket}")
+
+    client_bucket = config.get("client_bucket", "")
+    if not s3_bucket_exists(client_bucket, region):
+        print(f"Error: Client S3 bucket does not exist: {client_bucket}")
+        return False
+    print(f"  Client S3 bucket: {client_bucket}")
+
+    deployment_mode = config.get("deployment_mode", "")
+    scripts_bucket = config.get("scripts_bucket", "")
+    if scripts_bucket and deployment_mode in ["mud", "hybrid"]:
+        if not s3_bucket_exists(scripts_bucket, region):
+            print(f"Error: Scripts S3 bucket does not exist: {scripts_bucket}")
+            return False
+        print(f"  Scripts S3 bucket: {scripts_bucket}")
 
     if not route53_zone_exists(route53_zone_id):
         print(f"Error: Route53 hosted zone does not exist: {route53_zone_id}")

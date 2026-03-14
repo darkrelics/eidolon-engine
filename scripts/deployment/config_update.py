@@ -6,26 +6,47 @@ import yaml
 from deployment.cloudformation import get_stack_output
 
 
-def update_config_from_stacks(cf_client, config_path: str, deployment_mode: str):
+def update_config_from_stacks(cf_client, config_path: Path, deployment_config: dict):
     """Read stack outputs and update config.yml with infrastructure values.
 
-    Preserves game settings, DynamoDB table names, and other static config.
-    Only updates fields that come from CloudFormation stack outputs.
+    Persists deployment parameters and stack outputs to config.yml.
 
     Args:
         cf_client: boto3 CloudFormation client
         config_path: Path to config.yml
-        deployment_mode: Current deployment mode
+        deployment_config: Flat deployment config dict with user overrides
     """
     config_file = Path(config_path)
     with open(config_file, "r", encoding="utf-8") as fh:
         config = yaml.safe_load(fh)
+
+    deployment_mode = deployment_config.get("deployment_mode", "")
+
+    # Persist deployment parameters
+    if "Deployment" not in config:
+        config["Deployment"] = {}
+    config["Deployment"]["Mode"] = deployment_mode
+    config["Deployment"]["S3Bucket"] = deployment_config.get("s3_bucket", "")
+    config["Deployment"]["ClientBucket"] = deployment_config.get("client_bucket", "")
+    config["Deployment"]["Domain"] = deployment_config.get("domain", "")
+    config["Deployment"]["Route53ZoneId"] = deployment_config.get("route53_zone_id", "")
+    config["Deployment"]["ApiHost"] = deployment_config.get("api_host", "")
+    config["Deployment"]["ClientHost"] = deployment_config.get("client_host", "")
+    scripts_bucket = deployment_config.get("scripts_bucket", "")
+    if scripts_bucket:
+        config["Deployment"]["ScriptsBucket"] = scripts_bucket
+
+    if "GitHub" not in config:
+        config["GitHub"] = {}
+    config["GitHub"]["Branch"] = deployment_config.get("github_branch", "")
 
     # Cognito outputs
     user_pool_id = get_stack_output(cf_client, "eidolon-cognito", "UserPoolId")
     user_pool_arn = get_stack_output(cf_client, "eidolon-cognito", "UserPoolArn")
     user_pool_client_id = get_stack_output(cf_client, "eidolon-cognito", "UserPoolClientId")
 
+    if "Cognito" not in config:
+        config["Cognito"] = {}
     if user_pool_id:
         config["Cognito"]["UserPoolId"] = user_pool_id
     if user_pool_arn:
@@ -60,11 +81,6 @@ def update_config_from_stacks(cf_client, config_path: str, deployment_mode: str)
             config["CloudWatch"]["LogGroup"] = log_group
         if metrics_ns:
             config["CloudWatch"]["MetricsNamespace"] = metrics_ns
-
-    # Deployment mode
-    if "Deployment" not in config:
-        config["Deployment"] = {}
-    config["Deployment"]["Mode"] = deployment_mode
 
     # Write updated config
     with open(config_file, "w", encoding="utf-8") as fh:

@@ -1,11 +1,12 @@
 """Deploy Eidolon infrastructure using CloudFormation templates."""
 
-import os
 import sys
 import time
+from pathlib import Path
 
 import boto3
 import yaml
+from botocore.exceptions import ClientError
 from deployment.acm import certificate_exists, wait_for_certificate_validation
 from deployment.apigateway import force_api_gateway_deployment
 from deployment.cloudformation import deploy_stack, get_stack_output
@@ -14,13 +15,12 @@ from deployment.codebuild import trigger_build
 from deployment.config_update import update_config_from_stacks
 from deployment.lambda_utils import (
     cleanup_old_layer_versions,
-    get_latest_layer_version_arn,
     publish_layer_version,
     update_lambda_function_code,
 )
-from deployment.s3 import upload_scripts_to_s3
+from deployment.s3 import set_bucket_policy_for_cloudfront, upload_scripts_to_s3
 from deployment.tracker import DeploymentTracker
-from deployment.validation import validate_config, validate_environment, validate_resources
+from deployment.validation import VALID_DEPLOYMENT_MODES, validate_config, validate_environment, validate_resources
 
 tracker = DeploymentTracker()
 
@@ -37,7 +37,6 @@ STACK_MODE_MATRIX = {
     "eidolon-api-gateway": ["mud", "incremental", "hybrid"],
     "eidolon-portal-cloudfront": ["mud", "incremental", "hybrid"],
     "eidolon-codebuild-portal": ["mud", "incremental", "hybrid"],
-    "eidolon-s3-scripts": ["mud", "hybrid"],
     "eidolon-cloudwatch": ["mud", "hybrid"],
 }
 
@@ -74,7 +73,11 @@ def print_deployment_plan(config: dict):
     print(f"  Mode:            {mode}")
     print(f"  API Domain:      {api_host}.{domain}")
     print(f"  Portal Domain:   {client_host}.{domain}")
-    print(f"  S3 Bucket:       {config.get('s3_bucket', '')}")
+    print(f"  S3 Lambda:       {config.get('s3_bucket', '')}")
+    print(f"  S3 Client:       {config.get('client_bucket', '')}")
+    scripts = config.get("scripts_bucket", "")
+    if scripts:
+        print(f"  S3 Scripts:      {scripts}")
     print(f"  GitHub:          {config.get('github_owner', '')}/{config.get('github_repo', '')} ({config.get('github_branch', '')})")
 
     print("\n  Stacks to deploy:")
@@ -82,6 +85,34 @@ def print_deployment_plan(config: dict):
         marker = "[YES]" if mode in modes else "[SKIP]"
         print(f"    {marker} {stack_name}")
     print()
+
+
+def prompt_param(prompt: str, current: str, required: bool = False) -> str:
+    """Prompt for a parameter value, showing the current value as default.
+
+    Shows [current] and accepts Enter to keep it, or type a new value to override.
+
+    Args:
+        prompt: Description of the parameter
+        current: Current value from config
+        required: If True, loops until a value is provided
+
+    Returns:
+        The resolved parameter value
+    """
+    if current:
+        user_input = input(f"  {prompt} [{current}]: ").strip()
+        return user_input if user_input else current
+
+    if required:
+        value = ""
+        while not value:
+            value = input(f"  {prompt}: ").strip()
+            if not value:
+                print(f"    Value is required for {prompt}")
+        return value
+
+    return input(f"  {prompt}: ").strip()
 
 
 def extract_deploy_config(full_config: dict) -> dict:
@@ -106,27 +137,63 @@ def extract_deploy_config(full_config: dict) -> dict:
         "route53_zone_id": deployment.get("Route53ZoneId", ""),
         "api_host": deployment.get("ApiHost", ""),
         "client_host": deployment.get("ClientHost", ""),
-        "reply_email": deployment.get("ReplyEmail", ""),
         "github_owner": github.get("Owner", ""),
         "github_repo": github.get("Repo", ""),
         "github_branch": github.get("Branch", ""),
     }
 
 
-def main():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    base_dir = os.path.dirname(script_dir)
+def collect_deployment_params(config: dict) -> dict:
+    """Collect deployment parameters, prompting for overrides.
 
-    config_path = os.path.join(base_dir, "config.yml")
-    if not os.path.exists(config_path):
+    Config values are shown as defaults. User can press Enter to accept
+    or type a new value to override.
+
+    Args:
+        config: Flat config dictionary from extract_deploy_config
+
+    Returns:
+        Updated config dictionary with user overrides applied
+    """
+    print("\nDeployment Parameters:")
+
+    config["deployment_mode"] = prompt_param("Deployment Mode (mud/incremental/hybrid)", config.get("deployment_mode", ""), required=True)
+    if config.get("deployment_mode", "") not in VALID_DEPLOYMENT_MODES:
+        print(f"Error: Invalid deployment mode: {config.get('deployment_mode')}")
+        print(f"  Valid modes: {', '.join(VALID_DEPLOYMENT_MODES)}")
+        sys.exit(1)
+
+    config["s3_bucket"] = prompt_param("S3 Lambda Bucket", config.get("s3_bucket", ""), required=True)
+    config["client_bucket"] = prompt_param("S3 Client Bucket", config.get("client_bucket", ""), required=True)
+
+    if config.get("deployment_mode", "") in ["mud", "hybrid"]:
+        config["scripts_bucket"] = prompt_param("S3 Scripts Bucket", config.get("scripts_bucket", ""), required=True)
+
+    config["github_branch"] = prompt_param("GitHub Branch", config.get("github_branch", ""), required=True)
+    config["domain"] = prompt_param("Domain", config.get("domain", ""), required=True)
+    config["route53_zone_id"] = prompt_param("Route53 Zone ID", config.get("route53_zone_id", ""), required=True)
+    config["api_host"] = prompt_param("API Host", config.get("api_host", ""), required=True)
+    config["client_host"] = prompt_param("Client Host", config.get("client_host", ""), required=True)
+
+    return config
+
+
+def main():
+    base_dir = Path(__file__).resolve().parent.parent
+    config_path = base_dir / "config.yml"
+
+    if not config_path.exists():
         print(f"Error: Config file not found: {config_path}")
         sys.exit(1)
 
     with open(config_path, "r", encoding="utf-8") as config_file:
         config = extract_deploy_config(yaml.safe_load(config_file))
 
+    # Collect parameters interactively (config values shown as defaults)
+    config = collect_deployment_params(config)
+
     # Step 1: Validate
-    print("=== Step 1: Validating Configuration ===")
+    print("\n=== Step 1: Validating Configuration ===")
     tracker.start_step(1, "Validating Configuration")
 
     if not validate_config(config):
@@ -134,7 +201,7 @@ def main():
     print("  Config validated")
 
     deployment_mode = config.get("deployment_mode", "")
-    account_id = validate_environment(base_dir, deployment_mode)
+    account_id = validate_environment(str(base_dir), deployment_mode)
     if not account_id:
         sys.exit(1)
     print("  Environment validated")
@@ -146,6 +213,11 @@ def main():
     tracker.complete_step()
 
     print_deployment_plan(config)
+
+    response = input("Proceed with deployment? [Y/n]: ").strip().lower()
+    if response == "n":
+        print("Deployment cancelled")
+        sys.exit(0)
 
     # Extract config values
     region = config.get("region", "")
@@ -164,6 +236,7 @@ def main():
 
     # Initialize AWS clients
     cf = boto3.client("cloudformation", region_name=region)
+    cf_dir = base_dir / "cf"
 
     # Step 2: Deploy IAM Roles
     print("\n=== Step 2: Deploying IAM Roles ===")
@@ -173,9 +246,7 @@ def main():
         "ClientBucketName": client_bucket,
         "ScriptsBucketName": scripts_bucket,
     }
-    if not deploy_stack(
-        cf, "eidolon-roles", os.path.join(base_dir, "cf", "eidolon-roles.yml"), roles_params, ["CAPABILITY_NAMED_IAM"]
-    ):
+    if not deploy_stack(cf, "eidolon-roles", cf_dir / "eidolon-roles.yml", roles_params, ["CAPABILITY_NAMED_IAM"]):
         print("Error: Failed to deploy IAM roles")
         tracker.print_summary()
         sys.exit(1)
@@ -196,7 +267,7 @@ def main():
     # Step 3: Deploy DynamoDB Tables
     print("\n=== Step 3: Deploying DynamoDB Tables ===")
     tracker.start_step(3, "Deploying DynamoDB Tables")
-    if not deploy_stack(cf, "eidolon-dynamo", os.path.join(base_dir, "cf", "eidolon-dynamo.yml"), {}):
+    if not deploy_stack(cf, "eidolon-dynamo", cf_dir / "eidolon-dynamo.yml", {}):
         print("Error: Failed to deploy DynamoDB tables")
         tracker.print_summary()
         sys.exit(1)
@@ -210,7 +281,7 @@ def main():
         "ClientHostName": client_domain,
         "Route53ZoneId": route53_zone_id,
     }
-    if not deploy_stack(cf, "eidolon-certificate", os.path.join(base_dir, "cf", "eidolon-certificate.yml"), cert_params):
+    if not deploy_stack(cf, "eidolon-certificate", cf_dir / "eidolon-certificate.yml", cert_params):
         print("Error: Failed to deploy ACM certificates")
         tracker.print_summary()
         sys.exit(1)
@@ -248,7 +319,7 @@ def main():
         "GitHubRepo": github_repo,
         "GitHubBranch": github_branch,
     }
-    if not deploy_stack(cf, "eidolon-codebuild", os.path.join(base_dir, "cf", "eidolon-codebuild.yml"), codebuild_params):
+    if not deploy_stack(cf, "eidolon-codebuild", cf_dir / "eidolon-codebuild.yml", codebuild_params):
         print("Error: Failed to deploy CodeBuild projects")
         tracker.print_summary()
         sys.exit(1)
@@ -299,9 +370,7 @@ def main():
     # Step 9: Deploy Cognito Lambda Functions
     print("\n=== Step 9: Deploying Cognito Lambda Functions ===")
     tracker.start_step(9, "Deploying Cognito Lambda Functions")
-    if not deploy_stack(
-        cf, "eidolon-lambda-cognito", os.path.join(base_dir, "cf", "eidolon-lambda-cognito.yml"), lambda_params
-    ):
+    if not deploy_stack(cf, "eidolon-lambda-cognito", cf_dir / "eidolon-lambda-cognito.yml", lambda_params):
         print("Error: Failed to deploy Cognito Lambda functions")
         tracker.print_summary()
         sys.exit(1)
@@ -316,7 +385,10 @@ def main():
     # Update Cognito function code from S3
     cognito_functions = ["cognito-player-new", "cognito-player-delete"]
     for func_name in cognito_functions:
-        update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip")
+        if not update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip"):
+            print(f"Error: Failed to update {func_name} code")
+            tracker.print_summary()
+            sys.exit(1)
     print("  Updated Cognito function code from S3")
     tracker.complete_step()
 
@@ -327,7 +399,7 @@ def main():
         "PostConfirmationLambdaArn": cognito_player_new_arn,
         "AllowedOrigins": allowed_origins,
     }
-    if not deploy_stack(cf, "eidolon-cognito", os.path.join(base_dir, "cf", "eidolon-cognito.yml"), cognito_params):
+    if not deploy_stack(cf, "eidolon-cognito", cf_dir / "eidolon-cognito.yml", cognito_params):
         print("Error: Failed to deploy Cognito")
         tracker.print_summary()
         sys.exit(1)
@@ -346,9 +418,7 @@ def main():
     # Step 11: Deploy Character Lambda Functions
     print("\n=== Step 11: Deploying Character Lambda Functions ===")
     tracker.start_step(11, "Deploying Character Lambda Functions")
-    if not deploy_stack(
-        cf, "eidolon-lambda-character", os.path.join(base_dir, "cf", "eidolon-lambda-character.yml"), lambda_params
-    ):
+    if not deploy_stack(cf, "eidolon-lambda-character", cf_dir / "eidolon-lambda-character.yml", lambda_params):
         print("Error: Failed to deploy Character Lambda functions")
         tracker.print_summary()
         sys.exit(1)
@@ -360,7 +430,10 @@ def main():
         "api-item-discard", "api-item-consolidate", "api-item-split", "api-store-list", "api-store-purchase",
     ]
     for func_name in character_functions:
-        update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip")
+        if not update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip"):
+            print(f"Error: Failed to update {func_name} code")
+            tracker.print_summary()
+            sys.exit(1)
     print(f"  Deployed and updated {len(character_functions)} character functions")
     tracker.complete_step()
 
@@ -368,9 +441,7 @@ def main():
     if should_deploy_stack("eidolon-lambda-story", deployment_mode):
         print("\n=== Step 12: Deploying Story Lambda Functions ===")
         tracker.start_step(12, "Deploying Story Lambda Functions")
-        if not deploy_stack(
-            cf, "eidolon-lambda-story", os.path.join(base_dir, "cf", "eidolon-lambda-story.yml"), lambda_params
-        ):
+        if not deploy_stack(cf, "eidolon-lambda-story", cf_dir / "eidolon-lambda-story.yml", lambda_params):
             print("Error: Failed to deploy Story Lambda functions")
             tracker.print_summary()
             sys.exit(1)
@@ -382,7 +453,10 @@ def main():
             "ops-segment-poller", "ops-segment-process", "ops-story-advance",
         ]
         for func_name in story_functions:
-            update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip")
+            if not update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip"):
+                print(f"Error: Failed to update {func_name} code")
+                tracker.print_summary()
+                sys.exit(1)
         print(f"  Deployed and updated {len(story_functions)} story functions")
         tracker.complete_step()
     else:
@@ -398,9 +472,7 @@ def main():
         "ApiDomainName": api_domain,
         "AllowedOrigins": allowed_origins,
     }
-    if not deploy_stack(
-        cf, "eidolon-api-gateway", os.path.join(base_dir, "cf", "eidolon-api-gateway.yml"), api_gw_params
-    ):
+    if not deploy_stack(cf, "eidolon-api-gateway", cf_dir / "eidolon-api-gateway.yml", api_gw_params):
         print("Error: Failed to deploy API Gateway")
         tracker.print_summary()
         sys.exit(1)
@@ -426,9 +498,7 @@ def main():
         "Route53ZoneId": route53_zone_id,
         "ClientDomainName": client_domain,
     }
-    if not deploy_stack(
-        cf, "eidolon-portal-cloudfront", os.path.join(base_dir, "cf", "eidolon-portal-cloudfront.yml"), portal_params
-    ):
+    if not deploy_stack(cf, "eidolon-portal-cloudfront", cf_dir / "eidolon-portal-cloudfront.yml", portal_params):
         print("Error: Failed to deploy Portal CloudFront")
         tracker.print_summary()
         sys.exit(1)
@@ -439,6 +509,11 @@ def main():
         tracker.print_summary()
         sys.exit(1)
     print(f"  Distribution ID: {distribution_id}")
+
+    if not set_bucket_policy_for_cloudfront(client_bucket, distribution_id, region):
+        print("Error: Failed to set bucket policy for CloudFront OAC")
+        tracker.print_summary()
+        sys.exit(1)
     tracker.complete_step()
 
     # Step 15: Deploy CodeBuild Portal Project
@@ -456,9 +531,7 @@ def main():
         "GitHubBranch": github_branch,
         "DeploymentMode": deployment_mode,
     }
-    if not deploy_stack(
-        cf, "eidolon-codebuild-portal", os.path.join(base_dir, "cf", "eidolon-codebuild-portal.yml"), portal_build_params
-    ):
+    if not deploy_stack(cf, "eidolon-codebuild-portal", cf_dir / "eidolon-codebuild-portal.yml", portal_build_params):
         print("Error: Failed to deploy CodeBuild Portal project")
         tracker.print_summary()
         sys.exit(1)
@@ -473,34 +546,40 @@ def main():
         sys.exit(1)
     tracker.complete_step()
 
-    # Step 17: Deploy S3 Scripts Bucket (conditional)
-    if should_deploy_stack("eidolon-s3-scripts", deployment_mode):
-        print("\n=== Step 17: Deploying S3 Scripts Bucket ===")
-        tracker.start_step(17, "Deploying S3 Scripts Bucket")
-        scripts_params = {
-            "ScriptsBucketName": scripts_bucket,
-        }
-        if not deploy_stack(
-            cf, "eidolon-s3-scripts", os.path.join(base_dir, "cf", "eidolon-s3-scripts.yml"), scripts_params
-        ):
-            print("Error: Failed to deploy S3 scripts bucket")
+    # Step 17: Upload Lua Scripts (conditional)
+    if deployment_mode in ["mud", "hybrid"]:
+        print("\n=== Step 17: Uploading Lua Scripts ===")
+        tracker.start_step(17, "Uploading Lua Scripts")
+        if not upload_scripts_to_s3(scripts_bucket, region, str(base_dir)):
+            print("Error: Failed to upload Lua scripts")
             tracker.print_summary()
             sys.exit(1)
-
-        # Upload Lua scripts to the bucket
-        upload_scripts_to_s3(scripts_bucket, region, base_dir)
-        print("  Scripts uploaded to S3")
         tracker.complete_step()
     else:
-        print("\n=== Step 17: Skipping S3 Scripts Bucket (not in mode) ===")
+        print("\n=== Step 17: Skipping Lua Scripts (not in mode) ===")
 
     # Step 18: Deploy CloudWatch (conditional)
     if should_deploy_stack("eidolon-cloudwatch", deployment_mode):
         print("\n=== Step 18: Deploying CloudWatch ===")
         tracker.start_step(18, "Deploying CloudWatch")
-        if not deploy_stack(
-            cf, "eidolon-cloudwatch", os.path.join(base_dir, "cf", "eidolon-cloudwatch.yml"), {}
-        ):
+
+        # Check if log group exists outside CloudFormation management
+        resources_to_import = None
+        logs_client = boto3.client("logs", region_name=region)
+        try:
+            response = logs_client.describe_log_groups(logGroupNamePrefix="/eidolon/server", limit=1)
+            log_groups = response.get("logGroups", [])
+            if any(lg.get("logGroupName") == "/eidolon/server" for lg in log_groups):
+                resources_to_import = [{
+                    "ResourceType": "AWS::Logs::LogGroup",
+                    "LogicalResourceId": "ServerLogGroup",
+                    "ResourceIdentifier": {"LogGroupName": "/eidolon/server"},
+                }]
+                print("  Log group /eidolon/server exists, will import into stack")
+        except ClientError as err:
+            print(f"  Warning: Could not check for existing log group: {err}")
+
+        if not deploy_stack(cf, "eidolon-cloudwatch", cf_dir / "eidolon-cloudwatch.yml", {}, resources_to_import=resources_to_import):
             print("Error: Failed to deploy CloudWatch")
             tracker.print_summary()
             sys.exit(1)
@@ -508,45 +587,15 @@ def main():
     else:
         print("\n=== Step 18: Skipping CloudWatch (not in mode) ===")
 
-    # Step 19: Update all Lambda function code and layers from S3
-    print("\n=== Step 19: Updating Lambda Function Code ===")
-    tracker.start_step(19, "Updating Lambda Function Code")
-
-    # Get the latest layer version ARN (may differ from initial publish if redeploying)
-    current_layer_arn = get_latest_layer_version_arn(lambda_client, "eidolon-dependencies")
-    if not current_layer_arn:
-        print("Error: Could not retrieve latest Lambda layer ARN")
-        tracker.print_summary()
-        sys.exit(1)
-    print(f"  Layer ARN: {current_layer_arn}")
-
-    all_functions = cognito_functions + character_functions
-    if should_deploy_stack("eidolon-lambda-story", deployment_mode):
-        story_functions = [
-            "api-story-start", "api-story-abandon", "api-story-history",
-            "api-segment-decision", "api-segment-history", "api-segment-status",
-            "ops-segment-poller", "ops-segment-process", "ops-story-advance",
-        ]
-        all_functions = all_functions + story_functions
-
-    update_count = 0
-    for func_name in all_functions:
-        result = update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip")
-        if result:
-            update_count += 1
-    print(f"  Updated {update_count}/{len(all_functions)} functions")
+    # Step 19: Update config.yml with stack outputs and deployment params
+    print("\n=== Step 19: Updating config.yml ===")
+    tracker.start_step(19, "Updating config.yml")
+    update_config_from_stacks(cf, config_path, config)
     tracker.complete_step()
 
-    # Step 20: Update config.yml with stack outputs
-    print("\n=== Step 20: Updating config.yml ===")
-    tracker.start_step(20, "Updating config.yml")
-    config_output_path = os.path.join(base_dir, "config.yml")
-    update_config_from_stacks(cf, config_output_path, deployment_mode)
-    tracker.complete_step()
-
-    # Step 21: Verify CloudFront operational
-    print("\n=== Step 21: Verifying CloudFront ===")
-    tracker.start_step(21, "Verifying CloudFront")
+    # Step 20: Verify CloudFront operational
+    print("\n=== Step 20: Verifying CloudFront ===")
+    tracker.start_step(20, "Verifying CloudFront")
     if not wait_for_cloudfront_operational(client_domain):
         print("Warning: CloudFront not yet operational (may still be propagating)")
     else:

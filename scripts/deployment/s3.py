@@ -1,5 +1,6 @@
 """S3 bucket operations."""
 
+import json
 from pathlib import Path
 
 import boto3
@@ -26,6 +27,81 @@ def s3_bucket_exists(bucket_name: str, region: str) -> bool:
         if error_code in ["404", "NoSuchBucket"]:
             return False
         raise err from err
+
+
+def set_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str, region: str) -> bool:
+    """Set S3 bucket policy to allow CloudFront OAC read access.
+
+    Merges the OAC statement into any existing bucket policy rather than
+    replacing it, which avoids conflicts with policies set outside CloudFormation.
+
+    Args:
+        bucket_name: S3 bucket name
+        distribution_id: CloudFront distribution ID
+        region: AWS region
+
+    Returns:
+        bool: True if policy was set successfully
+    """
+    s3_client = boto3.client("s3", region_name=region)
+    sts_client = boto3.client("sts", region_name=region)
+
+    try:
+        account_id = retry_on_transient_error(lambda: sts_client.get_caller_identity()).get("Account", "")
+    except ClientError as err:
+        print(f"  [ERROR] Failed to get account ID: {err}")
+        return False
+
+    sid = f"AllowCloudFrontServicePrincipal-{distribution_id}"
+    oac_statement = {
+        "Sid": sid,
+        "Effect": "Allow",
+        "Principal": {"Service": "cloudfront.amazonaws.com"},
+        "Action": "s3:GetObject",
+        "Resource": f"arn:aws:s3:::{bucket_name}/*",
+        "Condition": {"StringEquals": {"AWS:SourceArn": f"arn:aws:cloudfront::{account_id}:distribution/{distribution_id}"}},
+    }
+
+    try:
+        existing = s3_client.get_bucket_policy(Bucket=bucket_name)
+        policy = json.loads(existing.get("Policy", "{}"))
+    except ClientError as err:
+        error_code = err.response.get("Error", {}).get("Code", "")
+        if error_code in ["NoSuchBucketPolicy", "NoSuchBucket"]:
+            policy = {"Version": "2012-10-17", "Statement": []}
+        else:
+            print(f"  [ERROR] Failed to read bucket policy: {err}")
+            return False
+
+    statements = policy.get("Statement", [])
+    cleaned = []
+    for stmt in statements:
+        principal = stmt.get("Principal", {})
+        if isinstance(principal, dict):
+            if "CanonicalUser" in principal:
+                continue
+            aws_principal = principal.get("AWS", "")
+            if isinstance(aws_principal, str) and not aws_principal.startswith("arn:"):
+                # Bare IAM unique ID — stale reference to a deleted principal
+                continue
+            if isinstance(aws_principal, str) and "cloudfront" in aws_principal:
+                continue
+            service = principal.get("Service", "")
+            if service == "cloudfront.amazonaws.com":
+                continue
+        cleaned.append(stmt)
+    cleaned.append(oac_statement)
+    policy["Statement"] = cleaned
+
+    policy_json = json.dumps(policy, indent=2)
+    try:
+        s3_client.put_bucket_policy(Bucket=bucket_name, Policy=policy_json)
+        print(f"  [OK] Bucket policy updated for CloudFront OAC access on {bucket_name}")
+        return True
+    except ClientError as err:
+        print(f"  [ERROR] Failed to set bucket policy: {err}")
+        print(f"  [DEBUG] Policy submitted:\n{policy_json}")
+        return False
 
 
 def upload_scripts_to_s3(bucket_name: str, region: str, base_dir: str) -> bool:
