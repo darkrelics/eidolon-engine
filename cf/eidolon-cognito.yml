@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: Cognito User Pool, Client, and Identity Pool for Eidolon Engine
+Description: Cognito User Pool and Client for Eidolon Engine
 
 Parameters:
   PostConfirmationLambdaArn:
@@ -9,17 +9,6 @@ Parameters:
   AllowedOrigins:
     Type: String
     Description: Allowed CORS callback URL for OAuth
-
-  ScriptsBucketName:
-    Type: String
-    Description: S3 bucket for game scripts (story images)
-    Default: ""
-
-Conditions:
-  HasScriptsBucket: !Not
-    - !Equals
-      - !Ref ScriptsBucketName
-      - ""
 
 Resources:
   UserPool:
@@ -91,56 +80,6 @@ Resources:
         IdToken: minutes
         RefreshToken: minutes
 
-  IdentityPool:
-    Type: AWS::Cognito::IdentityPool
-    Properties:
-      IdentityPoolName: eidolon-identity-pool
-      AllowUnauthenticatedIdentities: false
-      CognitoIdentityProviders:
-        - ClientId: !Ref UserPoolClient
-          ProviderName: !GetAtt UserPool.ProviderName
-
-  AuthenticatedRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: eidolon-cognito-authenticated-role
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Federated: cognito-identity.amazonaws.com
-            Action: sts:AssumeRoleWithWebIdentity
-            Condition:
-              StringEquals:
-                cognito-identity.amazonaws.com:aud: !Ref IdentityPool
-              ForAnyValue:StringLike:
-                cognito-identity.amazonaws.com:amr: authenticated
-      Policies:
-        - !If
-          - HasScriptsBucket
-          - PolicyName: eidolon-scripts-read-policy
-            PolicyDocument:
-              Version: "2012-10-17"
-              Statement:
-                - Effect: Allow
-                  Action:
-                    - s3:GetObject
-                  Resource:
-                    - !Sub "arn:aws:s3:::${ScriptsBucketName}/stories/*"
-                    - !Sub "arn:aws:s3:::${ScriptsBucketName}/images/*"
-          - !Ref AWS::NoValue
-      Tags:
-        - Key: System
-          Value: eidolon
-
-  IdentityPoolRoleAttachment:
-    Type: AWS::Cognito::IdentityPoolRoleAttachment
-    Properties:
-      IdentityPoolId: !Ref IdentityPool
-      Roles:
-        authenticated: !GetAtt AuthenticatedRole.Arn
-
   # WAF WebACL for Cognito User Pool
   CognitoWebACL:
     Type: AWS::WAFv2::WebACL
@@ -197,6 +136,3 @@ Outputs:
     Description: Cognito User Pool Client ID
     Value: !Ref UserPoolClient
 
-  IdentityPoolId:
-    Description: Cognito Identity Pool ID
-    Value: !Ref IdentityPool

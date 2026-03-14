@@ -84,21 +84,46 @@ def print_deployment_plan(config: dict):
     print()
 
 
-def main():
-    if len(sys.argv) != 2:
-        print("Usage: python eidolon_deployment.py <config_file>")
-        sys.exit(1)
+def extract_deploy_config(full_config: dict) -> dict:
+    """Extract flat deployment config from the unified config.yml structure.
 
+    Args:
+        full_config: Full config.yml dictionary
+
+    Returns:
+        Flat dictionary with deployment-specific keys
+    """
+    deployment = full_config.get("Deployment", {})
+    github = full_config.get("GitHub", {})
+
+    return {
+        "region": full_config.get("AWS", {}).get("Region", ""),
+        "deployment_mode": deployment.get("Mode", ""),
+        "s3_bucket": deployment.get("S3Bucket", ""),
+        "client_bucket": deployment.get("ClientBucket", ""),
+        "scripts_bucket": deployment.get("ScriptsBucket", ""),
+        "domain": deployment.get("Domain", ""),
+        "route53_zone_id": deployment.get("Route53ZoneId", ""),
+        "api_host": deployment.get("ApiHost", ""),
+        "client_host": deployment.get("ClientHost", ""),
+        "reply_email": deployment.get("ReplyEmail", ""),
+        "github_owner": github.get("Owner", ""),
+        "github_repo": github.get("Repo", ""),
+        "github_branch": github.get("Branch", ""),
+    }
+
+
+def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     base_dir = os.path.dirname(script_dir)
 
-    config_path = sys.argv[1]
+    config_path = os.path.join(base_dir, "config.yml")
     if not os.path.exists(config_path):
         print(f"Error: Config file not found: {config_path}")
         sys.exit(1)
 
     with open(config_path, "r", encoding="utf-8") as config_file:
-        config = yaml.safe_load(config_file)
+        config = extract_deploy_config(yaml.safe_load(config_file))
 
     # Step 1: Validate
     print("=== Step 1: Validating Configuration ===")
@@ -301,7 +326,6 @@ def main():
     cognito_params = {
         "PostConfirmationLambdaArn": cognito_player_new_arn,
         "AllowedOrigins": allowed_origins,
-        "ScriptsBucketName": scripts_bucket,
     }
     if not deploy_stack(cf, "eidolon-cognito", os.path.join(base_dir, "cf", "eidolon-cognito.yml"), cognito_params):
         print("Error: Failed to deploy Cognito")
@@ -367,14 +391,12 @@ def main():
     # Step 13: Deploy API Gateway
     print("\n=== Step 13: Deploying API Gateway ===")
     tracker.start_step(13, "Deploying API Gateway")
-    story_enabled = "true" if should_deploy_stack("eidolon-lambda-story", deployment_mode) else "false"
     api_gw_params = {
         "UserPoolArn": user_pool_arn,
         "ApiCertificateArn": api_cert_arn,
         "Route53ZoneId": route53_zone_id,
         "ApiDomainName": api_domain,
         "AllowedOrigins": allowed_origins,
-        "StoryEndpointsEnabled": story_enabled,
     }
     if not deploy_stack(
         cf, "eidolon-api-gateway", os.path.join(base_dir, "cf", "eidolon-api-gateway.yml"), api_gw_params

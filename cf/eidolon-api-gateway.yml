@@ -1,49 +1,26 @@
 AWSTemplateFormatVersion: "2010-09-09"
-Description: API Gateway REST API with Cognito auth, custom domain, WAF, and CORS
 
 Parameters:
   UserPoolArn:
     Type: String
-    Description: ARN of the Cognito User Pool for authorization
 
   ApiCertificateArn:
     Type: String
-    Description: ARN of the ACM certificate for the API custom domain
 
   Route53ZoneId:
     Type: String
-    Description: Route53 hosted zone ID for DNS records
 
   ApiDomainName:
     Type: String
-    Description: FQDN for API custom domain (e.g. api.darkrelics.net)
 
   AllowedOrigins:
     Type: String
-    Description: Allowed CORS origin (e.g. https://portal.darkrelics.net)
-
-  StoryEndpointsEnabled:
-    Type: String
-    Default: "false"
-    AllowedValues:
-      - "true"
-      - "false"
-    Description: Whether to include story and segment API endpoints
-
-Conditions:
-  HasStoryEndpoints: !Equals
-    - !Ref StoryEndpointsEnabled
-    - "true"
 
 Resources:
-  # ============================================================
-  # REST API and Authorizer
-  # ============================================================
   EidolonApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: eidolon-api
-      Description: Eidolon Engine API
       EndpointConfiguration:
         Types:
           - REGIONAL
@@ -61,9 +38,6 @@ Resources:
       ProviderARNs:
         - !Ref UserPoolArn
 
-  # ============================================================
-  # Gateway Responses (CORS headers on errors)
-  # ============================================================
   GatewayResponseDefault4XX:
     Type: AWS::ApiGateway::GatewayResponse
     Properties:
@@ -88,69 +62,6 @@ Resources:
         gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
         gatewayresponse.header.Vary: "'Origin'"
 
-  GatewayResponseUnauthorized:
-    Type: AWS::ApiGateway::GatewayResponse
-    Properties:
-      RestApiId: !Ref EidolonApi
-      ResponseType: UNAUTHORIZED
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-        gatewayresponse.header.Vary: "'Origin'"
-
-  GatewayResponseAccessDenied:
-    Type: AWS::ApiGateway::GatewayResponse
-    Properties:
-      RestApiId: !Ref EidolonApi
-      ResponseType: ACCESS_DENIED
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-        gatewayresponse.header.Vary: "'Origin'"
-
-  GatewayResponseExpiredToken:
-    Type: AWS::ApiGateway::GatewayResponse
-    Properties:
-      RestApiId: !Ref EidolonApi
-      ResponseType: EXPIRED_TOKEN
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-        gatewayresponse.header.Vary: "'Origin'"
-
-  GatewayResponseInvalidApiKey:
-    Type: AWS::ApiGateway::GatewayResponse
-    Properties:
-      RestApiId: !Ref EidolonApi
-      ResponseType: INVALID_API_KEY
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-        gatewayresponse.header.Vary: "'Origin'"
-
-  GatewayResponseMissingAuthToken:
-    Type: AWS::ApiGateway::GatewayResponse
-    Properties:
-      RestApiId: !Ref EidolonApi
-      ResponseType: MISSING_AUTHENTICATION_TOKEN
-      ResponseParameters:
-        gatewayresponse.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
-        gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
-        gatewayresponse.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        gatewayresponse.header.Access-Control-Allow-Credentials: "'true'"
-        gatewayresponse.header.Vary: "'Origin'"
-
-  # ============================================================
-  # / (root) - OPTIONS only
-  # ============================================================
   RootOptions:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -179,9 +90,6 @@ Resources:
             method.response.header.Access-Control-Allow-Credentials: true
             method.response.header.Vary: true
 
-  # ============================================================
-  # /archetype - GET -> api-archetype-list
-  # ============================================================
   ArchetypeResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -230,9 +138,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-archetype-list/invocations"
 
-  # ============================================================
-  # /character - POST -> api-character-add, GET -> api-character-get, DELETE -> api-character-delete
-  # ============================================================
   CharacterResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -307,9 +212,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-character-delete/invocations"
 
-  # ============================================================
-  # /character/list - GET -> api-character-list
-  # ============================================================
   CharacterListResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -358,9 +260,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-character-list/invocations"
 
-  # ============================================================
-  # /item - OPTIONS only (parent for item endpoints)
-  # ============================================================
   ItemResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -396,9 +295,6 @@ Resources:
             method.response.header.Access-Control-Allow-Credentials: true
             method.response.header.Vary: true
 
-  # ============================================================
-  # /item/brief - GET -> api-item-brief
-  # ============================================================
   ItemBriefResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -447,9 +343,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-brief/invocations"
 
-  # ============================================================
-  # /item/prototype - GET -> api-item-prototype
-  # ============================================================
   ItemPrototypeResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -498,9 +391,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-prototype/invocations"
 
-  # ============================================================
-  # /item/consume - POST -> api-item-consume
-  # ============================================================
   ItemConsumeResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -549,9 +439,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-consume/invocations"
 
-  # ============================================================
-  # /item/discard - POST -> api-item-discard
-  # ============================================================
   ItemDiscardResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -600,9 +487,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-discard/invocations"
 
-  # ============================================================
-  # /item/consolidate - POST -> api-item-consolidate
-  # ============================================================
   ItemConsolidateResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -651,9 +535,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-consolidate/invocations"
 
-  # ============================================================
-  # /item/split - POST -> api-item-split
-  # ============================================================
   ItemSplitResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -702,9 +583,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-split/invocations"
 
-  # ============================================================
-  # /store (parent resource, no methods)
-  # ============================================================
   StoreResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -712,9 +590,6 @@ Resources:
       ParentId: !GetAtt EidolonApi.RootResourceId
       PathPart: store
 
-  # ============================================================
-  # /store/list - GET -> api-store-list
-  # ============================================================
   StoreListResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -763,9 +638,6 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-store-list/invocations"
 
-  # ============================================================
-  # /store/purchase - POST -> api-store-purchase
-  # ============================================================
   StorePurchaseResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -814,21 +686,15 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-store-purchase/invocations"
 
-  # ============================================================
-  # /story (parent resource, conditional)
-  # ============================================================
   StoryResource:
     Type: AWS::ApiGateway::Resource
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ParentId: !GetAtt EidolonApi.RootResourceId
       PathPart: story
 
-  # /story/start - POST -> api-story-start
   StoryStartResource:
     Type: AWS::ApiGateway::Resource
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ParentId: !Ref StoryResource
@@ -836,7 +702,6 @@ Resources:
 
   StoryStartOptions:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref StoryStartResource
@@ -865,7 +730,6 @@ Resources:
 
   StoryStartPost:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref StoryStartResource
@@ -877,10 +741,8 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-story-start/invocations"
 
-  # /story/abandon - POST -> api-story-abandon
   StoryAbandonResource:
     Type: AWS::ApiGateway::Resource
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ParentId: !Ref StoryResource
@@ -888,7 +750,6 @@ Resources:
 
   StoryAbandonOptions:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref StoryAbandonResource
@@ -917,7 +778,6 @@ Resources:
 
   StoryAbandonPost:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref StoryAbandonResource
@@ -929,10 +789,8 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-story-abandon/invocations"
 
-  # /story/history - GET -> api-story-history
   StoryHistoryResource:
     Type: AWS::ApiGateway::Resource
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ParentId: !Ref StoryResource
@@ -940,7 +798,6 @@ Resources:
 
   StoryHistoryOptions:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref StoryHistoryResource
@@ -969,7 +826,6 @@ Resources:
 
   StoryHistoryGet:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref StoryHistoryResource
@@ -981,21 +837,15 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-story-history/invocations"
 
-  # ============================================================
-  # /segment (parent resource, conditional)
-  # ============================================================
   SegmentResource:
     Type: AWS::ApiGateway::Resource
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ParentId: !GetAtt EidolonApi.RootResourceId
       PathPart: segment
 
-  # /segment/decision - POST -> api-segment-decision
   SegmentDecisionResource:
     Type: AWS::ApiGateway::Resource
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ParentId: !Ref SegmentResource
@@ -1003,7 +853,6 @@ Resources:
 
   SegmentDecisionOptions:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref SegmentDecisionResource
@@ -1032,7 +881,6 @@ Resources:
 
   SegmentDecisionPost:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref SegmentDecisionResource
@@ -1044,10 +892,8 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-segment-decision/invocations"
 
-  # /segment/status - GET -> api-segment-status
   SegmentStatusResource:
     Type: AWS::ApiGateway::Resource
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ParentId: !Ref SegmentResource
@@ -1055,7 +901,6 @@ Resources:
 
   SegmentStatusOptions:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref SegmentStatusResource
@@ -1084,7 +929,6 @@ Resources:
 
   SegmentStatusGet:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref SegmentStatusResource
@@ -1096,10 +940,8 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-segment-status/invocations"
 
-  # /segment/history - GET -> api-segment-history
   SegmentHistoryResource:
     Type: AWS::ApiGateway::Resource
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ParentId: !Ref SegmentResource
@@ -1107,7 +949,6 @@ Resources:
 
   SegmentHistoryOptions:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref SegmentHistoryResource
@@ -1136,7 +977,6 @@ Resources:
 
   SegmentHistoryGet:
     Type: AWS::ApiGateway::Method
-    Condition: HasStoryEndpoints
     Properties:
       RestApiId: !Ref EidolonApi
       ResourceId: !Ref SegmentHistoryResource
@@ -1148,10 +988,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-segment-history/invocations"
 
-  # ============================================================
-  # Lambda Permissions (always-present functions)
-  # ============================================================
-  ApiArchetypeListPermission:
+  PermArchList:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-archetype-list
@@ -1159,7 +996,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiCharacterAddPermission:
+  PermCharAdd:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-character-add
@@ -1167,7 +1004,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiCharacterGetPermission:
+  PermCharGet:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-character-get
@@ -1175,7 +1012,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiCharacterDeletePermission:
+  PermCharDel:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-character-delete
@@ -1183,7 +1020,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiCharacterListPermission:
+  PermCharList:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-character-list
@@ -1191,7 +1028,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiItemBriefPermission:
+  PermItemBrief:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-item-brief
@@ -1199,7 +1036,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiItemPrototypePermission:
+  PermItemProto:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-item-prototype
@@ -1207,7 +1044,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiItemConsumePermission:
+  PermItemConsume:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-item-consume
@@ -1215,7 +1052,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiItemDiscardPermission:
+  PermItemDiscard:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-item-discard
@@ -1223,7 +1060,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiItemConsolidatePermission:
+  PermItemConsol:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-item-consolidate
@@ -1231,7 +1068,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiItemSplitPermission:
+  PermItemSplit:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-item-split
@@ -1239,7 +1076,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiStoreListPermission:
+  PermStoreList:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-store-list
@@ -1247,7 +1084,7 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiStorePurchasePermission:
+  PermStoreBuy:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: api-store-purchase
@@ -1255,66 +1092,54 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  # ============================================================
-  # Lambda Permissions (story/segment functions, conditional)
-  # ============================================================
-  ApiStoryStartPermission:
+  PermStoryStart:
     Type: AWS::Lambda::Permission
-    Condition: HasStoryEndpoints
     Properties:
       FunctionName: api-story-start
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiStoryAbandonPermission:
+  PermStoryAban:
     Type: AWS::Lambda::Permission
-    Condition: HasStoryEndpoints
     Properties:
       FunctionName: api-story-abandon
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiStoryHistoryPermission:
+  PermStoryHist:
     Type: AWS::Lambda::Permission
-    Condition: HasStoryEndpoints
     Properties:
       FunctionName: api-story-history
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiSegmentDecisionPermission:
+  PermSegDecide:
     Type: AWS::Lambda::Permission
-    Condition: HasStoryEndpoints
     Properties:
       FunctionName: api-segment-decision
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiSegmentStatusPermission:
+  PermSegStatus:
     Type: AWS::Lambda::Permission
-    Condition: HasStoryEndpoints
     Properties:
       FunctionName: api-segment-status
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  ApiSegmentHistoryPermission:
+  PermSegHist:
     Type: AWS::Lambda::Permission
-    Condition: HasStoryEndpoints
     Properties:
       FunctionName: api-segment-history
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
-  # ============================================================
-  # Deployment and Stage
-  # ============================================================
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
@@ -1357,9 +1182,6 @@ Resources:
         - Key: System
           Value: eidolon
 
-  # ============================================================
-  # Custom Domain, Base Path Mapping, Route53
-  # ============================================================
   ApiDomain:
     Type: AWS::ApiGateway::DomainName
     Properties:
@@ -1390,14 +1212,10 @@ Resources:
         DNSName: !GetAtt ApiDomain.RegionalDomainName
         HostedZoneId: !GetAtt ApiDomain.RegionalHostedZoneId
 
-  # ============================================================
-  # WAF WebACL for API Gateway
-  # ============================================================
   ApiGatewayWebACL:
     Type: AWS::WAFv2::WebACL
     Properties:
       Name: EidolonApiGatewayWebACL
-      Description: WAF protection for API Gateway REST endpoints
       Scope: REGIONAL
       DefaultAction:
         Allow: {}
@@ -1504,17 +1322,5 @@ Resources:
 
 Outputs:
   RestApiId:
-    Description: API Gateway REST API ID
     Value: !Ref EidolonApi
 
-  ApiUrl:
-    Description: API Gateway prod stage URL
-    Value: !Sub "https://${EidolonApi}.execute-api.${AWS::Region}.amazonaws.com/prod"
-
-  ApiCustomUrl:
-    Description: API custom domain URL
-    Value: !Sub "https://${ApiDomainName}"
-
-  StageName:
-    Description: API Gateway stage name
-    Value: prod

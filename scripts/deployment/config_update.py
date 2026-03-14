@@ -62,7 +62,6 @@ def update_config_from_stacks(cf_client, config_path: str, deployment_mode: str)
             config["CloudWatch"]["MetricsNamespace"] = metrics_ns
 
     # Deployment mode
-    config["DeploymentMode"] = deployment_mode
     if "Deployment" not in config:
         config["Deployment"] = {}
     config["Deployment"]["Mode"] = deployment_mode
