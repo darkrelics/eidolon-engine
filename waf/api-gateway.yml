@@ -68,44 +68,8 @@ rules:
       cloudwatch_metrics: true
       metric_name: ApiRequestSizeBlock
 
-  # Priority 3: AWS Managed Rule - Core Rule Set
-  - name: AWSManagedRulesCoreRuleSet
-    priority: 3
-    statement:
-      managed_rule_group:
-        vendor_name: AWS
-        name: AWSManagedRulesCommonRuleSet
-        excluded_rules: []
-    action: override_to_count
-    visibility:
-      sampled_requests: true
-      cloudwatch_metrics: true
-      metric_name: ApiCoreRuleSet
-
-  # Priority 4: AWS Managed Rule - IP Reputation
-  - name: AWSManagedRulesIPReputation
-    priority: 4
-    statement:
-      managed_rule_group:
-        vendor_name: AWS
-        name: AWSManagedRulesAmazonIpReputationList
-        excluded_rules: []
-    action: override_to_count
-    visibility:
-      sampled_requests: true
-      cloudwatch_metrics: true
-      metric_name: ApiIPReputation
-
 # CloudWatch integration
 cloudwatch:
   metrics_enabled: true
   sampled_requests_enabled: true
 
-# Custom response for blocked requests
-custom_response:
-  response_code: 429
-  response_headers:
-    - name: X-WAF-Block-Reason
-      value: rate-limit-exceeded
-    - name: Retry-After
-      value: "300"

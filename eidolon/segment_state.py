@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
 from eidolon.dynamo import TableName, dynamo
+from eidolon.environment import DEFAULT_SEGMENT_DURATION
 from eidolon.logger import logger
 from eidolon.segment_core import extract_character_updates_from_results, validate_segment_outcome_results
 from eidolon.time_utils import now_unix
@@ -170,15 +171,23 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
         expression_values[":events"] = client_events  # type: ignore
 
     try:
+        # Add conditional to prevent double-processing race condition
+        # Check for "processing" state (set by claim_segment_for_processing)
+        expression_values[":expected_status"] = "processing"
+
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
             UpdateExpression=update_expression,
+            ConditionExpression="ProcessingStatus = :expected_status",
             ExpressionAttributeNames=expression_names,
             ExpressionAttributeValues=expression_values,
         )
         logger.info(f"Updated active segment outcome for {active_segment_id}")
     except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.info(f"Segment {active_segment_id} already processed, skipping outcome update")
+            return  # Already processed - idempotent operation
         logger.error(f"Failed to update active segment outcome for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update active segment outcome: {err}") from err
 
@@ -203,7 +212,7 @@ def create_next_active_segment(
     """
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "mechanical")
-    duration = int(segment.get("SegmentDuration", 300))
+    duration = int(segment.get("SegmentDuration", DEFAULT_SEGMENT_DURATION))
 
     # Start at previous segment's end time if provided, otherwise start now
     # Use max() to handle slack - if we're advancing late, start at current time
@@ -296,6 +305,7 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
             ":outcome": outcome,
             ":updates": character_updates,
             ":processed_at": now_unix(),
+            ":already_processed": "processed",
         }
 
         if client_events is not None:
@@ -306,11 +316,15 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
             UpdateExpression=update_expr,
+            ConditionExpression="ProcessingStatus <> :already_processed",
             ExpressionAttributeNames={"#outcome": "Outcome"},
             ExpressionAttributeValues=expr_values,
         )
         logger.info(f"Updated segment processing status for {active_segment_id}")
     except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.info(f"Segment {active_segment_id} already processed, skipping status update")
+            return
         logger.error(f"Failed to update segment processing status for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update segment results: {err}") from err
 
@@ -331,7 +345,7 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status",
+            UpdateExpression="SET ProcessingStatus = :status REMOVE ProcessingStartedAt, ProcessedAt",
             ExpressionAttributeValues={":status": "pending"},
         )
         logger.info(f"Reset segment processing status to pending for {active_segment_id}")

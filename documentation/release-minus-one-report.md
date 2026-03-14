@@ -78,7 +78,6 @@ The incremental game subsystem is **substantially implemented** in code but docu
 **Defined in:** `deployment/stacks/story_stack.py`
 
 1. **eidolon-processing-queue**
-
    - Feeds: `ops-segment-process`
    - Purpose: Mechanical segment outcome calculation
    - Config: 90s visibility timeout, 1-day retention, batch size 10
@@ -292,7 +291,6 @@ stateDiagram-v2
 **Location:** `scripts_python/`
 
 1. **validate_story_content.py** ✅ WORKS
-
    - Validates segment structure (mechanical, decision)
    - Checks Results, Challenges, Combat, DecisionOptions
    - **Issue:** Expects top-level "Segments" array but test data has "Stories" wrapper
@@ -553,34 +551,29 @@ stateDiagram-v2
 ### Recommended New R0 (Immediate Actions)
 
 1. ~~**Fix SSM parameter name discrepancy**~~ ✅ NO ISSUE
-
    - Code correctly uses `/eidolon/story/config` with "run"/"stop" string values
    - CDK creates parameter with JSON default but code overwrites it correctly
    - No alignment needed
 
 2. ~~**Create DynamoDB schema files**~~ ✅ ALREADY DOCUMENTED
-
    - DynamoDB table schemas are fully documented in `documentation/schema.md` (38,185 lines)
    - Story and Segments table structures are comprehensively defined (lines 288-349)
    - The existing `incremental/schemas/story.schema.json` validates Twine exports, not DynamoDB records
    - No additional JSON Schema files needed - `schema.md` is the authoritative source
 
 3. ~~**Create API specification document**~~ ✅ COMPLETE
-
    - `documentation/incremental-api.md` (560 lines) documents all 11 user-facing API endpoints
    - All endpoints include: HTTP method, auth requirements, request/response examples, error codes
    - Internal functions (Cognito triggers, EventBridge/SQS handlers) intentionally not documented
    - Optional `/story` and `/story/{id}` endpoints not needed - story browsing embedded in `GET /character`
 
 4. ~~**Add story validation to CI**~~ ✅ COMPLETE
-
    - `.github/workflows/story-validation.yml` created and deployed
    - Validates story branching and content structure on PR
    - Runs on changes to `data/**/*.json` files
    - Completed on September 29, 2025 (prior to this report)
 
 5. ~~**Update GitHub issues**~~ ✅ COMPLETE
-
    - Issue #491: Closed October 2, 2025 - state machines documented
    - Issue #726: Open - items/rooms complete, currency system still missing
    - Issue #597: Closed - Twine schema exists, DynamoDB schema in `schema.md`
@@ -589,13 +582,11 @@ stateDiagram-v2
 ### Recommended New R1 (Core Functionality Completion)
 
 1. ~~**Implement story browsing API**~~ ✅ COMPLETE
-
    - Already implemented in `GET /character` endpoint
    - `get_stories_with_character()` handles filtering
    - Client development not blocked
 
 2. **Complete effects system** ✅ COMPLETE (as of 2025-10-19)
-
    - ✅ Item rewards - Fully implemented via `items.py:add_items_to_inventory()`
    - ✅ Room teleportation - Implemented
    - ✅ Atomicity - Implemented via ProcessingStatus conditional writes
@@ -736,11 +727,10 @@ The incremental subsystem is **substantially more complete than initially assess
 ### What's Missing ❌
 
 1. **Inventory Display** - get_inventory() returns empty InventoryDetails (players see UUIDs instead of item names)
-2. **Item Consumption** - No api_item_consume.py endpoint (healing potions don't work)
-3. **Store System** - No store endpoints to spend currency
-4. **Currency Display in Flutter** - Backend sends Resources.Value but Flutter needs integration
-5. **User-Facing Documentation** - Author guides and operations runbooks
-6. **State Machine Tests** - Unit/integration tests for concurrent operations
+2. **Store System** - No store endpoints to spend currency
+3. **Currency Display in Flutter** - Backend sends Resources.Value but Flutter needs integration
+4. **User-Facing Documentation** - Author guides and operations runbooks
+5. **State Machine Tests** - Unit/integration tests for concurrent operations
 
 **Note:** Currency backend is complete. Item rewards are fully implemented via `items.py:add_items_to_inventory()`.
 
@@ -758,13 +748,12 @@ The incremental subsystem is **substantially more complete than initially assess
 ### Recommended Focus (Updated October 19, 2025)
 
 1. **Inventory Display Fix** - Investigate get_inventory() issue, implement item_repository.dart in Flutter
-2. **Item Consumption** - Implement api_item_consume.py and Flutter UI
-3. **Store System** - Implement store endpoints and Flutter store UI
-4. **Currency Display** - Integrate currency display in Flutter (backend ready)
-5. **User-Facing Documentation** - Author guides, operations runbooks
-6. **Testing** - Integration tests for currency system, store, and item consumption
-7. **Code Quality** - Refactor large Lambda functions (api_segment_status.py 359 lines, ops_story_advance.py 315 lines)
+2. **Store System** - Implement store endpoints and Flutter store UI
+3. **Currency Display** - Integrate currency display in Flutter (backend ready)
+4. **User-Facing Documentation** - Author guides, operations runbooks
+5. **Testing** - Integration tests for currency system, store, and item discard
+6. **Code Quality** - Refactor large Lambda functions (api_segment_status.py 359 lines, ops_story_advance.py 315 lines)
 
-**Update:** System deployed to AWS. Currency backend implemented 2025-10-19. Core gameplay loop functional (earn currency, accumulate items). Missing: inventory display, item usage, store system.
+**Update:** System deployed to AWS. Currency backend implemented 2025-10-19. Item consumption delivered 2025-10-22 (earn → heal). Remaining: inventory polish, store system, currency UI.
 
 The system is **deployment-ready** for core story gameplay. Currency and death mechanics fixed. Now focusing on completing the economy loop (inventory display, item consumption, store system) and operational tooling.

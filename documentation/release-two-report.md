@@ -85,7 +85,7 @@ Release 2 focuses on production readiness: comprehensive security hardening, obs
 
 **Priority:** CRITICAL
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/695
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/695
 
 #### Implementation Summary
 
@@ -147,7 +147,7 @@ cloudfront.Distribution(
 
 **Priority:** CRITICAL
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/694
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/694
 
 #### Implementation Summary
 
@@ -210,7 +210,7 @@ def _associate_api_waf(self):
 
 **Priority:** CRITICAL
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/693
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/693
 
 #### Implementation Summary
 
@@ -346,7 +346,7 @@ python deployment/waf_compliance.py --check-all
 
 **Priority:** CRITICAL
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/616
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/616
 
 #### Audit Scope
 
@@ -449,7 +449,7 @@ safety check
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/603
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/603
 
 #### Dashboard Requirements
 
@@ -577,19 +577,16 @@ cloudwatch.put_metric_data(
 **Critical Alarms (Page on-call):**
 
 1. **Lambda Errors Spike**
-
    - Condition: Error rate >5% over 5 minutes
    - Function: Any story/segment Lambda
    - Action: SNS topic → PagerDuty/email
 
 2. **DynamoDB Throttling**
-
    - Condition: ThrottledRequests >10 in 5 minutes
    - Table: ActiveSegments, Characters
    - Action: SNS topic → alert (may need capacity increase)
 
 3. **Poller Disabled Unexpectedly**
-
    - Condition: EventBridge rule disabled while ActiveSegments exist
    - Detection: Custom metric from poller
    - Action: SNS topic → immediate investigation
@@ -602,13 +599,11 @@ cloudwatch.put_metric_data(
 **Warning Alarms (Email only):**
 
 5. **High Segment Processing Time**
-
    - Condition: p95 processing duration >30 seconds
    - Function: ops-segment-process
    - Action: SNS topic → investigate performance
 
 6. **Story Completion Rate Low**
-
    - Condition: Completion rate <50% over 1 hour
    - Metric: StoryCompleted / StoryStarted
    - Action: SNS topic → may indicate difficulty issues
@@ -663,7 +658,7 @@ def create_alarms(self):
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/729
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/729
 
 #### Document Outline
 
@@ -672,60 +667,51 @@ def create_alarms(self):
 **Sections:**
 
 1. **Introduction**
-
    - Purpose of the guide
    - Who should use it (content creators, game designers)
    - Prerequisites (JSON knowledge helpful but not required)
 
 2. **Story Concepts**
-
    - What is a story in Eidolon Engine
    - Story types: one-time, daily, repeatable
    - Segments and branching narratives
    - Prerequisites and gating
 
 3. **Writing Your First Story**
-
    - Step-by-step tutorial
    - Simple linear story example (3 segments)
    - Testing your story locally
    - Common pitfalls
 
 4. **Segment Types**
-
    - Decision segments (player choice)
    - Mechanical segments (challenges, combat)
    - Rest segments (recovery, narrative pauses)
 
 5. **Branching and Outcomes**
-
    - Defining outcome branches (exceptional/normal/minimal/failure/death)
    - Weighted random branching
    - DefaultDecision for timeouts
 
 6. **Prerequisites and Unlocking**
-
    - Skill requirements (MinSkills)
    - Item requirements (RequiredItems)
    - Attribute requirements (MinAttributes)
    - Previous story requirements
 
 7. **Rewards Configuration**
-
    - Skill XP awards
    - Attribute XP awards
    - Item rewards (from Prototypes)
    - Room transitions (teleportation)
 
 8. **Validation Tools**
-
    - Running validate_story_content.py
    - Running validate_branching.py
    - Interpreting validation errors
    - Common validation failures
 
 9. **Best Practices**
-
    - Balancing difficulty and rewards
    - Writing engaging narratives
    - Designing meaningful choices
@@ -757,7 +743,7 @@ def create_alarms(self):
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/729
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/729
 
 #### Document Outline
 
@@ -766,7 +752,6 @@ def create_alarms(self):
 **Sections:**
 
 1. **Story Table Fields**
-
    - StoryID (required, UUID format)
    - Title (required, string 1-100 chars)
    - StoryType (required, enum: "one-time" | "daily" | "repeatable")
@@ -776,7 +761,6 @@ def create_alarms(self):
    - Description (optional, narrative summary)
 
 2. **Segment Table Fields**
-
    - StoryID (required, partition key)
    - SegmentID (required, sort key, UUID)
    - SegmentType (required, enum: "mechanical" | "decision" | "rest")
@@ -785,40 +769,34 @@ def create_alarms(self):
    - SegmentActivity (required, present continuous verb phrase)
 
 3. **Decision Segment Fields**
-
    - DecisionText (required, narrative prompt)
    - DecisionOptions (required, object mapping choice IDs to outcomes)
    - DefaultDecision (required, fallback choice ID)
    - DecisionOptions format (supports legacy string and rich object formats)
 
 4. **Mechanical Segment Fields**
-
    - Challenges (array of skill/attribute checks)
    - Combat (combat configuration object)
    - Results (outcome mapping object)
 
 5. **Challenge Configuration**
-
    - Skill vs Attribute challenges
    - Difficulty values (0-10 scale)
    - Multiple attempts configuration
    - Success thresholds
 
 6. **Combat Configuration**
-
    - OpponentID (reference to Opponents table)
    - MaxRounds (combat duration limit)
    - CombatStyle (optional modifiers)
 
 7. **Results and Branching**
-
    - Outcome types: "exceptional", "normal", "minimal", "failure", "death"
    - NextSegmentID for each outcome
    - Weighted random branches
    - Terminal outcomes (null NextSegmentID)
 
 8. **Effects and Rewards**
-
    - SkillXP awards
    - AttributeXP awards
    - Items array (ItemPrototypeIDs)
@@ -849,7 +827,7 @@ def create_alarms(self):
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/729
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/729
 
 #### Document Outline
 
@@ -860,28 +838,24 @@ def create_alarms(self):
 1. **Common Issues**
 
    **Story Won't Start**
-
    - Symptom: api-story-start returns error
    - Causes: Character in wrong GameMode, prerequisites not met, story not in AvailableStories
    - Diagnosis: Check character GameMode, query Story prerequisites
    - Resolution: Clear GameMode, add story to AvailableStories
 
    **Story Stuck (Not Advancing)**
-
    - Symptom: Segment EndTime passed but no progress
    - Causes: Poller disabled, SSM stuck on "stop", segment not processed
    - Diagnosis: Check EventBridge rule status, read SSM parameter, query ActiveSegments
    - Resolution: Enable poller, reset SSM, re-queue segment
 
    **Character in Broken GameMode**
-
    - Symptom: Character has ActiveStoryID but no ActiveSegment
    - Causes: Orphaned segment deleted, race condition
    - Diagnosis: Query ActiveSegments for character
    - Resolution: Clear ActiveStoryID, set GameMode="None"
 
 2. **Error Code Reference**
-
    - 400 Bad Request: Invalid input (check request body format)
    - 401 Unauthorized: JWT invalid or expired (re-authenticate)
    - 403 Forbidden: Prerequisites not met (check character stats)
@@ -890,13 +864,11 @@ def create_alarms(self):
    - 500 Internal Server Error: Lambda error (check CloudWatch Logs)
 
 3. **Performance Issues**
-
    - Slow API responses: Check Lambda cold starts, DynamoDB throttling
    - Segments processing slowly: Check ops-segment-process duration, queue depth
    - High costs: Review DynamoDB read/write units, Lambda invocation counts
 
 4. **Data Recovery**
-
    - Recovering deleted story from StoryHistory
    - Restoring character from backup
    - Resetting stuck segments
@@ -944,7 +916,7 @@ def create_alarms(self):
 
 **Priority:** HIGH
 **Status:** ⏳ Pending
-**Issue:** https://github.com/robinje/eidolon-engine/issues/729
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/729
 
 #### Document Outline
 
@@ -953,49 +925,42 @@ def create_alarms(self):
 **Sections:**
 
 1. **Story Deployment Procedures**
-
    - Using story_loader.py to upload stories
    - Testing stories in dev/staging environments
    - Deploying to production
    - Rollback procedures
 
 2. **Monitoring and Observability**
-
    - CloudWatch dashboard locations
    - Key metrics to watch
    - Alarm response procedures
    - Log analysis with CloudWatch Insights
 
 3. **Performance Tuning**
-
    - Lambda memory allocation guidelines
    - DynamoDB capacity planning
    - Provisioned concurrency decisions
    - Cost optimization strategies
 
 4. **Incident Response**
-
    - Severity levels (Critical, High, Medium, Low)
    - On-call procedures
    - Escalation paths
    - Post-incident review process
 
 5. **Backup and Recovery**
-
    - DynamoDB point-in-time recovery
    - Story content backups
    - Lambda function versioning
    - Configuration rollback
 
 6. **Scaling Procedures**
-
    - Handling traffic spikes
    - Increasing DynamoDB capacity
    - Lambda concurrency limits
    - Cost impact analysis
 
 7. **Security Incident Response**
-
    - Detecting security incidents
    - Containment procedures
    - Investigation process
@@ -1024,7 +989,7 @@ def create_alarms(self):
 
 **Priority:** HIGH (Critical for R2 user experience)
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/722
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/722
 
 ---
 
@@ -1921,19 +1886,16 @@ Based on user requirements, implemented a minimal, surgical enhancement to the e
 **Changes Delivered:**
 
 1. **GameMode Status Badge** (Character Panel)
-
    - Displays current character state: IDLE (grey) / STORY (blue) / MUD (green)
    - Shows appropriate icon for each mode (hourglass/book/terminal)
    - Integrates cleanly into existing character header
 
 2. **Wounds Indicator** (Character Panel)
-
    - Displays active wounds below Health/Essence bars
    - Orange warning styling with count by damage type (e.g., "2 bashing, 1 lethal")
    - Only appears when character has wounds
 
 3. **Smart Story Availability** (Story Panel)
-
    - Stories automatically grey out when character is not idle (GameMode != 'None')
    - Uses existing visual styling for unavailable stories
    - Prevents confusion about why stories can't be started
@@ -1987,7 +1949,7 @@ Based on user requirements, implemented a minimal, surgical enhancement to the e
 
 **Priority:** DEFERRED
 **Status:** ⏸️ Deferred until principle development complete
-**Issue:** https://github.com/robinje/eidolon-engine/issues/606
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/606
 
 **Rationale:** Story discovery is a quality-of-life feature. Core gameplay loop (character management → story selection → progression) works without advanced filtering. Players can still start stories from the character screen's available story list. This feature will be implemented once principle development is complete and user feedback identifies the most valuable filtering/search capabilities.
 
@@ -1996,20 +1958,17 @@ Based on user requirements, implemented a minimal, surgical enhancement to the e
 **UI Components:**
 
 1. **Story Grid/List View**
-
    - Grid layout on desktop (3 columns)
    - List layout on mobile (1 column)
    - Story cards with title, description, difficulty, duration
 
 2. **Filtering**
-
    - By difficulty (Easy, Medium, Hard)
    - By duration (< 1hr, 1-4hrs, >4hrs)
    - By type (One-time, Daily, Repeatable)
    - By prerequisites met (Show locked vs unlocked)
 
 3. **Search**
-
    - Search by story title
    - Search by description keywords
    - Real-time filtering as user types
@@ -2084,7 +2043,7 @@ List<Story> _filterStories(List<Story> stories) {
 
 **Priority:** MEDIUM
 **Status:** ✓ COMPLETED
-**Issue:** https://github.com/robinje/eidolon-engine/issues/703
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/703
 
 #### Problem Statement
 
@@ -2114,7 +2073,6 @@ Users who close the browser/app before clicking the verification link cannot com
 **How It Works:**
 
 1. **For New User Pools:**
-
    - CDK loads template from `data/cognito-verification-email.html`
    - Applies during user pool creation via `user_verification` parameter
    - Uses `VerificationEmailStyle.CODE` to include both link and code
@@ -2170,7 +2128,7 @@ Template automatically:
 
 **Priority:** DEFERRED
 **Status:** ⏸️ Deferred until principle development complete
-**Issue:** https://github.com/robinje/eidolon-engine/issues/615
+**Issue:** https://github.com/darkrelics/eidolon-engine/issues/615
 
 **Rationale:** Basic cost awareness can be achieved through AWS billing console monitoring during beta. Automated budget controls will be implemented once principle development is complete and cost patterns are established.
 
@@ -2714,7 +2672,6 @@ def test_concurrent_decision_submit():
 **Changes Delivered:**
 
 1. **ops_story_advance.py - Added Idempotency Checks**
-
    - Check if segment already deleted (return success, skip retry loop)
    - Check if segment already marked completed (prevent duplicate processing)
    - Added atomic claim mechanism - mark segment completed FIRST before doing work

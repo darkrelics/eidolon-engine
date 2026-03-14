@@ -61,6 +61,24 @@ class ErrorHandler {
       return 'The requested resource was not found.';
     }
 
+    // Character-specific errors
+    if (normalizedError.contains('player account not found')) {
+      return 'We could not find your player data. Please sign out and back in.';
+    }
+
+    if (normalizedError.contains('character name is already taken') ||
+        normalizedError.contains('character name is not available')) {
+      return 'That character name is not available. Please choose another.';
+    }
+
+    if (normalizedError.contains('character limit reached')) {
+      return 'You have reached the maximum number of characters.';
+    }
+
+    if (normalizedError.contains('access denied')) {
+      return 'You do not have permission to perform this action.';
+    }
+
     // Story-specific errors
     if (normalizedError.contains('story not available')) {
       return 'This story is not available. It may be on cooldown or require certain prerequisites.';

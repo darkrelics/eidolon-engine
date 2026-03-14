@@ -65,6 +65,7 @@ The item prototypes store caches the complete prototype definitions for all item
 ### Design Principles
 
 Following the project's philosophy, the implementation will prioritize:
+
 - Simple, focused functions that do one thing well
 - Clear interfaces and contracts between components
 - Self-evident correctness through clean design
@@ -86,17 +87,20 @@ The service provides methods for basic CRUD operations on each object store, han
 **Implementation Details:**
 
 **Singleton Pattern:**
+
 ```dart
 static final IndexedDBService _instance = IndexedDBService._internal();
 factory IndexedDBService() => _instance;
 ```
 
 **Web Platform Detection:**
+
 ```dart
 bool get isSupported => kIsWeb && getIdbFactory() != null;
 ```
 
 **Database Schema (EidolonDB v1):**
+
 - **stories** - Composite key: `[CharacterID, StoryInstanceID]`
   - Indexes: `characterId`, `completedAt`, `outcome`, `storyId`
 - **story_segments** - Composite key: `[CharacterID, StoryInstanceID, ActiveSegmentID]`
@@ -112,6 +116,7 @@ bool get isSupported => kIsWeb && getIdbFactory() != null;
   - Full prototype data with `LastFetchedAt` metadata
 
 **API Surface (31 methods):**
+
 - **Characters:** `putCharacter()`, `getCharacter()`, `getPlayerCharacters()`, `deleteCharacter()`
 - **Stories:** `putStory()`, `getCharacterStories()`
 - **Segments:** `putSegment()`, `getStorySegments()`
@@ -120,6 +125,7 @@ bool get isSupported => kIsWeb && getIdbFactory() != null;
 - **Utilities:** `initialize()`, `close()`, `clearAll()`, `isSupported`
 
 **Error Handling Strategy:**
+
 - All operations wrapped in try-catch blocks
 - `debugPrint()` logging for troubleshooting
 - Graceful null returns on failures
@@ -127,6 +133,7 @@ bool get isSupported => kIsWeb && getIdbFactory() != null;
 - Automatic fallback to server fetches when unavailable
 
 **Verification:**
+
 - ✓ Flutter analyze: 0 issues
 - ✓ Web build: Successfully compiles
 - ✓ Compatible with idb_shim 2.6.7
@@ -147,6 +154,7 @@ The repository maintains consistency by ensuring all updates are atomic and prop
 **Implementation Details:**
 
 **Public API (9 methods):**
+
 ```dart
 loadPlayerCharacters() → Future<List<CharacterInfo>>
 getCharacter(String) → Future<Character?>
@@ -158,6 +166,7 @@ clearCache() → Future<void>
 ```
 
 **Cache-First Strategy:**
+
 ```dart
 // 1. Try cache first
 final cachedData = await _indexedDB.getCharacter(characterId);
@@ -173,6 +182,7 @@ return character;
 
 **Incremental Update Logic:**
 The `_applyUpdates()` method applies field-level changes:
+
 - **Health/Essence**: Direct replacement from updates
 - **Skills/Attributes**: Additive XP (current + delta)
 - **Resources**: Additive values (current + delta)
@@ -181,7 +191,9 @@ The `_applyUpdates()` method applies field-level changes:
 - **Progress**: Merge with existing progress
 
 **Server Fetch Points:**
+
 1. **Character Selection** (`loadPlayerCharacters()`):
+
    - Fetches list from server
    - Fetches full details for each character
    - Caches all characters in IndexedDB
@@ -192,6 +204,7 @@ The `_applyUpdates()` method applies field-level changes:
    - Ensures synchronization after major state changes
 
 **Error Handling:**
+
 - All cache operations wrapped in try-catch
 - Automatic fallback to server on cache errors
 - Graceful degradation when IndexedDB unavailable
@@ -199,6 +212,7 @@ The `_applyUpdates()` method applies field-level changes:
 - Server always remains accessible
 
 **Verification:**
+
 - ✓ Flutter analyze: 0 issues
 - ✓ Web build: Successfully compiles
 - ✓ Integrates with IndexedDB service
@@ -214,6 +228,7 @@ The item loading system implements an efficient three-tier caching strategy that
 **Implementation Architecture:**
 
 1. **Item Repository Pattern** (`item_repository.dart`) - ✅ Implemented (288 lines)
+
    - Memory cache layer for prototypes (fastest access: <1ms)
    - IndexedDB persistence layer (fast: 50-100ms, survives page refresh)
    - Server fallback for cache misses (slowest: 200-500ms)
@@ -221,6 +236,7 @@ The item loading system implements an efficient three-tier caching strategy that
    - File: `incremental/lib/repositories/item_repository.dart`
 
 2. **Three-Tier Loading Strategy** - ✅ Implemented
+
    ```
    Step 1: Fetch Item Brief (lightweight)
    - GET /item/brief?ItemID={id}
@@ -242,6 +258,7 @@ The item loading system implements an efficient three-tier caching strategy that
    ```
 
 3. **Batch Optimization** - ✅ Implemented
+
    - Collect all unique prototype IDs first
    - Pre-fetch all prototypes in parallel
    - Result: 20 items → ~5 prototype fetches (many items share prototypes)
@@ -256,6 +273,7 @@ The item loading system implements an efficient three-tier caching strategy that
    - Display format: "Item Name x5" for stackables with count > 1, "Item Name" otherwise
 
 **Implementation Results:**
+
 - ✅ Displays item names instead of UUIDs
 - ✅ Shows quantities for stackable items
 - ✅ Caches prototypes in IndexedDB
@@ -298,6 +316,7 @@ Per the project's testing policy (see documentation/unit-tests.md), this impleme
 Integration tests will validate the complete flow of character data through the system, ensuring all components work together correctly. The tests will simulate realistic game scenarios to verify system behavior under actual usage patterns.
 
 The character caching tests will validate the complete story lifecycle:
+
 - Fetch a character from the server at character selection
 - Start a story and apply multiple segment updates to the local cache
 - Verify incremental updates are applied correctly during gameplay
@@ -308,6 +327,7 @@ Additional integration tests will cover edge cases such as network failures duri
 ### 2. Manual Testing
 
 Critical user paths will be tested manually to verify:
+
 - Character selection properly loads and caches data
 - Segment updates correctly modify cached character state
 - Story completion refreshes the cache from server
@@ -326,16 +346,17 @@ Critical user paths will be tested manually to verify:
 
 ### Expected Improvements
 
-| Metric | Current | Target | Improvement |
-|--------|---------|--------|------------|
-| Character fetches per session | 54 (18 per story × 3 stories) | 5 (2 at selection + 3 after stories) | 91% reduction |
-| Network traffic | 200-400KB | 20-40KB | 90% reduction |
-| Average segment latency | 500ms | 50ms | 90% reduction |
-| Battery consumption | High | Low | Significant reduction |
+| Metric                        | Current                       | Target                               | Improvement           |
+| ----------------------------- | ----------------------------- | ------------------------------------ | --------------------- |
+| Character fetches per session | 54 (18 per story × 3 stories) | 5 (2 at selection + 3 after stories) | 91% reduction         |
+| Network traffic               | 200-400KB                     | 20-40KB                              | 90% reduction         |
+| Average segment latency       | 500ms                         | 50ms                                 | 90% reduction         |
+| Battery consumption           | High                          | Low                                  | Significant reduction |
 
 ## Cost Analysis for 10,000 Active Users
 
 ### Assumptions
+
 - Average user plays 3 stories per day
 - Average story has 18 segments
 - Average player has 2 characters
@@ -346,24 +367,28 @@ Critical user paths will be tested manually to verify:
 ### Current Implementation Costs (Monthly)
 
 **API Gateway Requests:**
+
 - Character fetches: 10,000 users × 3 stories × 18 fetches × 30 days = 16,200,000 requests
 - Segment status polls: 10,000 users × 3 stories × 18 segments × 30 days = 16,200,000 requests
 - Total API requests: 32,400,000
 - Cost: 32.4M × $1.00 per million = **$32.40**
 
 **Lambda Invocations (GET /character):**
+
 - Invocations: 16,200,000
 - Average duration: 100ms at 128MB
 - GB-seconds: 16.2M × 0.1s × 0.125GB = 202,500 GB-seconds
 - Cost: 202,500 × $0.0000166667 = **$3.38**
 
 **Data Transfer:**
+
 - Character data: 16.2M × 15KB = 243GB
 - Segment responses: 16.2M × 2KB = 32.4GB
 - Total: 275.4GB
 - Cost: 275.4GB × $0.09 = **$24.79**
 
 **DynamoDB Reads:**
+
 - Character table reads: 16.2M × 4KB units = 64.8M RCUs
 - Cost: 64.8M × $0.00000025 = **$16.20**
 
@@ -372,6 +397,7 @@ Critical user paths will be tested manually to verify:
 ### With IndexedDB Caching (Monthly)
 
 **API Gateway Requests:**
+
 - Character selection fetches: 10,000 users × 2 characters × 30 days = 600,000 requests
 - Story completion fetches: 10,000 users × 3 stories × 30 days = 900,000 requests
 - Segment status polls: 10,000 users × 3 stories × 18 segments × 30 days = 16,200,000 requests
@@ -381,12 +407,14 @@ Critical user paths will be tested manually to verify:
 - Cost: 24M × $1.00 per million = **$24.00**
 
 **Lambda Invocations:**
+
 - Character fetches: 1,500,000 × 100ms = 18,750 GB-seconds × $0.0000166667 = **$0.31**
 - Item brief: 4,500,000 × 20ms = 11,250 GB-seconds × $0.0000166667 = **$0.19**
 - Item prototype: 1,800,000 × 30ms = 6,750 GB-seconds × $0.0000166667 = **$0.11**
 - Total Lambda: **$0.61**
 
 **Data Transfer:**
+
 - Character data: 1.5M × 15KB = 22.5GB
 - Segment updates: 16.2M × 0.5KB = 8.1GB
 - Item briefs: 4.5M × 0.2KB = 0.9GB
@@ -395,6 +423,7 @@ Critical user paths will be tested manually to verify:
 - Cost: 35.1GB × $0.09 = **$3.16**
 
 **DynamoDB Reads:**
+
 - Character reads: 1.5M × 4KB = 6M RCUs = **$1.50**
 - Item reads: 6.3M × 1KB = 6.3M RCUs = **$1.58**
 - Total DynamoDB: **$3.08**
@@ -403,24 +432,26 @@ Critical user paths will be tested manually to verify:
 
 ### Cost Comparison Summary
 
-| Component | Current | With Cache | Savings |
-|-----------|---------|------------|---------|
-| API Gateway | $32.40 | $24.00 | $8.40 (26%) |
-| Lambda | $3.38 | $0.61 | $2.77 (82%) |
-| Data Transfer | $24.79 | $3.16 | $21.63 (87%) |
-| DynamoDB | $16.20 | $3.08 | $13.12 (81%) |
-| **Total Monthly** | **$76.77** | **$30.85** | **$45.92 (60%)** |
-| **Annual** | **$921.24** | **$370.20** | **$551.04** |
+| Component         | Current     | With Cache  | Savings          |
+| ----------------- | ----------- | ----------- | ---------------- |
+| API Gateway       | $32.40      | $24.00      | $8.40 (26%)      |
+| Lambda            | $3.38       | $0.61       | $2.77 (82%)      |
+| Data Transfer     | $24.79      | $3.16       | $21.63 (87%)     |
+| DynamoDB          | $16.20      | $3.08       | $13.12 (81%)     |
+| **Total Monthly** | **$76.77**  | **$30.85**  | **$45.92 (60%)** |
+| **Annual**        | **$921.24** | **$370.20** | **$551.04**      |
 
 ### Additional Considerations
 
 **Benefits Not Captured in Direct Costs:**
+
 - Reduced latency improves user experience and retention
 - Lower battery usage on mobile devices
 - Reduced server load allows better scaling
 - Fewer DynamoDB hot partition risks
 
 **Scaling Notes:**
+
 - Savings scale linearly with user count
 - At 100,000 users: ~$5,510/year savings
 - At 1 million users: ~$55,100/year savings
@@ -428,6 +459,7 @@ Critical user paths will be tested manually to verify:
 ## Implementation Status
 
 ### API Endpoints (Backend) ✓ **Completed**
+
 - [x] Create `lambda/api_item_brief.py` - GET /item/brief endpoint
 - [x] Create `lambda/api_item_prototype.py` - GET /item/prototype endpoint
 - [x] Add `get_item_brief()` to `eidolon/items.py`
@@ -438,6 +470,7 @@ Critical user paths will be tested manually to verify:
 - [x] Deploy updated stacks to AWS
 
 ### Phase 1: Foundation (Frontend)
+
 - [x] Create IndexedDB service (`incremental/lib/services/indexeddb_service.dart`) ✓ **Completed**
   - [x] Database initialization (EidolonDB v1)
   - [x] Five object stores (stories, story_segments, characters, items, item_prototypes)
@@ -463,6 +496,7 @@ Critical user paths will be tested manually to verify:
 #### 2.1 Story Polling Service Integration ✓ **Completed**
 
 **Files Modified:**
+
 - `incremental/lib/services/story_polling_service.dart`
 - `incremental/lib/screens/game_screen.dart`
 
@@ -471,12 +505,15 @@ The story polling service has been successfully modified to use incremental char
 **Implementation Changes:**
 
 **New Callback Added:**
+
 ```dart
 onSegmentComplete: (Map<String, dynamic> segmentUpdates)
 ```
+
 This callback is invoked when a segment completes, providing the segment response data for incremental updates.
 
 **Segment Completion Flow:**
+
 1. Poll segment status via `GET /segment/status`
 2. When segment complete (ProcessingStatus='processed' and TimeRemaining=0):
    - Extract segment updates from response
@@ -485,6 +522,7 @@ This callback is invoked when a segment completes, providing the segment respons
 3. Only fetch full character from server at story completion
 
 **Character Reload Eliminated:**
+
 - Removed `_apiService.getCharacterById()` calls at segment boundaries
 - Character updates now applied via `CharacterRepository.updateCharacterFromSegment()`
 - Full character reloads only occur at story completion
@@ -494,6 +532,7 @@ This callback is invoked when a segment completes, providing the segment respons
 **Implementation Details:**
 
 **Character Repository Integration:**
+
 ```dart
 late CharacterRepository _characterRepository;
 
@@ -504,6 +543,7 @@ _characterRepository = CharacterRepository(
 ```
 
 **Segment Update Handler:**
+
 ```dart
 onSegmentComplete: (segmentUpdates) async {
   final updatedCharacter = await _characterRepository.updateCharacterFromSegment(
@@ -520,6 +560,7 @@ onSegmentComplete: (segmentUpdates) async {
 ```
 
 **Story Completion Refresh:**
+
 ```dart
 onStoryComplete: () async {
   // Refresh character from server after story completion
@@ -534,11 +575,13 @@ onStoryComplete: () async {
 ```
 
 **Error Handling:**
+
 - Automatic fallback to full character reload if incremental update fails
 - Graceful degradation when IndexedDB unavailable
 - All cache operations wrapped in try-catch blocks
 
 **Verification:**
+
 - ✓ Flutter analyze: 0 issues
 - ✓ Web build: Successfully compiles
 - ✓ Character Repository fully integrated
@@ -546,6 +589,7 @@ onStoryComplete: () async {
 - ✓ Story completion refreshes from server
 
 ### Phase 3: Testing ⚠️ **Partially Complete**
+
 - [x] Code review validation (per project validation strategy in documentation/validation-strategy.md)
 - [ ] Manual testing of critical paths (pending - IndexedDB initialized 2025-10-21)
 - [x] Browser compatibility testing (out of scope)
@@ -553,6 +597,7 @@ onStoryComplete: () async {
 **✅ RESOLVED (2025-10-21):** IndexedDB initialization was previously missing but has been implemented in `incremental/lib/main.dart` (lines 28-32). The database now initializes on app startup for web platforms, enabling all caching functionality.
 
 ### Phase 4: Deployment ✅ **Complete** (2025-10-21)
+
 - [x] Deploy updated backend (Lambda functions deployed via CDK)
 - [x] IndexedDB initialization implemented (`incremental/lib/main.dart`)
 - [x] Deploy functional client with active caching
@@ -562,10 +607,12 @@ onStoryComplete: () async {
 **Note**: The authoritative error handling specification is in [incremental-design.md](incremental-design.md#error-handling-and-resilience) (section 7.3).
 
 ### 1. Data Corruption
+
 - **Risk**: Incomplete writes, browser crashes
 - **Mitigation**: Overwrite corrupted data from server GET calls (server is authoritative)
 
 ### 2. Cache Staleness
+
 - **Risk**: Local cache may become outdated
 - **Mitigation**: Server is authoritative, fresh data fetched at character selection and story completion
 
@@ -591,9 +638,11 @@ Two new endpoints are required for the two-tier item caching strategy:
 **Authentication:** Cognito (required)
 
 **Query Parameters:**
+
 - `ItemID` (required) - UUID of the item instance
 
 **Response (200 OK):**
+
 ```json
 {
   "ItemID": "550e8400-e29b-41d4-a716-446655440000",
@@ -604,6 +653,7 @@ Two new endpoints are required for the two-tier item caching strategy:
 **Lambda Function:** `lambda/api_item_brief.py` ✓ **Implemented**
 
 **Business Logic:** `eidolon.items.get_item_brief()` ✓ **Implemented**
+
 1. Extract and validate player ID from JWT token
 2. Validate player exists in Players table
 3. Validate ItemID parameter is a valid UUID
@@ -612,12 +662,14 @@ Two new endpoints are required for the two-tier item caching strategy:
 6. Return ItemID and PrototypeID only
 
 **Error Responses:**
+
 - `400` - Missing or invalid ItemID parameter
 - `401` - Unauthorized (missing/invalid JWT or player not found)
 - `404` - Item not found
 - `500` - Database operation failed
 
 **Performance Characteristics:**
+
 - Single DynamoDB GetItem operation
 - Response size: ~100 bytes
 - Expected latency: 10-20ms
@@ -629,9 +681,11 @@ Two new endpoints are required for the two-tier item caching strategy:
 **Authentication:** Cognito (required)
 
 **Query Parameters:**
+
 - `PrototypeID` (required) - UUID of the item prototype
 
 **Response (200 OK):**
+
 ```json
 {
   "PrototypeID": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
@@ -658,6 +712,7 @@ Two new endpoints are required for the two-tier item caching strategy:
 **Lambda Function:** `lambda/api_item_prototype.py` ✓ **Implemented**
 
 **Business Logic:** `eidolon.items.get_item_prototype_full()` ✓ **Implemented**
+
 1. Extract and validate player ID from JWT token
 2. Validate player exists in Players table
 3. Validate PrototypeID parameter is a valid UUID
@@ -666,17 +721,20 @@ Two new endpoints are required for the two-tier item caching strategy:
 6. Return complete prototype data
 
 **Error Responses:**
+
 - `400` - Missing or invalid PrototypeID parameter
 - `401` - Unauthorized (missing/invalid JWT or player not found)
 - `404` - Prototype not found
 - `500` - Database operation failed
 
 **Performance Characteristics:**
+
 - Single DynamoDB GetItem operation
 - Response size: ~2KB
 - Expected latency: 10-20ms
 
 **Caching Behavior:**
+
 - Prototypes are immutable game data
 - Safe to cache indefinitely on client
 - No cache invalidation needed
@@ -685,6 +743,7 @@ Two new endpoints are required for the two-tier item caching strategy:
 
 **Lambda Functions:** ✓ **Completed**
 Both functions follow standard patterns:
+
 - ✓ Use `eidolon.cognito.extract_player_id()` for authentication
 - ✓ Use `eidolon.player.validate_player()` for player validation
 - ✓ Use `eidolon.validation.validate_uuid()` for parameter validation
@@ -694,6 +753,7 @@ Both functions follow standard patterns:
 - ✓ Follow error handling patterns from existing endpoints
 
 **CDK Deployment:** ✓ **Completed**
+
 - ✓ Add function definitions to Character Stack (`deployment/stacks/character_stack.py`)
 - ✓ Configure API Gateway routes under `/item` resource (`deployment/stacks/api_stack.py`)
 - ✓ Use Cognito authorizer for authentication
@@ -701,12 +761,15 @@ Both functions follow standard patterns:
 - ✓ Fixed logical IDs: `ApiItemBriefFunction` and `ApiItemPrototypeFunction`
 
 **API Gateway Routes:** ✓ **Completed**
+
 - `GET /item/brief` → `api-item-brief` Lambda (handler: `api_item_brief.lambda_handler`)
 - `GET /item/prototype` → `api-item-prototype` Lambda (handler: `api_item_prototype.lambda_handler`)
+- `POST /item/consume` → `api-item-consume` Lambda (handler: `api_item_consume.lambda_handler`)
 
 ### Existing Endpoints
 
 These existing endpoints are used by the caching system:
+
 - `GET /character?CharacterID={id}` - Used at character selection and story completion for character data
 - `GET /segment/status` - Primary data source for character updates during active story gameplay
 - `GET /story/history?CharacterID={id}&StoryInstanceIDs={ids}` - Used to fetch completed story records for IndexedDB storage
@@ -751,12 +814,14 @@ flowchart TD
 ## Current Status Summary
 
 ### Completed Infrastructure
+
 - ✅ Backend API endpoints (api_item_brief.py, api_item_prototype.py) - deployed
 - ✅ IndexedDB service (403 lines, 31 methods, 5 object stores) - code complete
 - ✅ Character repository (331 lines, cache-first strategy) - code complete
 - ✅ GameScreen integration (CharacterRepository instantiated) - code complete
 
 ### Resolved Blocker
+
 - ✅ **IndexedDB Initialization** - Implemented (2025-10-21)
   - Database initialization added to `incremental/lib/main.dart` (lines 28-32)
   - Runs on app startup for web platform
@@ -768,6 +833,7 @@ flowchart TD
 The inventory management system with IndexedDB integration was completed with the following implementation:
 
 1. **IndexedDB Initialization Fixed** ✅ (`incremental/lib/main.dart`):
+
    ```dart
    if (kIsWeb && IndexedDBService().isSupported) {
      await IndexedDBService().initialize();
@@ -776,12 +842,14 @@ The inventory management system with IndexedDB integration was completed with th
    ```
 
 2. **Backend Enhancements:** ✅
+
    - Added Quantity field to item brief API response
    - Updated character inventory schema to support quantities
    - Implemented new format: `{slot: {"ItemID": "...", "Quantity": int}}` for stackable items
    - No backward compatibility needed (clean deployment)
 
 3. **Item Repository Created:** ✅ (`incremental/lib/repositories/item_repository.dart`)
+
    - Three-tier loading strategy (memory → IndexedDB → server)
    - Memory + IndexedDB caching layers
    - Batch optimization for inventory loading
@@ -798,12 +866,14 @@ The inventory management system with IndexedDB integration was completed with th
 ### Actual Outcomes (Achieved 2025-10-21)
 
 **Performance Improvements:**
+
 - Inventory load time: 4-10 seconds → <500ms (95% improvement) ✅
 - API calls for 20 items: 20 calls → ~5 calls (75% reduction) ✅
 - Data transfer: 200KB → 12KB (94% reduction) ✅
 - Cache hit rate: >80% after initial population ✅
 
 **User Experience:**
+
 - ✅ Item names displayed immediately
 - ✅ Quantities shown for stackable items
 - ✅ Instant inventory navigation
@@ -811,12 +881,13 @@ The inventory management system with IndexedDB integration was completed with th
 
 ---
 
-*Document Version: 1.2*
-*Created: 2024-10-16*
-*Updated: 2025-10-21*
-*Status: Implementation Complete - Manual Testing Pending*
+_Document Version: 1.2_
+_Created: 2024-10-16_
+_Updated: 2025-10-21_
+_Status: Implementation Complete - Manual Testing Pending_
 
 **Revision History:**
+
 - v1.0 (2024-10-16): Initial planning document
 - v1.1 (2025-10-19): Updated to reflect actual implementation state (code complete, not operational due to missing initialization)
 - v1.2 (2025-10-21): Updated to reflect completed implementation (IndexedDB initialization resolved, inventory management complete)

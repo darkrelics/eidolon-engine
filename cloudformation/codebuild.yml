@@ -21,7 +21,7 @@ Parameters:
   GitHubSourceRepo:
     Type: String
     Description: "The GitHub repository URL for the source code"
-    Default: "https://github.com/robinje/eidolon-engine"
+    Default: "https://github.com/darkrelics/eidolon-engine"
 
 Resources:
   CodeBuildAccessPolicy:

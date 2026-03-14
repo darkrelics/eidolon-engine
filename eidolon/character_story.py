@@ -10,9 +10,9 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_data import apply_character_updates, character_clear_story, character_get
 from eidolon.character_segment import character_get_active_segment
+from eidolon.character_state import calculate_heal_time
 from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
-from eidolon.mechanics import calculate_heal_time
 from eidolon.state_machines import GameMode, set_character_game_mode
 from eidolon.validation import validate_uuid
 
@@ -213,8 +213,8 @@ def get_stories(character_id: str, player_id: str, available_story_ids: list) ->
             stories.append(formatted_story)
             logger.debug(f"Story processed for {story_id}")
 
-        except ValueError:
-            logger.warning(f"Story not found for {story_id}")
+        except ValueError as err:
+            logger.warning(f"Story not found for {story_id}: {err}")
             continue
         except RuntimeError as err:
             logger.error(f"Error loading story for {story_id} Error: {err}")
@@ -289,8 +289,8 @@ def get_stories_with_character(character: dict, available_story_ids: list) -> li
             stories.append(formatted_story)
             logger.debug(f"Story processed for {story_id}")
 
-        except ValueError:
-            logger.warning(f"Story not found for {story_id}")
+        except ValueError as err:
+            logger.warning(f"Story not found for {story_id}: {err}")
             continue
         except RuntimeError as err:
             logger.error(f"Error loading story for {story_id} Error: {err}")
@@ -403,9 +403,9 @@ def apply_story_outcome_effects(character_id: str, outcome_effects: dict) -> Non
             apply_character_updates(character_id, character_updates)
             logger.info(f"Applied story outcome effects for {character_id}")
 
-    except ClientError as err:
+    except RuntimeError as err:
         logger.error(f"Failed to apply outcome effects for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to apply outcome effects: {err}") from err
+        raise
 
 
 def get_active_story_and_segment(character: dict) -> tuple:
@@ -444,8 +444,8 @@ def get_active_story_and_segment(character: dict) -> tuple:
         character_clear_story(character_id)
         return {}, {}
 
-    active_story_id = character.get("ActiveStoryID")
-    active_segment_id = character.get("ActiveSegmentID")
+    active_story_id: str = character.get("ActiveStoryID", "")
+    active_segment_id: str = character.get("ActiveSegmentID", "")
 
     # Validate both IDs are present and valid UUIDs
     story_valid = validate_uuid(active_story_id)
@@ -481,11 +481,6 @@ def get_active_story_and_segment(character: dict) -> tuple:
     if not active_segment:
         # Segment ID was valid but segment not found = broken chain
         logger.warning(f"Segment {active_segment_id} not found for character {character_id}")
-        character_clear_story(character_id)
-        return {}, {}
-
-    if not isinstance(active_story_id, str):
-        logger.warning(f"ActiveStoryID for character {character_id} is not a string; clearing story state")
         character_clear_story(character_id)
         return {}, {}
 

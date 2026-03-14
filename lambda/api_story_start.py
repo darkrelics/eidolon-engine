@@ -1,11 +1,16 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to start a story for a character.
 Validates character state, creates active segment, and returns first segment details.
+
+Endpoint: POST /story/start
+Authentication: Cognito (required)
 """
+
+from uuid_extension import uuid7
 
 from eidolon.character_data import character_get
 from eidolon.constants import CharState
@@ -17,6 +22,7 @@ from eidolon.requests import parse_event_body
 from eidolon.segment_response import new_segment_response
 from eidolon.sqs import queue_segment_for_processing
 from eidolon.story_active import story_update_character
+from eidolon.story_completion import complete_story_for_character
 from eidolon.story_history import create_story_history_entry
 from eidolon.story_retrieval import get_story_and_first_segment
 from eidolon.story_segment import create_active_segment
@@ -24,9 +30,36 @@ from eidolon.story_validation import story_eligibility, validate_story_available
 from eidolon.validation import validate_uuid
 
 
+def remove_invalid_story_from_character(character: dict, character_id: str, story_id: str) -> None:
+    """Remove a story that no longer exists from a character's available stories. Non-fatal on failure.
+
+    Args:
+        character: Character data dict
+        character_id: Character UUID
+        story_id: Story UUID to remove
+    """
+    try:
+        available_stories = set(character.get("AvailableStories", []))
+        if story_id in available_stories:
+            available_stories.remove(story_id)
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression="SET AvailableStories = :stories",
+                ExpressionAttributeValues={":stories": list(available_stories)},
+            )
+            logger.info(f"Removed invalid story {story_id} from character {character_id}")
+    except Exception as err:
+        logger.error(f"Failed to remove invalid story from character: {err}")
+
+
 def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     """
     Business logic for starting a story - orchestrates the complete process.
+
+    Uses lock-first pattern: atomically claims the character via conditional write
+    BEFORE creating any records, preventing race conditions where two concurrent
+    requests both pass eligibility checks.
 
     Args:
         character_id: Character UUID
@@ -63,40 +96,44 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     try:
         story, first_segment = get_story_and_first_segment(story_id)
     except ValueError as err:
-        # Story doesn't exist in database - remove it from character's available stories
         logger.warning(f"Story {story_id} not found in database, removing from character's available stories")
-        try:
-            available_stories = set(character.get("AvailableStories", []))
-            if story_id in available_stories:
-                available_stories.remove(story_id)
-                dynamo.update_item(
-                    TableName.CHARACTERS,
-                    Key={"CharacterID": character_id},
-                    UpdateExpression="SET AvailableStories = :stories",
-                    ExpressionAttributeValues={":stories": list(available_stories)},
-                )
-                logger.info(f"Removed invalid story {story_id} from character {character_id}")
-        except Exception as cleanup_err:
-            logger.error(f"Failed to remove invalid story from character: {cleanup_err}")
+        remove_invalid_story_from_character(character, character_id, story_id)
         raise ValueError("404:Story no longer exists") from err
 
-    # Create story instance
-    story_instance_id = create_story_history_entry(character_id, story_id, story)
+    # Pre-generate IDs so the atomic lock can reference them
+    story_instance_id = str(uuid7())
+    active_segment_id = str(uuid7())
 
-    # Create initial segment
-    active_segment = create_active_segment(character_id, player_id, story_id, first_segment, story_instance_id)
-
-    # Update character state
-    active_segment_id = active_segment.get("ActiveSegmentID")
-    if not active_segment_id:
-        raise RuntimeError("Active segment creation failed - no ActiveSegmentID")
-
+    # LOCK FIRST: Atomically claim the character via conditional write
+    # This prevents two concurrent requests from both passing eligibility
     try:
         story_update_character(character_id, story_id, active_segment_id, story_instance_id)
-    except (ValueError, RuntimeError) as err:
-        # Let ops_segment_poller handle cleanup of orphaned segments
-        logger.error(f"Failed to update character state, segment {active_segment_id} will be cleaned up by poller: {err}")
-        raise
+    except ValueError as err:
+        logger.warning(f"Character {character_id} already locked by another request: {err}")
+        raise ValueError("409:Character is currently starting another story") from err
+    except RuntimeError as err:
+        logger.error(f"Failed to lock character {character_id} for story start: {err}")
+        raise err
+
+    # Character is now locked (GameMode=Incremental) - create records
+    # If creation fails, roll back the character state
+    try:
+        # Create story instance
+        create_story_history_entry(character_id, story_id, story, story_instance_id)
+
+        # Create initial segment
+        active_segment = create_active_segment(
+            character_id, player_id, story_id, first_segment, story_instance_id, active_segment_id
+        )
+    except Exception as err:
+        # Roll back character state since records couldn't be created
+        logger.error(f"Failed to create story records after locking character {character_id}: {err}")
+        try:
+            complete_story_for_character(character_id)
+            logger.info(f"Rolled back character {character_id} state after creation failure")
+        except Exception as rollback_err:
+            logger.error(f"Failed to roll back character {character_id} state: {rollback_err}")
+        raise RuntimeError(f"Failed to create story records: {err}") from err
 
     # Queue mechanical segments - critical for game to work
     if first_segment.get("SegmentType") == "mechanical":

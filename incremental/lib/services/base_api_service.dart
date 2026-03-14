@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
+import 'package:eidolon_incremental/utils/api_validation.dart';
 
 /// Base API service with common HTTP functionality
 abstract class BaseApiService {
@@ -9,12 +10,39 @@ abstract class BaseApiService {
   final http.Client _httpClient;
   final String baseUrl;
 
+  /// Maximum request body size in bytes (5MB)
+  static const int maxRequestBodySize = 5 * 1024 * 1024;
+
+  /// Maximum query parameter value length
+  static const int maxQueryParamLength = 2048;
+
+  /// Maximum number of query parameters
+  static const int maxQueryParams = 50;
+
   BaseApiService({
     required AuthService authService,
     required this.baseUrl,
     http.Client? httpClient,
   }) : _authService = authService,
-       _httpClient = httpClient ?? http.Client();
+       _httpClient = httpClient ?? http.Client() {
+    _validateBaseUrl(baseUrl);
+  }
+
+  /// Validate base URL format
+  void _validateBaseUrl(String url) {
+    if (url.isEmpty) {
+      throw ArgumentError('Base URL cannot be empty');
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+      throw ArgumentError('Invalid base URL format: $url');
+    }
+
+    if (uri.scheme != 'https' && uri.scheme != 'http') {
+      throw ArgumentError('Base URL must use http or https: $url');
+    }
+  }
 
   /// Get authorization headers
   Future<Map<String, String>> getHeaders() async {
@@ -28,6 +56,91 @@ abstract class BaseApiService {
     };
   }
 
+  /// Validate endpoint path
+  void _validateEndpoint(String endpoint) {
+    if (endpoint.isEmpty) {
+      throw ArgumentError('Endpoint cannot be empty');
+    }
+
+    if (!endpoint.startsWith('/')) {
+      throw ArgumentError('Endpoint must start with /: $endpoint');
+    }
+
+    // Check for invalid characters that could cause injection attacks
+    if (endpoint.contains('..') || endpoint.contains('//')) {
+      throw ArgumentError('Endpoint contains invalid path traversal: $endpoint');
+    }
+
+    // Ensure endpoint doesn't contain query parameters (use queryParams instead)
+    if (endpoint.contains('?')) {
+      throw ArgumentError('Endpoint should not contain query parameters. Use queryParams parameter instead: $endpoint');
+    }
+  }
+
+  /// Validate query parameters
+  void _validateQueryParams(Map<String, String>? queryParams) {
+    if (queryParams == null || queryParams.isEmpty) {
+      return;
+    }
+
+    if (queryParams.length > maxQueryParams) {
+      throw ArgumentError('Too many query parameters (${queryParams.length}). Maximum: $maxQueryParams');
+    }
+
+    for (final entry in queryParams.entries) {
+      final key = entry.key;
+      final value = entry.value;
+
+      if (key.isEmpty) {
+        throw ArgumentError('Query parameter key cannot be empty');
+      }
+
+      if (value.length > maxQueryParamLength) {
+        throw ArgumentError('Query parameter "$key" value too long (${value.length} chars). Maximum: $maxQueryParamLength');
+      }
+
+      // Check for null bytes or control characters that could cause issues
+      if (value.contains('\u0000') || value.contains('\n') || value.contains('\r')) {
+        throw ArgumentError('Query parameter "$key" contains invalid characters');
+      }
+    }
+  }
+
+  /// Validate and encode request body
+  String? _validateAndEncodeBody(Map<String, dynamic>? body) {
+    if (body == null || body.isEmpty) {
+      return null;
+    }
+
+    try {
+      final encoded = jsonEncode(body);
+      final bodySize = encoded.length;
+
+      if (bodySize > maxRequestBodySize) {
+        throw ArgumentError(
+          'Request body too large ($bodySize bytes). Maximum: $maxRequestBodySize bytes (${(maxRequestBodySize / 1024 / 1024).toStringAsFixed(1)}MB)',
+        );
+      }
+
+      return encoded;
+    } catch (e) {
+      if (e is ArgumentError) {
+        rethrow;
+      }
+      throw ArgumentError('Failed to encode request body: $e');
+    }
+  }
+
+  /// Validate HTTP method
+  void _validateMethod(String method) {
+    const allowedMethods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'];
+    final upperMethod = method.toUpperCase();
+
+    if (!allowedMethods.contains(upperMethod)) {
+      throw ArgumentError('Unsupported HTTP method: $method. Allowed: ${allowedMethods.join(", ")}');
+    }
+  }
+
   /// Generic HTTP request handler
   Future<T> executeRequest<T>({
     required String method,
@@ -37,14 +150,21 @@ abstract class BaseApiService {
     T Function(Map<String, dynamic>)? parser,
     bool returnRawResponse = false,
   }) async {
+    // Validate inputs before making request
+    _validateMethod(method);
+    _validateEndpoint(endpoint);
+    _validateQueryParams(queryParams);
+
     try {
       // Build URI with query parameters
-      var uri = Uri.parse('$baseUrl$endpoint');
-      if (queryParams != null && queryParams.isNotEmpty) {
-        uri = uri.replace(queryParameters: queryParams);
-      }
+      final uri = Uri.parse('$baseUrl$endpoint').replace(
+        queryParameters: queryParams != null && queryParams.isNotEmpty ? queryParams : null,
+      );
 
       debugPrint('API [$method]: $uri');
+
+      // Validate and encode body
+      final encodedBody = _validateAndEncodeBody(body);
 
       // Get headers
       final headers = await getHeaders();
@@ -59,14 +179,14 @@ abstract class BaseApiService {
           response = await _httpClient.post(
             uri,
             headers: headers,
-            body: body != null ? jsonEncode(body) : null,
+            body: encodedBody,
           );
           break;
         case 'PUT':
           response = await _httpClient.put(
             uri,
             headers: headers,
-            body: body != null ? jsonEncode(body) : null,
+            body: encodedBody,
           );
           break;
         case 'DELETE':
@@ -76,11 +196,12 @@ abstract class BaseApiService {
           response = await _httpClient.patch(
             uri,
             headers: headers,
-            body: body != null ? jsonEncode(body) : null,
+            body: encodedBody,
           );
           break;
         default:
-          throw Exception('Unsupported HTTP method: $method');
+          // This should never happen due to validation above
+          throw ArgumentError('Unsupported HTTP method: $method');
       }
 
       debugPrint('API Response [${response.statusCode}]: ${response.body}');
@@ -122,6 +243,10 @@ abstract class BaseApiService {
         }
         throw ApiException(errorMessage, statusCode: response.statusCode);
       }
+    } on ArgumentError catch (e) {
+      // Input validation errors
+      debugPrint('API Validation Error: $e');
+      throw ValidationException(e.message);
     } catch (e) {
       if (e is ApiException) {
         rethrow;

@@ -10,8 +10,9 @@ from decimal import Decimal
 
 from botocore.exceptions import ClientError
 
-from eidolon.constants import MAX_SKILL_LEVEL, CharState
-from eidolon.dynamo import TableName, dynamo
+from eidolon.character_state import determine_character_state_from_wounds
+from eidolon.constants import DEFAULT_DEATH_ROOM_ID, MAX_SKILL_LEVEL, CharState
+from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes
 from eidolon.logger import logger
@@ -26,16 +27,18 @@ def generate_character_id() -> str:
     Returns:
         A UUID string for the character ID.
     """
-    charater_uuid: str = str(uuid.uuid4())
+    character_uuid: str = str(uuid.uuid4())
 
-    logger.debug(f"Generated character ID: {charater_uuid}")
+    logger.debug(f"Generated character ID: {character_uuid}")
 
-    return charater_uuid
+    return character_uuid
 
 
 def check_character_limit(player_id: str) -> bool:
     """
     Check if player has reached character limit.
+
+    Only counts non-dead characters toward the limit.
 
     Args:
         player_id: Cognito user ID.
@@ -55,7 +58,12 @@ def check_character_limit(player_id: str) -> bool:
             raise ValueError(f"Player {player_id} not found")
 
         character_list = player.get("CharacterList", {})
-        current_count = len(character_list)
+
+        # Count only non-dead characters toward the limit
+        current_count = 0
+        for char_name, char_info in character_list.items():
+            if isinstance(char_info, dict) and not char_info.get("Dead", False):
+                current_count += 1
 
         return current_count < MAX_CHARACTERS_PER_PLAYER
 
@@ -298,7 +306,11 @@ def character_get(character_id: str, player_id: str) -> dict:
 
 def create_character_record(character_item: dict) -> bool:
     """
-    Create character record in database with atomic name check.
+    Create character record in database.
+
+    Note: Name uniqueness is primarily enforced by the query in create_character().
+    The conditional here prevents overwriting an existing character with the
+    same CharacterID (which shouldn't happen with UUID generation).
 
     Args:
         character_item: Complete character record to create
@@ -307,19 +319,24 @@ def create_character_record(character_item: dict) -> bool:
         True if created successfully
 
     Raises:
-        ValueError: If character name is already taken
+        ValueError: If character with this ID already exists
         RuntimeError: If database operation fails
     """
     try:
-        # Use conditional put - only succeeds if name doesn't exist
-        dynamo.put_item(TableName.CHARACTERS, character_item, ConditionExpression="attribute_not_exists(CharacterName)")
+        # Conditional ensures we don't overwrite an existing character
+        # Note: Name uniqueness is enforced by query check in create_character()
+        dynamo.put_item(
+            TableName.CHARACTERS,
+            character_item,
+            ConditionExpression="attribute_not_exists(CharacterID)",
+        )
         logger.info(f"Character record created successfully for {character_item.get('CharacterID')}")
         return True
     except ClientError as err:
-        if err.response["Error"]["Code"] == "ConditionalCheckFailedException":
-            # Name already taken - convert to ValueError for proper HTTP status
-            logger.info(f"Character name '{character_item.get('CharacterName')}' already taken")
-            raise ValueError("Character name is already taken") from err
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            # CharacterID collision (extremely rare with UUIDs) or retry
+            logger.warning(f"Character ID collision for {character_item.get('CharacterID')}")
+            raise ValueError("Character creation failed - please try again") from err
         logger.error(f"Failed to create character record for {character_item.get('CharacterName')} Error: {err}")
         raise RuntimeError(f"Failed to create character record: {err}") from err
 
@@ -402,9 +419,9 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     # Create character record
     try:
         create_character_record(character_item)
-    except ValueError:
+    except ValueError as err:
         # Name already taken - re-raise as-is for proper HTTP status
-        raise
+        raise err
     except RuntimeError as err:
         # Other database failures
         logger.error(f"Failed to create character record: {err}")
@@ -583,3 +600,132 @@ def character_clear_story(character_id: str) -> None:
     except ClientError as err:
         logger.error(f"Failed to clear story for character {character_id} Error: {err}", exc_info=True)
         # Don't raise - just log and return
+
+
+def apply_death_state(character_id: str, character: dict, new_state: str, timestamp: str) -> None:
+    """Apply death state to character, updating both character and player tables atomically.
+
+    If player info is available, uses a transaction to update both tables.
+    Falls back to character-only update if player info is missing.
+
+    Args:
+        character_id: Character UUID
+        character: Full character dict with PlayerID and CharacterName
+        new_state: The new state value (should be CharState.DEAD.value)
+        timestamp: ISO format timestamp
+
+    Raises:
+        ClientError: If database operation fails
+    """
+    player_id = character.get("PlayerID")
+    character_name = character.get("CharacterName")
+
+    if player_id and character_name:
+        transact_items = [
+            {
+                "Update": {
+                    "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
+                    "Key": {"CharacterID": {"S": character_id}},
+                    "UpdateExpression": "SET CharState = :state, UpdatedAt = :timestamp, RoomID = :room",
+                    "ExpressionAttributeValues": {
+                        ":state": {"S": new_state},
+                        ":timestamp": {"S": timestamp},
+                        ":room": {"N": str(DEFAULT_DEATH_ROOM_ID)},
+                    },
+                }
+            },
+            {
+                "Update": {
+                    "TableName": TABLE_ENV_MAP[TableName.PLAYERS],
+                    "Key": {"PlayerID": {"S": player_id}},
+                    "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :timestamp",
+                    "ExpressionAttributeNames": {"#name": character_name},
+                    "ExpressionAttributeValues": {
+                        ":dead": {"BOOL": True},
+                        ":timestamp": {"S": timestamp},
+                    },
+                }
+            },
+        ]
+
+        try:
+            dynamo.transact_write_items(transact_items)
+            logger.info(f"Atomically updated character state to dead and player CharacterList for {character_id}")
+        except ClientError as err:
+            logger.error(f"Failed to update death state for {character_id} Error: {err}", exc_info=True)
+            raise RuntimeError(f"Failed to apply death state: {err}") from err
+    else:
+        logger.warning(f"Cannot update CharacterList - missing PlayerID or CharacterName for {character_id}")
+        apply_character_state_change(character_id, new_state, timestamp, include_room_reset=True)
+
+
+def apply_character_state_change(character_id: str, new_state: str, timestamp: str, include_room_reset: bool = False) -> None:
+    """Apply a single character state change.
+
+    Args:
+        character_id: Character UUID
+        new_state: New CharState value
+        timestamp: ISO format timestamp
+        include_room_reset: Whether to reset RoomID to default death room
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    update_expr = "SET CharState = :state, UpdatedAt = :timestamp"
+    expr_values: dict = {":state": new_state, ":timestamp": timestamp}
+
+    if include_room_reset:
+        update_expr += ", RoomID = :room"
+        expr_values[":room"] = DEFAULT_DEATH_ROOM_ID
+
+    try:
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues=expr_values,
+        )
+        logger.info(f"Updated character state to {new_state} for {character_id}")
+    except ClientError as err:
+        logger.error(f"Failed to update character state for {character_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to update character state: {err}") from err
+
+
+def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: list) -> str:
+    """
+    Apply death or unconscious state to character based on outcome and wounds.
+
+    Args:
+        character_id: Character UUID
+        outcome: Segment outcome ("death", "failure", etc.)
+        wounds: Current character wounds
+
+    Returns:
+        New character state that was applied
+
+    Raises:
+        RuntimeError: If database operation fails
+    """
+    if outcome != "death":
+        return CharState.STANDING.value  # Only death outcomes change state
+
+    try:
+        character = get_character(character_id)
+    except (ValueError, RuntimeError) as err:
+        logger.error(f"Failed to apply death/unconscious state for {character_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to apply death/unconscious state: {err}") from err
+
+    max_health = character.get("MaxHealth", DEFAULT_HEALTH)
+    new_state = determine_character_state_from_wounds(max_health, wounds)
+
+    if new_state == character.get("CharState", CharState.STANDING.value):
+        return new_state
+
+    timestamp = datetime.now(timezone.utc).isoformat()
+
+    if new_state == CharState.DEAD.value:
+        apply_death_state(character_id, character, new_state, timestamp)
+    else:
+        apply_character_state_change(character_id, new_state, timestamp)
+
+    return new_state

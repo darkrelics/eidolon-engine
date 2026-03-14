@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to process segments.
 Triggered by SQS with ActiveSegmentID messages.
@@ -9,10 +9,9 @@ Triggered by SQS with ActiveSegmentID messages.
 
 from eidolon.character_data import get_character
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.responses import lambda_response
 from eidolon.segment_core import get_active_segment, get_segment_definition
 from eidolon.segment_polling import claim_segment_for_processing
-from eidolon.segment_processing import route_segment_processing
+from eidolon.segment_processing import apply_segment_effects, route_segment_processing
 from eidolon.segment_state import update_active_segment_outcome
 from eidolon.validation import validate_uuid
 
@@ -48,20 +47,31 @@ def process_segment(active_segment: dict) -> None:
         )
     except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
-        raise
+        raise err
 
     # Get character
     character = get_character(active_segment.get("CharacterID"))  # type: ignore
 
-    # Process based on type
+    # Process based on type (computes outcome without applying effects to database)
     outcome, results = route_segment_processing(segment_def, character, active_segment)
 
-    # Persist results
+    # Persist outcome FIRST (before applying effects)
+    # This ensures effects are never orphaned if the outcome write fails
     try:
         update_active_segment_outcome(active_segment_id, outcome, results, segment_def)  # type: ignore
     except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to update segment outcome for {active_segment_id}: {err}", exc_info=True)
-        raise
+        raise err
+
+    # Apply effects to character AFTER outcome is safely persisted
+    character_id = active_segment.get("CharacterID")
+    if character_id:
+        try:
+            apply_segment_effects(character_id, results)
+        except RuntimeError as err:
+            # Outcome is already persisted -- effects failure is non-fatal for segment progression
+            # but must be visible in logs for investigation
+            logger.error(f"Segment {active_segment_id} outcome saved but effects incomplete: {err}")
 
     logger.info(f"Segment {active_segment_id} processed with outcome: {outcome}")
 
@@ -85,8 +95,14 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Check if this is an SQS event
     if "Records" not in event:
-        # Not an SQS event
-        return lambda_response(400, {"Error": "Invalid event format"}, event)
+        logger.error("Invalid event format - expected SQS event with Records")
+        return {"batchItemFailures": []}
+
+    # Track processing results for observability
+    # Note: We don't use batchItemFailures for retries - the poller handles stuck segments
+    success_count = 0
+    failure_count = 0
+    invalid_count = 0
 
     for record in event.get("Records", []):
         message_id = record.get("messageId", "unknown")
@@ -96,11 +112,13 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         if not active_segment_id:
             logger.warning(f"Empty message body for messageId={message_id}")
+            invalid_count += 1
             continue
 
         # Validate UUID format
         if not validate_uuid(active_segment_id):
             logger.warning(f"Invalid UUID format for messageId={message_id}: {active_segment_id}")
+            invalid_count += 1
             continue
 
         # Fetch the full active segment record from DynamoDB
@@ -109,10 +127,12 @@ def lambda_handler(event: dict, context: object) -> dict:
         except ValueError as err:
             logger.warning(f"Active segment {active_segment_id} not found: {err}")
             # Don't retry - segment doesn't exist
+            invalid_count += 1
             continue
         except RuntimeError as err:
             logger.error(f"Database error fetching active segment {active_segment_id}: {err}")
             # Don't retry - DB errors need investigation
+            failure_count += 1
             continue
 
         logger.info(f"Processing segment: {active_segment_id}")
@@ -120,9 +140,18 @@ def lambda_handler(event: dict, context: object) -> dict:
         # Process the segment
         try:
             process_segment(active_segment)
+            success_count += 1
         except Exception as err:
             logger.error(f"Failed to process segment {active_segment_id}: {err}", exc_info=True)
-            # Continue - poller will handle cleanup
+            failure_count += 1
+            # Don't add to batchItemFailures - poller will handle stuck segments
 
-    # Return empty dict for successful SQS batch processing
-    return {}
+    # Log summary
+    if invalid_count > 0 or failure_count > 0:
+        logger.warning(f"Batch processing summary: Success={success_count}, Failed={failure_count}, Invalid={invalid_count}")
+    else:
+        logger.info(f"Batch processing summary: Success={success_count}")
+
+    # Return proper SQS batch response format
+    # Empty batchItemFailures means all messages processed (no SQS retries - poller handles cleanup)
+    return {"batchItemFailures": []}

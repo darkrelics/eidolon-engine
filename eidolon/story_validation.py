@@ -4,6 +4,8 @@ Story validation and prerequisites.
 Provides functions for checking story availability and prerequisites.
 """
 
+from datetime import datetime, timezone
+
 from eidolon.constants import CharState
 from eidolon.logger import logger
 
@@ -29,10 +31,15 @@ def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
     required_items = prerequisites.get("requiredItems", [])
     if required_items:
         inventory = character.get("Inventory", {})
-        # Inventory is a dict where keys are slot numbers and values are item IDs
-        inventory_item_ids = list(inventory.values())
-        for required_item_id in required_items:
-            if required_item_id not in inventory_item_ids:
+        inventory_item_ids = []
+        for item_data in inventory.values():
+            if item_data and isinstance(item_data, dict):
+                item_id = item_data.get("ItemID")
+                if item_id:
+                    inventory_item_ids.append(item_id)
+
+        for item_id in required_items:
+            if item_id not in inventory_item_ids:
                 return False
 
     return True
@@ -63,14 +70,23 @@ def validate_story_available(character: dict, story_id: str) -> None:
     for entry in completed_stories:
         # Each entry is a single-key map: {story_id: {"StoryType": "daily", "CompletedAt": timestamp}}
         if story_id in entry:
-            story_data = entry[story_id]
+            story_data = entry.get(story_id, {})
             story_type = story_data.get("StoryType", "")
 
             if story_type == "one-time":
                 raise ValueError("Story already completed")
 
             if story_type == "daily":
-                # This should have been cleaned up, but double-check as safety
+                # Check if cooldown has actually expired (cleanup may have missed this entry)
+                completed_at = story_data.get("CompletedAt", "")
+                if completed_at:
+                    try:
+                        finished = datetime.fromisoformat(completed_at)
+                        now = datetime.now(timezone.utc)
+                        if finished.date() < now.date():
+                            continue  # Cooldown expired, story is available
+                    except (ValueError, TypeError):
+                        pass  # Can't parse date, block to be safe
                 raise ValueError("Story available again tomorrow")
 
 

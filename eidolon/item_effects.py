@@ -94,7 +94,7 @@ def apply_healing(character: dict, healing_amount: int) -> dict:
 
     if was_dead and len(remaining_wounds) < max_health:
         # Character is no longer dead (has some health)
-        character["CharState"] = CharState.ALIVE.value
+        character["CharState"] = CharState.STANDING.value
         logger.info("Character revived from death by healing")
 
     return {
@@ -160,7 +160,7 @@ def apply_item_effects(character_id: str, prototype: dict) -> dict:
         # Update character state if revived
         if healing_result.get("was_dead") and healing_result["current_health"] > 0:
             update_expressions.append("CharState = :char_state")
-            expression_values[":char_state"] = CharState.ALIVE.value
+            expression_values[":char_state"] = CharState.STANDING.value
 
         effects_applied.append(
             f"Healed {healing_result['wounds_healed']} wound(s) "

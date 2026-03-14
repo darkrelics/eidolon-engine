@@ -73,7 +73,7 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ### Performance Baseline — 1 Task
 
-- ~~R3-T2: Load testing and provisioned concurrency decision~~ — *Deferred to post-revenue*
+- ~~R3-T2: Load testing and provisioned concurrency decision~~ — _Deferred to post-revenue_
 
 ### Quality Assurance — 1 Task
 
@@ -81,7 +81,7 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 
 ### Enablement — 2 Tasks
 
-- ~~R3-T4: Author Quick-Start documentation~~ — *Deferred to R4*
+- ~~R3-T4: Author Quick-Start documentation~~ — _Deferred to R4_
 - R3-T5: Create real beta story content
 
 ### Security — 1 Task
@@ -99,6 +99,7 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 **Decision:** This task was **moved to Release 4** to focus R3 on critical beta readiness blockers (client polling, performance, testing, content).
 
 **Update (2025-10-19):** Currency system was subsequently **completed ahead of schedule** on 2025-10-19, including:
+
 - Coin-based currency system (bronze/silver/gold coins)
 - Resources.Value field tracking total currency
 - apply_story_rewards() fully implemented (199 lines)
@@ -122,21 +123,25 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
 **5-Stage Implementation Plan:**
 
 1. [COMPLETE] **Instrumentation** (Tasks 1-3) - COMPLETE
+
    - Created metrics collection infrastructure
    - Instrumented all API methods
    - Added segment boundary tracking
 
 2. [IN PROGRESS] **Baseline Measurement** (Task 4) - IN PROGRESS
+
    - Run test stories to document current API call patterns
    - Measure actual calls per segment (expecting 10-15+)
    - Document breakdown by endpoint
 
 3. [PAUSED] **Fix Core Timing Issues** (Tasks 5-7)
+
    - Remove client-side 60s delay
    - Use server-provided TimeRemaining
    - Implement server-authoritative polling pattern
 
 4. [PAUSED] **Remove Competing Systems** (Tasks 8-9)
+
    - Consolidate to single polling service
    - Remove duplicate timers and polling logic
    - Clean up provider-level polling
@@ -147,6 +152,7 @@ Release 3 focuses on **honest beta readiness** by fixing critical bugs, eliminat
    - Measure battery usage improvement
 
 **Files Modified (Stage 1):**
+
 - `incremental/lib/services/api_metrics.dart` - NEW (temporary instrumentation)
 - `incremental/lib/services/api_service.dart` - Added metrics recording
 - `incremental/lib/screens/game_screen.dart` - Added segment boundary tracking
@@ -191,13 +197,11 @@ From `documentation/incremental-design.md:686-695`:
 **Before Implementation:**
 
 1. **Measure Current Baseline**
-
    - Enable API Gateway execution logging (INFO level)
    - Track calls per character per segment for 5-10 test runs
    - Document actual call pattern
 
 2. **Locate Problematic Code**
-
    - `incremental/lib/services/` - Polling service implementations
    - `incremental/lib/screens/game_screen.dart` - Game screen polling
    - `incremental/lib/providers/` - Provider-level polling
@@ -212,6 +216,7 @@ From `documentation/incremental-design.md:686-695`:
 **Design Pattern:**
 
 See `documentation/incremental-design.md:606-654` for the server-authoritative polling pattern. Key principles:
+
 - Single API call per segment (GET /segment/status)
 - Use server-provided TimeRemaining value
 - Fixed 30-second retry on errors
@@ -220,21 +225,18 @@ See `documentation/incremental-design.md:606-654` for the server-authoritative p
 **Implementation Steps:**
 
 1. **Create Single Polling Service**
-
    - `incremental/lib/services/story_polling_service.dart`
    - Use GET /segment/status exclusively (includes all needed data)
    - Implement server-authoritative pattern above
    - Add proper error handling and retry logic
 
 2. **Remove Competing Systems**
-
    - Audit and remove any existing polling in GameScreen
    - Remove provider-level polling timers
    - Remove any GET /character calls during polling
    - Consolidate to single service with single endpoint
 
 3. **Add Metrics Collection**
-
    - Log API calls per segment (client-side counter)
    - Track timing accuracy (segment completion within 2s of TimeRemaining)
    - Monitor error rates
@@ -249,7 +251,7 @@ See `documentation/incremental-design.md:606-654` for the server-authoritative p
 
 **Before/After Measurement:**
 
-```text
+````text
 Baseline (Current):
 - Story with 5-minute segment
 - Expected: 2 API calls
@@ -960,7 +962,7 @@ iam.PolicyStatement(
 
 **Applied Fix:**
 
-```python
+````python
 logs_policy = iam.ManagedPolicy(
     self,
     "LambdaLogsPolicy",
@@ -1722,3 +1724,4 @@ See the three story files for complete updated metadata on all segments.
 - v1.2 (2025-10-12): Corrected exit criteria and dependencies after task renumbering, added explicit 5-stage plan for R3-T1
 - v1.1 (2025-10-07): Moved R3-T1 (Currency Rewards) to R4-T1, renumbered remaining tasks
 - v1.0 (2025-10-06): Initial release plan
+````

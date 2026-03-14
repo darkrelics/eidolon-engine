@@ -6,10 +6,11 @@ Provides functions for processing combat encounters using dual action system.
 
 from botocore.exceptions import ClientError
 
+from eidolon.character_state import calculate_heal_time
 from eidolon.constants import DEFAULT_COMBAT_ROUNDS, PLAYER_DEATH_LETHAL_WOUNDS, PLAYER_INCAPACITATED_TOTAL_WOUNDS
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
-from eidolon.mechanics import calculate_heal_time, resolve_opposed_check_with_xp
+from eidolon.mechanics import resolve_opposed_check_with_xp
 
 
 def get_character_best_offensive_action(attributes: dict, skills: dict) -> tuple:
@@ -224,14 +225,21 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             # Apply wounds using opponent's weapon type
             for _ in range(damage):
                 # Check if character is unconscious BEFORE applying this wound
-                current_health = character_max_health - len(player_wounds)
-                is_unconscious = current_health <= 0
+                total_wounds = len(player_wounds)
+                is_unconscious = total_wounds >= character_max_health
 
                 damage_type = opponent_weapon_type
 
-                # Special rule: bashing damage to unconscious characters converts to lethal
+                # Special rule: bashing damage to unconscious characters converts existing bashing to lethal
                 if is_unconscious and damage_type == "bashing":
-                    damage_type = "lethal"
+                    # Find an existing bashing wound to convert to lethal
+                    for wound in player_wounds:
+                        if wound.get("DamageType") == "bashing":
+                            wound["DamageType"] = "lethal"
+                            wound["HealAt"] = calculate_heal_time("lethal")
+                            break
+                    # Whether converted or not, don't add a new wound to an unconscious character
+                    continue
 
                 player_wounds.append({"DamageType": damage_type, "HealAt": calculate_heal_time(damage_type)})
 
@@ -256,11 +264,12 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
 
         # STEP 6: Check victory conditions after damage applied
         # Check character death/incapacitation first
-        lethal_wounds = sum(1 for w in player_wounds if w.get("DamageType") == "lethal")
+        # Count both lethal and aggravated wounds for death check (aggravated is worse than lethal)
+        deadly_wounds = sum(1 for w in player_wounds if w.get("DamageType") in ["lethal", "aggravated"])
         total_wounds = len(player_wounds)
 
-        if lethal_wounds >= PLAYER_DEATH_LETHAL_WOUNDS:
-            logger.info(f"Character defeated in round {round_num + 1} (lethal wounds: {lethal_wounds})")
+        if deadly_wounds >= PLAYER_DEATH_LETHAL_WOUNDS:
+            logger.info(f"Character defeated in round {round_num + 1} (deadly wounds: {deadly_wounds})")
             return "death", {
                 "Rounds": round_num + 1,
                 "PlayerWounds": player_wounds,

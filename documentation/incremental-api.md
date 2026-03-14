@@ -205,8 +205,8 @@ Retrieves complete character data including active story and segment information
     "Resources": {},
     "AvailableStories": ["story_1", "story_2"],
     "CompletedStories": [
-      {"story-uuid-3": {"StoryType": "one-time", "CompletedAt": 1729468900}},
-      {"story-uuid-4": {"StoryType": "daily", "CompletedAt": 1729555200}}
+      { "story-uuid-3": { "StoryType": "one-time", "CompletedAt": 1729468900 } },
+      { "story-uuid-4": { "StoryType": "daily", "CompletedAt": 1729555200 } }
     ],
     "ActiveStoryID": "story_current_uuid",
     "ActiveSegmentID": "segment_current_uuid",
@@ -639,27 +639,77 @@ Retrieves complete item prototype definition for client-side caching.
 - `404 Not Found` - Prototype does not exist
 - `500 Internal Server Error` - Database operation failed
 
+### Consume Item
+
+Consumes an inventory item and applies its effects server-side. Supports stackable consumables (e.g., potions, food) and updates the character's wounds/essence along with inventory quantities.
+
+**Endpoint:** `POST /item/consume`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "CharacterID": "550e8400-e29b-41d4-a716-446655440000",
+  "ItemID": "8f14e45f-e29b-41d4-a716-446655880000"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "success": true,
+  "message": "You drink the healing potion, feeling a warm sensation spread through your body.",
+  "itemName": "Healing Potion",
+  "effects": {
+    "healWounds": {
+      "requested": 6,
+      "removed": 4,
+      "damageTypes": ["lethal", "bashing"]
+    }
+  },
+  "remainingQuantity": 1,
+  "itemRemoved": false,
+  "characterState": "standing"
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request` - Missing parameters, invalid UUID format, or item not consumable
+- `401 Unauthorized` - Missing or invalid authentication token
+- `403 Forbidden` - Character not owned by authenticated player
+- `404 Not Found` - Item not found or not in character inventory
+- `409 Conflict` - Item has no effect in current state (e.g., no wounds, active story in progress)
+- `500 Internal Server Error` - Database update failed
+
 ### Stack Operations (Future)
 
 These endpoints will manage stackable item operations when implemented:
 
 **Stack Merging:** Automatic during inventory updates
+
 - When picking up stackable items, system automatically merges with existing stacks
 - Uses UUIDv7 comparison - older stack keeps its ItemID
 - Updates Quantity field on the surviving stack
 
 **Stack Splitting (Planned):** `POST /item/split`
+
 - Split a stack into two separate stacks
 - Required for trade, dropping partial stacks
 - Body: `{"ItemID": "uuid", "Quantity": 50}`
 - Returns: New stack ItemID
 
 **Inventory Consolidation (Planned):** `POST /inventory/consolidate`
+
 - Merges all matching stackable items in inventory
 - Reduces inventory slots used
 - Returns: Updated inventory with consolidated stacks
 
 **Stack Rules:**
+
 - Stackable items: Immutable except for Quantity field
 - Non-stackable items: Mutable, no Quantity field
 - Stack merging: Oldest ItemID (UUIDv7) wins
@@ -682,6 +732,7 @@ The designed polling pattern (from backend constants):
 8. **No Periodic Character Fetches**: Character only fetched at selection and story completion
 
 **Current Implementation Note:**
+
 - Flutter client currently polls immediately (T+0), not T+60
 - This is inconsistent with backend INITIAL_POLL_DELAY constant
 - Single polling source in GameScreen (no dual-polling)

@@ -1,172 +1,35 @@
-// Eidolon Engine
-//
-// Copyright 2024‑2025 Jason E. Robinson
-
+import 'package:eidolon_incremental/controllers/password_reset_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:eidolon_incremental/providers/auth_provider.dart';
-import 'package:eidolon_incremental/utils/error_handler.dart';
-
-class PasswordResetConfirmScreen extends StatefulWidget {
+class PasswordResetConfirmScreen extends StatelessWidget {
   const PasswordResetConfirmScreen({super.key});
 
   @override
-  State<PasswordResetConfirmScreen> createState() =>
-      _PasswordResetConfirmScreenState();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(create: (_) => PasswordResetController(), child: const _PasswordResetConfirmScreenView());
+  }
 }
 
-class _PasswordResetConfirmScreenState
-    extends State<PasswordResetConfirmScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _codeController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
+class _PasswordResetConfirmScreenView extends StatefulWidget {
+  const _PasswordResetConfirmScreenView();
 
-  bool _isPasswordVisible = false;
-  bool _isConfirmPasswordVisible = false;
-  bool _isLoading = false;
-  String? _email;
+  @override
+  State<_PasswordResetConfirmScreenView> createState() => _PasswordResetConfirmScreenViewState();
+}
 
+class _PasswordResetConfirmScreenViewState extends State<_PasswordResetConfirmScreenView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _email = ModalRoute.of(context)?.settings.arguments as String?;
-  }
-
-  @override
-  void dispose() {
-    _codeController.dispose();
-    _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _handlePasswordReset() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_email == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Email not found. Please start over.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      Navigator.pushReplacementNamed(context, '/forgot-password');
-      return;
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final authProvider = context.read<AuthProvider>();
-      await authProvider.confirmPassword(
-        _email!,
-        _codeController.text.trim(),
-        _passwordController.text,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password reset successfully! Please sign in.'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ErrorHandler.getUserFriendlyMessage(
-                e,
-                context: 'confirmPassword',
-              ),
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _resendCode() async {
-    if (_email == null) return;
-
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final authProvider = context.read<AuthProvider>();
-      await authProvider.forgotPassword(_email!);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('New reset code sent'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              ErrorHandler.getUserFriendlyMessage(
-                e,
-                context: 'confirmPassword',
-              ),
-            ),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please enter a password';
-    }
-    if (value.length < 8) {
-      return 'Password must be at least 8 characters';
-    }
-    if (!RegExp(r'(?=.*[a-z])').hasMatch(value)) {
-      return 'Password must contain a lowercase letter';
-    }
-    if (!RegExp(r'(?=.*[A-Z])').hasMatch(value)) {
-      return 'Password must contain an uppercase letter';
-    }
-    if (!RegExp(r'(?=.*\d)').hasMatch(value)) {
-      return 'Password must contain a number';
-    }
-    if (!RegExp(r'(?=.*[@$!%*?&])').hasMatch(value)) {
-      return 'Password must contain a special character (@\$!%*?&)';
-    }
-    return null;
+    final email = ModalRoute.of(context)?.settings.arguments as String?;
+    context.read<PasswordResetController>().initialize(email);
   }
 
   @override
   Widget build(BuildContext context) {
+    final controller = context.watch<PasswordResetController>();
+
     return Scaffold(
       appBar: AppBar(title: const Text('Reset Password')),
       body: Center(
@@ -175,25 +38,21 @@ class _PasswordResetConfirmScreenState
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Form(
-              key: _formKey,
+              key: controller.formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Create New Password',
-                    style: Theme.of(context).textTheme.headlineMedium,
-                    textAlign: TextAlign.center,
-                  ),
+                  Text('Create New Password', style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
                   const SizedBox(height: 16),
-                  if (_email != null)
+                  if (controller.email != null)
                     Text(
-                      'Enter the code sent to $_email',
+                      'Enter the code sent to ${controller.email}',
                       style: Theme.of(context).textTheme.bodyLarge,
                       textAlign: TextAlign.center,
                     ),
                   const SizedBox(height: 32),
                   TextFormField(
-                    controller: _codeController,
+                    controller: controller.codeController,
                     decoration: const InputDecoration(
                       labelText: 'Verification Code',
                       border: OutlineInputBorder(),
@@ -210,57 +69,40 @@ class _PasswordResetConfirmScreenState
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
-                    controller: _passwordController,
+                    controller: controller.passwordController,
                     decoration: InputDecoration(
                       labelText: 'New Password',
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
+                        icon: Icon(controller.isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                        onPressed: controller.togglePasswordVisibility,
                       ),
                     ),
-                    obscureText: !_isPasswordVisible,
+                    obscureText: !controller.isPasswordVisible,
                     textInputAction: TextInputAction.next,
-                    validator: _validatePassword,
+                    validator: controller.validatePassword,
                   ),
                   const SizedBox(height: 16),
                   TextFormField(
-                    controller: _confirmPasswordController,
+                    controller: controller.confirmPasswordController,
                     decoration: InputDecoration(
                       labelText: 'Confirm New Password',
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
-                        icon: Icon(
-                          _isConfirmPasswordVisible
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _isConfirmPasswordVisible =
-                                !_isConfirmPasswordVisible;
-                          });
-                        },
+                        icon: Icon(controller.isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                        onPressed: controller.toggleConfirmPasswordVisibility,
                       ),
                     ),
-                    obscureText: !_isConfirmPasswordVisible,
+                    obscureText: !controller.isConfirmPasswordVisible,
                     textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => _handlePasswordReset(),
+                    onFieldSubmitted: (_) => controller.handlePasswordResetConfirm(context),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please confirm your password';
                       }
-                      if (value != _passwordController.text) {
+                      if (value != controller.passwordController.text) {
                         return 'Passwords do not match';
                       }
                       return null;
@@ -274,18 +116,14 @@ class _PasswordResetConfirmScreenState
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: _isLoading ? null : _handlePasswordReset,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
+                    onPressed: controller.isLoading ? null : () => controller.handlePasswordResetConfirm(context),
+                    child: controller.isLoading
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Reset Password'),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: _isLoading ? null : _resendCode,
+                    onPressed: controller.isLoading ? null : () => controller.resendCode(context),
                     child: const Text('Resend Code'),
                   ),
                 ],

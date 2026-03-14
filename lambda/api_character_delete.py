@@ -1,10 +1,13 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to delete a character for an authenticated player.
 Ensures the character belongs to the player before deletion.
+
+Endpoint: DELETE /character/delete
+Authentication: Cognito (required)
 """
 
 from eidolon.character_data import character_get
@@ -45,8 +48,6 @@ def character_deletion(player_id: str, character_id: str) -> dict:
     # Delete the character
     deletion_result: dict = delete_character(character_id, remove_from_player_list=True)
 
-    logger.info(f"Character deletion completed for {character_id}")
-
     # Check if deletion was successful
     if not deletion_result.get("CharacterDeleted", False):
         error_msg = "Failed to delete character"
@@ -72,9 +73,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         Dict with status_code and body
     """
     # Get character ID from query parameters
-    character_id = get_query_parameter(event, "CharacterID")
-    if not character_id:
-        raise ValueError("Missing CharacterID parameter")
+    character_id: str = get_query_parameter(event, "CharacterID", required=True)
 
     if not validate_uuid(character_id):
         raise ValueError("Invalid CharacterID format")

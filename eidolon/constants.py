@@ -20,11 +20,17 @@ MAX_SKILL_LEVEL = 10.0  # Hard cap on skill/attribute values
 INITIAL_POLL_DELAY = 60  # Seconds to wait before first poll after segment starts
 RETRY_POLL_DELAY = 60  # Seconds between subsequent polls if not complete
 
-# Sigma thresholds for challenge outcomes
-SIGMA_EXCEPTIONAL = 3.0  # 3+ sigma for exceptional success
-SIGMA_NORMAL = 0.0  # 0+ sigma for normal success
-SIGMA_MINIMAL = -3.0  # -3+ sigma for minimal success
-# Below -3 sigma is failure
+# Sigma thresholds for challenge outcomes (per design doc incremental-design.md)
+# Death: any single sigma <= -3.0 OR average < -2.0
+# Failure: average -2.0 to -0.5
+# Minimal: average -0.5 to 0.5
+# Normal: average 0.5 to 1.5
+# Exceptional: average >= 1.5
+SIGMA_CRITICAL_FAILURE = -3.0  # Single roll threshold for instant death
+SIGMA_DEATH_AVG = -2.0  # Average threshold for death
+SIGMA_FAILURE = -0.5  # Average threshold for failure (below this)
+SIGMA_MINIMAL = 0.5  # Average threshold for minimal (below this)
+SIGMA_NORMAL = 1.5  # Average threshold for normal (below this, else exceptional)
 
 # Combat constants
 DEFAULT_COMBAT_ROUNDS = 10  # Default max rounds if not specified in segment

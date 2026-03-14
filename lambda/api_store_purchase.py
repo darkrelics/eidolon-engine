@@ -1,7 +1,7 @@
 """
 Eidolon Engine - Incremental Game
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to purchase items from the store.
 Handles atomic currency deduction and inventory updates.
@@ -75,26 +75,34 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     try:
         character_get(character_id, player_id)
     except ValueError as err:
+        normalized = str(err).lower()
         logger.warning(f"Character access denied: {err}")
-        raise ValueError(f"403:{err}") from err
+        if "not found" in normalized:
+            raise ValueError(f"404:{err}") from err
+        if "not owned" in normalized:
+            raise ValueError(f"403:{err}") from err
+        raise
 
     # Attempt purchase
     try:
         result = purchase_item(character_id, prototype_id, quantity)
-        logger.info(
-            f"Purchase successful: {quantity}x {prototype_id} " f"for character {character_id} (cost: {result['total_cost']})"
-        )
+        total_cost = result.get("total_cost", 0)
+        item_ids = result.get("item_ids", [])
+        quantity_purchased = result.get("quantity", 0)
+        currency_remaining = result.get("currency_remaining", 0)
+
+        logger.info(f"Purchase successful: {quantity}x {prototype_id} " f"for character {character_id} (cost: {total_cost})")
 
         # Return purchase results
         return {
             "status_code": 200,
             "body": {
                 "Success": True,
-                "ItemIDs": result["item_ids"],
-                "Quantity": result["quantity"],
-                "TotalCost": result["total_cost"],
-                "CurrencyRemaining": result["currency_remaining"],
-                "Message": f"Successfully purchased {result['quantity']} item(s)",
+                "ItemIDs": item_ids,
+                "Quantity": quantity_purchased,
+                "TotalCost": total_cost,
+                "CurrencyRemaining": currency_remaining,
+                "Message": f"Successfully purchased {quantity_purchased} item(s)",
             },
         }
     except ValueError as err:

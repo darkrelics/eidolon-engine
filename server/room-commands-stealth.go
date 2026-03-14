@@ -1,7 +1,7 @@
 /*
 Eidolon Engine - Stealth Commands (Hide/Sneak/Search/Point)
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 */
 

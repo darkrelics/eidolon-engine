@@ -35,7 +35,13 @@
         "Appraise": 0.0
       },
       "StartRoom": 8,
-      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d", "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1", "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d", "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d", "9d8e7f6a-5b4c-3d2e-1f0a-9b8c7d6e5f4a"],
+      "AvailableStories": [
+        "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+        "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
+        "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+        "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+        "9d8e7f6a-5b4c-3d2e-1f0a-9b8c7d6e5f4a"
+      ],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
@@ -104,7 +110,13 @@
         "Appraise": 0.0
       },
       "StartRoom": 10,
-      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d", "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1", "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d", "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d", "9d8e7f6a-5b4c-3d2e-1f0a-9b8c7d6e5f4a"],
+      "AvailableStories": [
+        "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+        "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
+        "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+        "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+        "9d8e7f6a-5b4c-3d2e-1f0a-9b8c7d6e5f4a"
+      ],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",
@@ -173,7 +185,13 @@
         "Appraise": 0.0
       },
       "StartRoom": 4,
-      "AvailableStories": ["f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d", "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1", "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d", "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d", "9d8e7f6a-5b4c-3d2e-1f0a-9b8c7d6e5f4a"],
+      "AvailableStories": [
+        "f7b3d9a4-8e2c-4f6a-b1d5-3c9e7a2f8b6d",
+        "2e3f4b5d-6bdc-4e47-a3ba-d8b51a04fcb1",
+        "8c7b6a5d-4e3f-4a1b-9c8d-7e6f5a4b3c2d",
+        "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+        "9d8e7f6a-5b4c-3d2e-1f0a-9b8c7d6e5f4a"
+      ],
       "StartingItems": [
         {
           "PrototypeID": "a47ac10b-58cc-4372-a567-0e02b2c3d484",

@@ -94,7 +94,7 @@ Each stack has its own app file to prevent cross-contamination:
 - **app_cloudwatch.py**: Log group and metrics namespace
 - **app_lambda.py**: Layer, functions, and execution role
 - **app_player.py**: Cognito User Pool with triggers
-- **app_character.py**: Character-related Lambda functions (api-item-brief, api-item-prototype)
+- **app_character.py**: Character, Archetype, Item, and Store Lambda functions (13 functions)
 - **app_story.py**: SSM, SQS, EventBridge integration
 - **app_api.py**: API Gateway with Lambda integrations
 - **app_client.py**: CloudFront, S3, and portal build
@@ -117,13 +117,11 @@ Modular deployment functions for each stack:
 ## Deployment Flow
 
 1. **Prerequisites Check**
-
    - Verify CDK bootstrap status
    - Validate AWS credentials and region
    - Auto-copy config.template.yml if needed
 
 2. **Parameter Collection**
-
    - Priority: Defaults → cdk.json → config.yml → User prompts
    - Collect all user input upfront
    - Single deployment confirmation
@@ -134,14 +132,12 @@ Modular deployment functions for each stack:
    The detailed sequence for each mode is maintained in [Deployment Guide](deployment.md#stack-deployment-order).
 
 4. **CDK Execution**
-
    - Pass parameters via CDK context (-c flags)
    - Each stack in separate app file
    - Fixed logical IDs for all resources
    - Post-deployment validation with boto3
 
 5. **Post-Deployment Operations**
-
    - Lambda function updates from S3
    - Layer version management and cleanup
    - Cognito trigger configuration for imported pools
@@ -184,7 +180,7 @@ This consolidation follows the codebase principle of "simplicity of code is high
   - Artifacts: `eidolon-engine-lambda-{account_id}`
   - Scripts: `eidolon-scripts-{account_id}`
   - Portal: `portal.{domain}` or custom
-- **Lambda Functions**: 18 total (17 deployed, 1 not deployed)
+- **Lambda Functions**: 24 total (23 deployed, 1 not deployed)
 - **Cognito**: `eidolon-users` pool
 - **CloudWatch**: `/eidolon/server` log group
 - **API Gateway**: REST API at `api.{domain}`
@@ -272,8 +268,8 @@ During routine deployment checks:
 
 - **Module Size**: 94% under 300 lines, 100% under 1000 lines
 - **Stack Count**: 10 independent CDK stacks
-- **Lambda Functions**: 18 total (17 deployed, 1 not deployed)
-- **DynamoDB Tables**: 14 tables with managed policy
+- **Lambda Functions**: 24 total (23 deployed, 1 not deployed)
+- **DynamoDB Tables**: 15 tables with managed policy
 - **Deployment Time**: Full deployment in under 15 minutes
 
 ## System Validation
@@ -288,14 +284,15 @@ During routine deployment checks:
 ### Build Artifact Validation
 
 - Lambda layer zip existence and size
-- All Lambda function zips present (17 deployed functions)
+- All Lambda function zips present (23 deployed functions)
 - Portal build output in S3
 - CloudFront distribution accessibility
 
 ### Integration Points
 
 - Cognito PostConfirmation → cognito-player-new Lambda
-- SQS Queues → ops-segment-process and ops-story-advance
+- SQS eidolon-processing-queue → ops-segment-process Lambda
+- SQS eidolon-advancement-queue → ops-story-advance Lambda
 - EventBridge → ops-segment-poller (disabled by default)
 - API Gateway → All API Lambda functions with Cognito authorizer
 

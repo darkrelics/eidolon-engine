@@ -163,14 +163,12 @@ lib/
 #### Component Types
 
 1. **Screen Components** (`screens/`)
-
    - Full-page routes
    - Scaffold-based layouts
    - Consume providers for state
    - Example: `GameScreen`, `LoginScreen`
 
 2. **Panel Components** (`widgets/game/`)
-
    - Major UI sections (left/center/right panels)
    - Composite widgets
    - Example: `CharacterPanel`, `StoryPanel`, `InventoryPanel`

@@ -48,6 +48,7 @@ Release 4 establishes the **economy and inventory management system** by impleme
 ### What Exists
 
 **Backend Infrastructure:**
+
 - ✅ Items table in DynamoDB with full schema
 - ✅ Prototypes table for item templates
 - ✅ `eidolon/items.py` - Item creation and inventory management
@@ -56,6 +57,7 @@ Release 4 establishes the **economy and inventory management system** by impleme
 - ✅ Currency calculation logic in `eidolon/story_rewards.py:12-48`
 
 **Frontend Infrastructure:**
+
 - ✅ `incremental/lib/widgets/game/inventory_panel.dart` - Basic inventory UI
 - ✅ Character model includes `inventory` and `inventoryDetails` maps
 - ✅ Equipment display for worn items
@@ -64,6 +66,7 @@ Release 4 establishes the **economy and inventory management system** by impleme
 ### What's Broken or Missing
 
 **Completed Features:**
+
 - ✅ Currency rewards calculated and persisted (R5-T1)
 - ✅ Item consumption mechanics implemented (potions, healing) (R5-T2)
 - ✅ Can discard/delete unwanted items with partial quantity support (R5-T3)
@@ -71,6 +74,7 @@ Release 4 establishes the **economy and inventory management system** by impleme
 - ✅ Store/shop implemented with purchase transactions (R5-T5)
 
 **Remaining Gaps:**
+
 - ❌ No item icons (text-only inventory) (R5-T4)
 - ❌ Item descriptions exist but not prominently displayed (R5-T4)
 - ❌ Author documentation not yet written (R5-T6)
@@ -113,6 +117,7 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
 ```
 
 **Verification:**
+
 - ✅ Backend implementation complete and deployed
 - ✅ Frontend receives and displays currency
 - ✅ Coins appear in inventory as stackable items
@@ -581,6 +586,7 @@ def test_use_decrements_quantity():
 **Status:** ✅ COMPLETE (2025-11-06)
 **Priority:** P1 - Quality of life feature
 **Commits:**
+
 - a40cd44 - "Implement Task 3: Inventory Management (R5-T3)"
 - 2a36366 - "Fix deployment configuration for new inventory/store Lambda functions"
 
@@ -605,6 +611,7 @@ def test_use_decrements_quantity():
 **API Endpoints:**
 
 1. **Discard**: `POST /item/discard`
+
    - Body: `{"CharacterID": "uuid", "ItemID": "uuid", "Quantity": 2 (optional)}`
    - Returns: Item discarded, quantity removed, remaining quantity
    - Supports partial discard (e.g., discard 2 of 5 potions)
@@ -925,16 +932,17 @@ Add icon field to item prototypes:
   "PrototypeID": "health-potion",
   "Name": "Health Potion",
   "Description": "A crimson liquid in a glass vial. Restores 25 health when consumed.",
-  "IconPath": "items/consumables/health_potion.png",  // ← New field
-  "IconUrl": "https://cdn.example.com/items/health_potion.png",  // ← Or use CDN
+  "IconPath": "items/consumables/health_potion.png", // ← New field
+  "IconUrl": "https://cdn.example.com/items/health_potion.png", // ← Or use CDN
   "Type": "consumable",
-  "Rarity": "common"  // ← For color coding
+  "Rarity": "common" // ← For color coding
 }
 ```
 
 **2. Icon Asset Storage**
 
 Options:
+
 - **Option A:** S3 bucket with CloudFront distribution (preferred for production)
 - **Option B:** Bundled assets in Flutter app (faster for beta, limited flexibility)
 
@@ -1199,6 +1207,7 @@ Minimum viable icon set (can use placeholder icons initially):
 **API Endpoints:**
 
 1. **List Store**: `GET /store/list?StoreID=general-store&CharacterID=uuid`
+
    - Returns: Store info, available items (filtered by level), prototype details
    - Level filtering: Only shows items character can use
    - Stock filtering: Hides out-of-stock items
@@ -1251,7 +1260,7 @@ Create store configuration in DynamoDB or config file:
     {
       "PrototypeID": "health-potion",
       "Price": 15,
-      "Stock": -1,  // -1 = unlimited
+      "Stock": -1, // -1 = unlimited
       "MinLevel": 0
     },
     {
@@ -1263,7 +1272,7 @@ Create store configuration in DynamoDB or config file:
     {
       "PrototypeID": "iron-sword",
       "Price": 100,
-      "Stock": 3,  // Limited stock
+      "Stock": 3, // Limited stock
       "MinLevel": 1
     },
     {
@@ -1279,7 +1288,7 @@ Create store configuration in DynamoDB or config file:
       "MinLevel": 0
     }
   ],
-  "RefreshIntervalHours": 24  // Store restocks daily
+  "RefreshIntervalHours": 24 // Store restocks daily
 }
 ```
 
@@ -1858,6 +1867,7 @@ def test_purchase_insufficient_funds():
 #### Rationale for R5 Inclusion
 
 **Why defer from R3 and R4:**
+
 - R3 focused on core bug fixes and minimal beta readiness
 - R4 focused on IndexedDB caching infrastructure
 - Author documentation more valuable after R5 economy system complete
@@ -1865,6 +1875,7 @@ def test_purchase_insufficient_funds():
 - Better to write comprehensive guide once than iterate
 
 **Why include in R5:**
+
 - Currency system now complete (R5-T1) provides foundation to document
 - Economy features add complexity requiring clear documentation
 - Authors need guidance on reward balancing with working examples
@@ -1905,12 +1916,14 @@ def test_purchase_insufficient_funds():
 **Core Sections:**
 
 1. **Prerequisites**
+
    - Text editor setup
    - Python 3.12+ installation
    - Repository access
    - AWS CLI configuration
 
 2. **Story Creation Workflow**
+
    - Create story JSON
    - Define segments (mechanical, decision)
    - Add economy features (currency rewards, item drops)
@@ -1919,6 +1932,7 @@ def test_purchase_insufficient_funds():
    - Test in-game
 
 3. **Field Reference**
+
    - Story metadata fields explained
    - Segment types and fields
    - Challenge definitions
@@ -1927,17 +1941,20 @@ def test_purchase_insufficient_funds():
    - **NEW: Item drop configuration**
 
 4. **Copy-Paste Templates** (3 required)
+
    - Linear 3-segment story with currency reward
    - Branching story with 2 decision points and item drops
    - Combat story with skill challenge and mixed rewards
 
 5. **Common Patterns**
+
    - Simple quests
    - Branching narratives
    - Combat encounters
    - **NEW: Economy-focused stories (earn/spend loops)**
 
 6. **Balance Guidelines**
+
    - Segment durations by tier
    - Difficulty progression
    - **NEW: Currency reward scaling**
@@ -1959,7 +1976,7 @@ Add sections covering R4 features:
 
 Stories can award currency based on outcome quality:
 
-```json
+````json
 {
   "RewardTiers": {
     "Exceptional": {"Currency": 100, "Items": ["health-potion"]},
@@ -2020,27 +2037,31 @@ When creating items for the store, consider:
 
 **Pricing Formula:**
 
-```
+````
+
 Store Price = (Average Currency Reward × Story Completions Required) × 1.5
+
 ```text
 
 Example:
 - Health Potion drops 30% of the time from Tier 1 stories (50 currency)
 - Expected value: 50 ÷ 0.3 = ~166 currency of story completion
 - Store price: 166 × 1.5 = ~250 currency → Round to 15 currency (instant purchase option)
+```
 ````
 
 #### Additional Documentation Updates
 
 **Update `README.md`:**
 
-```markdown
+````markdown
 ## Documentation
 
 - [Story Author Quick-Start](documentation/story-author-quickstart.md) - Create your first story
 - [Deployment Guide](documentation/deployment.md) - Infrastructure setup
 - [Architecture Overview](documentation/architecture.md) - System design
-```text
+
+````text
 
 **Update `.github/workflows/story-validation.yml`:**
 
@@ -2238,3 +2259,5 @@ Example:
 **Revision History:**
 - v1.0 (2025-10-07): Initial planning document for R4 economy system
 - v1.1 (2025-10-19): Updated to reflect R5-T1 completion, corrected release numbering (R4→R5), updated all task references
+````
+````

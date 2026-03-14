@@ -1,7 +1,7 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Dark Relics Studio LLC
 
 */
 
@@ -19,6 +19,7 @@ import (
 
 	"github.com/bits-and-blooms/bloom/v3"
 	"github.com/gofrs/uuid/v5"
+	"github.com/darkrelics/eidolon-engine/events"
 )
 
 type Game struct {
@@ -43,9 +44,11 @@ type Game struct {
 	startingEssence      uint16
 	balance              float64
 	autoSaveInterval     uint16
+	eventStore           events.EventStore
+	cloudWatch           *CloudWatch
 }
 
-func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
+func NewGame(globalCtx context.Context, config *Configuration, cloudWatch *CloudWatch) (*Game, error) {
 
 	Logger.Info("New Game...Initializing Game...")
 
@@ -71,11 +74,13 @@ func NewGame(globalCtx context.Context, config *Configuration) (*Game, error) {
 		startingEssence:  config.Game.StartingEssence,
 		balance:          config.Game.Balance,
 		autoSaveInterval: 5,
+		eventStore:       events.NewMemoryEventStore(),
+		cloudWatch:       cloudWatch,
 	}
 
 	game.characterCount.Store(0)
 
-	database, err := NewKeyPair(ctx, config)
+	database, err := NewKeyPair(ctx, config, cloudWatch)
 	if err != nil {
 		return nil, fmt.Errorf("database init error: %w", err)
 	}

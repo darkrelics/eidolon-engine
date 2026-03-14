@@ -46,32 +46,46 @@ def merge_stacks(item1: dict, item2: dict) -> dict:
 
     total_quantity = item1.get("Quantity", 1) + item2.get("Quantity", 1)
 
+    # Check if merged quantity would exceed MaxStack
+    max_stack = prototype.get("MaxStack", 99)
+    if max_stack <= 0:
+        max_stack = 99
+    if total_quantity > max_stack:
+        return {}
+
+    item1_id = item1.get("ItemID", "")
+    item2_id = item2.get("ItemID", "")
+    if not item1_id or not item2_id:
+        return {}
+
     # UUIDv7 has timestamp, so lexicographic comparison gives older item
-    if item1["ItemID"] < item2["ItemID"]:
+    if item1_id < item2_id:
         # item1 is older, keep its ID
         return {
-            "ItemID": item1["ItemID"],
-            "PrototypeID": item1["PrototypeID"],
+            "ItemID": item1_id,
+            "PrototypeID": item1.get("PrototypeID", ""),
             "Quantity": total_quantity,
             "OwnerID": item1.get("OwnerID"),
         }
     else:
         # item2 is older, keep its ID
         return {
-            "ItemID": item2["ItemID"],
-            "PrototypeID": item2["PrototypeID"],
+            "ItemID": item2_id,
+            "PrototypeID": item2.get("PrototypeID", ""),
             "Quantity": total_quantity,
             "OwnerID": item2.get("OwnerID"),
         }
 
 
-def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
+def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int = 1, owner_id: str = "") -> tuple:
     """
-    Find an existing stack in inventory that matches the prototype.
+    Find an existing stack in inventory that matches the prototype and has room.
 
     Args:
         inventory: Dict mapping slot to item data: {slot: {"ItemID": "...", "Quantity": int}}
         prototype_id: PrototypeID to find
+        quantity_to_add: Quantity that needs to fit in the stack (default 1)
+        owner_id: Character ID to verify ownership (recommended to prevent cross-character merge)
 
     Returns:
         Tuple of (slot, item_data_dict) or empty tuple if no matching stack found
@@ -79,10 +93,14 @@ def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
     if not inventory or not prototype_id:
         return ()
 
-    # Get prototype to check if stackable
+    # Get prototype to check if stackable and get MaxStack
     prototype = get_prototype(prototype_id)
     if not prototype or not prototype.get("Stackable", False):
         return ()
+
+    max_stack = prototype.get("MaxStack", 99)
+    if max_stack <= 0:
+        max_stack = 99
 
     # Check each item in inventory
     for slot, item_data in inventory.items():
@@ -97,45 +115,78 @@ def find_matching_stack(inventory: dict, prototype_id: str) -> tuple:
         try:
             item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
             if item and item.get("PrototypeID") == prototype_id:
-                # Return slot and the inventory entry (includes Quantity)
-                return (slot, item_data)
-        except ClientError:
+                # Verify ownership if owner_id provided (prevents cross-character merge)
+                if owner_id and item.get("OwnerID") and item.get("OwnerID") != owner_id:
+                    logger.warning(f"Item {item_id} ownership mismatch: expected {owner_id}, found {item.get('OwnerID')}")
+                    continue
+
+                # Check if stack has room for the quantity
+                current_quantity = item_data.get("Quantity", 1)
+                if can_add_to_stack(current_quantity, quantity_to_add, max_stack):
+                    return (slot, item_data)
+        except ClientError as err:
+            logger.debug(f"Failed to get item {item_id} for stacking: {err}")
             continue
 
     return ()
 
 
-def create_coins_from_value(value: int) -> list[dict]:
+def can_add_to_stack(current_quantity: int, add_quantity: int, max_stack: int) -> bool:
     """
-    Convert a value amount into coin item creation requests.
-    These are just regular item creation requests for coin prototypes.
+    Check if quantity can be added to a stack without exceeding MaxStack.
 
     Args:
-        value: Total value to convert to coins
+        current_quantity: Current stack quantity
+        add_quantity: Quantity to add
+        max_stack: Maximum stack size from prototype
 
     Returns:
-        List of dicts with PrototypeID and Quantity for each coin type
+        True if the addition would not exceed MaxStack
     """
-    if value <= 0:
+    if max_stack <= 0:
+        max_stack = 99
+    return current_quantity + add_quantity <= max_stack
+
+
+def get_stack_space(current_quantity: int, max_stack: int) -> int:
+    """
+    Calculate how many items can be added to a stack.
+
+    Args:
+        current_quantity: Current stack quantity
+        max_stack: Maximum stack size from prototype
+
+    Returns:
+        Number of items that can be added (0 if stack is full)
+    """
+    if max_stack <= 0:
+        max_stack = 99
+    return max(0, max_stack - current_quantity)
+
+
+def distribute_into_stacks(total_quantity: int, max_stack: int) -> list:
+    """
+    Split a quantity into MaxStack-compliant portions.
+
+    Args:
+        total_quantity: Total quantity to distribute
+        max_stack: Maximum stack size
+
+    Returns:
+        List of quantities, each <= max_stack
+    """
+    if max_stack <= 0:
+        max_stack = 99
+    if total_quantity <= 0:
         return []
 
-    items_to_create = []
-
-    # Calculate optimal coin distribution
-    gold_coins = value // 2400
-    remainder = value % 2400
-    silver_coins = remainder // 120
-    bronze_coins = (remainder % 120) // 10
-
-    # Create coin item requests
-    if gold_coins > 0:
-        items_to_create.append({"PrototypeID": "6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d", "Quantity": gold_coins})
-    if silver_coins > 0:
-        items_to_create.append({"PrototypeID": "8f5b3c9e-2d7a-4f8e-b6c1-9a4e7d2b5f3c", "Quantity": silver_coins})
-    if bronze_coins > 0:
-        items_to_create.append({"PrototypeID": "3d8a6f2e-1c4b-4e9f-a5d2-7b3e9f0c1d8a", "Quantity": bronze_coins})
-
-    return items_to_create
+    stacks = []
+    remaining = total_quantity
+    while remaining > 0:
+        stack_qty = min(remaining, max_stack)
+        stacks.append(stack_qty)
+        remaining -= stack_qty
+    return stacks
 
 
 @cache
@@ -215,7 +266,7 @@ def get_item_prototype_full(prototype_id: str) -> dict:
         prototype_id: Prototype UUID to fetch
 
     Returns:
-        Complete prototype data dict
+        Complete prototype data dict with Name field for client compatibility
 
     Raises:
         ValueError: If prototype not found
@@ -230,7 +281,11 @@ def get_item_prototype_full(prototype_id: str) -> dict:
     if not prototype:
         raise ValueError(f"Prototype {prototype_id} not found")
 
-    return prototype
+    # Add Name field for client compatibility (prototypes store PrototypeName)
+    result = dict(prototype)
+    result["Name"] = prototype.get("PrototypeName", prototype.get("Name", "Unknown Item"))
+
+    return result
 
 
 def build_item_payload(
@@ -239,13 +294,24 @@ def build_item_payload(
     *,
     is_worn: bool = False,
     contents=None,
+    quantity_override=None,
+    owner_id=None,
 ) -> dict:
-    """Construct item payload from a prototype definition."""
+    """Construct item payload from a prototype definition.
 
-    return {
+    Args:
+        prototype: Prototype definition from DynamoDB
+        item_id: UUID assigned to the instance
+        is_worn: Whether the item starts worn
+        contents: Optional contents list for containers
+        quantity_override: Explicit quantity to persist (primarily for stackable rewards)
+        owner_id: Optional character UUID to persist as OwnerID
+    """
+
+    payload = {
         "ItemID": item_id,
         "PrototypeID": prototype.get("PrototypeID", ""),
-        "Name": prototype.get("Name", "Unknown Item"),
+        "Name": prototype.get("PrototypeName", prototype.get("Name", "Unknown Item")),
         "Description": prototype.get("Description", ""),
         "Mass": prototype.get("Mass", 0),
         "Value": prototype.get("Value", 0),
@@ -264,7 +330,17 @@ def build_item_payload(
         "Equipped": is_worn,
         "CanPickUp": prototype.get("CanPickUp", True),
         "Metadata": prototype.get("Metadata", {}),
+        "Consumable": prototype.get("Consumable", False),
+        "ConsumableEffects": prototype.get("ConsumableEffects", {}),
     }
+
+    if quantity_override is not None:
+        payload["Quantity"] = quantity_override
+
+    if owner_id:
+        payload["OwnerID"] = owner_id
+
+    return payload
 
 
 def create_item_from_prototype(
@@ -272,6 +348,8 @@ def create_item_from_prototype(
     *,
     is_worn: bool = False,
     initial_contents=None,
+    quantity=None,
+    owner_id=None,
 ) -> dict:
     """Create a single item instance from a prototype and persist it."""
 
@@ -290,6 +368,8 @@ def create_item_from_prototype(
         item_id,
         is_worn=is_worn,
         contents=initial_contents,
+        quantity_override=quantity,
+        owner_id=owner_id,
     )
 
     try:
@@ -314,7 +394,7 @@ def find_next_available_slot(inventory: dict) -> str:
         index += 1
 
 
-def process_items_with_probability(items_data: list) -> list[str]:
+def process_items_with_probability(items_data: list) -> list:
     """
     Process Items field and determine which items to grant based on probability.
 
@@ -373,7 +453,7 @@ def process_items_with_probability(items_data: list) -> list[str]:
         return []
 
 
-def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[str]:
+def add_items_to_inventory(character_id: str, prototype_ids: list) -> list:
     """Create items from prototypes and append them to a character's inventory."""
 
     if not prototype_ids:
@@ -395,21 +475,24 @@ def add_items_to_inventory(character_id: str, prototype_ids: list[str]) -> list[
         inventory = {}
 
     normalized_inventory = {str(key): value for key, value in inventory.items()}
-    granted_items: list[str] = []
+    granted_items = []
 
     for prototype_id in prototype_ids:
         if not isinstance(prototype_id, str) or not prototype_id:
             logger.warning("Skipping invalid prototype ID in story rewards for %s: %s", character_id, prototype_id)
             continue
 
-        item_payload = create_item_from_prototype(prototype_id)
+        item_payload = create_item_from_prototype(prototype_id, owner_id=character_id)
         if not item_payload:
             continue
 
         slot_key = find_next_available_slot(normalized_inventory)
         item_id = item_payload["ItemID"]
-        # Non-stackable items don't have Quantity field
-        normalized_inventory[slot_key] = {"ItemID": item_id}
+        # Build inventory entry - stackable items include Quantity
+        slot_entry = {"ItemID": item_id}
+        if item_payload.get("Stackable", False):
+            slot_entry["Quantity"] = item_payload.get("Quantity", 1)
+        normalized_inventory[slot_key] = slot_entry
         granted_items.append(item_id)
 
     if not granted_items:
@@ -479,6 +562,7 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
                 prototype,
                 item_id,
                 is_worn=is_worn,
+                owner_id=character_id,
             )
 
             # Track first container
@@ -529,6 +613,53 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
     except Exception as err:
         logger.error(f"Error creating items from prototypes for {character_id} Error: {err}")
         return {}
+
+
+def fetch_single_item_details(item_id: str, slot_data: list, enriched_inventory: dict) -> None:
+    """Fetch a single item from DynamoDB and populate its inventory slots.
+
+    Args:
+        item_id: Item UUID to fetch
+        slot_data: List of (slot, quantity) tuples for this item
+        enriched_inventory: Dict to populate with item details
+    """
+    try:
+        item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+    except ClientError as err:
+        logger.error(f"Failed to get item {item_id} Error: {err}")
+        for slot, quantity in slot_data:
+            enriched_inventory[slot] = {
+                "ItemID": item_id,
+                "Name": "Error Loading Item",
+                "Description": "Failed to load item details",
+                "Quantity": quantity,
+            }
+        return
+
+    if item:
+        base_item_details = {
+            "ItemID": item_id,
+            "Name": item.get("Name", "Unknown Item"),
+            "Description": item.get("Description", ""),
+            "Stackable": item.get("Stackable", False),
+            "Equipped": item.get("Equipped", item.get("IsWorn", False)),
+            "Mass": item.get("Mass", 0),
+            "Value": item.get("Value", 0),
+            "Rarity": item.get("Rarity", "common"),
+            "Type": item.get("Type", ""),
+            "Consumable": item.get("Consumable", False),
+            "WornOn": item.get("WornOn", ""),
+        }
+        for slot, quantity in slot_data:
+            enriched_inventory[slot] = {**base_item_details, "Quantity": quantity}
+    else:
+        for slot, quantity in slot_data:
+            enriched_inventory[slot] = {
+                "ItemID": item_id,
+                "Name": "Missing Item",
+                "Description": "This item could not be loaded",
+                "Quantity": quantity,
+            }
 
 
 def get_inventory(inventory: dict) -> dict:
@@ -607,6 +738,10 @@ def get_inventory(inventory: dict) -> dict:
                     "Equipped": item.get("Equipped", item.get("IsWorn", False)),
                     "Mass": item.get("Mass", 0),
                     "Value": item.get("Value", 0),
+                    "Rarity": item.get("Rarity", "common"),
+                    "Type": item.get("Type", ""),
+                    "Consumable": item.get("Consumable", False),
+                    "WornOn": item.get("WornOn", ""),
                 }
 
                 # Assign to all slots with slot-specific quantity
@@ -630,42 +765,6 @@ def get_inventory(inventory: dict) -> dict:
         logger.error(f"Failed to batch get item details Error: {err}")
         # Fall back to individual lookups on batch failure
         for item_id, slot_data in item_slots.items():
-            try:
-                item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
-
-                if item:
-                    base_item_details = {
-                        "ItemID": item_id,
-                        "Name": item.get("Name", "Unknown Item"),
-                        "Description": item.get("Description", ""),
-                        "Stackable": item.get("Stackable", False),
-                        "Equipped": item.get("Equipped", item.get("IsWorn", False)),
-                        "Mass": item.get("Mass", 0),
-                        "Value": item.get("Value", 0),
-                    }
-
-                    for slot, quantity in slot_data:
-                        enriched_inventory[slot] = {
-                            **base_item_details,
-                            "Quantity": quantity,
-                        }
-                else:
-                    for slot, quantity in slot_data:
-                        enriched_inventory[slot] = {
-                            "ItemID": item_id,
-                            "Name": "Missing Item",
-                            "Description": "This item could not be loaded",
-                            "Quantity": quantity,
-                        }
-
-            except ClientError as individual_err:
-                logger.error(f"Failed to get item {item_id} Error: {individual_err}")
-                for slot, quantity in slot_data:
-                    enriched_inventory[slot] = {
-                        "ItemID": item_id,
-                        "Name": "Error Loading Item",
-                        "Description": "Failed to load item details",
-                        "Quantity": quantity,
-                    }
+            fetch_single_item_details(item_id, slot_data, enriched_inventory)
 
     return enriched_inventory

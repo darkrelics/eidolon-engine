@@ -1,0 +1,227 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: DynamoDB tables for Eidolon Engine
+
+Resources:
+  PlayersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: players
+      AttributeDefinitions:
+        - AttributeName: PlayerID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PlayerID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  CharactersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: characters
+      AttributeDefinitions:
+        - AttributeName: CharacterID
+          AttributeType: S
+        - AttributeName: CharacterName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: CharacterID
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: CharacterNameIndex
+          KeySchema:
+            - AttributeName: CharacterName
+              KeyType: HASH
+          Projection:
+            ProjectionType: KEYS_ONLY
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  RoomsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: rooms
+      AttributeDefinitions:
+        - AttributeName: RoomID
+          AttributeType: N
+      KeySchema:
+        - AttributeName: RoomID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  ExitsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: exits
+      AttributeDefinitions:
+        - AttributeName: ExitID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ExitID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  ItemsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: items
+      AttributeDefinitions:
+        - AttributeName: ItemID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ItemID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  ItemPrototypesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: prototypes
+      AttributeDefinitions:
+        - AttributeName: PrototypeID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PrototypeID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  ArchetypesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: archetypes
+      AttributeDefinitions:
+        - AttributeName: ArchetypeName
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ArchetypeName
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  MOTDTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: motd
+      AttributeDefinitions:
+        - AttributeName: MotdID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: MotdID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  StoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: story
+      AttributeDefinitions:
+        - AttributeName: StoryID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: StoryID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  SegmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: segments
+      AttributeDefinitions:
+        - AttributeName: StoryID
+          AttributeType: S
+        - AttributeName: SegmentID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: StoryID
+          KeyType: HASH
+        - AttributeName: SegmentID
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  ActiveSegmentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: active_segments
+      AttributeDefinitions:
+        - AttributeName: ActiveSegmentID
+          AttributeType: S
+        - AttributeName: Status
+          AttributeType: S
+        - AttributeName: EndTime
+          AttributeType: N
+        - AttributeName: CharacterID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ActiveSegmentID
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EndTimeIndex
+          KeySchema:
+            - AttributeName: Status
+              KeyType: HASH
+            - AttributeName: EndTime
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: CharacterID-index
+          KeySchema:
+            - AttributeName: CharacterID
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  OpponentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: opponents
+      AttributeDefinitions:
+        - AttributeName: OpponentID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: OpponentID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  StoryHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: story_history
+      AttributeDefinitions:
+        - AttributeName: CharacterID
+          AttributeType: S
+        - AttributeName: StoryInstanceID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: CharacterID
+          KeyType: HASH
+        - AttributeName: StoryInstanceID
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+
+  SegmentHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: segment_history
+      AttributeDefinitions:
+        - AttributeName: CharacterID
+          AttributeType: S
+        - AttributeName: ActiveSegmentID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: CharacterID
+          KeyType: HASH
+        - AttributeName: ActiveSegmentID
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true

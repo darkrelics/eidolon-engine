@@ -1,0 +1,52 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CloudWatch log group and metrics for Eidolon server
+
+Parameters:
+  RetentionInDays:
+    Type: Number
+    Default: 365
+    AllowedValues:
+      - 1
+      - 3
+      - 5
+      - 7
+      - 14
+      - 30
+      - 60
+      - 90
+      - 120
+      - 150
+      - 180
+      - 365
+      - 400
+      - 545
+      - 731
+      - 1096
+      - 1827
+      - 2192
+      - 2557
+      - 2922
+      - 3288
+      - 3653
+    Description: Number of days to retain server logs
+
+Resources:
+  ServerLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: /eidolon/server
+      RetentionInDays: !Ref RetentionInDays
+      Tags:
+        - Key: System
+          Value: eidolon
+
+Outputs:
+  LogGroupName:
+    Description: Name of the server CloudWatch log group
+    Value: !Ref ServerLogGroup
+
+  MetricsNamespace:
+    Description: CloudWatch metrics namespace
+    Value: eidolon/metrics

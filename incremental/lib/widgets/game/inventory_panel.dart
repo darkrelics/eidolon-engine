@@ -1,17 +1,26 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:eidolon_incremental/models/character.dart';
+import 'package:eidolon_incremental/utils/json_parser.dart';
 import 'package:eidolon_incremental/utils/rpg_icons.dart';
 import 'package:eidolon_incremental/repositories/item_repository.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
 import 'package:eidolon_incremental/services/auth_service.dart';
+import 'package:eidolon_incremental/services/base_api_service.dart';
 import 'package:fluttericon/rpg_awesome_icons.dart';
 
 /// Right panel displaying character inventory with enriched item data
 class InventoryPanel extends StatefulWidget {
   final Character character;
   final Function(String itemId)? onItemTap;
+  final Future<void> Function()? onRefresh;
 
-  const InventoryPanel({super.key, required this.character, this.onItemTap});
+  const InventoryPanel({
+    super.key,
+    required this.character,
+    this.onItemTap,
+    this.onRefresh,
+  });
 
   @override
   State<InventoryPanel> createState() => _InventoryPanelState();
@@ -19,9 +28,11 @@ class InventoryPanel extends StatefulWidget {
 
 class _InventoryPanelState extends State<InventoryPanel> {
   ItemRepository? _itemRepository;
+  ApiService? _apiService;
   Map<String, Map<String, dynamic>> _enrichedInventory = {};
   bool _isLoading = true;
   String? _errorMessage;
+  final Set<String> _processingItems = <String>{};
 
   @override
   void initState() {
@@ -33,6 +44,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
     try {
       final authService = AuthService.instance;
       final apiService = ApiService(authService: authService);
+      _apiService = apiService;
       _itemRepository = ItemRepository(apiService: apiService);
 
       // Load enriched inventory
@@ -46,6 +58,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
   }
 
+  @override
+  void didUpdateWidget(covariant InventoryPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!mapEquals(widget.character.inventory, oldWidget.character.inventory)) {
+      _loadInventoryDetails();
+    }
+  }
+
   Future<void> _loadInventoryDetails() async {
     if (_itemRepository == null) {
       setState(() {
@@ -55,6 +75,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
 
     try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
       final enriched = await _itemRepository!.loadInventoryDetails(widget.character.inventory);
       setState(() {
         _enrichedInventory = enriched;
@@ -83,7 +107,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
     if (value is Map<String, dynamic>) {
       // If Quantity field exists, use it (stackable item)
       // If Quantity field missing, return 0 (non-stackable item)
-      return value['Quantity'] as int? ?? 0;
+      return JsonParser.getInt(value, 'Quantity');
     }
     return 0;
   }
@@ -131,7 +155,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       ),
                     ),
                   )
-                else if (widget.character.inventory.isNotEmpty)
+                else if (widget.character.inventory.isNotEmpty) ...[
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 8,
@@ -150,6 +174,19 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       ),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.compress),
+                    iconSize: 18,
+                    tooltip: 'Consolidate stacks',
+                    style: IconButton.styleFrom(
+                      foregroundColor: colorScheme.onPrimaryContainer,
+                      padding: const EdgeInsets.all(4),
+                      minimumSize: const Size(28, 28),
+                    ),
+                    onPressed: _handleConsolidateStacks,
+                  ),
+                ],
               ],
             ),
           ),
@@ -305,10 +342,25 @@ class _InventoryPanelState extends State<InventoryPanel> {
               itemBuilder: (context, index) {
                 final item = unequippedItems[index];
                 final itemId = _getItemId(item.value);
+                final slotKey = item.key;
+                final itemDetails = _getEnrichedItemDetails(slotKey);
+                final isConsumable = _isConsumable(itemDetails);
+                final quantity = _getQuantity(item.value);
+                final isStackable = itemDetails?['Stackable'] == true;
+                final itemName = itemDetails?['Name'] as String? ?? 'Item';
                 return _InventoryGridItem(
+                  slot: slotKey,
                   itemId: itemId,
-                  itemDetails: _getEnrichedItemDetails(item.key),
-                  quantity: _getQuantity(item.value),
+                  itemDetails: itemDetails,
+                  quantity: quantity,
+                  isConsumable: isConsumable,
+                  isStackable: isStackable,
+                  isProcessing: _isItemProcessing(itemId),
+                  onUse: isConsumable ? () => _handleUseItem(slotKey, itemId) : null,
+                  onDiscard: () => _showDiscardDialog(slotKey, itemId, itemName, quantity, isStackable),
+                  onSplit: isStackable && quantity > 1
+                      ? () => _showSplitDialog(slotKey, itemId, itemName, quantity)
+                      : null,
                   onTap: widget.onItemTap != null
                       ? () => widget.onItemTap!(itemId)
                       : null,
@@ -324,6 +376,466 @@ class _InventoryPanelState extends State<InventoryPanel> {
   /// Get enriched item details from loaded inventory
   Map<String, dynamic>? _getEnrichedItemDetails(String slot) {
     return _enrichedInventory[slot];
+  }
+
+  bool _isConsumable(Map<String, dynamic>? details) {
+    if (details == null) {
+      return false;
+    }
+    final consumable = details['Consumable'];
+    if (consumable is bool) {
+      return consumable;
+    }
+    return false;
+  }
+
+  bool _isItemProcessing(String itemId) => _processingItems.contains(itemId);
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) {
+      return;
+    }
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Theme.of(context).colorScheme.error : null,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _handleUseItem(String slot, String itemId) async {
+    if (_apiService == null || _processingItems.contains(itemId)) {
+      return;
+    }
+
+    setState(() {
+      _processingItems.add(itemId);
+    });
+
+    try {
+      final result = await _apiService!.consumeItem(
+        characterId: widget.character.id,
+        itemId: itemId,
+      );
+
+      final remainingQuantity = JsonParser.getInt(result, 'remainingQuantity');
+      final itemRemoved = JsonParser.getBool(result, 'itemRemoved', defaultValue: remainingQuantity <= 0);
+      final message = JsonParser.getString(result, 'message', defaultValue: 'Item consumed.');
+
+      final slotsToUpdate = widget.character.inventory.entries
+          .where((entry) => entry.value is Map && entry.value['ItemID'] == itemId)
+          .map((entry) => entry.key)
+          .toList();
+
+      if (slotsToUpdate.isEmpty) {
+        slotsToUpdate.add(slot);
+      }
+
+      for (final slotKey in slotsToUpdate) {
+        if (itemRemoved) {
+          widget.character.inventory.remove(slotKey);
+          widget.character.inventoryDetails.remove(slotKey);
+          _enrichedInventory.remove(slotKey);
+        } else {
+          final slotValue = widget.character.inventory[slotKey];
+          if (slotValue is Map<String, dynamic>) {
+            slotValue['Quantity'] = remainingQuantity;
+          } else {
+            widget.character.inventory[slotKey] = {'ItemID': itemId, 'Quantity': remainingQuantity};
+          }
+
+          final details = _enrichedInventory[slotKey];
+          if (details != null) {
+            details['Quantity'] = remainingQuantity;
+          }
+
+          final detailInventory = widget.character.inventoryDetails[slotKey];
+          if (detailInventory is Map<String, dynamic>) {
+            detailInventory['Quantity'] = remainingQuantity;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        _showSnackBar(message);
+      }
+
+      if (widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } on ApiException catch (err) {
+      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to consume item.';
+      _showSnackBar(errorMessage, isError: true);
+      // On 409 conflict (race condition), refresh inventory to get current state
+      if (err.statusCode == 409 && widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } catch (err) {
+      _showSnackBar('Unexpected error: $err', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingItems.remove(itemId);
+        });
+      }
+    }
+  }
+
+  Future<void> _handleDiscardItem(String slot, String itemId, {int? quantity}) async {
+    if (_apiService == null || _processingItems.contains(itemId)) {
+      return;
+    }
+
+    setState(() {
+      _processingItems.add(itemId);
+    });
+
+    try {
+      final result = await _apiService!.discardItem(
+        characterId: widget.character.id,
+        itemId: itemId,
+        slot: slot,
+        quantity: quantity,
+      );
+
+      final itemFullyDiscarded = JsonParser.getBool(result, 'ItemFullyDiscarded', defaultValue: true);
+      final remainingQuantity = JsonParser.getInt(result, 'RemainingQuantity');
+      final quantityDiscarded = JsonParser.getInt(result, 'QuantityDiscarded', defaultValue: quantity ?? 1);
+
+      if (itemFullyDiscarded) {
+        widget.character.inventory.remove(slot);
+        widget.character.inventoryDetails.remove(slot);
+        _enrichedInventory.remove(slot);
+      } else {
+        final slotValue = widget.character.inventory[slot];
+        if (slotValue is Map<String, dynamic>) {
+          slotValue['Quantity'] = remainingQuantity;
+        }
+
+        final details = _enrichedInventory[slot];
+        if (details != null) {
+          details['Quantity'] = remainingQuantity;
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        _showSnackBar('Discarded $quantityDiscarded item(s)');
+      }
+
+      if (widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } on ApiException catch (err) {
+      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to discard item.';
+      _showSnackBar(errorMessage, isError: true);
+      // On 409 conflict (race condition), refresh inventory to get current state
+      if (err.statusCode == 409 && widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } catch (err) {
+      _showSnackBar('Unexpected error: $err', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingItems.remove(itemId);
+        });
+      }
+    }
+  }
+
+  Future<void> _handleConsolidateStacks() async {
+    if (_apiService == null) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await _apiService!.consolidateStacks(
+        characterId: widget.character.id,
+        consolidateAll: true,
+      );
+
+      final totalStacksRemoved = JsonParser.getInt(result, 'TotalStacksRemoved');
+      final message = JsonParser.getString(
+        result,
+        'Message',
+        defaultValue: totalStacksRemoved > 0
+            ? 'Consolidated $totalStacksRemoved stack(s)'
+            : 'Nothing to consolidate',
+      );
+
+      if (mounted) {
+        _showSnackBar(message);
+      }
+
+      if (widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } on ApiException catch (err) {
+      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to consolidate stacks.';
+      _showSnackBar(errorMessage, isError: true);
+      // On 409 conflict (race condition), refresh inventory to get current state
+      if (err.statusCode == 409 && widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } catch (err) {
+      _showSnackBar('Unexpected error: $err', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showDiscardDialog(String slot, String itemId, String itemName, int quantity, bool isStackable) {
+    if (!isStackable || quantity <= 1) {
+      // For non-stackable or single items, confirm and discard all
+      showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Discard Item'),
+          content: Text('Discard $itemName?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      ).then((confirmed) {
+        if (confirmed == true) {
+          _handleDiscardItem(slot, itemId);
+        }
+      });
+    } else {
+      // For stackable items with quantity > 1, show quantity selector
+      int discardQuantity = 1;
+      showDialog<int>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: const Text('Discard Items'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('How many $itemName to discard?'),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      onPressed: discardQuantity > 1
+                          ? () => setDialogState(() => discardQuantity--)
+                          : null,
+                      icon: const Icon(Icons.remove),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Theme.of(context).colorScheme.outline),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '$discardQuantity',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: discardQuantity < quantity
+                          ? () => setDialogState(() => discardQuantity++)
+                          : null,
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => setDialogState(() => discardQuantity = quantity),
+                  child: const Text('Discard All'),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(discardQuantity),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        ),
+      ).then((qty) {
+        if (qty != null && qty > 0) {
+          _handleDiscardItem(slot, itemId, quantity: qty);
+        }
+      });
+    }
+  }
+
+  Future<void> _handleSplitStack(String slot, String itemId, int quantity) async {
+    if (_apiService == null || _processingItems.contains(itemId)) {
+      return;
+    }
+
+    setState(() {
+      _processingItems.add(itemId);
+    });
+
+    try {
+      final result = await _apiService!.splitStack(
+        characterId: widget.character.id,
+        slot: slot,
+        quantity: quantity,
+      );
+
+      final originalStack = result['OriginalStack'] as Map<String, dynamic>?;
+      final newStack = result['NewStack'] as Map<String, dynamic>?;
+
+      if (originalStack != null) {
+        final remainingQty = originalStack['RemainingQuantity'] as int? ?? 0;
+        final slotValue = widget.character.inventory[slot];
+        if (slotValue is Map<String, dynamic>) {
+          slotValue['Quantity'] = remainingQty;
+        }
+        final details = _enrichedInventory[slot];
+        if (details != null) {
+          details['Quantity'] = remainingQty;
+        }
+      }
+
+      if (newStack != null) {
+        final newSlot = newStack['Slot'] as String?;
+        final newItemId = newStack['ItemID'] as String?;
+        final newQty = newStack['Quantity'] as int? ?? quantity;
+
+        if (newSlot != null && newItemId != null) {
+          widget.character.inventory[newSlot] = {
+            'ItemID': newItemId,
+            'Quantity': newQty,
+          };
+        }
+      }
+
+      if (mounted) {
+        setState(() {});
+        _showSnackBar('Split $quantity items into new stack');
+      }
+
+      if (widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } on ApiException catch (err) {
+      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to split stack.';
+      _showSnackBar(errorMessage, isError: true);
+      // On 409 conflict (race condition), refresh inventory to get current state
+      if (err.statusCode == 409 && widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
+    } catch (err) {
+      _showSnackBar('Unexpected error: $err', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingItems.remove(itemId);
+        });
+      }
+    }
+  }
+
+  void _showSplitDialog(String slot, String itemId, String itemName, int quantity) {
+    if (quantity <= 1) {
+      _showSnackBar('Cannot split a stack with only 1 item');
+      return;
+    }
+
+    int splitQuantity = 1;
+    final maxSplit = quantity - 1;
+
+    showDialog<int>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Split Stack'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('How many $itemName to split off?'),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: splitQuantity > 1
+                        ? () => setDialogState(() => splitQuantity--)
+                        : null,
+                    icon: const Icon(Icons.remove),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Theme.of(context).colorScheme.outline),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$splitQuantity',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: splitQuantity < maxSplit
+                        ? () => setDialogState(() => splitQuantity++)
+                        : null,
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Original stack will have ${quantity - splitQuantity} items',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => setDialogState(() => splitQuantity = maxSplit),
+                child: const Text('Split Half'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(splitQuantity),
+              child: const Text('Split'),
+            ),
+          ],
+        ),
+      ),
+    ).then((qty) {
+      if (qty != null && qty > 0) {
+        _handleSplitStack(slot, itemId, qty);
+      }
+    });
   }
 
   bool _isEquipmentSlot(String slot) {
@@ -495,16 +1007,30 @@ class _InventorySlot extends StatelessWidget {
 }
 
 class _InventoryGridItem extends StatelessWidget {
+  final String slot;
   final String itemId;
   final Map<String, dynamic>? itemDetails;
   final int quantity;
   final VoidCallback? onTap;
+  final VoidCallback? onUse;
+  final VoidCallback? onDiscard;
+  final VoidCallback? onSplit;
+  final bool isConsumable;
+  final bool isProcessing;
+  final bool isStackable;
 
   const _InventoryGridItem({
+    required this.slot,
     required this.itemId,
     this.itemDetails,
     this.quantity = 1,
     this.onTap,
+    this.onUse,
+    this.onDiscard,
+    this.onSplit,
+    this.isConsumable = false,
+    this.isProcessing = false,
+    this.isStackable = false,
   });
 
   @override
@@ -514,37 +1040,109 @@ class _InventoryGridItem extends StatelessWidget {
 
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
     final isStackable = itemDetails?['Stackable'] == true;
+    final itemName = itemDetails?['Name'] as String? ?? itemId;
+    final tooltipText = slot.isNotEmpty ? '$itemName ($slot)' : itemName;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: _getRarityColor(itemRarity).withValues(alpha: 0.5),
-            width: 2,
-          ),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              _getItemIcon(itemDetails?['Type'] ?? 'item'),
-              size: 24,
-              color: _getRarityColor(itemRarity),
+    return Tooltip(
+      message: tooltipText,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: _getRarityColor(itemRarity).withValues(alpha: 0.5),
+              width: 2,
             ),
-            const SizedBox(height: 4),
-            if (isStackable && quantity > 1)
-              Text(
-                'x$quantity',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.bold,
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _getItemIcon(itemDetails?['Type'] ?? 'item'),
+                      size: 24,
+                      color: _getRarityColor(itemRarity),
+                    ),
+                    const SizedBox(height: 4),
+                    if (isStackable && quantity > 1)
+                      Text(
+                        'x$quantity',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-          ],
+              if (isConsumable)
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: IconButton(
+                    tooltip: 'Use $itemName',
+                    onPressed: isProcessing ? null : onUse,
+                    style: IconButton.styleFrom(
+                      backgroundColor: colorScheme.primaryContainer,
+                      foregroundColor: colorScheme.onPrimaryContainer,
+                      padding: const EdgeInsets.all(4),
+                      minimumSize: const Size(28, 28),
+                    ),
+                    icon: isProcessing
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                colorScheme.onPrimaryContainer,
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.play_arrow_rounded, size: 16),
+                  ),
+                ),
+              // Discard button in bottom-left
+              if (onDiscard != null)
+                Positioned(
+                  left: 0,
+                  bottom: 0,
+                  child: IconButton(
+                    tooltip: 'Discard $itemName',
+                    onPressed: isProcessing ? null : onDiscard,
+                    style: IconButton.styleFrom(
+                      backgroundColor: colorScheme.errorContainer,
+                      foregroundColor: colorScheme.onErrorContainer,
+                      padding: const EdgeInsets.all(4),
+                      minimumSize: const Size(28, 28),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                  ),
+                ),
+              // Split button in bottom-right (for stackable items with qty > 1)
+              if (onSplit != null && isStackable && quantity > 1)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: IconButton(
+                    tooltip: 'Split stack',
+                    onPressed: isProcessing ? null : onSplit,
+                    style: IconButton.styleFrom(
+                      backgroundColor: colorScheme.secondaryContainer,
+                      foregroundColor: colorScheme.onSecondaryContainer,
+                      padding: const EdgeInsets.all(4),
+                      minimumSize: const Size(28, 28),
+                    ),
+                    icon: const Icon(Icons.call_split, size: 16),
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

@@ -5,7 +5,6 @@ Provides common validation functions for user input.
 """
 
 import re
-from functools import cache
 
 # Character name validation constants
 NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")
@@ -60,10 +59,6 @@ def validate_character_name(name: str) -> None:
         if name[i] == name[i + 1] == name[i + 2]:
             raise ValueError("Name cannot have more than 2 consecutive identical characters")
 
-    # Check letter ratio for short names with special chars
-    if len(name) <= 3 and any(c in "-'" for c in name):
-        raise ValueError("Short names cannot contain special characters")
-
     # Ensure reasonable letter-to-special-character ratio
     letter_count: int = sum(1 for c in name if c.isalpha())
     if letter_count / len(name) < 0.5:
@@ -71,7 +66,7 @@ def validate_character_name(name: str) -> None:
 
     # Check reserved prefixes
     name_lower: str = name.lower()
-    reserved_prefixes: list = ["gm_", "admin_", "mod_", "system_", "server_", "npc_"]
+    reserved_prefixes: list = ["gm-", "admin-", "mod-", "system-", "server-", "npc-"]
     for prefix in reserved_prefixes:
         if name_lower.startswith(prefix):
             raise ValueError("Name uses reserved prefix")
@@ -82,7 +77,6 @@ def validate_character_name(name: str) -> None:
         raise ValueError("Name is reserved")
 
 
-@cache
 def validate_uuid(uuid_value: str) -> bool:
     """
     Validate UUID format.

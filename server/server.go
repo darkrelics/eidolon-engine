@@ -1,7 +1,7 @@
 /*
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 */
 
@@ -36,6 +36,7 @@ type Server struct {
 	index         *Index
 	activeMotDs   []*MOTD
 	sshInterface  *Interface_SSH
+	cloudWatch    *CloudWatch
 }
 
 type Index struct {
@@ -60,13 +61,13 @@ func (i *Index) SetID(id uint64) {
 	}
 }
 
-func NewServer(globalCtx context.Context, cfg *Configuration) (*Server, error) {
+func NewServer(globalCtx context.Context, cfg *Configuration, cloudWatch *CloudWatch) (*Server, error) {
 
 	Logger.Info("New Server...Initializing server...")
 
 	ctx, cancel := context.WithCancel(globalCtx)
 
-	database, err := NewKeyPair(ctx, cfg)
+	database, err := NewKeyPair(ctx, cfg, cloudWatch)
 	if err != nil {
 		cancel()
 		return nil, fmt.Errorf("database init error: %w", err)
@@ -98,6 +99,7 @@ func NewServer(globalCtx context.Context, cfg *Configuration) (*Server, error) {
 		shutdownOnce:  sync.Once{},
 		cognito:       cognitoidentityprovider.NewFromConfig(awsConfig),
 		index:         index,
+		cloudWatch:    cloudWatch,
 	}
 
 	server.playerCount.Store(0)

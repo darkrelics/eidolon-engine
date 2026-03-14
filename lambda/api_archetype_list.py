@@ -1,18 +1,21 @@
 """
 Eidolon Engine
 
-Copyright 2024-2025 Jason E. Robinson
+Copyright 2024-2026 Jason E. Robinson
 
 Lambda function to cache and serve player-available archetypes.
 The function loads all archetypes on cold start and filters for Player=true.
 Lambda instances typically stay warm for 30 minutes to 2 hours after invocation.
+
+Endpoint: GET /archetype/list
+Authentication: Cognito (required)
 """
 
 from eidolon.archetypes import get_archetypes
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 
-archetypes_cache = []
+archetypes_cache = None
 
 # Cache for player archetypes - populated at module load
 try:
@@ -39,8 +42,8 @@ def handle_get_archetypes() -> dict:
     """
     global archetypes_cache
 
-    if archetypes_cache:
-        logger.info(f"Returning pre-loaded player archetypes cache: {len(archetypes_cache)} archetypes")
+    if archetypes_cache is not None:
+        logger.debug(f"Returning pre-loaded player archetypes cache: {len(archetypes_cache)} archetypes")
         return {"archetypes": archetypes_cache, "count": len(archetypes_cache)}
 
     # Cache failed to load at module init, try again

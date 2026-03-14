@@ -89,9 +89,9 @@ def get_polling_state() -> str:
     try:
         state = get_parameter(SSM_POLLER_STATE_PARAMETER)
         return state
-    except ValueError:
+    except ValueError as err:
         # Parameter doesn't exist, create it with default value
-        logger.info("Polling state parameter not found, creating with default")
+        logger.info(f"Polling state parameter not found, creating with default: {err}")
         update_polling_state("run")
         return "run"
     except Exception as err:
@@ -102,33 +102,31 @@ def get_polling_state() -> str:
 def ensure_polling_enabled() -> None:
     """
     Ensure polling is enabled when starting a story.
-    Sets SSM parameter to "run" and enables EventBridge rule.
+    Enables EventBridge rule first, then sets SSM parameter to "run".
     Used only by api-story-start.
+
+    Order of operations:
+    1. Enable EventBridge rule (idempotent - safe to enable if already enabled)
+    2. Update SSM parameter to "run"
+
+    If EventBridge fails, we skip SSM update to avoid starting the poller
+    when it can't actually run.
     """
     logger.info(f"Enabling polling system - Rule: {EVENTBRIDGE_RULE_NAME}, SSM: {SSM_POLLER_STATE_PARAMETER}")
 
-    # 1) Update SSM parameter to 'run' (narrow try block)
-    ssm_ok = True
-    try:
-        update_polling_state("run")
-        logger.info("Polling state parameter set to 'run'")
-    except Exception as err:
-        ssm_ok = False
-        logger.error(f"Failed to update polling state to 'run' Error: {err}", exc_info=True)
-
-    # 2) Enable the EventBridge rule (narrow try block)
-    rule_ok = True
+    # 1) Enable EventBridge rule first - if this fails, don't update SSM
     try:
         manage_eventbridge_rule(True)
         logger.info("EventBridge rule enabled")
     except Exception as err:
-        rule_ok = False
         logger.error(f"Failed to enable EventBridge rule Error: {err}", exc_info=True)
+        logger.warning("Skipping SSM update because EventBridge rule enablement failed")
+        return
 
-    # 3) Summarize outcome without raising (story start must proceed)
-    if ssm_ok and rule_ok:
+    # 2) Update SSM parameter to 'run'
+    try:
+        update_polling_state("run")
         logger.info("Polling system enabled successfully")
-    else:
-        logger.warning(
-            f"Polling system partially enabled: SSM={'OK' if ssm_ok else 'FAILED'}, Rule={'OK' if rule_ok else 'FAILED'}"
-        )
+    except Exception as err:
+        logger.error(f"Failed to update polling state to 'run' Error: {err}", exc_info=True)
+        logger.warning("EventBridge enabled but SSM update failed - poller may self-correct")

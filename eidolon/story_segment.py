@@ -8,21 +8,29 @@ from botocore.exceptions import ClientError
 from uuid_extension import uuid7
 
 from eidolon.dynamo import TableName, dynamo
+from eidolon.environment import DEFAULT_SEGMENT_DURATION
 from eidolon.logger import logger
 from eidolon.time_utils import from_unix, future_unix, now_unix
 
 
-def create_active_segment(character_id: str, player_id: str, story_id: str, segment: dict, story_instance_id=None) -> dict:
+def create_active_segment(
+    character_id: str,
+    player_id: str,
+    story_id: str,
+    segment: dict,
+    story_instance_id=None,
+    active_segment_id: str = "",
+) -> dict:
     """
     Create an active segment record for tracking progress.
-    Also creates a SegmentHistory record and adds it to StoryHistory if story_instance_id is provided.
 
     Args:
         character_id: Character UUID
         player_id: Player UUID
         story_id: Story UUID
         segment: Segment data from Segments table
-        story_instance_id: StoryInstanceID for this story execution (optional for backward compatibility)
+        story_instance_id: StoryInstanceID for this story execution (optional)
+        active_segment_id: Pre-generated ActiveSegmentID (optional, generates new if empty)
 
     Returns:
         Active segment record
@@ -32,14 +40,15 @@ def create_active_segment(character_id: str, player_id: str, story_id: str, segm
     """
     segment_id = segment.get("SegmentID")
     segment_type = segment.get("SegmentType", "mechanical")
-    duration = int(segment.get("SegmentDuration", 300))
+    duration = int(segment.get("SegmentDuration", DEFAULT_SEGMENT_DURATION))
 
     start_time = now_unix()
     end_time = future_unix(duration)
 
     logger.info(f"Creating segment with StartTime: {from_unix(start_time)}, EndTime: {from_unix(end_time)}, Duration: {duration}s")
 
-    active_segment_id = str(uuid7())
+    if not active_segment_id:
+        active_segment_id = str(uuid7())
 
     active_segment = {
         "ActiveSegmentID": active_segment_id,
