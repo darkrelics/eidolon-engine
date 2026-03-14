@@ -267,5 +267,3 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
     except Exception as err:
         logger.error(f"Unexpected error applying rewards for {character_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply rewards: {err}") from err
-
-

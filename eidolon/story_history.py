@@ -220,5 +220,3 @@ def update_story_history_xp(character_id: str, story_instance_id: str, skill_xp:
     except ClientError as err:
         logger.error(f"Failed to update story history XP for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update story history XP: {err}") from err
-
-

@@ -468,5 +468,3 @@ def delete_character(character_id: str, remove_from_player_list: bool = True) ->
     logger.info(f"Character deletion completed for {character_id}")
 
     return results
-
-
