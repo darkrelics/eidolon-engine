@@ -278,5 +278,3 @@ def claim_segment_for_processing(active_segment_id: str) -> bool:
 
         logger.error(f"Failed to claim segment for processing {active_segment_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to claim segment: {err}") from err
-
-

@@ -73,8 +73,9 @@ def validate_split_request(character: dict, slot: str) -> tuple:
     return item_id, prototype_id, current_quantity
 
 
-def execute_split(character_id: str, inventory: dict, slot: str, item_id: str,
-                  current_quantity: int, split_quantity: int, prototype_id: str) -> dict:
+def execute_split(
+    character_id: str, inventory: dict, slot: str, item_id: str, current_quantity: int, split_quantity: int, prototype_id: str
+) -> dict:
     """Execute the item split: create new item, update inventory, sync ITEMS table.
 
     Args:

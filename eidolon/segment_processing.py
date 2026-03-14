@@ -391,9 +391,7 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
                     idx, selected = select_weighted_branch(available)
                     next_id = selected.get("NextSegmentID")
                     selected_decision = selected.get("Decision")
-                    logger.info(
-                        f"Using weighted timeout for {active_segment_id}: decision={selected_decision}, next={next_id}"
-                    )
+                    logger.info(f"Using weighted timeout for {active_segment_id}: decision={selected_decision}, next={next_id}")
                     return next_id, {
                         "SelectionMethod": "weighted_timeout",
                         "Decision": selected_decision,

@@ -121,9 +121,7 @@ def resolve_segment_outcome(active_segment: dict, active_segment_id: str, segmen
     return outcome
 
 
-def record_advancement_history(
-    active_segment: dict, active_segment_id: str, outcome: str, branch_metadata: dict
-) -> None:
+def record_advancement_history(active_segment: dict, active_segment_id: str, outcome: str, branch_metadata: dict) -> None:
     """Record segment history, story history, and XP updates.
 
     Stores branch metadata on the active segment before recording history

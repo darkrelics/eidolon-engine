@@ -13,11 +13,7 @@ from deployment.cloudformation import deploy_stack, get_stack_output
 from deployment.cloudfront import wait_for_cloudfront_operational
 from deployment.codebuild import trigger_build
 from deployment.config_update import update_config_from_stacks
-from deployment.lambda_utils import (
-    cleanup_old_layer_versions,
-    publish_layer_version,
-    update_lambda_function_code,
-)
+from deployment.lambda_utils import cleanup_old_layer_versions, publish_layer_version, update_lambda_function_code
 from deployment.s3 import set_bucket_policy_for_cloudfront, upload_scripts_to_s3
 from deployment.tracker import DeploymentTracker
 from deployment.validation import VALID_DEPLOYMENT_MODES, validate_config, validate_environment, validate_resources
@@ -78,7 +74,9 @@ def print_deployment_plan(config: dict):
     scripts = config.get("scripts_bucket", "")
     if scripts:
         print(f"  S3 Scripts:      {scripts}")
-    print(f"  GitHub:          {config.get('github_owner', '')}/{config.get('github_repo', '')} ({config.get('github_branch', '')})")
+    print(
+        f"  GitHub:          {config.get('github_owner', '')}/{config.get('github_repo', '')} ({config.get('github_branch', '')})"
+    )
 
     print("\n  Stacks to deploy:")
     for stack_name, modes in STACK_MODE_MATRIX.items():
@@ -157,7 +155,9 @@ def collect_deployment_params(config: dict) -> dict:
     """
     print("\nDeployment Parameters:")
 
-    config["deployment_mode"] = prompt_param("Deployment Mode (mud/incremental/hybrid)", config.get("deployment_mode", ""), required=True)
+    config["deployment_mode"] = prompt_param(
+        "Deployment Mode (mud/incremental/hybrid)", config.get("deployment_mode", ""), required=True
+    )
     if config.get("deployment_mode", "") not in VALID_DEPLOYMENT_MODES:
         print(f"Error: Invalid deployment mode: {config.get('deployment_mode')}")
         print(f"  Valid modes: {', '.join(VALID_DEPLOYMENT_MODES)}")
@@ -425,9 +425,19 @@ def main():
 
     # Update character function code from S3
     character_functions = [
-        "api-character-add", "api-character-delete", "api-character-get", "api-character-list",
-        "api-archetype-list", "api-item-brief", "api-item-prototype", "api-item-consume",
-        "api-item-discard", "api-item-consolidate", "api-item-split", "api-store-list", "api-store-purchase",
+        "api-character-add",
+        "api-character-delete",
+        "api-character-get",
+        "api-character-list",
+        "api-archetype-list",
+        "api-item-brief",
+        "api-item-prototype",
+        "api-item-consume",
+        "api-item-discard",
+        "api-item-consolidate",
+        "api-item-split",
+        "api-store-list",
+        "api-store-purchase",
     ]
     for func_name in character_functions:
         if not update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip"):
@@ -448,9 +458,15 @@ def main():
 
         # Update story function code from S3
         story_functions = [
-            "api-story-start", "api-story-abandon", "api-story-history",
-            "api-segment-decision", "api-segment-history", "api-segment-status",
-            "ops-segment-poller", "ops-segment-process", "ops-story-advance",
+            "api-story-start",
+            "api-story-abandon",
+            "api-story-history",
+            "api-segment-decision",
+            "api-segment-history",
+            "api-segment-status",
+            "ops-segment-poller",
+            "ops-segment-process",
+            "ops-story-advance",
         ]
         for func_name in story_functions:
             if not update_lambda_function_code(lambda_client, func_name, s3_bucket, f"{func_name}.zip"):
@@ -570,16 +586,20 @@ def main():
             response = logs_client.describe_log_groups(logGroupNamePrefix="/eidolon/server", limit=1)
             log_groups = response.get("logGroups", [])
             if any(lg.get("logGroupName") == "/eidolon/server" for lg in log_groups):
-                resources_to_import = [{
-                    "ResourceType": "AWS::Logs::LogGroup",
-                    "LogicalResourceId": "ServerLogGroup",
-                    "ResourceIdentifier": {"LogGroupName": "/eidolon/server"},
-                }]
+                resources_to_import = [
+                    {
+                        "ResourceType": "AWS::Logs::LogGroup",
+                        "LogicalResourceId": "ServerLogGroup",
+                        "ResourceIdentifier": {"LogGroupName": "/eidolon/server"},
+                    }
+                ]
                 print("  Log group /eidolon/server exists, will import into stack")
         except ClientError as err:
             print(f"  Warning: Could not check for existing log group: {err}")
 
-        if not deploy_stack(cf, "eidolon-cloudwatch", cf_dir / "eidolon-cloudwatch.yml", {}, resources_to_import=resources_to_import):
+        if not deploy_stack(
+            cf, "eidolon-cloudwatch", cf_dir / "eidolon-cloudwatch.yml", {}, resources_to_import=resources_to_import
+        ):
             print("Error: Failed to deploy CloudWatch")
             tracker.print_summary()
             sys.exit(1)

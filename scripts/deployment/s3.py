@@ -134,9 +134,7 @@ def upload_scripts_to_s3(bucket_name: str, region: str, base_dir: str) -> bool:
 
             try:
                 retry_on_transient_error(
-                    lambda f=script_file, k=s3_key: s3_client.put_object(
-                        Bucket=bucket_name, Key=k, Body=f.read_bytes()
-                    )
+                    lambda f=script_file, k=s3_key: s3_client.put_object(Bucket=bucket_name, Key=k, Body=f.read_bytes())
                 )
                 print(f"  [UPLOADED] {s3_key}")
                 uploaded += 1

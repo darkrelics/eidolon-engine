@@ -98,7 +98,9 @@ def _continue_update_rollback(cf_client, stack_name: str) -> bool:
         return False
 
 
-def deploy_stack(cf_client, stack_name: str, template_path: Path, parameters=None, capabilities=None, resources_to_import=None) -> bool:
+def deploy_stack(
+    cf_client, stack_name: str, template_path: Path, parameters=None, capabilities=None, resources_to_import=None
+) -> bool:
     """Deploy a CloudFormation stack.
 
     Args:
@@ -245,7 +247,9 @@ def create_new_stack(cf_client, stack_name: str, template_body: str, params: lis
         return False
 
 
-def create_stack_via_import(cf_client, stack_name: str, template_body: str, params: list, caps: list, resources_to_import: list) -> bool:
+def create_stack_via_import(
+    cf_client, stack_name: str, template_body: str, params: list, caps: list, resources_to_import: list
+) -> bool:
     """Create a CloudFormation stack by importing existing resources.
 
     Uses CloudFormation's resource import to adopt pre-existing resources
