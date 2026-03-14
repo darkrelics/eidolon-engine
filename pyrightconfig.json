@@ -4,7 +4,7 @@
       "root": "scripts"
     },
     {
-      "root": "deployment"
+      "root": "scripts/deployment"
     }
   ]
 }

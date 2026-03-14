@@ -73,7 +73,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         Dict with status_code and body
     """
     # Get character ID from query parameters
-    character_id: str = get_query_parameter(event, "CharacterID", required=True) or ""
+    character_id: str = get_query_parameter(event, "CharacterID", required=True)
 
     if not validate_uuid(character_id):
         raise ValueError("Invalid CharacterID format")

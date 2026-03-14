@@ -1169,6 +1169,18 @@ Resources:
       - StoreListGet
       - StorePurchaseOptions
       - StorePurchasePost
+      - StoryStartOptions
+      - StoryStartPost
+      - StoryAbandonOptions
+      - StoryAbandonPost
+      - StoryHistoryOptions
+      - StoryHistoryGet
+      - SegmentDecisionOptions
+      - SegmentDecisionPost
+      - SegmentStatusOptions
+      - SegmentStatusGet
+      - SegmentHistoryOptions
+      - SegmentHistoryGet
     Properties:
       RestApiId: !Ref EidolonApi
 

@@ -4,7 +4,7 @@ import os
 import re
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, NoCredentialsError, PartialCredentialsError
 from deployment.route53 import route53_zone_exists
 from deployment.s3 import s3_bucket_exists
 
@@ -142,7 +142,7 @@ def validate_environment(base_dir: str, deployment_mode: str) -> str:
             print("Error: Failed to get AWS account ID")
             return ""
         print(f"AWS Account: {account_id}")
-    except ClientError as err:
+    except (ClientError, NoCredentialsError, PartialCredentialsError) as err:
         print(f"Error: AWS credentials not configured: {err}")
         return ""
 
