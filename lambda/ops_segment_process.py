@@ -9,10 +9,9 @@ Triggered by SQS with ActiveSegmentID messages.
 
 from eidolon.character_data import get_character
 from eidolon.logger import log_lambda_statistics, logger
-from eidolon.responses import lambda_response
 from eidolon.segment_core import get_active_segment, get_segment_definition
 from eidolon.segment_polling import claim_segment_for_processing
-from eidolon.segment_processing import route_segment_processing
+from eidolon.segment_processing import apply_segment_effects, route_segment_processing
 from eidolon.segment_state import update_active_segment_outcome
 from eidolon.validation import validate_uuid
 
@@ -46,28 +45,33 @@ def process_segment(active_segment: dict) -> None:
             active_segment.get("StoryID"),  # type: ignore
             active_segment.get("SegmentID"),  # type: ignore
         )
-    except ValueError as err:
-        logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
-        raise err
-    except RuntimeError as err:
+    except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
         raise err
 
     # Get character
     character = get_character(active_segment.get("CharacterID"))  # type: ignore
 
-    # Process based on type
+    # Process based on type (computes outcome without applying effects to database)
     outcome, results = route_segment_processing(segment_def, character, active_segment)
 
-    # Persist results
+    # Persist outcome FIRST (before applying effects)
+    # This ensures effects are never orphaned if the outcome write fails
     try:
         update_active_segment_outcome(active_segment_id, outcome, results, segment_def)  # type: ignore
-    except ValueError as err:
+    except (ValueError, RuntimeError) as err:
         logger.error(f"Failed to update segment outcome for {active_segment_id}: {err}", exc_info=True)
         raise err
-    except RuntimeError as err:
-        logger.error(f"Failed to update segment outcome for {active_segment_id}: {err}", exc_info=True)
-        raise err
+
+    # Apply effects to character AFTER outcome is safely persisted
+    character_id = active_segment.get("CharacterID")
+    if character_id:
+        try:
+            apply_segment_effects(character_id, results)
+        except RuntimeError as err:
+            # Outcome is already persisted -- effects failure is non-fatal for segment progression
+            # but must be visible in logs for investigation
+            logger.error(f"Segment {active_segment_id} outcome saved but effects incomplete: {err}")
 
     logger.info(f"Segment {active_segment_id} processed with outcome: {outcome}")
 
@@ -91,8 +95,8 @@ def lambda_handler(event: dict, context: object) -> dict:
 
     # Check if this is an SQS event
     if "Records" not in event:
-        # Not an SQS event
-        return lambda_response(400, {"Error": "Invalid event format"}, event)
+        logger.error("Invalid event format - expected SQS event with Records")
+        return {"batchItemFailures": []}
 
     # Track processing results for observability
     # Note: We don't use batchItemFailures for retries - the poller handles stuck segments

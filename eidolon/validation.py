@@ -5,7 +5,6 @@ Provides common validation functions for user input.
 """
 
 import re
-from functools import cache
 
 # Character name validation constants
 NAME_PATTERN = re.compile(r"^[a-zA-Z'-]+$")
@@ -67,7 +66,7 @@ def validate_character_name(name: str) -> None:
 
     # Check reserved prefixes
     name_lower: str = name.lower()
-    reserved_prefixes: list = ["gm_", "admin_", "mod_", "system_", "server_", "npc_"]
+    reserved_prefixes: list = ["gm-", "admin-", "mod-", "system-", "server-", "npc-"]
     for prefix in reserved_prefixes:
         if name_lower.startswith(prefix):
             raise ValueError("Name uses reserved prefix")
@@ -78,7 +77,6 @@ def validate_character_name(name: str) -> None:
         raise ValueError("Name is reserved")
 
 
-@cache
 def validate_uuid(uuid_value: str) -> bool:
     """
     Validate UUID format.

@@ -1,0 +1,470 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Lambda functions, SQS queues, EventBridge rule, and SSM parameter for story system
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: S3 bucket containing Lambda deployment packages
+
+  LambdaLayerArn:
+    Type: String
+    Description: ARN of the Lambda dependencies layer
+
+  LambdaExecutionRoleArn:
+    Type: String
+    Description: ARN of the Lambda execution role
+
+  AllowedOrigins:
+    Type: String
+    Description: Allowed CORS origins
+
+Resources:
+  # SQS Queues
+  ProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: eidolon-processing-queue
+      VisibilityTimeout: 90
+      MessageRetentionPeriod: 86400
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  AdvancementQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: eidolon-advancement-queue
+      VisibilityTimeout: 90
+      MessageRetentionPeriod: 86400
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  # SSM Parameter
+  StoryConfigParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /eidolon/story/config
+      Type: String
+      Value: '{"enabled": false, "polling_interval": 60}'
+      Description: Story system configuration
+      Tags:
+        System: eidolon
+
+  # API Lambda Functions
+  ApiStoryStartFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-story-start
+      Description: Start a new story
+      Runtime: python3.12
+      Handler: api_story_start.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-story-start.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiStoryAbandonFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-story-abandon
+      Description: Abandon an active story
+      Runtime: python3.12
+      Handler: api_story_abandon.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-story-abandon.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiStoryHistoryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-story-history
+      Description: Get story history for a character
+      Runtime: python3.12
+      Handler: api_story_history.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-story-history.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiSegmentDecisionFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-segment-decision
+      Description: Submit a segment decision
+      Runtime: python3.12
+      Handler: api_segment_decision.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-segment-decision.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiSegmentHistoryFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-segment-history
+      Description: Get segment history for a character
+      Runtime: python3.12
+      Handler: api_segment_history.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-segment-history.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  ApiSegmentStatusFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: api-segment-status
+      Description: Get current segment status
+      Runtime: python3.12
+      Handler: api_segment_status.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: api-segment-status.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  # Ops Lambda Functions
+  OpsSegmentPollerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ops-segment-poller
+      Description: Poll for expired segments
+      Runtime: python3.12
+      Handler: ops_segment_poller.lambda_handler
+      MemorySize: 128
+      Timeout: 60
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: ops-segment-poller.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  OpsSegmentProcessFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ops-segment-process
+      Description: Process segment queue messages
+      Runtime: python3.12
+      Handler: ops_segment_process.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: ops-segment-process.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      ReservedConcurrentExecutions: 5
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  OpsStoryAdvanceFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: ops-story-advance
+      Description: Advance story progression
+      Runtime: python3.12
+      Handler: ops_story_advance.lambda_handler
+      MemorySize: 128
+      Timeout: 30
+      Role: !Ref LambdaExecutionRoleArn
+      Layers:
+        - !Ref LambdaLayerArn
+      Code:
+        S3Bucket: !Ref S3BucketName
+        S3Key: ops-story-advance.zip
+      Environment:
+        Variables:
+          APPLICATION_NAME: eidolon-engine
+          LOG_LEVEL: INFO
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          CORS_ALLOW_CREDENTIALS: "true"
+          CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+          CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+          CORS_MAX_AGE: "86400"
+          STORY_TABLE: story
+          SEGMENTS_TABLE: segments
+          ACTIVE_SEGMENTS_TABLE: active_segments
+          STORY_HISTORY_TABLE: story_history
+          SEGMENT_HISTORY_TABLE: segment_history
+          CHARACTERS_TABLE: characters
+          OPPONENTS_TABLE: opponents
+          SEGMENT_QUEUE_URL: !Ref ProcessingQueue
+          STORY_ADVANCEMENT_QUEUE_URL: !Ref AdvancementQueue
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  # EventBridge Rule
+  StoryPollerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: eidolon-story-poller
+      Description: Trigger segment poller every minute
+      ScheduleExpression: rate(1 minute)
+      State: DISABLED
+      Targets:
+        - Arn: !GetAtt OpsSegmentPollerFunction.Arn
+          Id: SegmentPollerTarget
+
+  StoryPollerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref OpsSegmentPollerFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt StoryPollerRule.Arn
+
+  # SQS Event Source Mappings
+  ProcessingQueueMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt ProcessingQueue.Arn
+      FunctionName: !Ref OpsSegmentProcessFunction
+      BatchSize: 10
+      MaximumBatchingWindowInSeconds: 5
+
+  AdvancementQueueMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt AdvancementQueue.Arn
+      FunctionName: !Ref OpsStoryAdvanceFunction
+      BatchSize: 10
+      MaximumBatchingWindowInSeconds: 5
+
+Outputs:
+  ProcessingQueueUrl:
+    Description: URL of the segment processing queue
+    Value: !Ref ProcessingQueue
+
+  ProcessingQueueArn:
+    Description: ARN of the segment processing queue
+    Value: !GetAtt ProcessingQueue.Arn
+
+  AdvancementQueueUrl:
+    Description: URL of the story advancement queue
+    Value: !Ref AdvancementQueue
+
+  AdvancementQueueArn:
+    Description: ARN of the story advancement queue
+    Value: !GetAtt AdvancementQueue.Arn
+
+  StoryConfigParameterName:
+    Description: SSM parameter name for story config
+    Value: !Ref StoryConfigParameter
+
+  ApiStoryStartArn:
+    Description: ARN of api-story-start function
+    Value: !GetAtt ApiStoryStartFunction.Arn
+
+  ApiStoryAbandonArn:
+    Description: ARN of api-story-abandon function
+    Value: !GetAtt ApiStoryAbandonFunction.Arn
+
+  ApiStoryHistoryArn:
+    Description: ARN of api-story-history function
+    Value: !GetAtt ApiStoryHistoryFunction.Arn
+
+  ApiSegmentDecisionArn:
+    Description: ARN of api-segment-decision function
+    Value: !GetAtt ApiSegmentDecisionFunction.Arn
+
+  ApiSegmentHistoryArn:
+    Description: ARN of api-segment-history function
+    Value: !GetAtt ApiSegmentHistoryFunction.Arn
+
+  ApiSegmentStatusArn:
+    Description: ARN of api-segment-status function
+    Value: !GetAtt ApiSegmentStatusFunction.Arn

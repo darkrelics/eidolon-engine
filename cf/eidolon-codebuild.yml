@@ -1,0 +1,89 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CodeBuild projects for Eidolon Lambda layer and functions
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: S3 bucket for Lambda artifacts
+
+  CodeBuildRoleArn:
+    Type: String
+    Description: ARN of the CodeBuild service role
+
+  GitHubOwner:
+    Type: String
+    Description: GitHub repository owner
+
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+
+  GitHubBranch:
+    Type: String
+    Description: GitHub branch to build from
+
+Resources:
+  LambdaLayerProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: eidolon-lambda-layer
+      Description: Build Lambda layer with Python dependencies
+      ServiceRole: !Ref CodeBuildRoleArn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: S3_BUCKET
+            Value: !Ref S3BucketName
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref "AWS::Region"
+      Source:
+        Type: GITHUB
+        Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
+        BuildSpec: buildspec/lambda-layer.yml
+        GitCloneDepth: 1
+      SourceVersion: !Ref GitHubBranch
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: System
+          Value: eidolon
+
+  LambdaFunctionsProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: eidolon-lambda-functions
+      Description: Build Lambda function deployment packages
+      ServiceRole: !Ref CodeBuildRoleArn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: S3_BUCKET
+            Value: !Ref S3BucketName
+          - Name: AWS_DEFAULT_REGION
+            Value: !Ref "AWS::Region"
+      Source:
+        Type: GITHUB
+        Location: !Sub "https://github.com/${GitHubOwner}/${GitHubRepo}.git"
+        BuildSpec: buildspec/lambda-functions.yml
+        GitCloneDepth: 1
+      SourceVersion: !Ref GitHubBranch
+      TimeoutInMinutes: 15
+      Tags:
+        - Key: System
+          Value: eidolon
+
+Outputs:
+  LayerBuildProjectName:
+    Description: CodeBuild project name for Lambda layer
+    Value: !Ref LambdaLayerProject
+
+  FunctionsBuildProjectName:
+    Description: CodeBuild project name for Lambda functions
+    Value: !Ref LambdaFunctionsProject

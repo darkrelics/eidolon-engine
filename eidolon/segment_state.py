@@ -172,13 +172,14 @@ def update_active_segment_outcome(active_segment_id: str, outcome: str, results:
 
     try:
         # Add conditional to prevent double-processing race condition
-        expression_values[":pending"] = "pending"
+        # Check for "processing" state (set by claim_segment_for_processing)
+        expression_values[":expected_status"] = "processing"
 
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
             UpdateExpression=update_expression,
-            ConditionExpression="ProcessingStatus = :pending",
+            ConditionExpression="ProcessingStatus = :expected_status",
             ExpressionAttributeNames=expression_names,
             ExpressionAttributeValues=expression_values,
         )
@@ -304,6 +305,7 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
             ":outcome": outcome,
             ":updates": character_updates,
             ":processed_at": now_unix(),
+            ":already_processed": "processed",
         }
 
         if client_events is not None:
@@ -314,11 +316,15 @@ def update_segment_processing_status(active_segment_id: str, outcome: str, chara
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
             UpdateExpression=update_expr,
+            ConditionExpression="ProcessingStatus <> :already_processed",
             ExpressionAttributeNames={"#outcome": "Outcome"},
             ExpressionAttributeValues=expr_values,
         )
         logger.info(f"Updated segment processing status for {active_segment_id}")
     except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            logger.info(f"Segment {active_segment_id} already processed, skipping status update")
+            return
         logger.error(f"Failed to update segment processing status for {active_segment_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to update segment results: {err}") from err
 
@@ -339,7 +345,7 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
         dynamo.update_item(
             TableName.ACTIVE_SEGMENTS,
             Key={"ActiveSegmentID": active_segment_id},
-            UpdateExpression="SET ProcessingStatus = :status",
+            UpdateExpression="SET ProcessingStatus = :status REMOVE ProcessingStartedAt, ProcessedAt",
             ExpressionAttributeValues={":status": "pending"},
         )
         logger.info(f"Reset segment processing status to pending for {active_segment_id}")

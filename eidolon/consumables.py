@@ -127,6 +127,7 @@ def build_consume_transaction(
     item_removed: bool,
     remaining_quantity: int,
     timestamp: str,
+    current_quantity: int = 0,
 ) -> list:
     """Build the list of transactional write items for consume_item."""
     # Convert expression values to DynamoDB typed format for transactions
@@ -136,12 +137,21 @@ def build_consume_transaction(
     typed_names = dict(expression_names)
     typed_names["#slot"] = slot_key
 
+    # Check ItemID is still in the slot
+    condition = "Inventory.#slot.ItemID = :expected_item_id"
+
+    # For stackable items, also check quantity hasn't changed since we read it
+    # This prevents two concurrent consume requests from both decrementing from the same base quantity
+    if stackable and current_quantity > 0:
+        condition += " AND Inventory.#slot.Quantity = :expected_quantity"
+        typed_values[":expected_quantity"] = {"N": str(current_quantity)}
+
     character_update = {
         "Update": {
             "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
             "Key": {"CharacterID": {"S": character_id}},
             "UpdateExpression": "SET " + ", ".join(update_expression_parts),
-            "ConditionExpression": "Inventory.#slot.ItemID = :expected_item_id",
+            "ConditionExpression": condition,
             "ExpressionAttributeValues": typed_values,
             "ExpressionAttributeNames": typed_names,
         }
@@ -580,6 +590,9 @@ def consume_item(character_id: str, item_id: str) -> dict:
         fx.get("new_char_state", ""),
     )
 
+    slot_entry = ctx.get("slot_entry", {})
+    current_quantity = coerce_int(slot_entry.get("Quantity", item.get("Quantity", 1)), 1)
+
     transact_items = build_consume_transaction(
         character_id,
         item_id,
@@ -592,6 +605,7 @@ def consume_item(character_id: str, item_id: str) -> dict:
         inv_result.get("item_removed", False),
         inv_result.get("remaining_quantity", 0),
         expr.get("timestamp", ""),
+        current_quantity,
     )
 
     execute_consume_transaction(

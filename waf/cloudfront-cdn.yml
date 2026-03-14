@@ -22,28 +22,8 @@ rules:
       cloudwatch_metrics: true
       metric_name: CloudFrontRateLimitGeneral
 
-  # Priority 1: AWS Managed Rule - IP Reputation
-  - name: AWSManagedRulesIPReputation
-    priority: 1
-    statement:
-      managed_rule_group:
-        vendor_name: AWS
-        name: AWSManagedRulesAmazonIpReputationList
-        excluded_rules: []
-    action: override_to_count
-    visibility:
-      sampled_requests: true
-      cloudwatch_metrics: true
-      metric_name: CloudFrontIPReputation
-
 # CloudWatch integration
 cloudwatch:
   metrics_enabled: true
   sampled_requests_enabled: true
 
-# Custom response for blocked requests
-custom_response:
-  response_code: 403
-  response_headers:
-    - name: X-WAF-Block-Reason
-      value: rate-limit-exceeded

@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: ACM certificates for Eidolon Engine custom domains
+
+Parameters:
+  ApiHostName:
+    Type: String
+    Description: FQDN for the API Gateway custom domain (e.g. api.darkrelics.net)
+
+  ClientHostName:
+    Type: String
+    Description: FQDN for the portal CloudFront distribution (e.g. portal.darkrelics.net)
+
+  Route53ZoneId:
+    Type: String
+    Description: Route53 hosted zone ID for DNS validation
+
+Resources:
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref ApiHostName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref ApiHostName
+          HostedZoneId: !Ref Route53ZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub "${ApiHostName}-certificate"
+        - Key: System
+          Value: eidolon
+
+  PortalCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref ClientHostName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref ClientHostName
+          HostedZoneId: !Ref Route53ZoneId
+      Tags:
+        - Key: Name
+          Value: !Sub "${ClientHostName}-certificate"
+        - Key: System
+          Value: eidolon
+
+Outputs:
+  ApiCertificateArn:
+    Description: ARN of the API ACM certificate
+    Value: !Ref ApiCertificate
+
+  PortalCertificateArn:
+    Description: ARN of the Portal ACM certificate
+    Value: !Ref PortalCertificate

@@ -157,7 +157,9 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                             )
                             if not new_item:
                                 continue
-                            item_id = new_item["ItemID"]
+                            item_id = new_item.get("ItemID")
+                            if not item_id:
+                                continue
                             next_slot = find_next_available_slot(inventory)
                             inventory[next_slot] = {"ItemID": item_id}
                             items_created.append(item_id)
@@ -208,7 +210,9 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                                 )
                                 if not new_item:
                                     continue
-                                item_id = new_item["ItemID"]
+                                item_id = new_item.get("ItemID")
+                                if not item_id:
+                                    continue
                                 next_slot = find_next_available_slot(inventory)
                                 inventory[next_slot] = {"ItemID": item_id, "Quantity": stack_qty}
                                 items_created.append(item_id)
@@ -233,21 +237,22 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
                 expression_names["#check_slot"] = first_new_slot
                 dynamo.update_item(
                     TableName.CHARACTERS,
-                    {"CharacterID": character_id},
-                    update_expression,
-                    expression_names,
-                    expression_values,
-                    "attribute_not_exists(Inventory.#check_slot)",
+                    Key={"CharacterID": character_id},
+                    UpdateExpression=update_expression,
+                    ExpressionAttributeNames=expression_names,
+                    ExpressionAttributeValues=expression_values,
+                    ConditionExpression="attribute_not_exists(Inventory.#check_slot)",
                 )
             else:
                 # Only updating existing stacks, no new slots
-                dynamo.update_item(
-                    TableName.CHARACTERS,
-                    {"CharacterID": character_id},
-                    update_expression,
-                    expression_names if expression_names else None,
-                    expression_values,
-                )
+                update_kwargs = {
+                    "Key": {"CharacterID": character_id},
+                    "UpdateExpression": update_expression,
+                    "ExpressionAttributeValues": expression_values,
+                }
+                if expression_names:
+                    update_kwargs["ExpressionAttributeNames"] = expression_names
+                dynamo.update_item(TableName.CHARACTERS, **update_kwargs)
 
         logger.info(f"Applied story rewards for {character_id}: {len(items_created)} items created")
 
@@ -262,29 +267,3 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
     except Exception as err:
         logger.error(f"Unexpected error applying rewards for {character_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply rewards: {err}") from err
-
-
-def apply_combat_rewards(character_id: str, opponent_data: dict) -> None:
-    """
-    Apply rewards from defeating an opponent in combat.
-
-    Args:
-        character_id: Character UUID
-        opponent_data: Opponent data including XPReward and Items
-
-    Raises:
-        RuntimeError: If database operations fail
-    """
-    try:
-        # Segment processing already applied skill/attribute XP.
-        # Additional combat rewards must come from segment/story data; none are applied here.
-        items = opponent_data.get("Items", [])
-        if items:
-            logger.info(
-                "Item rewards are defined on the opponent but segment/story data must trigger distribution; skipping Dynamo writes"
-            )
-
-        logger.info(f"No additional combat rewards applied for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to apply combat rewards for {character_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to apply combat rewards: {err}") from err

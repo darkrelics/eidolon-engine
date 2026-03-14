@@ -75,8 +75,13 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     try:
         character_get(character_id, player_id)
     except ValueError as err:
+        normalized = str(err).lower()
         logger.warning(f"Character access denied: {err}")
-        raise ValueError(f"403:{err}") from err
+        if "not found" in normalized:
+            raise ValueError(f"404:{err}") from err
+        if "not owned" in normalized:
+            raise ValueError(f"403:{err}") from err
+        raise
 
     # Attempt purchase
     try:

@@ -15,7 +15,6 @@ import time
 from eidolon.constants import RETRY_POLL_DELAY
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
-from eidolon.player import verify_character_ownership
 from eidolon.requests import get_query_parameter
 from eidolon.segment_core import map_outcome_to_key, validate_segment_outcome_results
 from eidolon.story_active import get_active_story_segment_with_player_check
@@ -84,11 +83,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         ValueError: If character not found or not owned
         RuntimeError: If database operations fail
     """
-    # Verify character ownership using player record
-    if not verify_character_ownership(character_id, player_id):
-        raise ValueError("403:Access denied")
-
-    # Try to get active segment
+    # Get active segment (includes player ownership check via PlayerID filter)
     try:
         active_segment = get_active_story_segment_with_player_check(character_id, player_id)
     except ValueError as err:
@@ -176,61 +171,54 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
         response["Outcome"] = active_segment.get("Outcome")
         response["CombatState"] = active_segment.get("CombatState")
 
-        # If segment is processed/completed, include full narrative data
-        if processing_status == "processed" or active_segment.get("Status") == "completed":
-            try:
-                # Get segment definition for narrative text
-                segment_def = get_story_segment(story_id, segment_id)  # type: ignore
+        try:
+            # Get segment definition for narrative text
+            segment_def = get_story_segment(story_id, segment_id)  # type: ignore
 
-                if segment_type == "mechanical":
-                    outcome = active_segment.get("Outcome", "normal")
-                    validated_result = validate_segment_outcome_results(segment_def, outcome)
-                    response["Narrative"] = validated_result.get("Narrative", "")
-                    response["Effects"] = validated_result.get("Effects", {})
+            if segment_type == "mechanical":
+                outcome = active_segment.get("Outcome", "normal")
+                validated_result = validate_segment_outcome_results(segment_def, outcome)
+                response["Narrative"] = validated_result.get("Narrative", "")
+                response["Effects"] = validated_result.get("Effects", {})
 
-                    # Get next segment based on outcome
-                    results = segment_def.get("Results", {}) or {}
-                    next_segment_id = None
-                    if isinstance(results, dict):
-                        outcome_key = map_outcome_to_key(outcome or "normal")
-                        if outcome_key and isinstance(results.get(outcome_key), dict):
-                            outcome_block = results.get(outcome_key, {})
-                            # NextSegmentID is in the Branches array
-                            branches = outcome_block.get("Branches", [])
-                            if branches and isinstance(branches, list) and len(branches) > 0:
-                                first_branch = branches[0]
-                                if isinstance(first_branch, dict):
-                                    next_segment_id = first_branch.get("NextSegmentID")
+                # Get next segment based on outcome
+                results = segment_def.get("Results", {}) or {}
+                next_segment_id = None
+                if isinstance(results, dict):
+                    outcome_key = map_outcome_to_key(outcome or "normal")
+                    if outcome_key and isinstance(results.get(outcome_key), dict):
+                        outcome_block = results.get(outcome_key, {})
+                        branches = outcome_block.get("Branches", [])
+                        if branches and isinstance(branches, list):
+                            first_branch = branches[0]
+                            if isinstance(first_branch, dict):
+                                next_segment_id = first_branch.get("NextSegmentID")
 
-                    response["NextSegmentID"] = next_segment_id
+                response["NextSegmentID"] = next_segment_id
 
-                elif segment_type == "decision":
-                    decision = active_segment.get("Decision")
-                    decision_options = segment_def.get("DecisionOptions", {})
-                    response["NextSegmentID"] = decision_options.get(decision) if decision else None
-                    response["Narrative"] = ""
-                    response["Effects"] = {}
+            elif segment_type == "decision":
+                decision = active_segment.get("Decision")
+                decision_options = segment_def.get("DecisionOptions", {})
+                selected_option = decision_options.get(decision, {}) if decision else {}
+                response["NextSegmentID"] = selected_option.get("NextSegmentID") if selected_option else None
+                response["Narrative"] = ""
+                response["Effects"] = {}
 
-                # Add StoryComplete flag - only valid when segment is processed
-                # Story is complete if segment is processed AND NextSegmentID is None
-                next_segment_id = response.get("NextSegmentID")
-                if processing_status == "processed":
-                    response["StoryComplete"] = next_segment_id is None
-                else:
-                    # Segment not processed yet - can't determine if story complete
-                    response["StoryComplete"] = False
+            # Story is complete if NextSegmentID is None
+            next_segment_id = response.get("NextSegmentID")
+            response["StoryComplete"] = next_segment_id is None
 
-                # Add NextSegmentPreview if there's a next segment
-                if next_segment_id and (processing_status == "processed" or active_segment.get("Status") == "completed"):
-                    preview = get_next_segment_preview(story_id, next_segment_id)  # type: ignore
-                    if preview:
-                        response["NextSegmentPreview"] = preview
+            # Add NextSegmentPreview if there's a next segment
+            if next_segment_id:
+                preview = get_next_segment_preview(story_id, next_segment_id)  # type: ignore
+                if preview:
+                    response["NextSegmentPreview"] = preview
 
-            except Exception as err:
-                logger.warning(
-                    f"Failed to get narrative data for segment_id={segment_id}, character_id={character_id}: {err.__class__.__name__}: {err}"
-                )
-                # Continue without narrative - not critical
+        except Exception as err:
+            logger.warning(
+                f"Failed to get narrative data for segment_id={segment_id}, character_id={character_id}: {err.__class__.__name__}: {err}"
+            )
+            # Continue without narrative - not critical
     else:
         # Segment is still processing - just return basic status
         response["SegmentTitle"] = response.get("SegmentTitle") or "Processing..."

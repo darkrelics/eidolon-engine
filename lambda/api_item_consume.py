@@ -30,19 +30,11 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     Returns:
         Dict with status_code and body
     """
-    try:
-        if not validate_player(player_id):
-            logger.error(f"Player {player_id} not found")
-            raise ValueError("401:Unauthorized")
-    except RuntimeError as err:
-        logger.error(f"Failed to validate player {player_id}: {err}", exc_info=True)
-        raise err
+    if not validate_player(player_id):
+        logger.error(f"Player {player_id} not found")
+        raise ValueError("401:Unauthorized")
 
-    try:
-        body = parse_event_body(event)
-    except ValueError as err:
-        logger.error(f"Failed to parse consume request body: {err}", exc_info=True)
-        raise ValueError("Invalid request body") from err
+    body = parse_event_body(event)
 
     character_id = str(body.get("CharacterID", "")).strip()
     item_id = str(body.get("ItemID", "")).strip()
@@ -75,9 +67,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         message = str(err)
         normalized = message.lower()
         logger.warning(f"Consume item failed for character {character_id} item {item_id}: {message}")
-        if "active story" in normalized:
-            raise ValueError(f"409:{message}") from err
-        if "no effect" in normalized:
+        if "active story" in normalized or "no effect" in normalized or "already been consumed" in normalized:
             raise ValueError(f"409:{message}") from err
         if "not found" in normalized or "not in character inventory" in normalized:
             raise ValueError(f"404:{message}") from err
