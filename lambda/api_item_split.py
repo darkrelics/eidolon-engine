@@ -23,16 +23,15 @@ from eidolon.story_rewards import create_reward_item
 from eidolon.validation import validate_uuid
 
 
-def validate_split_request(character: dict, slot: str, item_id_out: list) -> tuple:
+def validate_split_request(character: dict, slot: str) -> tuple:
     """Validate the inventory slot and retrieve item data for splitting.
 
     Args:
         character: Character dict from character_get
         slot: Inventory slot string
-        item_id_out: Empty list; item_id is appended for caller access
 
     Returns:
-        Tuple of (slot_data, item_id, current_quantity)
+        Tuple of (item_id, prototype_id, current_quantity)
 
     Raises:
         ValueError: If slot/item not found or item is not stackable
@@ -233,7 +232,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         raise
 
     # Validate slot and item
-    item_id, prototype_id, current_quantity = validate_split_request(character, slot, [])
+    item_id, prototype_id, current_quantity = validate_split_request(character, slot)
 
     if split_quantity > current_quantity:
         raise ValueError(f"Cannot split {split_quantity} items from a stack of {current_quantity}")
