@@ -12,7 +12,7 @@ attrs==25.4.0
 botocore==1.42.39
 cattrs==25.2.0
 importlib_resources==6.5.2
-jmespath==1.0.1
+jmespath==1.1.0
 jsii==1.126.0
 publication==0.0.3
 python-dateutil==2.9.0.post0
