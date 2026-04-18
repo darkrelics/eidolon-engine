@@ -26,6 +26,7 @@ class Character {
   final List<Map<String, dynamic>> completedStories; // Format: [{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]
   final List<Map<String, dynamic>>? availableStoriesDetails; // Full story metadata when no active story
   final List<Map<String, dynamic>>? wounds; // List of wound objects with DamageType and HealAt
+  final String? charState; // 'standing' | 'unconscious' | 'dead' | 'ghost'
 
   Character({
     required this.id,
@@ -51,6 +52,7 @@ class Character {
     this.completedStories = const [],
     this.availableStoriesDetails,
     this.wounds,
+    this.charState,
   });
 
   /// Safely parse a map of dynamic values to doubles.
@@ -146,6 +148,7 @@ class Character {
       wounds: json['Wounds'] != null
           ? (json['Wounds'] as List).map((wound) => wound as Map<String, dynamic>).toList()
           : null,
+      charState: json['CharState'] as String?,
     );
   }
 
@@ -174,6 +177,7 @@ class Character {
       'CompletedStories': completedStories,
       if (availableStoriesDetails != null) 'AvailableStoriesDetails': availableStoriesDetails,
       if (wounds != null) 'Wounds': wounds,
+      if (charState != null) 'CharState': charState,
     };
   }
 
@@ -221,6 +225,7 @@ class Character {
       completedStories: completedStories ?? this.completedStories,
       availableStoriesDetails: availableStoriesDetails ?? this.availableStoriesDetails,
       wounds: wounds ?? this.wounds,
+      charState: charState,
     );
   }
 

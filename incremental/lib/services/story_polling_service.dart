@@ -30,7 +30,10 @@ class StoryPollingService {
   static const int _errorRetryDelaySeconds = 30;
   static const int _defaultPollDelaySeconds = 60;  // Fallback if no PollAfter
   static const int _initialPollDelaySeconds = 60;  // Backend design spec: INITIAL_POLL_DELAY
-  static const int _recoveryDelaySeconds = 300;  // 5 minutes before recovery attempt
+  // Exponential backoff for recovery: 15s, 30s, 60s, 120s, 300s cap
+  static const int _recoveryInitialDelaySeconds = 15;
+  static const int _recoveryMaxDelaySeconds = 300;
+  int _recoveryAttempt = 0;
 
   void dispose() {
     stopPolling();
@@ -49,6 +52,7 @@ class StoryPollingService {
     _lastSeenActiveSegmentId = null;
     _lastReloadedSegmentId = null;
     _pendingCompletionSegmentId = null;
+    _recoveryAttempt = 0;
   }
 
   /// Start polling for the character's active story.
@@ -146,8 +150,9 @@ class StoryPollingService {
         _pendingCompletionSegmentId = null;
       }
 
-      // Reset error counter on successful call
+      // Reset error and recovery counters on successful call
       _consecutiveErrors = 0;
+      _recoveryAttempt = 0;
 
       // Update UI with segment status
       onStatusUpdate(segmentStatus);
@@ -277,7 +282,7 @@ class StoryPollingService {
             // Retry with backoff
             _consecutiveErrors++;
             if (_consecutiveErrors >= _maxConsecutiveErrors) {
-              debugPrint('StoryPollingService: Too many consecutive errors - scheduling recovery in $_recoveryDelaySeconds seconds');
+              debugPrint('StoryPollingService: Too many consecutive errors - scheduling recovery with exponential backoff');
               _scheduleRecovery(
                 characterId: characterId,
                 onStatusUpdate: onStatusUpdate,
@@ -359,7 +364,7 @@ class StoryPollingService {
 
       // Schedule recovery after too many consecutive errors
       if (_consecutiveErrors >= _maxConsecutiveErrors) {
-        debugPrint('StoryPollingService: Too many consecutive errors ($_consecutiveErrors) - scheduling recovery in $_recoveryDelaySeconds seconds');
+        debugPrint('StoryPollingService: Too many consecutive errors ($_consecutiveErrors) - scheduling recovery with exponential backoff');
         _scheduleRecovery(
           characterId: characterId,
           onStatusUpdate: onStatusUpdate,
@@ -410,9 +415,9 @@ class StoryPollingService {
 
   /// Schedule recovery attempt after too many consecutive errors.
   ///
-  /// After hitting max consecutive errors, waits 5 minutes then attempts
-  /// to resume polling. This prevents permanent failure when the server
-  /// is temporarily unavailable.
+  /// Uses exponential backoff (15s, 30s, 60s, 120s) capped at 5 minutes so
+  /// transient network hiccups don't impose a minutes-long UI stall while
+  /// sustained outages still avoid hammering the API.
   void _scheduleRecovery({
     required String characterId,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
@@ -428,8 +433,14 @@ class StoryPollingService {
     _completionTimer = null;
     _recoveryTimer?.cancel();
 
-    // Schedule recovery attempt
-    _recoveryTimer = Timer(const Duration(seconds: _recoveryDelaySeconds), () {
+    final backoffSeconds = (_recoveryInitialDelaySeconds << _recoveryAttempt).clamp(
+      _recoveryInitialDelaySeconds,
+      _recoveryMaxDelaySeconds,
+    );
+    _recoveryAttempt++;
+    debugPrint('StoryPollingService: Recovery attempt #$_recoveryAttempt in ${backoffSeconds}s');
+
+    _recoveryTimer = Timer(Duration(seconds: backoffSeconds), () {
       _recoveryTimer = null;
 
       // Check if polling was explicitly stopped
