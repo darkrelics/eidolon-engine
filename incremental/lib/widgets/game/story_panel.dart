@@ -162,12 +162,16 @@ class _StoryPanelState extends State<StoryPanel> {
       );
     }
 
-    if (widget.error != null) {
-      return _buildErrorWidget();
-    }
-
+    // Story completion outranks a stale error banner. A late-arriving
+    // segment callback can set widget.error after the story has already
+    // finalized; in that case we still want to show the completion screen
+    // rather than trapping the user on a Retry button.
     if (_isStoryComplete()) {
       return _buildStoryCompleteWidget();
+    }
+
+    if (widget.error != null) {
+      return _buildErrorWidget();
     }
 
     if (_hasActiveStory()) {

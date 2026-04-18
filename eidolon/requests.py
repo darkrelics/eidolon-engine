@@ -78,7 +78,7 @@ def get_header(event: dict, header: str, required: bool = False):
     return None
 
 
-def get_query_parameter(event: dict, param: str, required: bool = False):
+def get_query_parameter(event: dict, param: str, required: bool = False) -> str:
     """
     Extract query parameter from API Gateway event.
 
@@ -88,7 +88,8 @@ def get_query_parameter(event: dict, param: str, required: bool = False):
         required: Whether parameter is required
 
     Returns:
-        Parameter value or None if not found and not required
+        Parameter value, or empty string if not found and not required. When
+        required=True a non-empty str is guaranteed (or ValueError is raised).
 
     Raises:
         ValueError: If parameter is required but missing
@@ -99,4 +100,4 @@ def get_query_parameter(event: dict, param: str, required: bool = False):
     if not value and required:
         raise ValueError(f"Missing required query parameter: {param}")
 
-    return value if value else None
+    return value

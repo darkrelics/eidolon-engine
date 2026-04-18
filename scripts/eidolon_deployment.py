@@ -113,8 +113,24 @@ def prompt_param(prompt: str, current: str, required: bool = False) -> str:
     return input(f"  {prompt}: ").strip()
 
 
+def _first_nonempty(*values) -> str:
+    """Return the first truthy string-like value, coerced to str. Empty otherwise."""
+    for value in values:
+        if value:
+            return str(value)
+    return ""
+
+
 def extract_deploy_config(full_config: dict) -> dict:
     """Extract flat deployment config from the unified config.yml structure.
+
+    Tolerates three layouts so every prompt gets a sensible default:
+      1. The template schema used by config.template.yml (API.*, S3.*,
+         CloudFront.Subdomain, Deployment.Mode).
+      2. The flat form the script historically expected (Deployment.Domain,
+         Deployment.S3Bucket, etc.).
+      3. The legacy layout currently in the committed config.yml
+         (CodeBuild.PortalS3Bucket, Game.ScriptsS3Bucket).
 
     Args:
         full_config: Full config.yml dictionary
@@ -122,22 +138,59 @@ def extract_deploy_config(full_config: dict) -> dict:
     Returns:
         Flat dictionary with deployment-specific keys
     """
-    deployment = full_config.get("Deployment", {})
-    github = full_config.get("GitHub", {})
+    aws = full_config.get("AWS", {}) or {}
+    deployment = full_config.get("Deployment", {}) or {}
+    api = full_config.get("API", {}) or {}
+    s3 = full_config.get("S3", {}) or {}
+    cloudfront = full_config.get("CloudFront", {}) or {}
+    codebuild = full_config.get("CodeBuild", {}) or {}
+    game = full_config.get("Game", {}) or {}
+    github = full_config.get("GitHub", {}) or {}
 
     return {
-        "region": full_config.get("AWS", {}).get("Region", ""),
-        "deployment_mode": deployment.get("Mode", ""),
-        "s3_bucket": deployment.get("S3Bucket", ""),
-        "client_bucket": deployment.get("ClientBucket", ""),
-        "scripts_bucket": deployment.get("ScriptsBucket", ""),
-        "domain": deployment.get("Domain", ""),
-        "route53_zone_id": deployment.get("Route53ZoneId", ""),
-        "api_host": deployment.get("ApiHost", ""),
-        "client_host": deployment.get("ClientHost", ""),
-        "github_owner": github.get("Owner", ""),
-        "github_repo": github.get("Repo", ""),
-        "github_branch": github.get("Branch", ""),
+        "region": _first_nonempty(aws.get("Region")),
+        "deployment_mode": _first_nonempty(deployment.get("Mode")),
+        # Lambda artifacts bucket (flat form, template S3.ArtifactsBucket)
+        "s3_bucket": _first_nonempty(
+            deployment.get("S3Bucket"),
+            s3.get("ArtifactsBucket"),
+        ),
+        # Portal / incremental client bucket (flat form, template S3.PortalBucket,
+        # or legacy CodeBuild.PortalS3Bucket)
+        "client_bucket": _first_nonempty(
+            deployment.get("ClientBucket"),
+            s3.get("PortalBucket"),
+            codebuild.get("PortalS3Bucket"),
+        ),
+        # MUD scripts bucket (flat form, template S3.ScriptsBucket, legacy Game.ScriptsS3Bucket)
+        "scripts_bucket": _first_nonempty(
+            deployment.get("ScriptsBucket"),
+            s3.get("ScriptsBucket"),
+            game.get("ScriptsS3Bucket"),
+        ),
+        # Apex domain (flat form or template API.Domain)
+        "domain": _first_nonempty(
+            deployment.get("Domain"),
+            api.get("Domain"),
+        ),
+        # Route53 hosted zone (flat form or template API.HostedZoneId)
+        "route53_zone_id": _first_nonempty(
+            deployment.get("Route53ZoneId"),
+            api.get("HostedZoneId"),
+        ),
+        # API subdomain (flat form or template API.Subdomain)
+        "api_host": _first_nonempty(
+            deployment.get("ApiHost"),
+            api.get("Subdomain"),
+        ),
+        # Client / CloudFront subdomain (flat form or template CloudFront.Subdomain)
+        "client_host": _first_nonempty(
+            deployment.get("ClientHost"),
+            cloudfront.get("Subdomain"),
+        ),
+        "github_owner": _first_nonempty(github.get("Owner")),
+        "github_repo": _first_nonempty(github.get("Repo")),
+        "github_branch": _first_nonempty(github.get("Branch")),
     }
 
 
@@ -155,6 +208,8 @@ def collect_deployment_params(config: dict) -> dict:
     """
     print("\nDeployment Parameters:")
 
+    config["region"] = prompt_param("AWS Region", config.get("region", ""), required=True)
+
     config["deployment_mode"] = prompt_param(
         "Deployment Mode (mud/incremental/hybrid)", config.get("deployment_mode", ""), required=True
     )
@@ -169,6 +224,8 @@ def collect_deployment_params(config: dict) -> dict:
     if config.get("deployment_mode", "") in ["mud", "hybrid"]:
         config["scripts_bucket"] = prompt_param("S3 Scripts Bucket", config.get("scripts_bucket", ""), required=True)
 
+    config["github_owner"] = prompt_param("GitHub Owner", config.get("github_owner", ""), required=True)
+    config["github_repo"] = prompt_param("GitHub Repo", config.get("github_repo", ""), required=True)
     config["github_branch"] = prompt_param("GitHub Branch", config.get("github_branch", ""), required=True)
     config["domain"] = prompt_param("Domain", config.get("domain", ""), required=True)
     config["route53_zone_id"] = prompt_param("Route53 Zone ID", config.get("route53_zone_id", ""), required=True)
