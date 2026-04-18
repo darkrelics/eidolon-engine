@@ -343,6 +343,42 @@ def build_item_payload(
     return payload
 
 
+def build_item_from_prototype(
+    prototype_id: str,
+    *,
+    is_worn: bool = False,
+    initial_contents=None,
+    quantity=None,
+    owner_id=None,
+) -> dict:
+    """Build an item payload from a prototype without persisting it.
+
+    Returns a payload dict complete with a fresh ItemID, or {} when the
+    prototype can't be resolved. Use this when the caller needs to plan
+    inventory changes before committing to DynamoDB — persist the result
+    with dynamo.put_item or a batch write once the character update succeeds.
+    """
+
+    if not prototype_id:
+        logger.warning("Cannot build item: missing prototype ID")
+        return {}
+
+    prototype = get_prototype(prototype_id)
+    if not prototype:
+        logger.warning(f"Prototype not found for {prototype_id}")
+        return {}
+
+    item_id = str(uuid.uuid4())
+    return build_item_payload(
+        prototype,
+        item_id,
+        is_worn=is_worn,
+        contents=initial_contents,
+        quantity_override=quantity,
+        owner_id=owner_id,
+    )
+
+
 def create_item_from_prototype(
     prototype_id: str,
     *,
@@ -353,25 +389,17 @@ def create_item_from_prototype(
 ) -> dict:
     """Create a single item instance from a prototype and persist it."""
 
-    if not prototype_id:
-        logger.warning("Cannot create item: missing prototype ID")
-        return {}
-
-    prototype = get_prototype(prototype_id)
-    if not prototype:
-        logger.warning(f"Prototype not found for {prototype_id}")
-        return {}
-
-    item_id = str(uuid.uuid4())
-    item_payload = build_item_payload(
-        prototype,
-        item_id,
+    item_payload = build_item_from_prototype(
+        prototype_id,
         is_worn=is_worn,
-        contents=initial_contents,
-        quantity_override=quantity,
+        initial_contents=initial_contents,
+        quantity=quantity,
         owner_id=owner_id,
     )
+    if not item_payload:
+        return {}
 
+    item_id = item_payload["ItemID"]
     try:
         dynamo.put_item(TableName.ITEMS, item_payload)
         logger.info(f"Created item {item_id} from prototype {prototype_id}")
@@ -454,7 +482,13 @@ def process_items_with_probability(items_data: list) -> list:
 
 
 def add_items_to_inventory(character_id: str, prototype_ids: list) -> list:
-    """Create items from prototypes and append them to a character's inventory."""
+    """Create items from prototypes and append them to a character's inventory.
+
+    Writes the character record first, then persists the ITEMS rows. Any
+    ITEMS that fail to persist after the character write are deleted from
+    the character's Inventory in a follow-up update so the two tables stay
+    consistent.
+    """
 
     if not prototype_ids:
         return []
@@ -474,30 +508,31 @@ def add_items_to_inventory(character_id: str, prototype_ids: list) -> list:
         logger.warning("Character %s has unexpected inventory format; initializing empty inventory", character_id)
         inventory = {}
 
+    # Plan the inventory changes without touching DynamoDB yet.
     normalized_inventory = {str(key): value for key, value in inventory.items()}
-    granted_items = []
+    planned_items = []  # list[(slot_key, item_payload)]
 
     for prototype_id in prototype_ids:
         if not isinstance(prototype_id, str) or not prototype_id:
             logger.warning("Skipping invalid prototype ID in story rewards for %s: %s", character_id, prototype_id)
             continue
 
-        item_payload = create_item_from_prototype(prototype_id, owner_id=character_id)
+        item_payload = build_item_from_prototype(prototype_id, owner_id=character_id)
         if not item_payload:
             continue
 
         slot_key = find_next_available_slot(normalized_inventory)
         item_id = item_payload["ItemID"]
-        # Build inventory entry - stackable items include Quantity
         slot_entry = {"ItemID": item_id}
         if item_payload.get("Stackable", False):
             slot_entry["Quantity"] = item_payload.get("Quantity", 1)
         normalized_inventory[slot_key] = slot_entry
-        granted_items.append(item_id)
+        planned_items.append((slot_key, item_payload))
 
-    if not granted_items:
+    if not planned_items:
         return []
 
+    # Write the character first. If this fails the ITEMS table is untouched.
     try:
         dynamo.update_item(
             TableName.CHARACTERS,
@@ -517,6 +552,41 @@ def add_items_to_inventory(character_id: str, prototype_ids: list) -> list:
         )
         return []
 
+    # Persist items in batch now that the character points at them.
+    items_to_write = [payload for _, payload in planned_items]
+    failed_payloads = dynamo.batch_write_with_retries(TableName.ITEMS, items_to_write, operation="put")
+    failed_ids = {payload.get("ItemID") for payload in failed_payloads}
+
+    if failed_ids:
+        logger.error(
+            "Failed to persist %d reward items for %s; reverting their inventory slots",
+            len(failed_ids),
+            character_id,
+        )
+        reconciled_inventory = {
+            slot: entry
+            for slot, entry in normalized_inventory.items()
+            if not (isinstance(entry, dict) and entry.get("ItemID") in failed_ids)
+        }
+        try:
+            dynamo.update_item(
+                TableName.CHARACTERS,
+                Key={"CharacterID": character_id},
+                UpdateExpression="SET Inventory = :inventory, UpdatedAt = :updated_at",
+                ExpressionAttributeValues={
+                    ":inventory": reconciled_inventory,
+                    ":updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except ClientError as reconcile_err:
+            logger.error(
+                "Failed to reconcile inventory for %s after partial item write Error: %s",
+                character_id,
+                reconcile_err,
+                exc_info=True,
+            )
+
+    granted_items = [payload["ItemID"] for _, payload in planned_items if payload["ItemID"] not in failed_ids]
     logger.info("Added %d item(s) to inventory for %s", len(granted_items), character_id)
     return granted_items
 
@@ -524,6 +594,11 @@ def add_items_to_inventory(character_id: str, prototype_ids: list) -> list:
 def create_items_from_prototypes(starting_items: list, character_id: str) -> dict:
     """
     Create item instances from starting item definitions.
+
+    Every starting item gets a numbered slot in the returned inventory so
+    the character record stays in sync with the ITEMS table. Worn equipment,
+    containers, and loose items all land in the inventory; the first container
+    additionally records loose items in its Contents field for deletion cleanup.
 
     Args:
         starting_items: List of dicts with PrototypeID, IsWorn, Slot, Container fields
@@ -574,19 +649,21 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
                 # Clear the list for items after container
                 items_for_container = []
 
-            # If not worn and not a container, add to items list
-            # These will go into the container if one exists or will be created
+            # Loose items (not worn, not a container) are also tracked on the
+            # container's Contents list so character-deletion cleanup can recurse.
             if not is_worn and not is_container:
                 items_for_container.append(item_id)
 
             # Add to batch write list
             items_to_create.append(item_data)
 
-            # Add to inventory only if worn or is the container
-            if is_worn or (is_container and item_id == container_id):
-                # Non-stackable items (equipment, containers) don't have Quantity field
-                inventory[str(slot_num)] = {"ItemID": item_id}
-                slot_num += 1
+            # Every starting item gets an Inventory slot on the character.
+            # Stackable entries carry Quantity; worn/container/non-stackable do not.
+            slot_entry = {"ItemID": item_id}
+            if prototype.get("Stackable", False):
+                slot_entry["Quantity"] = item_data.get("Quantity", prototype.get("Quantity", 1))
+            inventory[str(slot_num)] = slot_entry
+            slot_num += 1
 
         # Batch write all items at once
         if items_to_create:

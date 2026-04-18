@@ -12,6 +12,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import (
+    build_item_from_prototype,
     distribute_into_stacks,
     find_matching_stack,
     find_next_available_slot,
@@ -19,7 +20,6 @@ from eidolon.items import (
     get_stack_space,
 )
 from eidolon.logger import logger
-from eidolon.story_rewards import create_reward_item
 
 
 def load_store_inventory(store_id: str) -> dict:
@@ -195,18 +195,20 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
     if not isinstance(inventory, dict):
         inventory = {}
 
-    # Create items
+    # Plan the inventory and ITEMS changes without writing yet. Persisting
+    # items before the character update risks orphaned ITEMS rows if the
+    # conditional currency check later fails.
     item_ids = []
+    planned_new_items: list = []  # payloads to put_item after character commits
+    planned_stack_updates: list = []  # (item_id, new_qty) to update after commit
 
     if is_stackable:
-        # For stackable items, respect MaxStack when adding to inventory
         max_stack = prototype.get("MaxStack", 99)
         if max_stack <= 0:
             max_stack = 99
 
         remaining_quantity = quantity
 
-        # First, try to add to existing stacks
         while remaining_quantity > 0:
             existing_stack = find_matching_stack(inventory, prototype_id, quantity_to_add=1)
             if not existing_stack:
@@ -220,38 +222,45 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
                 break
 
             add_qty = min(remaining_quantity, space_available)
-            inventory[stack_slot]["Quantity"] = current_qty + add_qty
+            new_qty = current_qty + add_qty
+            inventory[stack_slot]["Quantity"] = new_qty
             remaining_quantity -= add_qty
 
-            if stack_data["ItemID"] not in item_ids:
-                item_ids.append(stack_data["ItemID"])
-            logger.info(f"Added {add_qty} to existing stack in slot {stack_slot}")
+            existing_item_id = stack_data["ItemID"]
+            if existing_item_id not in item_ids:
+                item_ids.append(existing_item_id)
+            planned_stack_updates.append((existing_item_id, new_qty))
+            logger.info(f"Planned stack merge in slot {stack_slot}: +{add_qty}")
 
-        # Create new stacks for remaining quantity
         if remaining_quantity > 0:
-            stack_quantities = distribute_into_stacks(remaining_quantity, max_stack)
-            for stack_qty in stack_quantities:
-                new_item = create_reward_item(prototype_id=prototype_id, quantity=stack_qty, owner_id=character_id)
-                item_id = new_item["ItemID"]
+            for stack_qty in distribute_into_stacks(remaining_quantity, max_stack):
+                payload = build_item_from_prototype(
+                    prototype_id=prototype_id, quantity=stack_qty, owner_id=character_id
+                )
+                if not payload:
+                    continue
+                item_id = payload["ItemID"]
                 next_slot = find_next_available_slot(inventory)
                 inventory[next_slot] = {"ItemID": item_id, "Quantity": stack_qty}
+                planned_new_items.append(payload)
                 item_ids.append(item_id)
-                logger.info(f"Created new stack in slot {next_slot}: {stack_qty} items")
+                logger.info(f"Planned new stack in slot {next_slot}: {stack_qty} items")
     else:
-        # For non-stackable items, create separate item for each
         for _ in range(quantity):
-            new_item = create_reward_item(prototype_id=prototype_id, quantity=None, owner_id=character_id)
-            item_id = new_item["ItemID"]
+            payload = build_item_from_prototype(prototype_id=prototype_id, quantity=None, owner_id=character_id)
+            if not payload:
+                continue
+            item_id = payload["ItemID"]
             next_slot = find_next_available_slot(inventory)
             inventory[next_slot] = {"ItemID": item_id}
+            planned_new_items.append(payload)
             item_ids.append(item_id)
-            logger.info(f"Created non-stackable item in slot {next_slot}")
+            logger.info(f"Planned non-stackable item in slot {next_slot}")
 
-    # Calculate new currency value
     new_currency = current_currency - total_cost
 
-    # [FIX] BUG #1: Use conditional update to prevent race conditions
-    # Ensures currency hasn't changed since we read it (prevents double-purchase exploits)
+    # Commit character record first (currency + inventory). This also enforces
+    # the anti-double-purchase conditional on the currency balance.
     try:
         dynamo.update_item(
             TableName.CHARACTERS,
@@ -268,15 +277,56 @@ def purchase_item(character_id: str, prototype_id: str, quantity: int = 1) -> di
                 ":expected_currency": Decimal(str(current_currency)),
             },
         )
-        logger.info(f"Purchase complete: {quantity}x {prototype_id} for {total_cost} currency")
+        logger.info(f"Purchase committed: {quantity}x {prototype_id} for {total_cost} currency")
     except ClientError as err:
-        # Check if this was a conditional check failure (currency changed = race condition)
         if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             logger.warning("Purchase failed: currency changed during transaction (race condition detected)")
             raise ValueError("409:Currency balance changed during purchase. Please try again.") from err
 
         logger.error(f"Failed to complete purchase for {character_id}: {err}")
         raise RuntimeError("Purchase transaction failed") from err
+
+    # Character is committed. Persist items.
+    if planned_new_items:
+        failed_payloads = dynamo.batch_write_with_retries(TableName.ITEMS, planned_new_items, operation="put")
+        if failed_payloads:
+            failed_ids = {payload.get("ItemID") for payload in failed_payloads}
+            logger.error(
+                f"Failed to persist {len(failed_ids)} purchased items for {character_id}; "
+                "reverting their inventory slots"
+            )
+            reconciled = {
+                slot: entry
+                for slot, entry in inventory.items()
+                if not (isinstance(entry, dict) and entry.get("ItemID") in failed_ids)
+            }
+            try:
+                dynamo.update_item(
+                    TableName.CHARACTERS,
+                    Key={"CharacterID": character_id},
+                    UpdateExpression="SET Inventory = :inventory",
+                    ExpressionAttributeValues={":inventory": reconciled},
+                )
+            except ClientError as reconcile_err:
+                logger.error(
+                    f"Failed to reconcile inventory for {character_id} after partial purchase Error: {reconcile_err}",
+                    exc_info=True,
+                )
+            item_ids = [iid for iid in item_ids if iid not in failed_ids]
+
+    for item_id, new_qty in planned_stack_updates:
+        try:
+            dynamo.update_item(
+                TableName.ITEMS,
+                Key={"ItemID": item_id},
+                UpdateExpression="SET Quantity = :quantity",
+                ExpressionAttributeValues={":quantity": new_qty},
+            )
+        except ClientError as err:
+            logger.error(
+                f"Failed to bump stack quantity for {item_id} after purchase Error: {err}",
+                exc_info=True,
+            )
 
     return {
         "item_ids": item_ids,
