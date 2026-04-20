@@ -380,12 +380,13 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
 
     logger.info(f"Creating new character for {character_name}")
 
-    # Process starting items
-    inventory = {}
+    # Process starting items. Character is the base container: its Contents
+    # holds equipped items, containers, and any loose items.
+    contents = []
     starting_items = archetype_data.get("StartingItems", [])
     if starting_items:
         logger.info(f"Processing starting items for character for {character_id}")
-        inventory = create_items_from_prototypes(starting_items, character_id)
+        contents = create_items_from_prototypes(starting_items, character_id)
         logger.info(f"Starting items created for {character_id}")
 
     # Build character record (inlined)
@@ -401,7 +402,7 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),
         "Wounds": [],
         "RoomID": archetype_data.get("StartRoom", 0),
-        "Inventory": inventory,
+        "Contents": contents,
         "Resources": {},
         "Progress": {},
         "AvailableStories": archetype_data.get("AvailableStories", []),

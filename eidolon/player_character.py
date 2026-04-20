@@ -168,52 +168,28 @@ def remove_character_from_player_list(player_id: str, character_name: str) -> di
 
 
 def delete_character_items(character: dict) -> dict:
-    """
-    Delete all items belonging to a character, including items inside containers.
-
-    Args:
-        character: Character dict containing inventory and equipped items
+    """Delete every item reachable from a character, walking nested containers.
 
     Returns:
-        Dict with:
-            - DeletedCount: int - Number of items deleted
-            - Errors: list - List of error messages
+        {"DeletedCount": int, "Errors": list}
     """
     result = {"DeletedCount": 0, "Errors": []}
 
-    # Collect all top-level item IDs
-    top_level_items = []
+    top_level_items = list(character.get("Contents") or [])
+    for hand_field in ("LeftHandID", "RightHandID"):
+        hand_id = character.get(hand_field)
+        if hand_id and hand_id not in top_level_items:
+            top_level_items.append(hand_id)
 
-    # Inventory items
-    inventory = character.get("Inventory", {})
-    for _, item_data in inventory.items():
-        if item_data and isinstance(item_data, dict):
-            item_id = item_data.get("ItemID")
-            if item_id:
-                top_level_items.append(item_id)
-
-    # Equipped items
-    left_id = character.get("LeftHandID")
-    if left_id:
-        top_level_items.append(left_id)
-    right_id = character.get("RightHandID")
-    if right_id:
-        top_level_items.append(right_id)
-
-    # Recursively collect all item IDs including contents
     all_item_ids = set()
     items_to_process = list(top_level_items)
 
     while items_to_process:
         item_id = items_to_process.pop()
-
-        # Skip if already processed
-        if item_id in all_item_ids:
+        if not item_id or item_id in all_item_ids:
             continue
-
         all_item_ids.add(item_id)
 
-        # Check if this item is a container and has contents
         try:
             item = dynamo.get_item(
                 TableName.ITEMS,
@@ -221,16 +197,13 @@ def delete_character_items(character: dict) -> dict:
                 ProjectionExpression="Container, Contents",
             )
             if item and item.get("Container"):
-                # Add contents to process list
-                contents = item.get("Contents", [])
-                for content_id in contents:
+                for content_id in item.get("Contents", []) or []:
                     if content_id and content_id not in all_item_ids:
                         items_to_process.append(content_id)
         except ClientError as err:
             logger.error(f"Failed to check container contents for {item_id} Error: {err}")
             result["Errors"].append(f"Failed to check item {item_id}: {err}")
 
-    # Batch delete all items using DynamoDB's batch writer with automatic retries
     if all_item_ids:
         delete_keys = [{"ItemID": item_id} for item_id in all_item_ids]
         delete_result = batch_delete_with_fallback(TableName.ITEMS, delete_keys, "item")

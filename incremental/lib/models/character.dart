@@ -14,8 +14,9 @@ class Character {
   final Map<String, double> attributes;
   final Map<String, double> skills;
   final Map<String, int> resources;
-  final Map<String, dynamic> inventory; // Format: slot -> {ItemID: string, Quantity: int}
-  final Map<String, dynamic> inventoryDetails; // Enriched inventory data with item details
+  /// Top-level ItemIDs the character carries directly.
+  /// Mirrors an item's Contents list; the character is the base container.
+  final List<String> contents;
   final Map<String, dynamic> progress; // Story progress flags
   Map<String, dynamic>? storyState; // Current story position
   final String? activeStoryID; // Currently active story ID
@@ -40,8 +41,7 @@ class Character {
     required this.attributes,
     required this.skills,
     required this.resources,
-    required this.inventory,
-    this.inventoryDetails = const {},
+    required this.contents,
     required this.progress,
     this.storyState,
     this.activeStoryID,
@@ -132,8 +132,7 @@ class Character {
       attributes: parsedAttributes,
       skills: parsedSkills,
       resources: parsedResources,
-      inventory: Map<String, dynamic>.from(json['Inventory'] ?? {}),
-      inventoryDetails: Map<String, dynamic>.from(json['InventoryDetails'] ?? {}),
+      contents: (json['Contents'] as List? ?? const []).whereType<String>().toList(),
       progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
       storyState: json['StoryState'] as Map<String, dynamic>?,
       activeStoryID: json['ActiveStoryID'] as String?,
@@ -165,8 +164,7 @@ class Character {
       'Attributes': attributes,
       'Skills': skills,
       'Resources': resources,
-      'Inventory': inventory,
-      'InventoryDetails': inventoryDetails,
+      'Contents': contents,
       'Progress': progress,
       'StoryState': storyState,
       'ActiveStoryID': activeStoryID,
@@ -188,8 +186,7 @@ class Character {
     Map<String, double>? attributes,
     Map<String, double>? skills,
     Map<String, int>? resources,
-    Map<String, dynamic>? inventory,
-    Map<String, dynamic>? inventoryDetails,
+    List<String>? contents,
     Map<String, dynamic>? progress,
     Map<String, dynamic>? storyState,
     String? activeStoryId,
@@ -213,8 +210,7 @@ class Character {
       attributes: attributes ?? this.attributes,
       skills: skills ?? this.skills,
       resources: resources ?? this.resources,
-      inventory: inventory ?? this.inventory,
-      inventoryDetails: inventoryDetails ?? this.inventoryDetails,
+      contents: contents ?? this.contents,
       progress: progress ?? this.progress,
       storyState: storyState ?? this.storyState,
       activeStoryID: activeStoryId ?? activeStoryID,

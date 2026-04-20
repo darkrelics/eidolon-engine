@@ -114,42 +114,8 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
         return 0
 
 
-def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
-    """
-    Check if character meets story prerequisites.
-
-    Args:
-        character: Character data
-        prerequisites: Story prerequisite requirements
-
-    Returns:
-        True if all prerequisites are met
-    """
-    # Check minimum skills
-    min_skills = prerequisites.get("minSkills", {})
-    character_skills = character.get("Skills", {})
-
-    for skill, min_value in min_skills.items():
-        if character_skills.get(skill, 0) < min_value:
-            return False
-
-    # Check required items
-    required_items = prerequisites.get("requiredItems", [])
-    if required_items:
-        inventory = character.get("Inventory", {})
-        # Extract ItemIDs from inventory (new format: {slot: {"ItemID": "...", "Quantity": int}})
-        inventory_item_ids = []
-        for item_data in inventory.values():
-            if item_data and isinstance(item_data, dict):
-                item_id = item_data.get("ItemID")
-                if item_id:
-                    inventory_item_ids.append(item_id)
-
-        for item_id in required_items:
-            if item_id not in inventory_item_ids:
-                return False
-
-    return True
+# Prerequisite checking lives in eidolon.story_validation to avoid divergence.
+from eidolon.story_validation import check_story_prerequisites  # noqa: E402, F401
 
 
 def get_stories(character_id: str, player_id: str, available_story_ids: list) -> list:

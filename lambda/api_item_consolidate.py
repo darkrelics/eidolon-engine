@@ -3,8 +3,8 @@ Eidolon Engine - Incremental Game
 
 Copyright 2024-2026 Jason E. Robinson
 
-Lambda function to consolidate stackable item stacks in character inventory.
-Merges multiple separate stacks of the same item into a single stack.
+Lambda function to consolidate stackable item stacks in a character's Contents tree.
+Merges multiple stacks sharing a prototype into fewer stacks, respecting MaxStack.
 
 Endpoint: POST /item/consolidate
 Authentication: Cognito (required)
@@ -13,8 +13,9 @@ Authentication: Cognito (required)
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import character_get
+from eidolon.contents import PARENT_CHARACTER, PARENT_ITEM, get_item_record
 from eidolon.dynamo import TableName, dynamo
-from eidolon.items import distribute_into_stacks, get_item_brief, get_item_prototype_full
+from eidolon.items import distribute_into_stacks, get_item_prototype_full
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
@@ -24,265 +25,188 @@ from eidolon.story_rewards import update_reward_stack_quantity
 from eidolon.validation import validate_uuid
 
 
-def scan_inventory(inventory: dict, prototype_id: str) -> tuple:
-    """Scan inventory to build prototype map and detect orphaned items.
+def walk_tree(character: dict) -> list:
+    """Walk the character's Contents tree and return every reachable stack entry.
 
-    Args:
-        inventory: Character inventory dict (slot -> slot_data)
-        prototype_id: Optional prototype ID filter (empty string for all)
+    Returns a list of dicts: {parent_kind, parent_id, parent_contents, item_id, item_record}.
+    parent_contents is a mutable reference to the owning parent's Contents list.
+    """
+    entries = []
+    character_id = character.get("CharacterID", "")
+    top_contents = character.get("Contents") or []
+    queue = [(PARENT_CHARACTER, character_id, top_contents, cid) for cid in top_contents if cid]
+    visited = set()
 
-    Returns:
-        Tuple of (prototype_map, orphaned_items, prototype_cache) where:
-            - prototype_map: dict of prototype_id -> list of (slot, item_id, quantity)
-            - orphaned_items: list of dicts with Slot, ItemID, Error
-            - prototype_cache: dict of prototype_id -> prototype data
+    while queue:
+        parent_kind, parent_id, parent_contents, item_id = queue.pop(0)
+        if item_id in visited:
+            continue
+        visited.add(item_id)
+
+        record = get_item_record(item_id)
+        if not record:
+            continue
+
+        entries.append({
+            "parent_kind": parent_kind,
+            "parent_id": parent_id,
+            "parent_contents": parent_contents,
+            "item_id": item_id,
+            "item_record": record,
+        })
+
+        if record.get("Container"):
+            child_contents = record.get("Contents") or []
+            for child_id in child_contents:
+                if child_id and child_id not in visited:
+                    queue.append((PARENT_ITEM, item_id, child_contents, child_id))
+
+    return entries
+
+
+def group_by_prototype(entries: list, prototype_id_filter: str) -> tuple:
+    """Group stackable, non-worn entries by PrototypeID.
+
+    Returns (prototype_map, prototype_cache).
+    prototype_map: {prototype_id: [entry, ...]}
+    prototype_cache: {prototype_id: prototype_data}
     """
     prototype_map = {}
-    orphaned_items = []
     prototype_cache = {}
 
-    for slot, slot_data in inventory.items():
-        item_id = slot_data.get("ItemID")
-        if not item_id:
+    for entry in entries:
+        record = entry["item_record"]
+        if record.get("IsWorn") or record.get("Equipped"):
+            continue
+        proto_id = record.get("PrototypeID")
+        if not proto_id:
+            continue
+        if prototype_id_filter and proto_id != prototype_id_filter:
             continue
 
-        # Get item brief to find prototype
-        try:
-            item_brief = get_item_brief(item_id)
-            item_prototype_id = item_brief.get("PrototypeID")
-        except ValueError as err:
-            logger.error(f"Orphaned item detected in slot {slot}: {item_id} - {err}")
-            orphaned_items.append({"Slot": slot, "ItemID": item_id, "Error": str(err)})
-            continue
-
-        if not item_prototype_id:
-            continue
-
-        if prototype_id and item_prototype_id != prototype_id:
-            continue
-
-        # Look up prototype (cache to avoid redundant DB calls)
-        if item_prototype_id not in prototype_cache:
+        if proto_id not in prototype_cache:
             try:
-                prototype_cache[item_prototype_id] = get_item_prototype_full(item_prototype_id)
+                prototype_cache[proto_id] = get_item_prototype_full(proto_id)
             except ValueError as err:
-                logger.warning(f"Could not get prototype for {item_prototype_id}, skipping: {err}")
+                logger.warning(f"Could not get prototype {proto_id}, skipping: {err}")
                 continue
-
-        prototype = prototype_cache.get(item_prototype_id, {})
-        if not prototype.get("Stackable", False):
+        if not prototype_cache[proto_id].get("Stackable", False):
             continue
 
-        if item_prototype_id not in prototype_map:
-            prototype_map[item_prototype_id] = []
+        prototype_map.setdefault(proto_id, []).append(entry)
 
-        quantity = slot_data.get("Quantity", 1)
-        prototype_map[item_prototype_id].append((slot, item_id, quantity))
-
-    return prototype_map, orphaned_items, prototype_cache
+    return prototype_map, prototype_cache
 
 
-def consolidate_stacks(prototype_map: dict, prototype_cache: dict, updated_inventory: dict) -> list:
-    """Consolidate multiple stacks of the same prototype into fewer stacks.
+def consolidate_group(entries: list, max_stack: int) -> tuple:
+    """Plan consolidation for one prototype group.
 
-    Updates updated_inventory in place. Also updates ITEMS table quantities
-    for kept items and deletes ITEMS table records for removed items.
-
-    Args:
-        prototype_map: dict of prototype_id -> list of (slot, item_id, quantity)
-        prototype_cache: dict of prototype_id -> prototype data
-        updated_inventory: Inventory dict to modify in place
-
-    Returns:
-        List of consolidation result dicts
+    Returns (keep_updates, remove_entries, total_quantity, stacks_after) where
+    keep_updates is a list of (item_id, new_quantity) and remove_entries is a
+    list of entries whose items should be deleted.
     """
-    consolidated_stacks = []
-    items_to_delete = []
+    if len(entries) < 2:
+        return [], [], 0, len(entries)
 
-    for proto_id, item_list in prototype_map.items():
-        if len(item_list) < 2:
-            continue
+    total_quantity = sum(int(e["item_record"].get("Quantity", 1)) for e in entries)
+    stack_quantities = distribute_into_stacks(total_quantity, max_stack)
+    stacks_needed = len(stack_quantities)
 
-        # Get MaxStack from cached prototype data
-        prototype = prototype_cache.get(proto_id, {})
-        max_stack = prototype.get("MaxStack", 99)
-        if max_stack <= 0:
-            max_stack = 99
-
-        # Filter to only numeric slots (equipment slots like "weapon" are not consolidated)
-        numeric_items = [(s, i, q) for s, i, q in item_list if s.isdigit()]
-        if len(numeric_items) < 2:
-            continue
-
-        # Sort numeric slots by slot number
-        numeric_items.sort(key=lambda x: int(x[0]))
-        item_list = numeric_items
-
-        total_quantity = sum(qty for _, _, qty in item_list)
-        stack_quantities = distribute_into_stacks(total_quantity, max_stack)
-        stacks_needed = len(stack_quantities)
-
-        slots_to_keep = item_list[:stacks_needed]
-        slots_to_remove = item_list[stacks_needed:]
-
-        # Update kept slots with new quantities
-        kept_slots = []
-        kept_item_ids = []
-        for i, (slot, item_id, _) in enumerate(slots_to_keep):
-            new_qty = stack_quantities[i]
-            updated_inventory.get(slot, {})["Quantity"] = new_qty
-            kept_slots.append(slot)
-            kept_item_ids.append(item_id)
-            update_reward_stack_quantity(item_id, new_qty)
-
-        # Remove excess slots from inventory and collect items for ITEMS table deletion
-        removed_slots = []
-        for slot, item_id, qty in slots_to_remove:
-            updated_inventory.pop(slot, None)
-            removed_slots.append(slot)
-            items_to_delete.append({"ItemID": item_id})
-
-        if removed_slots:
-            consolidated_stacks.append(
-                {
-                    "PrototypeID": proto_id,
-                    "KeptSlots": kept_slots,
-                    "KeptItemIDs": kept_item_ids,
-                    "TotalQuantity": total_quantity,
-                    "StacksAfterConsolidation": stacks_needed,
-                    "StacksConsolidated": len(item_list),
-                    "RemovedSlots": removed_slots,
-                }
-            )
-
-            logger.info(
-                f"Consolidated {len(item_list)} stacks of {proto_id} "
-                f"into {stacks_needed} stack(s) with {total_quantity} total items"
-            )
-
-    # Delete removed item records from the ITEMS table
-    if items_to_delete:
-        delete_result = batch_delete_with_fallback(TableName.ITEMS, items_to_delete, "consolidated item")
-        errors = delete_result.get("Errors", [])
-        if errors:
-            logger.warning(f"Some consolidated item records failed to delete: {errors}")
-
-    return consolidated_stacks
+    keep_entries = entries[:stacks_needed]
+    remove_entries = entries[stacks_needed:]
+    keep_updates = [(keep_entries[i]["item_id"], stack_quantities[i]) for i in range(stacks_needed)]
+    return keep_updates, remove_entries, total_quantity, stacks_needed
 
 
-def save_inventory(character_id: str, updated_inventory: dict, consolidated_stacks: list, orphaned_items: list) -> None:
-    """Save the updated inventory to DynamoDB with a conditional check.
+def apply_removals(remove_entries: list) -> None:
+    """Remove items from their parents' Contents lists, then delete ITEMS records."""
+    if not remove_entries:
+        return
 
-    Args:
-        character_id: Character UUID
-        updated_inventory: The modified inventory dict
-        consolidated_stacks: List of consolidation results (for check_slot selection)
-        orphaned_items: List of orphaned item dicts (for check_slot fallback)
+    # Group removals by parent so each parent is written once.
+    by_parent = {}  # (kind, id) -> {"parent_contents": list, "to_remove": {item_ids}}
+    for entry in remove_entries:
+        key = (entry["parent_kind"], entry["parent_id"])
+        bucket = by_parent.setdefault(
+            key,
+            {"parent_contents": entry["parent_contents"], "to_remove": set()},
+        )
+        bucket["to_remove"].add(entry["item_id"])
 
-    Raises:
-        ValueError: With 409 prefix if inventory changed during operation
-        RuntimeError: If database update fails
-    """
-    check_slot = None
-
-    if consolidated_stacks:
-        first_removed = consolidated_stacks[0].get("RemovedSlots", [])
-        if first_removed:
-            check_slot = first_removed[0]
-
-    if not check_slot and orphaned_items:
-        check_slot = orphaned_items[0].get("Slot")
-
-    try:
-        if check_slot:
+    for (kind, parent_id), bucket in by_parent.items():
+        new_contents = [cid for cid in bucket["parent_contents"] if cid not in bucket["to_remove"]]
+        table = TableName.CHARACTERS if kind == PARENT_CHARACTER else TableName.ITEMS
+        key = {"CharacterID": parent_id} if kind == PARENT_CHARACTER else {"ItemID": parent_id}
+        try:
             dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression="SET Inventory = :inventory",
-                ConditionExpression="attribute_exists(Inventory.#check_slot)",
-                ExpressionAttributeNames={"#check_slot": check_slot},
-                ExpressionAttributeValues={":inventory": updated_inventory},
+                table,
+                Key=key,
+                UpdateExpression="SET Contents = :new",
+                ExpressionAttributeValues={":new": new_contents},
             )
-        else:
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression="SET Inventory = :inventory",
-                ExpressionAttributeValues={":inventory": updated_inventory},
-            )
-    except ClientError as err:
-        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning("Consolidation failed: inventory changed during operation (race condition detected)")
-            raise ValueError("409:Inventory changed during consolidation. Please try again.") from err
-        logger.error(f"Failed to update inventory for {character_id}: {err}")
-        raise RuntimeError("Failed to consolidate stacks") from err
+        except ClientError as err:
+            logger.error(f"Failed to prune Contents for {kind} {parent_id}: {err}")
+            raise RuntimeError("Failed to update Contents during consolidation") from err
+
+    delete_keys = [{"ItemID": e["item_id"]} for e in remove_entries]
+    result = batch_delete_with_fallback(TableName.ITEMS, delete_keys, "consolidated item")
+    errors = result.get("Errors", [])
+    if errors:
+        logger.warning(f"Some consolidated item records failed to delete: {errors}")
 
 
-def handle_consolidation(character_id: str, player_id: str, prototype_id: str) -> dict:
-    """Handle the business logic for item stack consolidation.
-
-    Args:
-        character_id: Character UUID
-        player_id: Authenticated player ID
-        prototype_id: Optional prototype ID filter (empty string for all)
-
-    Returns:
-        Dict containing consolidation results for the response body
-
-    Raises:
-        ValueError: If character not found or access denied
-        RuntimeError: If database operations fail
-    """
-    # Get character and verify ownership
+def handle_consolidation(character_id: str, player_id: str, prototype_id_filter: str) -> dict:
+    """Consolidate stackable items across the character's Contents tree."""
     try:
         character = character_get(character_id, player_id)
     except ValueError as err:
         logger.warning(f"Character access denied: {err}")
         raise ValueError(f"403:{err}") from err
 
-    inventory = character.get("Inventory", {})
-
-    if not inventory:
+    entries = walk_tree(character)
+    if not entries:
         return {
             "Success": True,
             "Message": "Inventory is empty, nothing to consolidate",
             "ConsolidatedStacks": [],
+            "TotalStacksRemoved": 0,
         }
 
-    # Scan inventory for stackable items and orphaned entries
-    prototype_map, orphaned_items, prototype_cache = scan_inventory(inventory, prototype_id)
+    prototype_map, prototype_cache = group_by_prototype(entries, prototype_id_filter)
 
-    # Clean up orphaned items from inventory
-    updated_inventory = inventory.copy()
-    for orphan in orphaned_items:
-        orphan_slot = orphan.get("Slot")
-        if orphan_slot and orphan_slot in updated_inventory:
-            updated_inventory.pop(orphan_slot, None)
-            logger.info(f"Removed orphaned item from slot {orphan_slot}")
+    consolidated_stacks = []
+    all_removals = []
+    for proto_id, group in prototype_map.items():
+        max_stack = prototype_cache[proto_id].get("MaxStack", 99) or 99
+        keep_updates, remove_entries, total_qty, stacks_after = consolidate_group(group, max_stack)
+        if not remove_entries:
+            continue
 
-    # Consolidate stacks
-    consolidated_stacks = consolidate_stacks(prototype_map, prototype_cache, updated_inventory)
+        for item_id, new_qty in keep_updates:
+            update_reward_stack_quantity(item_id, new_qty)
 
-    # Save inventory if anything changed
-    if consolidated_stacks or orphaned_items:
-        save_inventory(character_id, updated_inventory, consolidated_stacks, orphaned_items)
-        message = f"Successfully consolidated {len(consolidated_stacks)} item type(s)"
-    else:
-        message = "No stackable items found to consolidate"
+        consolidated_stacks.append({
+            "PrototypeID": proto_id,
+            "TotalQuantity": total_qty,
+            "StacksAfterConsolidation": stacks_after,
+            "StacksConsolidated": len(group),
+            "RemovedItemIDs": [e["item_id"] for e in remove_entries],
+        })
+        all_removals.extend(remove_entries)
 
-    # Build response
-    response_body = {
+    apply_removals(all_removals)
+
+    message = (
+        f"Successfully consolidated {len(consolidated_stacks)} item type(s)"
+        if consolidated_stacks
+        else "No stackable items found to consolidate"
+    )
+    return {
         "Success": True,
         "Message": message,
         "ConsolidatedStacks": consolidated_stacks,
-        "TotalStacksRemoved": sum(len(cs.get("RemovedSlots", [])) for cs in consolidated_stacks),
+        "TotalStacksRemoved": len(all_removals),
     }
-
-    if orphaned_items:
-        response_body["OrphanedItemsCleaned"] = orphaned_items
-        response_body["Message"] = f"{message}. Cleaned {len(orphaned_items)} orphaned inventory slot(s)."
-
-    return response_body
 
 
 @authenticated_handler
@@ -292,47 +216,28 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     Request Body:
         {
             "CharacterID": "uuid",
-            "PrototypeID": "uuid" (optional - consolidate specific item type),
-            "ConsolidateAll": true (optional - consolidate all stackable items)
+            "PrototypeID": "uuid"    (optional - limit to one prototype),
+            "ConsolidateAll": true   (optional - default when no PrototypeID)
         }
-
-    If neither PrototypeID nor ConsolidateAll is provided, defaults to ConsolidateAll=true.
-
-    Args:
-        event: API Gateway Lambda proxy event
-        context: Lambda context
-        player_id: Authenticated player ID
-
-    Returns:
-        Dict with status_code and body containing consolidation results
     """
-    # Validate player exists
     if not validate_player(player_id):
         logger.error(f"Player {player_id} not found in database")
         raise ValueError("401:Unauthorized")
 
-    # Parse request body
     body = parse_event_body(event)
     character_id = body.get("CharacterID", "")
     prototype_id = body.get("PrototypeID", "")
-    consolidate_all = body.get("ConsolidateAll", False)
 
     if not character_id:
         raise ValueError("CharacterID is required")
-
     if not validate_uuid(character_id):
         raise ValueError("Invalid CharacterID format")
-
     if prototype_id and not validate_uuid(prototype_id):
         raise ValueError("Invalid PrototypeID format")
 
-    # Default to consolidate all if no specific prototype given
-    if not prototype_id and not consolidate_all:
-        consolidate_all = True
-
-    # Call business logic
     result = handle_consolidation(character_id, player_id, prototype_id)
-
-    logger.info(f"Stack consolidation for character {character_id}: {len(result.get('ConsolidatedStacks', []))} types")
-
+    logger.info(
+        f"Stack consolidation for character {character_id}: "
+        f"{len(result.get('ConsolidatedStacks', []))} types"
+    )
     return {"status_code": 200, "body": result}

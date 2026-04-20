@@ -9,7 +9,13 @@ import 'package:eidolon_incremental/services/auth_service.dart';
 import 'package:eidolon_incremental/services/base_api_service.dart';
 import 'package:fluttericon/rpg_awesome_icons.dart';
 
-/// Right panel displaying character inventory with enriched item data
+/// Right-hand panel showing the character's carried items.
+///
+/// Data model: the character is the base container. Its `contents` list holds
+/// ItemIDs the character carries directly; each container item carries its
+/// own `Contents` list. This widget renders an Equipped section, one section
+/// per container (recursively for nested containers), and a Loose section
+/// for remaining leaf items at the character root.
 class InventoryPanel extends StatefulWidget {
   final Character character;
   final Function(String itemId)? onItemTap;
@@ -46,8 +52,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final apiService = ApiService(authService: authService);
       _apiService = apiService;
       _itemRepository = ItemRepository(apiService: apiService);
-
-      // Load enriched inventory
       await _loadInventoryDetails();
     } catch (e) {
       debugPrint('InventoryPanel: Error initializing repository: $e');
@@ -61,16 +65,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
   @override
   void didUpdateWidget(covariant InventoryPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!mapEquals(widget.character.inventory, oldWidget.character.inventory)) {
+    if (!listEquals(widget.character.contents, oldWidget.character.contents)) {
       _loadInventoryDetails();
     }
   }
 
   Future<void> _loadInventoryDetails() async {
     if (_itemRepository == null) {
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       return;
     }
 
@@ -79,7 +81,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
         _isLoading = true;
         _errorMessage = null;
       });
-      final enriched = await _itemRepository!.loadInventoryDetails(widget.character.inventory);
+      final enriched = await _itemRepository!.loadInventoryDetails(widget.character.contents);
       setState(() {
         _enrichedInventory = enriched;
         _isLoading = false;
@@ -93,24 +95,29 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
   }
 
-  /// Extract ItemID from inventory value
-  String _getItemId(dynamic value) {
-    if (value is Map<String, dynamic>) {
-      return value['ItemID'] as String? ?? '';
-    }
-    return '';
+  bool _isWorn(Map<String, dynamic>? details) {
+    if (details == null) return false;
+    final worn = details['IsWorn'] ?? details['Equipped'];
+    return worn == true;
   }
 
-  /// Get quantity from inventory value
-  /// Returns the actual quantity for stackable items, or 0 for non-stackable items (no Quantity field)
-  int _getQuantity(dynamic value) {
-    if (value is Map<String, dynamic>) {
-      // If Quantity field exists, use it (stackable item)
-      // If Quantity field missing, return 0 (non-stackable item)
-      return JsonParser.getInt(value, 'Quantity');
-    }
-    return 0;
+  bool _isContainer(Map<String, dynamic>? details) {
+    if (details == null) return false;
+    return details['Container'] == true;
   }
+
+  bool _isConsumable(Map<String, dynamic>? details) {
+    if (details == null) return false;
+    final consumable = details['Consumable'];
+    return consumable is bool ? consumable : false;
+  }
+
+  int _quantity(Map<String, dynamic>? details) {
+    if (details == null) return 0;
+    return JsonParser.getInt(details, 'Quantity');
+  }
+
+  bool _isItemProcessing(String itemId) => _processingItems.contains(itemId);
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +129,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -155,20 +161,15 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       ),
                     ),
                   )
-                else if (widget.character.inventory.isNotEmpty) ...[
+                else if (widget.character.contents.isNotEmpty) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: colorScheme.onPrimaryContainer.withValues(
-                        alpha: 0.2,
-                      ),
+                      color: colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      '${widget.character.inventory.length} items',
+                      '${widget.character.contents.length} items',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: colorScheme.onPrimaryContainer,
                       ),
@@ -190,16 +191,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
               ],
             ),
           ),
-
-          // Content
           Expanded(
             child: _isLoading
                 ? _buildLoadingState(context)
                 : _errorMessage != null
                     ? _buildErrorState(context)
-                    : widget.character.inventory.isEmpty
+                    : widget.character.contents.isEmpty
                         ? _buildEmptyInventory(context)
-                        : _buildInventoryGrid(context),
+                        : _buildInventoryBody(context),
           ),
         ],
       ),
@@ -222,29 +221,19 @@ class _InventoryPanelState extends State<InventoryPanel> {
   Widget _buildErrorState(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 64,
-            color: colorScheme.error,
-          ),
+          Icon(Icons.error_outline, size: 64, color: colorScheme.error),
           const SizedBox(height: 16),
           Text(
             _errorMessage ?? 'Failed to load inventory',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.error,
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _loadInventoryDetails,
-            child: const Text('Retry'),
-          ),
+          ElevatedButton(onPressed: _loadInventoryDetails, child: const Text('Retry')),
         ],
       ),
     );
@@ -253,7 +242,6 @@ class _InventoryPanelState extends State<InventoryPanel> {
   Widget _buildEmptyInventory(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -264,34 +252,29 @@ class _InventoryPanelState extends State<InventoryPanel> {
             color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
-          Text(
-            'No Items',
-            style: theme.textTheme.titleMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
+          Text('No Items',
+              style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
-          Text(
-            'Items you acquire will appear here',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
+          Text('Items you acquire will appear here',
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
         ],
       ),
     );
   }
 
-  Widget _buildInventoryGrid(BuildContext context) {
-    // Group items by slot type
-    final equippedItems = <String, MapEntry<String, dynamic>>{};
-    final unequippedItems = <MapEntry<String, dynamic>>[];
+  Widget _buildInventoryBody(BuildContext context) {
+    final equippedIds = <String>[];
+    final containerIds = <String>[];
+    final looseIds = <String>[];
 
-    for (final entry in widget.character.inventory.entries) {
-      if (_isEquipmentSlot(entry.key)) {
-        equippedItems[entry.key] = entry;
+    for (final itemId in widget.character.contents) {
+      final details = _enrichedInventory[itemId];
+      if (_isWorn(details)) {
+        equippedIds.add(itemId);
+      } else if (_isContainer(details)) {
+        containerIds.add(itemId);
       } else {
-        unequippedItems.add(entry);
+        looseIds.add(itemId);
       }
     }
 
@@ -300,102 +283,158 @@ class _InventoryPanelState extends State<InventoryPanel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Equipped Items Section
-          if (equippedItems.isNotEmpty) ...[
+          if (equippedIds.isNotEmpty) ...[
             _SectionHeader(title: 'Equipped'),
             const SizedBox(height: 12),
-            ...equippedItems.entries.map(
-              (equipped) {
-                final itemId = _getItemId(equipped.value.value);
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _InventorySlot(
-                    slot: equipped.key,
-                    itemId: itemId,
-                    itemDetails: _getEnrichedItemDetails(equipped.key),
-                    quantity: _getQuantity(equipped.value.value),
-                    isEquipped: true,
-                    onTap: widget.onItemTap != null
-                        ? () => widget.onItemTap!(itemId)
-                        : null,
-                  ),
-                );
-              },
-            ),
+            for (final itemId in equippedIds)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: _InventorySlot(
+                  itemId: itemId,
+                  itemDetails: _enrichedInventory[itemId],
+                  quantity: _quantity(_enrichedInventory[itemId]),
+                  isEquipped: true,
+                  onTap: widget.onItemTap != null ? () => widget.onItemTap!(itemId) : null,
+                ),
+              ),
             const SizedBox(height: 20),
           ],
-
-          // Bag/Unequipped Items Section
-          if (unequippedItems.isNotEmpty) ...[
-            _SectionHeader(title: 'Bag'),
+          for (final containerId in containerIds) ...[
+            _buildContainerSection(context, containerId, depth: 0, visited: const <String>{}),
+            const SizedBox(height: 20),
+          ],
+          if (looseIds.isNotEmpty) ...[
+            _SectionHeader(title: 'Loose'),
             const SizedBox(height: 12),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 4,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 1,
-              ),
-              itemCount: unequippedItems.length,
-              itemBuilder: (context, index) {
-                final item = unequippedItems[index];
-                final itemId = _getItemId(item.value);
-                final slotKey = item.key;
-                final itemDetails = _getEnrichedItemDetails(slotKey);
-                final isConsumable = _isConsumable(itemDetails);
-                final quantity = _getQuantity(item.value);
-                final isStackable = itemDetails?['Stackable'] == true;
-                final itemName = itemDetails?['Name'] as String? ?? 'Item';
-                return _InventoryGridItem(
-                  slot: slotKey,
-                  itemId: itemId,
-                  itemDetails: itemDetails,
-                  quantity: quantity,
-                  isConsumable: isConsumable,
-                  isStackable: isStackable,
-                  isProcessing: _isItemProcessing(itemId),
-                  onUse: isConsumable ? () => _handleUseItem(slotKey, itemId) : null,
-                  onDiscard: () => _showDiscardDialog(slotKey, itemId, itemName, quantity, isStackable),
-                  onSplit: isStackable && quantity > 1
-                      ? () => _showSplitDialog(slotKey, itemId, itemName, quantity)
-                      : null,
-                  onTap: widget.onItemTap != null
-                      ? () => widget.onItemTap!(itemId)
-                      : null,
-                );
-              },
-            ),
+            _buildItemGrid(context, looseIds),
           ],
         ],
       ),
     );
   }
 
-  /// Get enriched item details from loaded inventory
-  Map<String, dynamic>? _getEnrichedItemDetails(String slot) {
-    return _enrichedInventory[slot];
+  /// Render a container and its Contents. Nested containers are rendered
+  /// recursively with increasing left indentation. ``visited`` guards against
+  /// cycles; the container id is added before recursing into children.
+  Widget _buildContainerSection(
+    BuildContext context,
+    String containerId, {
+    required int depth,
+    required Set<String> visited,
+  }) {
+    if (visited.contains(containerId)) {
+      return const SizedBox.shrink();
+    }
+    final nextVisited = <String>{...visited, containerId};
+
+    final details = _enrichedInventory[containerId];
+    final containerName = details?['Name'] as String? ?? 'Container';
+    final contents = details?['Contents'];
+    final childLeafIds = <String>[];
+    final childContainerIds = <String>[];
+    if (contents is List) {
+      for (final x in contents) {
+        if (x is String && _enrichedInventory.containsKey(x)) {
+          final childDetails = _enrichedInventory[x];
+          if (_isContainer(childDetails)) {
+            childContainerIds.add(x);
+          } else {
+            childLeafIds.add(x);
+          }
+        }
+      }
+    }
+
+    final theme = Theme.of(context);
+    final isNested = depth > 0;
+
+    final sectionContent = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHeader(title: containerName),
+        const SizedBox(height: 12),
+        if (childLeafIds.isEmpty && childContainerIds.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Text(
+              'Empty',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          )
+        else ...[
+          if (childLeafIds.isNotEmpty) _buildItemGrid(context, childLeafIds),
+          for (final nestedId in childContainerIds) ...[
+            const SizedBox(height: 16),
+            _buildContainerSection(
+              context,
+              nestedId,
+              depth: depth + 1,
+              visited: nextVisited,
+            ),
+          ],
+        ],
+      ],
+    );
+
+    if (!isNested) return sectionContent;
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 12),
+      child: Container(
+        padding: const EdgeInsets.only(left: 8),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: theme.colorScheme.primary.withValues(alpha: 0.3),
+              width: 2,
+            ),
+          ),
+        ),
+        child: sectionContent,
+      ),
+    );
   }
 
-  bool _isConsumable(Map<String, dynamic>? details) {
-    if (details == null) {
-      return false;
-    }
-    final consumable = details['Consumable'];
-    if (consumable is bool) {
-      return consumable;
-    }
-    return false;
-  }
+  Widget _buildItemGrid(BuildContext context, List<String> itemIds) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 4,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 0.85,
+      ),
+      itemCount: itemIds.length,
+      itemBuilder: (context, index) {
+        final itemId = itemIds[index];
+        final details = _enrichedInventory[itemId];
+        final qty = _quantity(details);
+        final isStackable = details?['Stackable'] == true;
+        final isConsumable = _isConsumable(details);
+        final itemName = details?['Name'] as String? ?? 'Item';
 
-  bool _isItemProcessing(String itemId) => _processingItems.contains(itemId);
+        return _InventoryGridItem(
+          itemId: itemId,
+          itemDetails: details,
+          quantity: qty,
+          isConsumable: isConsumable,
+          isStackable: isStackable,
+          isProcessing: _isItemProcessing(itemId),
+          onUse: isConsumable ? () => _handleUseItem(itemId) : null,
+          onDiscard: () => _showDiscardDialog(itemId, itemName, qty, isStackable),
+          onSplit: isStackable && qty > 1 ? () => _showSplitDialog(itemId, itemName, qty) : null,
+          onTap: widget.onItemTap != null ? () => widget.onItemTap!(itemId) : null,
+        );
+      },
+    );
+  }
 
   void _showSnackBar(String message, {bool isError = false}) {
-    if (!mounted) {
-      return;
-    }
-
+    if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
@@ -407,14 +446,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
     );
   }
 
-  Future<void> _handleUseItem(String slot, String itemId) async {
-    if (_apiService == null || _processingItems.contains(itemId)) {
-      return;
-    }
-
-    setState(() {
-      _processingItems.add(itemId);
-    });
+  Future<void> _handleUseItem(String itemId) async {
+    if (_apiService == null || _processingItems.contains(itemId)) return;
+    setState(() => _processingItems.add(itemId));
 
     try {
       final result = await _apiService!.consumeItem(
@@ -426,80 +460,39 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final itemRemoved = JsonParser.getBool(result, 'itemRemoved', defaultValue: remainingQuantity <= 0);
       final message = JsonParser.getString(result, 'message', defaultValue: 'Item consumed.');
 
-      final slotsToUpdate = widget.character.inventory.entries
-          .where((entry) => entry.value is Map && entry.value['ItemID'] == itemId)
-          .map((entry) => entry.key)
-          .toList();
-
-      if (slotsToUpdate.isEmpty) {
-        slotsToUpdate.add(slot);
-      }
-
-      for (final slotKey in slotsToUpdate) {
-        if (itemRemoved) {
-          widget.character.inventory.remove(slotKey);
-          widget.character.inventoryDetails.remove(slotKey);
-          _enrichedInventory.remove(slotKey);
-        } else {
-          final slotValue = widget.character.inventory[slotKey];
-          if (slotValue is Map<String, dynamic>) {
-            slotValue['Quantity'] = remainingQuantity;
-          } else {
-            widget.character.inventory[slotKey] = {'ItemID': itemId, 'Quantity': remainingQuantity};
-          }
-
-          final details = _enrichedInventory[slotKey];
-          if (details != null) {
-            details['Quantity'] = remainingQuantity;
-          }
-
-          final detailInventory = widget.character.inventoryDetails[slotKey];
-          if (detailInventory is Map<String, dynamic>) {
-            detailInventory['Quantity'] = remainingQuantity;
-          }
-        }
+      if (itemRemoved) {
+        widget.character.contents.remove(itemId);
+        _enrichedInventory.remove(itemId);
+        _removeFromContainerContents(itemId);
+      } else {
+        final details = _enrichedInventory[itemId];
+        if (details != null) details['Quantity'] = remainingQuantity;
       }
 
       if (mounted) {
         setState(() {});
         _showSnackBar(message);
       }
-
-      if (widget.onRefresh != null) {
-        await widget.onRefresh!();
-      }
+      if (widget.onRefresh != null) await widget.onRefresh!();
     } on ApiException catch (err) {
       final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to consume item.';
       _showSnackBar(errorMessage, isError: true);
-      // On 409 conflict (race condition), refresh inventory to get current state
-      if (err.statusCode == 409 && widget.onRefresh != null) {
-        await widget.onRefresh!();
-      }
+      if (err.statusCode == 409 && widget.onRefresh != null) await widget.onRefresh!();
     } catch (err) {
       _showSnackBar('Unexpected error: $err', isError: true);
     } finally {
-      if (mounted) {
-        setState(() {
-          _processingItems.remove(itemId);
-        });
-      }
+      if (mounted) setState(() => _processingItems.remove(itemId));
     }
   }
 
-  Future<void> _handleDiscardItem(String slot, String itemId, {int? quantity}) async {
-    if (_apiService == null || _processingItems.contains(itemId)) {
-      return;
-    }
-
-    setState(() {
-      _processingItems.add(itemId);
-    });
+  Future<void> _handleDiscardItem(String itemId, {int? quantity}) async {
+    if (_apiService == null || _processingItems.contains(itemId)) return;
+    setState(() => _processingItems.add(itemId));
 
     try {
       final result = await _apiService!.discardItem(
         characterId: widget.character.id,
         itemId: itemId,
-        slot: slot,
         quantity: quantity,
       );
 
@@ -508,62 +501,49 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final quantityDiscarded = JsonParser.getInt(result, 'QuantityDiscarded', defaultValue: quantity ?? 1);
 
       if (itemFullyDiscarded) {
-        widget.character.inventory.remove(slot);
-        widget.character.inventoryDetails.remove(slot);
-        _enrichedInventory.remove(slot);
+        widget.character.contents.remove(itemId);
+        _enrichedInventory.remove(itemId);
+        _removeFromContainerContents(itemId);
       } else {
-        final slotValue = widget.character.inventory[slot];
-        if (slotValue is Map<String, dynamic>) {
-          slotValue['Quantity'] = remainingQuantity;
-        }
-
-        final details = _enrichedInventory[slot];
-        if (details != null) {
-          details['Quantity'] = remainingQuantity;
-        }
+        final details = _enrichedInventory[itemId];
+        if (details != null) details['Quantity'] = remainingQuantity;
       }
 
       if (mounted) {
         setState(() {});
         _showSnackBar('Discarded $quantityDiscarded item(s)');
       }
-
-      if (widget.onRefresh != null) {
-        await widget.onRefresh!();
-      }
+      if (widget.onRefresh != null) await widget.onRefresh!();
     } on ApiException catch (err) {
       final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to discard item.';
       _showSnackBar(errorMessage, isError: true);
-      // On 409 conflict (race condition), refresh inventory to get current state
-      if (err.statusCode == 409 && widget.onRefresh != null) {
-        await widget.onRefresh!();
-      }
+      if (err.statusCode == 409 && widget.onRefresh != null) await widget.onRefresh!();
     } catch (err) {
       _showSnackBar('Unexpected error: $err', isError: true);
     } finally {
-      if (mounted) {
-        setState(() {
-          _processingItems.remove(itemId);
-        });
+      if (mounted) setState(() => _processingItems.remove(itemId));
+    }
+  }
+
+  /// Drop ``itemId`` from any container's cached Contents so the UI doesn't
+  /// keep rendering a discarded item until the next full refresh.
+  void _removeFromContainerContents(String itemId) {
+    for (final entry in _enrichedInventory.values) {
+      final contents = entry['Contents'];
+      if (contents is List) {
+        contents.remove(itemId);
       }
     }
   }
 
   Future<void> _handleConsolidateStacks() async {
-    if (_apiService == null) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
+    if (_apiService == null) return;
+    setState(() => _isLoading = true);
     try {
       final result = await _apiService!.consolidateStacks(
         characterId: widget.character.id,
         consolidateAll: true,
       );
-
       final totalStacksRemoved = JsonParser.getInt(result, 'TotalStacksRemoved');
       final message = JsonParser.getString(
         result,
@@ -572,137 +552,98 @@ class _InventoryPanelState extends State<InventoryPanel> {
             ? 'Consolidated $totalStacksRemoved stack(s)'
             : 'Nothing to consolidate',
       );
-
-      if (mounted) {
-        _showSnackBar(message);
-      }
-
-      if (widget.onRefresh != null) {
-        await widget.onRefresh!();
-      }
+      if (mounted) _showSnackBar(message);
+      if (widget.onRefresh != null) await widget.onRefresh!();
     } on ApiException catch (err) {
       final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to consolidate stacks.';
       _showSnackBar(errorMessage, isError: true);
-      // On 409 conflict (race condition), refresh inventory to get current state
-      if (err.statusCode == 409 && widget.onRefresh != null) {
-        await widget.onRefresh!();
-      }
+      if (err.statusCode == 409 && widget.onRefresh != null) await widget.onRefresh!();
     } catch (err) {
       _showSnackBar('Unexpected error: $err', isError: true);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _showDiscardDialog(String slot, String itemId, String itemName, int quantity, bool isStackable) {
+  void _showDiscardDialog(String itemId, String itemName, int quantity, bool isStackable) {
     if (!isStackable || quantity <= 1) {
-      // For non-stackable or single items, confirm and discard all
       showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Discard Item'),
           content: Text('Discard $itemName?'),
           actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Discard')),
+          ],
+        ),
+      ).then((confirmed) {
+        if (confirmed == true) _handleDiscardItem(itemId);
+      });
+      return;
+    }
+
+    int discardQuantity = 1;
+    showDialog<int>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Discard Items'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('How many $itemName to discard?'),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    onPressed: discardQuantity > 1 ? () => setDialogState(() => discardQuantity--) : null,
+                    icon: const Icon(Icons.remove),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Theme.of(context).colorScheme.outline),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text('$discardQuantity', style: Theme.of(context).textTheme.titleLarge),
+                  ),
+                  IconButton(
+                    onPressed: discardQuantity < quantity ? () => setDialogState(() => discardQuantity++) : null,
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => setDialogState(() => discardQuantity = quantity),
+                child: const Text('Discard All'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(null), child: const Text('Cancel')),
             TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
+              onPressed: () => Navigator.of(context).pop(discardQuantity),
               child: const Text('Discard'),
             ),
           ],
         ),
-      ).then((confirmed) {
-        if (confirmed == true) {
-          _handleDiscardItem(slot, itemId);
-        }
-      });
-    } else {
-      // For stackable items with quantity > 1, show quantity selector
-      int discardQuantity = 1;
-      showDialog<int>(
-        context: context,
-        builder: (context) => StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            title: const Text('Discard Items'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('How many $itemName to discard?'),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    IconButton(
-                      onPressed: discardQuantity > 1
-                          ? () => setDialogState(() => discardQuantity--)
-                          : null,
-                      icon: const Icon(Icons.remove),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Theme.of(context).colorScheme.outline),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '$discardQuantity',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: discardQuantity < quantity
-                          ? () => setDialogState(() => discardQuantity++)
-                          : null,
-                      icon: const Icon(Icons.add),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextButton(
-                  onPressed: () => setDialogState(() => discardQuantity = quantity),
-                  child: const Text('Discard All'),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(null),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(discardQuantity),
-                child: const Text('Discard'),
-              ),
-            ],
-          ),
-        ),
-      ).then((qty) {
-        if (qty != null && qty > 0) {
-          _handleDiscardItem(slot, itemId, quantity: qty);
-        }
-      });
-    }
+      ),
+    ).then((qty) {
+      if (qty != null && qty > 0) _handleDiscardItem(itemId, quantity: qty);
+    });
   }
 
-  Future<void> _handleSplitStack(String slot, String itemId, int quantity) async {
-    if (_apiService == null || _processingItems.contains(itemId)) {
-      return;
-    }
-
-    setState(() {
-      _processingItems.add(itemId);
-    });
+  Future<void> _handleSplitStack(String itemId, int quantity) async {
+    if (_apiService == null || _processingItems.contains(itemId)) return;
+    setState(() => _processingItems.add(itemId));
 
     try {
       final result = await _apiService!.splitStack(
         characterId: widget.character.id,
-        slot: slot,
+        itemId: itemId,
         quantity: quantity,
       );
 
@@ -710,27 +651,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final newStack = result['NewStack'] as Map<String, dynamic>?;
 
       if (originalStack != null) {
-        final remainingQty = originalStack['RemainingQuantity'] as int? ?? 0;
-        final slotValue = widget.character.inventory[slot];
-        if (slotValue is Map<String, dynamic>) {
-          slotValue['Quantity'] = remainingQty;
-        }
-        final details = _enrichedInventory[slot];
-        if (details != null) {
-          details['Quantity'] = remainingQty;
-        }
+        final remainingQty = JsonParser.getInt(originalStack, 'RemainingQuantity');
+        final details = _enrichedInventory[itemId];
+        if (details != null) details['Quantity'] = remainingQty;
       }
 
       if (newStack != null) {
-        final newSlot = newStack['Slot'] as String?;
         final newItemId = newStack['ItemID'] as String?;
-        final newQty = newStack['Quantity'] as int? ?? quantity;
-
-        if (newSlot != null && newItemId != null) {
-          widget.character.inventory[newSlot] = {
-            'ItemID': newItemId,
-            'Quantity': newQty,
-          };
+        if (newItemId != null && widget.onRefresh != null) {
+          // Full refresh is the simplest way to surface the new stack and its
+          // parent Contents; avoids duplicating the backend's placement logic.
+          await widget.onRefresh!();
         }
       }
 
@@ -738,29 +669,18 @@ class _InventoryPanelState extends State<InventoryPanel> {
         setState(() {});
         _showSnackBar('Split $quantity items into new stack');
       }
-
-      if (widget.onRefresh != null) {
-        await widget.onRefresh!();
-      }
     } on ApiException catch (err) {
       final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to split stack.';
       _showSnackBar(errorMessage, isError: true);
-      // On 409 conflict (race condition), refresh inventory to get current state
-      if (err.statusCode == 409 && widget.onRefresh != null) {
-        await widget.onRefresh!();
-      }
+      if (err.statusCode == 409 && widget.onRefresh != null) await widget.onRefresh!();
     } catch (err) {
       _showSnackBar('Unexpected error: $err', isError: true);
     } finally {
-      if (mounted) {
-        setState(() {
-          _processingItems.remove(itemId);
-        });
-      }
+      if (mounted) setState(() => _processingItems.remove(itemId));
     }
   }
 
-  void _showSplitDialog(String slot, String itemId, String itemName, int quantity) {
+  void _showSplitDialog(String itemId, String itemName, int quantity) {
     if (quantity <= 1) {
       _showSnackBar('Cannot split a stack with only 1 item');
       return;
@@ -783,9 +703,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    onPressed: splitQuantity > 1
-                        ? () => setDialogState(() => splitQuantity--)
-                        : null,
+                    onPressed: splitQuantity > 1 ? () => setDialogState(() => splitQuantity--) : null,
                     icon: const Icon(Icons.remove),
                   ),
                   Container(
@@ -794,24 +712,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
                       border: Border.all(color: Theme.of(context).colorScheme.outline),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
-                      '$splitQuantity',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
+                    child: Text('$splitQuantity', style: Theme.of(context).textTheme.titleLarge),
                   ),
                   IconButton(
-                    onPressed: splitQuantity < maxSplit
-                        ? () => setDialogState(() => splitQuantity++)
-                        : null,
+                    onPressed: splitQuantity < maxSplit ? () => setDialogState(() => splitQuantity++) : null,
                     icon: const Icon(Icons.add),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(
-                'Original stack will have ${quantity - splitQuantity} items',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+              Text('Original stack will have ${quantity - splitQuantity} items',
+                  style: Theme.of(context).textTheme.bodySmall),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: () => setDialogState(() => splitQuantity = maxSplit),
@@ -820,10 +731,7 @@ class _InventoryPanelState extends State<InventoryPanel> {
             ],
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(null),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => Navigator.of(context).pop(null), child: const Text('Cancel')),
             TextButton(
               onPressed: () => Navigator.of(context).pop(splitQuantity),
               child: const Text('Split'),
@@ -832,60 +740,22 @@ class _InventoryPanelState extends State<InventoryPanel> {
         ),
       ),
     ).then((qty) {
-      if (qty != null && qty > 0) {
-        _handleSplitStack(slot, itemId, qty);
-      }
+      if (qty != null && qty > 0) _handleSplitStack(itemId, qty);
     });
-  }
-
-  bool _isEquipmentSlot(String slot) {
-    const equipmentSlots = [
-      'head',
-      'helmet',
-      'chest',
-      'armor',
-      'body',
-      'legs',
-      'pants',
-      'feet',
-      'boots',
-      'shoes',
-      'hands',
-      'gloves',
-      'weapon',
-      'main_hand',
-      'mainhand',
-      'off_hand',
-      'offhand',
-      'shield',
-      'neck',
-      'amulet',
-      'ring',
-      'ring1',
-      'ring2',
-      'back',
-      'cloak',
-      'cape',
-    ];
-    return equipmentSlots.contains(slot.toLowerCase());
   }
 }
 
 class _SectionHeader extends StatelessWidget {
   final String title;
-
   const _SectionHeader({required this.title});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: theme.colorScheme.primary, width: 2),
-        ),
+        border: Border(bottom: BorderSide(color: theme.colorScheme.primary, width: 2)),
       ),
       child: Text(
         title,
@@ -899,7 +769,6 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _InventorySlot extends StatelessWidget {
-  final String slot;
   final String itemId;
   final Map<String, dynamic>? itemDetails;
   final int quantity;
@@ -907,7 +776,6 @@ class _InventorySlot extends StatelessWidget {
   final VoidCallback? onTap;
 
   const _InventorySlot({
-    required this.slot,
     required this.itemId,
     this.itemDetails,
     this.quantity = 1,
@@ -923,11 +791,8 @@ class _InventorySlot extends StatelessWidget {
     final itemName = itemDetails?['Name'] ?? itemId;
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
     final isStackable = itemDetails?['Stackable'] == true;
-
-    // Format: "Item Name" or "Item Name x5" for stackable items
-    final displayName = (isStackable && quantity > 1)
-        ? '$itemName x$quantity'
-        : itemName;
+    final slotLabel = _wornOnLabel(itemDetails);
+    final displayName = (isStackable && quantity > 1) ? '$itemName x$quantity' : itemName;
 
     return InkWell(
       onTap: onTap,
@@ -940,23 +805,17 @@ class _InventorySlot extends StatelessWidget {
               : colorScheme.surfaceContainerHighest,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: _getRarityColor(itemRarity).withValues(alpha: 0.5),
+            color: _rarityColor(itemRarity).withValues(alpha: 0.5),
             width: 2,
           ),
         ),
         child: Row(
           children: [
-            Icon(
-              _getSlotIcon(slot),
-              size: 20,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            Icon(RpgIcons.getEquipmentSlotIcon(slotLabel), size: 20, color: colorScheme.onSurfaceVariant),
             const SizedBox(width: 8),
             Text(
-              _formatSlotName(slot),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
+              _titleCase(slotLabel),
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -964,7 +823,7 @@ class _InventorySlot extends StatelessWidget {
                 displayName,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: _getRarityColor(itemRarity),
+                  color: _rarityColor(itemRarity),
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -977,37 +836,28 @@ class _InventorySlot extends StatelessWidget {
     );
   }
 
-  String _formatSlotName(String slot) {
-    return slot
+  String _wornOnLabel(Map<String, dynamic>? details) {
+    final wornOn = details?['WornOn'];
+    if (wornOn is List && wornOn.isNotEmpty) {
+      final first = wornOn.first;
+      if (first is String && first.isNotEmpty) return first;
+    }
+    if (wornOn is String && wornOn.isNotEmpty) return wornOn;
+    return '';
+  }
+
+  String _titleCase(String value) {
+    if (value.isEmpty) return '';
+    return value
         .replaceAll('_', ' ')
         .split(' ')
-        .map((word) => word[0].toUpperCase() + word.substring(1))
+        .where((w) => w.isNotEmpty)
+        .map((w) => w[0].toUpperCase() + w.substring(1))
         .join(' ');
-  }
-
-  IconData _getSlotIcon(String slot) {
-    return RpgIcons.getEquipmentSlotIcon(slot);
-  }
-
-  Color _getRarityColor(String rarity) {
-    switch (rarity.toLowerCase()) {
-      case 'legendary':
-        return Colors.orange;
-      case 'epic':
-        return Colors.purple;
-      case 'rare':
-        return Colors.blue;
-      case 'uncommon':
-        return Colors.green;
-      case 'common':
-      default:
-        return Colors.grey;
-    }
   }
 }
 
 class _InventoryGridItem extends StatelessWidget {
-  final String slot;
   final String itemId;
   final Map<String, dynamic>? itemDetails;
   final int quantity;
@@ -1020,7 +870,6 @@ class _InventoryGridItem extends StatelessWidget {
   final bool isStackable;
 
   const _InventoryGridItem({
-    required this.slot,
     required this.itemId,
     this.itemDetails,
     this.quantity = 1,
@@ -1039,12 +888,12 @@ class _InventoryGridItem extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
-    final isStackable = itemDetails?['Stackable'] == true;
+    final effectiveStackable = itemDetails?['Stackable'] == true;
     final itemName = itemDetails?['Name'] as String? ?? itemId;
-    final tooltipText = slot.isNotEmpty ? '$itemName ($slot)' : itemName;
+    final displayName = (effectiveStackable && quantity > 1) ? '$itemName x$quantity' : itemName;
 
     return Tooltip(
-      message: tooltipText,
+      message: itemName,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
@@ -1054,7 +903,7 @@ class _InventoryGridItem extends StatelessWidget {
             color: colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: _getRarityColor(itemRarity).withValues(alpha: 0.5),
+              color: _rarityColor(itemRarity).withValues(alpha: 0.5),
               width: 2,
             ),
           ),
@@ -1063,20 +912,24 @@ class _InventoryGridItem extends StatelessWidget {
               Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Icon(
-                      _getItemIcon(itemDetails?['Type'] ?? 'item'),
-                      size: 24,
-                      color: _getRarityColor(itemRarity),
+                      RpgIcons.getItemTypeIcon(itemDetails?['Type'] ?? 'item'),
+                      size: 28,
+                      color: _rarityColor(itemRarity),
                     ),
                     const SizedBox(height: 4),
-                    if (isStackable && quantity > 1)
-                      Text(
-                        'x$quantity',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    Text(
+                      displayName,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: _rarityColor(itemRarity),
                       ),
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
@@ -1107,27 +960,9 @@ class _InventoryGridItem extends StatelessWidget {
                         : const Icon(Icons.play_arrow_rounded, size: 16),
                   ),
                 ),
-              // Discard button in bottom-left
-              if (onDiscard != null)
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  child: IconButton(
-                    tooltip: 'Discard $itemName',
-                    onPressed: isProcessing ? null : onDiscard,
-                    style: IconButton.styleFrom(
-                      backgroundColor: colorScheme.errorContainer,
-                      foregroundColor: colorScheme.onErrorContainer,
-                      padding: const EdgeInsets.all(4),
-                      minimumSize: const Size(28, 28),
-                    ),
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                  ),
-                ),
-              // Split button in bottom-right (for stackable items with qty > 1)
               if (onSplit != null && isStackable && quantity > 1)
                 Positioned(
-                  right: 0,
+                  left: 0,
                   bottom: 0,
                   child: IconButton(
                     tooltip: 'Split stack',
@@ -1141,30 +976,42 @@ class _InventoryGridItem extends StatelessWidget {
                     icon: const Icon(Icons.call_split, size: 16),
                   ),
                 ),
+              if (onDiscard != null)
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: IconButton(
+                    tooltip: 'Discard $itemName',
+                    onPressed: isProcessing ? null : onDiscard,
+                    style: IconButton.styleFrom(
+                      backgroundColor: colorScheme.errorContainer,
+                      foregroundColor: colorScheme.onErrorContainer,
+                      padding: const EdgeInsets.all(4),
+                      minimumSize: const Size(28, 28),
+                    ),
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                  ),
+                ),
             ],
           ),
         ),
       ),
     );
   }
+}
 
-  IconData _getItemIcon(String type) {
-    return RpgIcons.getItemTypeIcon(type);
-  }
-
-  Color _getRarityColor(String rarity) {
-    switch (rarity.toLowerCase()) {
-      case 'legendary':
-        return Colors.orange;
-      case 'epic':
-        return Colors.purple;
-      case 'rare':
-        return Colors.blue;
-      case 'uncommon':
-        return Colors.green;
-      case 'common':
-      default:
-        return Colors.grey;
-    }
+Color _rarityColor(String rarity) {
+  switch (rarity.toLowerCase()) {
+    case 'legendary':
+      return Colors.orange;
+    case 'epic':
+      return Colors.purple;
+    case 'rare':
+      return Colors.blue;
+    case 'uncommon':
+      return Colors.green;
+    case 'common':
+    default:
+      return Colors.grey;
   }
 }

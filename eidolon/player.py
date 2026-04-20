@@ -219,44 +219,27 @@ def get_character_list(player_id: str) -> list:
 
 
 def character_contains_item(character: dict, item_id: str, *, character_id=None) -> bool:
-    """
-    Determine whether the provided character owns the supplied item ID.
+    """Return True when ``item_id`` is reachable from the character's tree.
 
-    Inspects inventory slots, equipped hand slots, and recursively traverses container contents.
+    Walks ``character.Contents`` recursively through container items. Equipped
+    hand-slot pointers are treated as valid ownership evidence too (they may
+    reference items that also appear in Contents, but callers can't assume so).
     """
     if not character or not item_id:
         return False
 
-    top_level_items = []
-
-    inventory = character.get("Inventory", {})
-    for slot_data in inventory.values():
-        if slot_data and isinstance(slot_data, dict):
-            slot_item_id = slot_data.get("ItemID")
-            if slot_item_id:
-                if slot_item_id == item_id:
-                    return True
-                top_level_items.append(slot_item_id)
-
-    left_id = character.get("LeftHandID")
-    if left_id:
-        if left_id == item_id:
-            return True
-        top_level_items.append(left_id)
-
-    right_id = character.get("RightHandID")
-    if right_id:
-        if right_id == item_id:
-            return True
-        top_level_items.append(right_id)
+    if character.get("LeftHandID") == item_id or character.get("RightHandID") == item_id:
+        return True
 
     processed = set()
-    items_to_process = list(top_level_items)
+    queue = list(character.get("Contents") or [])
 
-    while items_to_process:
-        current_id = items_to_process.pop()
+    while queue:
+        current_id = queue.pop()
         if not current_id or current_id in processed:
             continue
+        if current_id == item_id:
+            return True
 
         processed.add(current_id)
 
@@ -279,14 +262,9 @@ def character_contains_item(character: dict, item_id: str, *, character_id=None)
         if not item_record or not item_record.get("Container"):
             continue
 
-        contents = item_record.get("Contents", [])
-        for nested_id in contents:
-            if not nested_id:
-                continue
-            if nested_id == item_id:
-                return True
-            if nested_id not in processed:
-                items_to_process.append(nested_id)
+        for nested_id in item_record.get("Contents", []) or []:
+            if nested_id and nested_id not in processed:
+                queue.append(nested_id)
 
     return False
 
@@ -331,7 +309,7 @@ def player_owns_item(player_id: str, item_id: str) -> bool:
             character = dynamo.get_item(
                 TableName.CHARACTERS,
                 {"CharacterID": char_id},
-                ProjectionExpression="Inventory, LeftHandID, RightHandID",
+                ProjectionExpression="Contents, LeftHandID, RightHandID",
             )
         except ClientError as err:
             logger.error(

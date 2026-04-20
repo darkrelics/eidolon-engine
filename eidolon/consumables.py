@@ -7,6 +7,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_state import determine_character_state_from_wounds
 from eidolon.constants import CharState
+from eidolon.contents import PARENT_CHARACTER, PARENT_ITEM, locate_item
 from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
 from eidolon.items import get_prototype
@@ -118,57 +119,88 @@ def dynamo_typed_value(value) -> dict:
 def build_consume_transaction(
     character_id: str,
     item_id: str,
-    slot_key: str,
-    inventory: dict,
+    location: dict,
+    new_parent_contents: list,
     update_expression_parts: list,
     expression_values: dict,
-    expression_names: dict,
     stackable: bool,
     item_removed: bool,
     remaining_quantity: int,
     timestamp: str,
     current_quantity: int = 0,
 ) -> list:
-    """Build the list of transactional write items for consume_item."""
-    # Convert expression values to DynamoDB typed format for transactions
+    """Build the transactional write items for consume_item.
+
+    ``location`` is the ``locate_item`` result for the consumed item; its
+    ``parent_kind`` dictates whether the Contents mutation rides on the
+    character update or on a separate item-record update.
+    """
+    parent_kind = location.get("parent_kind")
+    parent_id = location.get("parent_id")
+
+    # Start with the base character update (state/wounds/essence/UpdatedAt).
     typed_values = {k: dynamo_typed_value(v) for k, v in expression_values.items()}
-    typed_values[":expected_item_id"] = {"S": item_id}
+    parts = list(update_expression_parts)
 
-    typed_names = dict(expression_names)
-    typed_names["#slot"] = slot_key
-
-    # Check ItemID is still in the slot
-    condition = "Inventory.#slot.ItemID = :expected_item_id"
-
-    # For stackable items, also check quantity hasn't changed since we read it
-    # This prevents two concurrent consume requests from both decrementing from the same base quantity
-    if stackable and current_quantity > 0:
-        condition += " AND Inventory.#slot.Quantity = :expected_quantity"
-        typed_values[":expected_quantity"] = {"N": str(current_quantity)}
-
-    character_update = {
-        "Update": {
-            "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
-            "Key": {"CharacterID": {"S": character_id}},
-            "UpdateExpression": "SET " + ", ".join(update_expression_parts),
-            "ConditionExpression": condition,
-            "ExpressionAttributeValues": typed_values,
-            "ExpressionAttributeNames": typed_names,
+    if item_removed and parent_kind == PARENT_CHARACTER:
+        # Fold the character Contents mutation into the same character update.
+        parts.append("Contents = :new_contents")
+        typed_values[":new_contents"] = dynamo_typed_value(new_parent_contents)
+        typed_values[":expected_item_id"] = {"S": item_id}
+        character_update = {
+            "Update": {
+                "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
+                "Key": {"CharacterID": {"S": character_id}},
+                "UpdateExpression": "SET " + ", ".join(parts),
+                "ConditionExpression": "contains(Contents, :expected_item_id)",
+                "ExpressionAttributeValues": typed_values,
+            }
         }
-    }
+        transact_items = [character_update]
+    else:
+        # Character update doesn't touch Contents; use a neutral precondition
+        # so the transaction still detects a missing character.
+        character_update = {
+            "Update": {
+                "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
+                "Key": {"CharacterID": {"S": character_id}},
+                "UpdateExpression": "SET " + ", ".join(parts),
+                "ExpressionAttributeValues": typed_values,
+                "ConditionExpression": "attribute_exists(CharacterID)",
+            }
+        }
+        transact_items = [character_update]
 
-    transact_items = [character_update]
+        if item_removed and parent_kind == PARENT_ITEM:
+            # Separate update on the container item record.
+            transact_items.append(
+                {
+                    "Update": {
+                        "TableName": TABLE_ENV_MAP[TableName.ITEMS],
+                        "Key": {"ItemID": {"S": parent_id}},
+                        "UpdateExpression": "SET Contents = :new_contents",
+                        "ConditionExpression": "contains(Contents, :expected_item_id)",
+                        "ExpressionAttributeValues": {
+                            ":new_contents": dynamo_typed_value(new_parent_contents),
+                            ":expected_item_id": {"S": item_id},
+                        },
+                    }
+                }
+            )
 
     if stackable and not item_removed:
+        # Decrement the stack on the ITEMS record with a quantity precondition.
         transact_items.append(
             {
                 "Update": {
                     "TableName": TABLE_ENV_MAP[TableName.ITEMS],
                     "Key": {"ItemID": {"S": item_id}},
                     "UpdateExpression": "SET Quantity = :quantity, UpdatedAt = :updated_at",
+                    "ConditionExpression": "Quantity = :expected_quantity",
                     "ExpressionAttributeValues": {
                         ":quantity": {"N": str(remaining_quantity)},
                         ":updated_at": {"S": timestamp},
+                        ":expected_quantity": {"N": str(current_quantity)},
                     },
                 }
             }
@@ -187,18 +219,14 @@ def build_consume_transaction(
 
 
 def load_character_for_consumption(character_id: str, item_id: str) -> dict:
-    """Load character and find the inventory slot containing the target item.
+    """Load the character and locate the target item in its Contents tree.
 
-    Args:
-        character_id: Character UUID.
-        item_id: Item UUID to find in inventory.
-
-    Returns:
-        Dict with keys: character, slot_key, slot_entry, inventory.
+    Returns a dict with keys: character, location (from contents.locate_item).
 
     Raises:
-        ValueError: If character not found, in active story, or item not in inventory.
-        RuntimeError: If database lookup fails.
+        ValueError: If the character isn't found, is mid-story, or the item
+            isn't anywhere in the character's tree.
+        RuntimeError: On database failure.
     """
     try:
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
@@ -211,23 +239,11 @@ def load_character_for_consumption(character_id: str, item_id: str) -> dict:
     if character.get("ActiveStoryID"):
         raise ValueError("Cannot consume items during an active story")
 
-    inventory_raw = character.get("Inventory", {})
-    if not isinstance(inventory_raw, dict):
-        inventory_raw = {}
-
-    inventory: dict = {str(key): value for key, value in inventory_raw.items()}
-    slot_key = None
-    slot_entry = None
-    for key, value in inventory.items():
-        if isinstance(value, dict) and value.get("ItemID") == item_id:
-            slot_key = key
-            slot_entry = value
-            break
-
-    if slot_key is None or slot_entry is None:
+    location = locate_item(character, item_id)
+    if not location.get("found"):
         raise ValueError("Item is not in character inventory")
 
-    return {"character": character, "slot_key": slot_key, "slot_entry": slot_entry, "inventory": inventory}
+    return {"character": character, "location": location}
 
 
 def load_item_and_prototype(item_id: str) -> dict:
@@ -275,15 +291,9 @@ def load_item_and_prototype(item_id: str) -> dict:
 
 
 def load_consumable_context(character_id: str, item_id: str) -> dict:
-    """Load and validate character, item, prototype, and inventory slot for consumption.
+    """Load and validate character, item, prototype, and location for consumption.
 
-    Args:
-        character_id: Character UUID.
-        item_id: Item UUID.
-
-    Returns:
-        Dict with keys: character, item, prototype, slot_key, slot_entry,
-        inventory, effects.
+    Returns a dict with keys: character, item, prototype, location, effects.
 
     Raises:
         ValueError: If validation fails.
@@ -299,9 +309,7 @@ def load_consumable_context(character_id: str, item_id: str) -> dict:
         "character": char_ctx.get("character"),
         "item": item_ctx.get("item"),
         "prototype": item_ctx.get("prototype"),
-        "slot_key": char_ctx.get("slot_key"),
-        "slot_entry": char_ctx.get("slot_entry"),
-        "inventory": char_ctx.get("inventory"),
+        "location": char_ctx.get("location"),
         "effects": item_ctx.get("effects"),
     }
 
@@ -405,57 +413,37 @@ def apply_essence_effect(effects: dict, character: dict) -> dict:
     return {"effect_summary": summary, "new_essence": None, "essence_changed": False, "effect_applied": False}
 
 
-def update_inventory_for_consumption(
-    inventory: dict,
-    slot_key: str,
-    slot_entry: dict,
-    item: dict,
-    item_id: str,
-) -> dict:
-    """Handle stackable and non-stackable item consumption in inventory.
-
-    Args:
-        inventory: Character inventory dict (will be mutated).
-        slot_key: Inventory slot key containing the item.
-        slot_entry: Inventory slot entry dict.
-        item: Item data dict from DynamoDB.
-        item_id: Item UUID.
+def update_contents_for_consumption(location: dict, item: dict, item_id: str) -> dict:
+    """Decide how consuming one unit of ``item`` changes its parent's Contents.
 
     Returns:
-        Dict with keys: inventory, remaining_quantity, item_removed, inventory_changed.
+        Dict with keys: new_parent_contents, current_quantity,
+        remaining_quantity, item_removed.
     """
     stackable = bool(item.get("Stackable"))
-    current_quantity = coerce_int(slot_entry.get("Quantity", item.get("Quantity", 1)), 1)
-    remaining_quantity = 0
-    item_removed = False
+    current_quantity = coerce_int(item.get("Quantity", 1), 1)
+    parent_contents = location.get("parent_contents") or []
 
     if stackable:
-        new_quantity = max(0, current_quantity - 1)
-        remaining_quantity = new_quantity
-        if new_quantity > 0:
-            for key, value in inventory.items():
-                if isinstance(value, dict) and value.get("ItemID") == item_id:
-                    existing = dict(value)
-                    existing["Quantity"] = new_quantity
-                    inventory[key] = existing
-        else:
-            inventory.pop(slot_key, None)
-            item_removed = True
-    else:
-        inventory.pop(slot_key, None)
-        item_removed = True
+        remaining_quantity = max(0, current_quantity - 1)
+        if remaining_quantity > 0:
+            return {
+                "new_parent_contents": list(parent_contents),
+                "current_quantity": current_quantity,
+                "remaining_quantity": remaining_quantity,
+                "item_removed": False,
+            }
 
+    new_contents = [cid for cid in parent_contents if cid != item_id]
     return {
-        "inventory": inventory,
-        "remaining_quantity": remaining_quantity,
-        "item_removed": item_removed,
-        "inventory_changed": True,
+        "new_parent_contents": new_contents,
+        "current_quantity": current_quantity,
+        "remaining_quantity": 0,
+        "item_removed": True,
     }
 
 
 def build_character_update_expression(
-    inventory_changed: bool,
-    inventory: dict,
     wounds_changed: bool,
     new_wounds: list,
     essence_changed: bool,
@@ -465,27 +453,16 @@ def build_character_update_expression(
 ) -> dict:
     """Build the DynamoDB update expression for character changes after consumption.
 
-    Args:
-        inventory_changed: Whether inventory was modified.
-        inventory: Updated inventory dict.
-        wounds_changed: Whether wounds were modified.
-        new_wounds: Updated wounds list.
-        essence_changed: Whether essence was modified.
-        new_essence: New essence value.
-        state_changed: Whether character state changed.
-        new_state: New character state value.
+    Contents mutations are applied elsewhere (conditionally on the owning
+    parent) and are not part of this base expression.
 
     Returns:
-        Dict with keys: update_expression_parts, expression_values, expression_names.
+        Dict with keys: update_expression_parts, expression_values, timestamp.
     """
     timestamp = datetime.now(timezone.utc).isoformat()
     update_expression_parts = ["UpdatedAt = :updated_at"]
     expression_values: dict = {":updated_at": timestamp}
-    expression_names = {}
 
-    if inventory_changed:
-        update_expression_parts.append("Inventory = :inventory")
-        expression_values[":inventory"] = inventory
     if wounds_changed:
         update_expression_parts.append("Wounds = :wounds")
         expression_values[":wounds"] = new_wounds
@@ -499,7 +476,6 @@ def build_character_update_expression(
     return {
         "update_expression_parts": update_expression_parts,
         "expression_values": expression_values,
-        "expression_names": expression_names,
         "timestamp": timestamp,
     }
 
@@ -552,36 +528,17 @@ def apply_consumable_effects(ctx: dict) -> dict:
 
 
 def consume_item(character_id: str, item_id: str) -> dict:
-    """Consume an item from a character's inventory and apply its effects.
-
-    Args:
-        character_id: Character UUID.
-        item_id: Item UUID.
-
-    Returns:
-        Dict describing the applied effects and inventory changes.
-
-    Raises:
-        ValueError: If validation fails (missing item, not consumable, effect wasted).
-        RuntimeError: If database operations fail.
-    """
+    """Consume an item from a character's Contents tree and apply its effects."""
     ctx = load_consumable_context(character_id, item_id)
     item = ctx.get("item", {})
+    location = ctx.get("location", {})
     fx = apply_consumable_effects(ctx)
 
-    inv_result = update_inventory_for_consumption(
-        ctx.get("inventory", {}),
-        ctx.get("slot_key", ""),
-        ctx.get("slot_entry", {}),
-        item,
-        item_id,
-    )
+    inv_result = update_contents_for_consumption(location, item, item_id)
 
     state_changed = fx.get("new_char_state") != fx.get("character_state_before")
     essence_result = fx.get("essence_result", {})
     expr = build_character_update_expression(
-        inv_result.get("inventory_changed", False),
-        inv_result.get("inventory", {}),
         fx.get("wounds_changed", False),
         fx.get("new_wounds", []),
         essence_result.get("essence_changed", False),
@@ -590,22 +547,18 @@ def consume_item(character_id: str, item_id: str) -> dict:
         fx.get("new_char_state", ""),
     )
 
-    slot_entry = ctx.get("slot_entry", {})
-    current_quantity = coerce_int(slot_entry.get("Quantity", item.get("Quantity", 1)), 1)
-
     transact_items = build_consume_transaction(
         character_id,
         item_id,
-        ctx.get("slot_key", ""),
-        inv_result.get("inventory", {}),
+        location,
+        inv_result.get("new_parent_contents", []),
         expr.get("update_expression_parts", []),
         expr.get("expression_values", {}),
-        expr.get("expression_names", {}),
         bool(item.get("Stackable")),
         inv_result.get("item_removed", False),
         inv_result.get("remaining_quantity", 0),
         expr.get("timestamp", ""),
-        current_quantity,
+        inv_result.get("current_quantity", 0),
     )
 
     execute_consume_transaction(

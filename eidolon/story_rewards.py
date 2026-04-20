@@ -6,13 +6,12 @@ Provides functions for calculating and applying story rewards.
 
 from botocore.exceptions import ClientError
 
+from eidolon.contents import append_to_contents, PARENT_CHARACTER
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import (
     build_item_from_prototype,
     create_item_from_prototype,
     distribute_into_stacks,
-    find_matching_stack,
-    find_next_available_slot,
     get_prototype,
     get_stack_space,
 )
@@ -106,142 +105,114 @@ def update_reward_stack_quantity(item_id: str, new_quantity: int, character_id: 
         logger.error(f"Failed to update quantity for reward stack {item_id} Error: {err}", exc_info=True)
 
 
+def _load_top_level_stacks(character_id: str, top_level_ids: list, prototype_id: str) -> list:
+    """Return ``(item_id, current_quantity)`` tuples for stackable items in the
+    character's top-level Contents that share ``prototype_id``.
+
+    Top-level only — existing stacks inside a container are untouched, which
+    keeps rewards flowing to the character's carry level by default.
+    """
+    matching = []
+    for item_id in top_level_ids:
+        if not item_id:
+            continue
+        try:
+            record = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+        except ClientError as err:
+            logger.error(f"Failed to inspect item {item_id} for reward merge: {err}")
+            continue
+        if not record or record.get("PrototypeID") != prototype_id:
+            continue
+        if not record.get("Stackable"):
+            continue
+        current = int(record.get("Quantity", 1) or 0)
+        matching.append((item_id, current))
+    return matching
+
+
 def _plan_item_reward(
-    inventory: dict,
+    character_id: str,
+    top_level_ids: list,
     prototype_id: str,
     quantity: int,
-    character_id: str,
     planned_new_items: list,
     planned_stack_updates: list,
-) -> None:
-    """Plan the inventory mutation for a single reward entry.
+) -> list:
+    """Plan ITEMS-table writes for a single reward entry.
 
-    Mutates ``inventory`` in place. Appends new item payloads to
-    ``planned_new_items`` and (item_id, new_quantity) pairs to
-    ``planned_stack_updates``. No DynamoDB writes happen here.
+    Returns the list of new ItemIDs that must be appended to the character's
+    top-level Contents. Also appends payloads to ``planned_new_items`` and
+    ``(item_id, new_quantity)`` tuples to ``planned_stack_updates`` for stack
+    top-ups.
     """
     prototype = get_prototype(prototype_id)
     is_stackable = prototype.get("Stackable", False) if prototype else False
+    new_item_ids: list = []
 
     if not is_stackable:
         for _ in range(quantity):
             payload = build_item_from_prototype(prototype_id, owner_id=character_id)
             if not payload:
                 continue
-            item_id = payload["ItemID"]
-            next_slot = find_next_available_slot(inventory)
-            inventory[next_slot] = {"ItemID": item_id}
             planned_new_items.append(payload)
-            logger.info(f"Planned reward item in slot {next_slot}: {item_id}")
-        return
+            new_item_ids.append(payload["ItemID"])
+            logger.info(f"Planned reward item: {payload['ItemID']}")
+        return new_item_ids
 
     max_stack = prototype.get("MaxStack", 99) if prototype else 99
     if max_stack <= 0:
         max_stack = 99
 
     remaining = quantity
-    while remaining > 0:
-        existing_stack = find_matching_stack(inventory, prototype_id, quantity_to_add=1)
-        if not existing_stack:
+    for item_id, current in _load_top_level_stacks(character_id, top_level_ids, prototype_id):
+        if remaining <= 0:
             break
-
-        stack_slot, stack_data = existing_stack
-        item_id = stack_data.get("ItemID")
-        current_quantity = stack_data.get("Quantity", 0) or 0
-        space_available = get_stack_space(current_quantity, max_stack)
-
-        if space_available <= 0:
-            break
-
-        add_qty = min(remaining, space_available)
-        new_quantity = current_quantity + add_qty
+        space = get_stack_space(current, max_stack)
+        if space <= 0:
+            continue
+        add_qty = min(remaining, space)
+        new_quantity = current + add_qty
         remaining -= add_qty
+        planned_stack_updates.append((item_id, new_quantity))
+        logger.info(f"Planned merge into stack {item_id}: +{add_qty}")
 
-        if isinstance(inventory.get(stack_slot), dict):
-            inventory[stack_slot]["Quantity"] = new_quantity
-        else:
-            inventory[stack_slot] = {"ItemID": item_id, "Quantity": new_quantity}
-
-        if item_id:
-            planned_stack_updates.append((item_id, new_quantity))
-        logger.info(f"Planned merge into slot {stack_slot}: +{add_qty}")
-
-    if remaining <= 0:
-        return
-
-    for stack_qty in distribute_into_stacks(remaining, max_stack):
+    for stack_qty in distribute_into_stacks(remaining, max_stack) if remaining > 0 else []:
         payload = build_item_from_prototype(prototype_id, quantity=stack_qty, owner_id=character_id)
         if not payload:
             continue
-        item_id = payload["ItemID"]
-        next_slot = find_next_available_slot(inventory)
-        inventory[next_slot] = {"ItemID": item_id, "Quantity": stack_qty}
         planned_new_items.append(payload)
-        logger.info(f"Planned new reward stack in slot {next_slot}: {item_id} x{stack_qty}")
+        new_item_ids.append(payload["ItemID"])
+        logger.info(f"Planned new reward stack: {payload['ItemID']} x{stack_qty}")
+
+    return new_item_ids
 
 
-def _persist_new_reward_items(character_id: str, inventory: dict, planned_new_items: list) -> None:
-    """Persist newly-planned items, reconciling inventory on partial failure."""
+def _persist_new_reward_items(planned_new_items: list) -> set:
+    """Persist newly-planned items; returns the set of ItemIDs that failed."""
     if not planned_new_items:
-        return
-
+        return set()
     failed_payloads = dynamo.batch_write_with_retries(TableName.ITEMS, planned_new_items, operation="put")
-    if not failed_payloads:
-        return
-
-    failed_ids = {payload.get("ItemID") for payload in failed_payloads}
-    logger.error(
-        f"Failed to persist {len(failed_ids)} reward items for {character_id}; reverting their inventory slots"
-    )
-    reconciled = {
-        slot: entry
-        for slot, entry in inventory.items()
-        if not (isinstance(entry, dict) and entry.get("ItemID") in failed_ids)
-    }
-    try:
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET Inventory = :inventory",
-            ExpressionAttributeValues={":inventory": reconciled},
-        )
-    except ClientError as err:
-        logger.error(
-            f"Failed to reconcile inventory for {character_id} after partial reward write Error: {err}",
-            exc_info=True,
-        )
+    return {payload.get("ItemID") for payload in failed_payloads}
 
 
 def apply_story_rewards(character_id: str, rewards: dict) -> None:
-    """
-    Apply calculated rewards to a character.
+    """Append reward items to a character's top-level Contents.
 
-    Planning and persistence are separated so the character record is the
-    source of truth: the inventory update is written first, then the new
-    ITEMS rows (and any stack-quantity bumps) are persisted. If the
-    character update fails nothing touches the ITEMS table, so quest
-    rewards cannot leak orphaned item rows.
-
-    Args:
-        character_id: Character UUID
-        rewards: Dict containing items and currency
-
-    Raises:
-        RuntimeError: If database operations fail
+    Existing top-level stackables share a prototype get topped up first;
+    anything left over becomes new items appended to the character's Contents.
+    Stack-quantity bumps happen on the ITEMS records (Contents is a pure ID list
+    and doesn't duplicate quantity).
     """
     try:
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
         if not character:
             raise RuntimeError(f"Character {character_id} not found")
 
-        inventory = character.get("Inventory", {})
-        if not isinstance(inventory, dict):
-            inventory = {}
-
-        original_inventory = set(inventory.keys())
+        top_level = list(character.get("Contents") or [])
 
         planned_new_items: list = []
         planned_stack_updates: list = []
+        items_to_append: list = []
 
         for item_reward in rewards.get("items", []):
             if not isinstance(item_reward, dict):
@@ -250,47 +221,37 @@ def apply_story_rewards(character_id: str, rewards: dict) -> None:
             if not prototype_id:
                 continue
             quantity = item_reward.get("Quantity", 1)
-            _plan_item_reward(
-                inventory,
+            new_ids = _plan_item_reward(
+                character_id,
+                top_level,
                 prototype_id,
                 quantity,
-                character_id,
                 planned_new_items,
                 planned_stack_updates,
             )
+            items_to_append.extend(new_ids)
 
         if not planned_new_items and not planned_stack_updates:
             logger.info(f"No reward items planned for {character_id}")
             return
 
-        # Write character first with an idempotency guard on the first new slot.
-        first_new_slot = next((slot for slot in inventory if slot not in original_inventory), None)
-        update_kwargs = {
-            "Key": {"CharacterID": character_id},
-            "UpdateExpression": "SET Inventory = :inventory",
-            "ExpressionAttributeValues": {":inventory": inventory},
-        }
-        if first_new_slot is not None:
-            update_kwargs["ExpressionAttributeNames"] = {"#check_slot": first_new_slot}
-            update_kwargs["ConditionExpression"] = "attribute_not_exists(Inventory.#check_slot)"
+        failed_ids = _persist_new_reward_items(planned_new_items)
+        if failed_ids:
+            logger.error(f"Failed to persist {len(failed_ids)} reward items for {character_id}")
+            items_to_append = [item_id for item_id in items_to_append if item_id not in failed_ids]
 
-        dynamo.update_item(TableName.CHARACTERS, **update_kwargs)
-
-        # Character is committed. Persist items now.
-        _persist_new_reward_items(character_id, inventory, planned_new_items)
         for item_id, new_quantity in planned_stack_updates:
             update_reward_stack_quantity(item_id, new_quantity, character_id)
 
+        if items_to_append:
+            append_to_contents(PARENT_CHARACTER, character_id, items_to_append)
+
         logger.info(
             f"Applied story rewards for {character_id}: "
-            f"{len(planned_new_items)} created, {len(planned_stack_updates)} merged"
+            f"{len(items_to_append)} new top-level items, {len(planned_stack_updates)} merged"
         )
 
     except ClientError as err:
-        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning("Rewards failed: inventory changed during application (race condition detected)")
-            raise RuntimeError("Rewards already applied or character state changed") from err
-
         logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply rewards: {err}") from err
     except RuntimeError:

@@ -2,11 +2,11 @@
 
 import random
 import uuid
-from datetime import datetime, timezone
 from functools import cache
 
 from botocore.exceptions import ClientError
 
+from eidolon.contents import PARENT_CHARACTER, append_to_contents
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 
@@ -75,60 +75,6 @@ def merge_stacks(item1: dict, item2: dict) -> dict:
             "Quantity": total_quantity,
             "OwnerID": item2.get("OwnerID"),
         }
-
-
-def find_matching_stack(inventory: dict, prototype_id: str, quantity_to_add: int = 1, owner_id: str = "") -> tuple:
-    """
-    Find an existing stack in inventory that matches the prototype and has room.
-
-    Args:
-        inventory: Dict mapping slot to item data: {slot: {"ItemID": "...", "Quantity": int}}
-        prototype_id: PrototypeID to find
-        quantity_to_add: Quantity that needs to fit in the stack (default 1)
-        owner_id: Character ID to verify ownership (recommended to prevent cross-character merge)
-
-    Returns:
-        Tuple of (slot, item_data_dict) or empty tuple if no matching stack found
-    """
-    if not inventory or not prototype_id:
-        return ()
-
-    # Get prototype to check if stackable and get MaxStack
-    prototype = get_prototype(prototype_id)
-    if not prototype or not prototype.get("Stackable", False):
-        return ()
-
-    max_stack = prototype.get("MaxStack", 99)
-    if max_stack <= 0:
-        max_stack = 99
-
-    # Check each item in inventory
-    for slot, item_data in inventory.items():
-        if not item_data or not isinstance(item_data, dict):
-            continue
-
-        item_id = item_data.get("ItemID")
-        if not item_id:
-            continue
-
-        # Get the item from database to check PrototypeID
-        try:
-            item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
-            if item and item.get("PrototypeID") == prototype_id:
-                # Verify ownership if owner_id provided (prevents cross-character merge)
-                if owner_id and item.get("OwnerID") and item.get("OwnerID") != owner_id:
-                    logger.warning(f"Item {item_id} ownership mismatch: expected {owner_id}, found {item.get('OwnerID')}")
-                    continue
-
-                # Check if stack has room for the quantity
-                current_quantity = item_data.get("Quantity", 1)
-                if can_add_to_stack(current_quantity, quantity_to_add, max_stack):
-                    return (slot, item_data)
-        except ClientError as err:
-            logger.debug(f"Failed to get item {item_id} for stacking: {err}")
-            continue
-
-    return ()
 
 
 def can_add_to_stack(current_quantity: int, add_quantity: int, max_stack: int) -> bool:
@@ -238,12 +184,18 @@ def get_item_brief(item_id: str) -> dict:
     prototype = get_prototype(prototype_id)
     is_stackable = prototype.get("Stackable", False) if prototype else False
 
+    is_container = prototype.get("Container", False) if prototype else False
+    is_worn = bool(item.get("IsWorn", item.get("Equipped", False)))
+
     # Build response with Quantity field for API consistency
     # Storage: stackable items have Quantity field, non-stackable don't
     # API response: always include Quantity (actual count or 0 for non-stackable)
     result = {
         "ItemID": item_id,
         "PrototypeID": prototype_id,
+        "Container": is_container,
+        "Contents": item.get("Contents", []) if is_container else [],
+        "IsWorn": is_worn,
     }
 
     if is_stackable:
@@ -409,19 +361,6 @@ def create_item_from_prototype(
         return {}
 
 
-def find_next_available_slot(inventory: dict) -> str:
-    """Return the next open inventory slot, reusing empty entries when possible."""
-
-    normalized = {str(key): value for key, value in inventory.items()}
-    index = 0
-    while True:
-        key = str(index)
-        value = normalized.get(key)
-        if value in (None, "", 0) or key not in normalized:
-            return key
-        index += 1
-
-
 def process_items_with_probability(items_data: list) -> list:
     """
     Process Items field and determine which items to grant based on probability.
@@ -482,152 +421,76 @@ def process_items_with_probability(items_data: list) -> list:
 
 
 def add_items_to_inventory(character_id: str, prototype_ids: list) -> list:
-    """Create items from prototypes and append them to a character's inventory.
-
-    Writes the character record first, then persists the ITEMS rows. Any
-    ITEMS that fail to persist after the character write are deleted from
-    the character's Inventory in a follow-up update so the two tables stay
-    consistent.
-    """
-
+    """Create items from prototypes and append them to ``character.Contents``."""
     if not prototype_ids:
         return []
 
-    try:
-        character_record = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-    except ClientError as err:
-        logger.error("Failed to load character %s for story rewards Error: %s", character_id, err, exc_info=True)
-        return []
-
-    if not character_record:
-        logger.error("Character %s not found when applying story rewards", character_id)
-        return []
-
-    inventory = character_record.get("Inventory") or {}
-    if not isinstance(inventory, dict):
-        logger.warning("Character %s has unexpected inventory format; initializing empty inventory", character_id)
-        inventory = {}
-
-    # Plan the inventory changes without touching DynamoDB yet.
-    normalized_inventory = {str(key): value for key, value in inventory.items()}
-    planned_items = []  # list[(slot_key, item_payload)]
+    planned_items: list = []
+    new_ids: list = []
 
     for prototype_id in prototype_ids:
         if not isinstance(prototype_id, str) or not prototype_id:
             logger.warning("Skipping invalid prototype ID in story rewards for %s: %s", character_id, prototype_id)
             continue
-
-        item_payload = build_item_from_prototype(prototype_id, owner_id=character_id)
-        if not item_payload:
+        payload = build_item_from_prototype(prototype_id, owner_id=character_id)
+        if not payload:
             continue
-
-        slot_key = find_next_available_slot(normalized_inventory)
-        item_id = item_payload["ItemID"]
-        slot_entry = {"ItemID": item_id}
-        if item_payload.get("Stackable", False):
-            slot_entry["Quantity"] = item_payload.get("Quantity", 1)
-        normalized_inventory[slot_key] = slot_entry
-        planned_items.append((slot_key, item_payload))
+        planned_items.append(payload)
+        new_ids.append(payload["ItemID"])
 
     if not planned_items:
         return []
 
-    # Write the character first. If this fails the ITEMS table is untouched.
-    try:
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET Inventory = :inventory, UpdatedAt = :updated_at",
-            ExpressionAttributeValues={
-                ":inventory": normalized_inventory,
-                ":updated_at": datetime.now(timezone.utc).isoformat(),
-            },
-        )
-    except ClientError as err:
-        logger.error(
-            "Failed to update inventory for %s while applying story rewards Error: %s",
-            character_id,
-            err,
-            exc_info=True,
-        )
-        return []
-
-    # Persist items in batch now that the character points at them.
-    items_to_write = [payload for _, payload in planned_items]
-    failed_payloads = dynamo.batch_write_with_retries(TableName.ITEMS, items_to_write, operation="put")
+    failed_payloads = dynamo.batch_write_with_retries(TableName.ITEMS, planned_items, operation="put")
     failed_ids = {payload.get("ItemID") for payload in failed_payloads}
+    new_ids = [iid for iid in new_ids if iid not in failed_ids]
 
     if failed_ids:
-        logger.error(
-            "Failed to persist %d reward items for %s; reverting their inventory slots",
-            len(failed_ids),
-            character_id,
-        )
-        reconciled_inventory = {
-            slot: entry
-            for slot, entry in normalized_inventory.items()
-            if not (isinstance(entry, dict) and entry.get("ItemID") in failed_ids)
-        }
+        logger.error("Failed to persist %d reward items for %s", len(failed_ids), character_id)
+
+    if new_ids:
         try:
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                UpdateExpression="SET Inventory = :inventory, UpdatedAt = :updated_at",
-                ExpressionAttributeValues={
-                    ":inventory": reconciled_inventory,
-                    ":updated_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-        except ClientError as reconcile_err:
-            logger.error(
-                "Failed to reconcile inventory for %s after partial item write Error: %s",
-                character_id,
-                reconcile_err,
-                exc_info=True,
-            )
+            append_to_contents(PARENT_CHARACTER, character_id, new_ids)
+        except RuntimeError as err:
+            logger.error("Failed to append new items to character %s Contents: %s", character_id, err)
+            return []
 
-    granted_items = [payload["ItemID"] for _, payload in planned_items if payload["ItemID"] not in failed_ids]
-    logger.info("Added %d item(s) to inventory for %s", len(granted_items), character_id)
-    return granted_items
+    logger.info("Added %d item(s) to inventory for %s", len(new_ids), character_id)
+    return new_ids
 
 
-def create_items_from_prototypes(starting_items: list, character_id: str) -> dict:
-    """
-    Create item instances from starting item definitions.
+def create_items_from_prototypes(starting_items: list, character_id: str) -> list:
+    """Create item instances from starting item definitions.
 
-    Every starting item gets a numbered slot in the returned inventory so
-    the character record stays in sync with the ITEMS table. Worn equipment,
-    containers, and loose items all land in the inventory; the first container
-    additionally records loose items in its Contents field for deletion cleanup.
+    The character is the base container: its Contents holds equipped items,
+    containers, and any loose items that aren't placed inside another container.
+    Loose items are nested inside the first container encountered (if any);
+    otherwise they join the character's Contents directly.
 
     Args:
-        starting_items: List of dicts with PrototypeID, IsWorn, Slot, Container fields
-        character_id: Character ID for logging
+        starting_items: List of dicts with PrototypeID, IsWorn, Container fields.
+        character_id: Character ID for logging and OwnerID on each item.
 
     Returns:
-        Dict mapping slot numbers to item data.
-        Non-stackable (equipment): {slot: {"ItemID": "..."}}
-        Stackable (if any): {slot: {"ItemID": "...", "Quantity": count}}
+        List of ItemIDs carried directly by the character.
     """
     if not starting_items:
-        return {}
+        return []
 
     try:
-        inventory = {}
-        slot_num = 0
-        container_id = None
-        items_for_container = []
-        items_before_container = []
+        character_contents = []
+        # Loose items flow into this bucket. Starts as a standalone list and
+        # gets bound to the first container's Contents when one appears.
+        loose_bucket = []
+        first_container_seen = False
         items_to_create = []
 
-        # First pass: Build all item payloads
         for item_def in starting_items:
             prototype_id = item_def.get("PrototypeID")
             is_worn = item_def.get("IsWorn", False)
             is_container = item_def.get("Container", False)
 
             prototype = get_prototype(prototype_id)
-
             if not prototype:
                 logger.warning(f"Prototype not found for {prototype_id}")
                 continue
@@ -639,33 +502,25 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
                 is_worn=is_worn,
                 owner_id=character_id,
             )
-
-            # Track first container
-            if is_container and container_id is None:
-                container_id = item_id
-                # Update contents with items collected so far (items before container)
-                item_data["Contents"] = items_for_container.copy()
-                items_before_container = items_for_container.copy()
-                # Clear the list for items after container
-                items_for_container = []
-
-            # Loose items (not worn, not a container) are also tracked on the
-            # container's Contents list so character-deletion cleanup can recurse.
-            if not is_worn and not is_container:
-                items_for_container.append(item_id)
-
-            # Add to batch write list
             items_to_create.append(item_data)
 
-            # Every starting item gets an Inventory slot on the character.
-            # Stackable entries carry Quantity; worn/container/non-stackable do not.
-            slot_entry = {"ItemID": item_id}
-            if prototype.get("Stackable", False):
-                slot_entry["Quantity"] = item_data.get("Quantity", prototype.get("Quantity", 1))
-            inventory[str(slot_num)] = slot_entry
-            slot_num += 1
+            if is_container:
+                if not first_container_seen:
+                    # Adopt the bucket: items collected so far (and any that
+                    # arrive later as loose) live inside this container.
+                    item_data["Contents"] = list(loose_bucket)
+                    loose_bucket = item_data["Contents"]
+                    first_container_seen = True
+                character_contents.append(item_id)
+            elif is_worn:
+                character_contents.append(item_id)
+            else:
+                loose_bucket.append(item_id)
 
-        # Batch write all items at once
+        # No container ever appeared: loose items live directly on the character.
+        if not first_container_seen:
+            character_contents.extend(loose_bucket)
+
         if items_to_create:
             failed = dynamo.batch_write_with_retries(TableName.ITEMS, items_to_create, operation="put")
             if failed:
@@ -673,175 +528,10 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> dic
             else:
                 logger.info(f"Created {len(items_to_create)} items from prototypes for {character_id}")
 
-        # After all items are created, update container with items added after it
-        if container_id and items_for_container:
-            # Combine items before and after container
-            final_contents = items_before_container + items_for_container
-            dynamo.update_item(
-                TableName.ITEMS,
-                Key={"ItemID": container_id},
-                UpdateExpression="SET Contents = :contents",
-                ExpressionAttributeValues={":contents": final_contents},
-            )
-            logger.info(f"Updated container {container_id} with total of {len(final_contents)} items")
-
-        return inventory
+        return character_contents
 
     except Exception as err:
         logger.error(f"Error creating items from prototypes for {character_id} Error: {err}")
-        return {}
+        return []
 
 
-def fetch_single_item_details(item_id: str, slot_data: list, enriched_inventory: dict) -> None:
-    """Fetch a single item from DynamoDB and populate its inventory slots.
-
-    Args:
-        item_id: Item UUID to fetch
-        slot_data: List of (slot, quantity) tuples for this item
-        enriched_inventory: Dict to populate with item details
-    """
-    try:
-        item = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
-    except ClientError as err:
-        logger.error(f"Failed to get item {item_id} Error: {err}")
-        for slot, quantity in slot_data:
-            enriched_inventory[slot] = {
-                "ItemID": item_id,
-                "Name": "Error Loading Item",
-                "Description": "Failed to load item details",
-                "Quantity": quantity,
-            }
-        return
-
-    if item:
-        base_item_details = {
-            "ItemID": item_id,
-            "Name": item.get("Name", "Unknown Item"),
-            "Description": item.get("Description", ""),
-            "Stackable": item.get("Stackable", False),
-            "Equipped": item.get("Equipped", item.get("IsWorn", False)),
-            "Mass": item.get("Mass", 0),
-            "Value": item.get("Value", 0),
-            "Rarity": item.get("Rarity", "common"),
-            "Type": item.get("Type", ""),
-            "Consumable": item.get("Consumable", False),
-            "WornOn": item.get("WornOn", ""),
-        }
-        for slot, quantity in slot_data:
-            enriched_inventory[slot] = {**base_item_details, "Quantity": quantity}
-    else:
-        for slot, quantity in slot_data:
-            enriched_inventory[slot] = {
-                "ItemID": item_id,
-                "Name": "Missing Item",
-                "Description": "This item could not be loaded",
-                "Quantity": quantity,
-            }
-
-
-def get_inventory(inventory: dict) -> dict:
-    """
-    Enrich inventory with item details for display.
-
-    Args:
-        inventory: Dict mapping slot to item data.
-            Stackable: {slot: {"ItemID": "...", "Quantity": count}}
-            Non-stackable: {slot: {"ItemID": "..."}} (no Quantity field)
-
-    Returns:
-        Dict mapping slot to enriched item details including name, description, and quantity.
-        Quantity field always included in response: actual count for stackable, 0 for non-stackable.
-    """
-    if not inventory:
-        return {}
-
-    enriched_inventory = {}
-
-    # Separate null/empty slots from actual item entries
-    # Track both item_id and the slot's quantity
-    item_slots = {}  # Maps item_id to list of (slot, quantity) tuples
-    for slot, item_data in inventory.items():
-        if not item_data:
-            enriched_inventory[slot] = None
-            continue
-
-        # Extract ItemID and Quantity from new format
-        if isinstance(item_data, dict):
-            item_id = item_data.get("ItemID")
-            # If Quantity field exists, use it (stackable)
-            # If Quantity field missing, default to 0 (non-stackable)
-            quantity = item_data.get("Quantity", 0)
-        else:
-            # Malformed entry
-            logger.warning(f"Invalid inventory entry in slot {slot}: {item_data}")
-            enriched_inventory[slot] = None
-            continue
-
-        if not item_id:
-            enriched_inventory[slot] = None
-        else:
-            if item_id not in item_slots:
-                item_slots[item_id] = []
-            item_slots[item_id].append((slot, quantity))
-
-    # If no actual items, return early
-    if not item_slots:
-        return enriched_inventory
-
-    # Batch fetch all unique items
-    unique_item_ids = list(item_slots.keys())
-    item_keys = [{"ItemID": item_id} for item_id in unique_item_ids]
-
-    try:
-        # Use batch_get_items to fetch all items in one operation
-        items_data = dynamo.batch_get_items(TableName.ITEMS, item_keys)
-
-        # Create lookup map for fetched items (handle None or empty response)
-        items_map = {}
-        if items_data:
-            items_map = {item["ItemID"]: item for item in items_data}
-
-        # Process each item and its slots
-        for item_id, slot_data in item_slots.items():
-            item = items_map.get(item_id)
-
-            if item:
-                # Get base item data (shared across all slots with this item)
-                base_item_details = {
-                    "ItemID": item_id,
-                    "Name": item.get("Name", "Unknown Item"),
-                    "Description": item.get("Description", ""),
-                    "Stackable": item.get("Stackable", False),
-                    "Equipped": item.get("Equipped", item.get("IsWorn", False)),
-                    "Mass": item.get("Mass", 0),
-                    "Value": item.get("Value", 0),
-                    "Rarity": item.get("Rarity", "common"),
-                    "Type": item.get("Type", ""),
-                    "Consumable": item.get("Consumable", False),
-                    "WornOn": item.get("WornOn", ""),
-                }
-
-                # Assign to all slots with slot-specific quantity
-                for slot, quantity in slot_data:
-                    enriched_inventory[slot] = {
-                        **base_item_details,
-                        "Quantity": quantity,  # Use slot-specific quantity
-                    }
-            else:
-                # Item not found - create missing item placeholder
-                logger.warning(f"Item not found in inventory for {item_id}")
-                for slot, quantity in slot_data:
-                    enriched_inventory[slot] = {
-                        "ItemID": item_id,
-                        "Name": "Missing Item",
-                        "Description": "This item could not be loaded",
-                        "Quantity": quantity,
-                    }
-
-    except ClientError as err:
-        logger.error(f"Failed to batch get item details Error: {err}")
-        # Fall back to individual lookups on batch failure
-        for item_id, slot_data in item_slots.items():
-            fetch_single_item_details(item_id, slot_data, enriched_inventory)
-
-    return enriched_inventory

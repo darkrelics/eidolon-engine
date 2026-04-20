@@ -62,95 +62,82 @@ class ItemRepository {
     }
   }
 
-  /// Load inventory details for all items in inventory.
+  /// Load enriched details for every item reachable from a set of root IDs.
   ///
-  /// Takes inventory map with new schema: {slot: {"ItemID": "...", "Quantity": int}}
-  /// Returns map of enriched item data: {slot: enrichedItem}
+  /// Pass the character's top-level Contents list (or any container's). The
+  /// returned map is keyed by ItemID and includes items nested inside any
+  /// container (recursively via the brief's Contents list).
   ///
-  /// Optimized batch loading:
-  /// - Fetches all item briefs first
-  /// - Groups by unique PrototypeID
-  /// - Pre-fetches all unique prototypes
-  /// - Merges prototype data into each item
-  ///
-  /// Performance: 20 items with 5 unique prototypes = ~5 prototype fetches
+  /// Each enriched entry merges prototype fields with the instance brief
+  /// (ItemID, PrototypeID, Quantity, Container, Contents, IsWorn).
   Future<Map<String, Map<String, dynamic>>> loadInventoryDetails(
-    Map<String, dynamic> inventory,
+    List<String> rootItemIds,
   ) async {
-    if (inventory.isEmpty) {
+    if (rootItemIds.isEmpty) {
       return {};
     }
 
-    debugPrint('ItemRepository: Loading inventory details for ${inventory.length} slots');
+    debugPrint('ItemRepository: Loading inventory details for ${rootItemIds.length} root items');
 
     try {
-      final enrichedInventory = <String, Map<String, dynamic>>{};
-
-      // Extract all item IDs from inventory
-      final itemIds = <String>[];
-      for (final value in inventory.values) {
-        if (value is Map<String, dynamic>) {
-          final itemId = value['ItemID'] as String?;
-          if (itemId != null) {
-            itemIds.add(itemId);
-          }
-        }
-      }
-
-      if (itemIds.isEmpty) {
+      final seedIds = rootItemIds.where((id) => id.isNotEmpty).toSet();
+      if (seedIds.isEmpty) {
         return {};
       }
 
-      // Fetch all item briefs (parallel)
-      final itemBriefFutures = itemIds.map((itemId) => _getItemBrief(itemId));
-      final itemBriefs = await Future.wait(itemBriefFutures);
-
-      // Extract unique prototype IDs
-      final uniquePrototypeIds = <String>{};
-      for (final itemBrief in itemBriefs) {
-        final prototypeId = itemBrief['PrototypeID'] as String?;
-        if (prototypeId != null) {
-          uniquePrototypeIds.add(prototypeId);
+      // BFS: fetch briefs level by level, queueing Contents items for the next
+      // pass. Keeps fetches parallel within each level.
+      final briefsById = <String, Map<String, dynamic>>{};
+      var frontier = seedIds;
+      while (frontier.isNotEmpty) {
+        final pending = frontier.where((id) => !briefsById.containsKey(id)).toList();
+        if (pending.isEmpty) {
+          break;
         }
+        final fetched = await Future.wait(pending.map(_getItemBrief));
+        final next = <String>{};
+        for (var i = 0; i < pending.length; i++) {
+          final brief = fetched[i];
+          briefsById[pending[i]] = brief;
+          final contents = brief['Contents'];
+          if (contents is List) {
+            for (final childId in contents) {
+              if (childId is String && !briefsById.containsKey(childId)) {
+                next.add(childId);
+              }
+            }
+          }
+        }
+        frontier = next;
       }
 
-      debugPrint('ItemRepository: Found ${uniquePrototypeIds.length} unique prototypes');
+      // Pre-fetch every unique prototype in parallel so per-item merges hit cache.
+      final prototypeIds = <String>{};
+      for (final brief in briefsById.values) {
+        final prototypeId = brief['PrototypeID'] as String?;
+        if (prototypeId != null) {
+          prototypeIds.add(prototypeId);
+        }
+      }
+      debugPrint('ItemRepository: Found ${prototypeIds.length} unique prototypes');
+      await Future.wait(prototypeIds.map(_getPrototype));
 
-      // Pre-fetch all unique prototypes (parallel)
-      final prototypeFutures = uniquePrototypeIds.map((id) => _getPrototype(id));
-      await Future.wait(prototypeFutures);
-
-      // Now build enriched inventory
-      int briefIndex = 0;
-      for (final entry in inventory.entries) {
-        final slot = entry.key;
-        final value = entry.value;
-
-        // Extract ItemID from new format
-        if (value is! Map<String, dynamic>) {
+      final enriched = <String, Map<String, dynamic>>{};
+      for (final entry in briefsById.entries) {
+        final brief = entry.value;
+        final prototypeId = brief['PrototypeID'] as String?;
+        if (prototypeId == null) {
           continue;
         }
-
-        final itemId = value['ItemID'] as String?;
-        if (itemId == null || briefIndex >= itemBriefs.length) {
-          continue;
-        }
-
-        final itemBrief = itemBriefs[briefIndex];
-        briefIndex++;
-
-        final prototypeId = itemBrief['PrototypeID'] as String;
         final prototype = await _getPrototype(prototypeId);
-
-        // Merge prototype + item brief
-        enrichedInventory[slot] = {
+        enriched[entry.key] = {
           ...prototype,
-          ...itemBrief,
+          ...brief,
         };
       }
 
-      debugPrint('ItemRepository: Loaded ${enrichedInventory.length} enriched items');
-      return enrichedInventory;
+      debugPrint('ItemRepository: Loaded ${enriched.length} enriched items');
+      return enriched;
     } catch (e) {
       debugPrint('ItemRepository: Error loading inventory details: $e');
       return {}; // Return empty on error rather than throwing
