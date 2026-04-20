@@ -15,7 +15,9 @@ import 'package:fluttericon/rpg_awesome_icons.dart';
 /// ItemIDs the character carries directly; each container item carries its
 /// own `Contents` list. This widget renders an Equipped section, one section
 /// per container (recursively for nested containers), and a Loose section
-/// for remaining leaf items at the character root.
+/// for remaining leaf items at the character root. A worn container (e.g. a
+/// backpack equipped in a Back slot) appears in both Equipped and as its own
+/// container section so its contents stay visible.
 class InventoryPanel extends StatefulWidget {
   final Character character;
   final Function(String itemId)? onItemTap;
@@ -269,13 +271,11 @@ class _InventoryPanelState extends State<InventoryPanel> {
 
     for (final itemId in widget.character.contents) {
       final details = _enrichedInventory[itemId];
-      if (_isWorn(details)) {
-        equippedIds.add(itemId);
-      } else if (_isContainer(details)) {
-        containerIds.add(itemId);
-      } else {
-        looseIds.add(itemId);
-      }
+      final worn = _isWorn(details);
+      final container = _isContainer(details);
+      if (worn) equippedIds.add(itemId);
+      if (container) containerIds.add(itemId);
+      if (!worn && !container) looseIds.add(itemId);
     }
 
     return SingleChildScrollView(
@@ -887,10 +887,11 @@ class _InventoryGridItem extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final itemRarity = itemDetails?['Rarity'] ?? 'common';
+    final itemRarity = (itemDetails?['Rarity'] as String?) ?? 'common';
     final effectiveStackable = itemDetails?['Stackable'] == true;
     final itemName = itemDetails?['Name'] as String? ?? itemId;
     final displayName = (effectiveStackable && quantity > 1) ? '$itemName x$quantity' : itemName;
+    final rarityColor = _rarityColor(itemRarity);
 
     return Tooltip(
       message: itemName,
@@ -898,101 +899,170 @@ class _InventoryGridItem extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerHighest,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: _rarityColor(itemRarity).withValues(alpha: 0.5),
-              width: 2,
+            border: Border.all(color: rarityColor.withValues(alpha: 0.5), width: 2),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: _buildIconZone(context, rarityColor, itemName)),
+              _buildNameStrip(context, displayName, rarityColor),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Icon zone — tinted background, centered visual (image or fallback sigil),
+  /// with action buttons in corners. Kept distinct from the name strip so
+  /// future artwork has room to breathe.
+  Widget _buildIconZone(BuildContext context, Color rarityColor, String itemName) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(
+          color: rarityColor.withValues(alpha: 0.08),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.all(8),
+          child: _buildItemVisual(rarityColor),
+        ),
+        if (isConsumable)
+          Positioned(
+            right: 2,
+            top: 2,
+            child: _tileActionButton(
+              tooltip: 'Use $itemName',
+              onPressed: isProcessing ? null : onUse,
+              background: colorScheme.primaryContainer,
+              foreground: colorScheme.onPrimaryContainer,
+              child: isProcessing
+                  ? SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimaryContainer),
+                      ),
+                    )
+                  : const Icon(Icons.play_arrow_rounded, size: 14),
             ),
           ),
-          child: Stack(
-            children: [
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Icon(
-                      RpgIcons.getItemTypeIcon(itemDetails?['Type'] ?? 'item'),
-                      size: 28,
-                      color: _rarityColor(itemRarity),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      displayName,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: _rarityColor(itemRarity),
-                      ),
-                      maxLines: 2,
-                      textAlign: TextAlign.center,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (isConsumable)
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  child: IconButton(
-                    tooltip: 'Use $itemName',
-                    onPressed: isProcessing ? null : onUse,
-                    style: IconButton.styleFrom(
-                      backgroundColor: colorScheme.primaryContainer,
-                      foregroundColor: colorScheme.onPrimaryContainer,
-                      padding: const EdgeInsets.all(4),
-                      minimumSize: const Size(28, 28),
-                    ),
-                    icon: isProcessing
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                colorScheme.onPrimaryContainer,
-                              ),
-                            ),
-                          )
-                        : const Icon(Icons.play_arrow_rounded, size: 16),
-                  ),
-                ),
-              if (onSplit != null && isStackable && quantity > 1)
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  child: IconButton(
-                    tooltip: 'Split stack',
-                    onPressed: isProcessing ? null : onSplit,
-                    style: IconButton.styleFrom(
-                      backgroundColor: colorScheme.secondaryContainer,
-                      foregroundColor: colorScheme.onSecondaryContainer,
-                      padding: const EdgeInsets.all(4),
-                      minimumSize: const Size(28, 28),
-                    ),
-                    icon: const Icon(Icons.call_split, size: 16),
-                  ),
-                ),
-              if (onDiscard != null)
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: IconButton(
-                    tooltip: 'Discard $itemName',
-                    onPressed: isProcessing ? null : onDiscard,
-                    style: IconButton.styleFrom(
-                      backgroundColor: colorScheme.errorContainer,
-                      foregroundColor: colorScheme.onErrorContainer,
-                      padding: const EdgeInsets.all(4),
-                      minimumSize: const Size(28, 28),
-                    ),
-                    icon: const Icon(Icons.delete_outline, size: 16),
-                  ),
-                ),
-            ],
+        if (onSplit != null && isStackable && quantity > 1)
+          Positioned(
+            left: 2,
+            top: 2,
+            child: _tileActionButton(
+              tooltip: 'Split stack',
+              onPressed: isProcessing ? null : onSplit,
+              background: colorScheme.secondaryContainer,
+              foreground: colorScheme.onSecondaryContainer,
+              child: const Icon(Icons.call_split, size: 14),
+            ),
+          ),
+        if (onDiscard != null)
+          Positioned(
+            right: 2,
+            bottom: 2,
+            child: _tileActionButton(
+              tooltip: 'Discard $itemName',
+              onPressed: isProcessing ? null : onDiscard,
+              background: colorScheme.errorContainer,
+              foreground: colorScheme.onErrorContainer,
+              child: const Icon(Icons.delete_outline, size: 14),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// Name strip below the icon — dedicated row, subtle top border in the
+  /// rarity color to tie it back to the icon zone.
+  Widget _buildNameStrip(BuildContext context, String displayName, Color rarityColor) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: rarityColor.withValues(alpha: 0.3), width: 1),
+        ),
+      ),
+      child: Text(
+        displayName,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodySmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: rarityColor,
+          height: 1.1,
+        ),
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  /// Render the item's visual. If the prototype provides ``IconUrl`` we load
+  /// that image; otherwise fall back to the generic type sigil. ``IconAsset``
+  /// is also honored for bundled-asset icons once we ship any.
+  Widget _buildItemVisual(Color rarityColor) {
+    final iconUrl = itemDetails?['IconUrl'] as String?;
+    if (iconUrl != null && iconUrl.isNotEmpty) {
+      return Image.network(
+        iconUrl,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => _fallbackSigil(rarityColor),
+      );
+    }
+    final iconAsset = itemDetails?['IconAsset'] as String?;
+    if (iconAsset != null && iconAsset.isNotEmpty) {
+      return Image.asset(
+        iconAsset,
+        fit: BoxFit.contain,
+        errorBuilder: (_, _, _) => _fallbackSigil(rarityColor),
+      );
+    }
+    return _fallbackSigil(rarityColor);
+  }
+
+  Widget _fallbackSigil(Color rarityColor) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Icon(
+        RpgIcons.getItemTypeIcon(itemDetails?['Type'] ?? 'item'),
+        size: 40,
+        color: rarityColor,
+      ),
+    );
+  }
+
+  Widget _tileActionButton({
+    required String tooltip,
+    required VoidCallback? onPressed,
+    required Color background,
+    required Color foreground,
+    required Widget child,
+  }) {
+    return Material(
+      color: background,
+      shape: const CircleBorder(),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onPressed,
+        child: Tooltip(
+          message: tooltip,
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: IconTheme(
+              data: IconThemeData(color: foreground, size: 14),
+              child: Center(child: child),
+            ),
           ),
         ),
       ),
