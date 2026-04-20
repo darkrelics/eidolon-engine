@@ -405,8 +405,8 @@ class _InventoryPanelState extends State<InventoryPanel> {
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 4,
         crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-        childAspectRatio: 0.85,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.7,
       ),
       itemCount: itemIds.length,
       itemBuilder: (context, index) {
@@ -857,12 +857,13 @@ class _InventorySlot extends StatelessWidget {
   }
 }
 
-class _InventoryGridItem extends StatelessWidget {
+class _InventoryGridItem extends StatefulWidget {
   final String itemId;
   final Map<String, dynamic>? itemDetails;
   final int quantity;
   final VoidCallback? onTap;
   final VoidCallback? onUse;
+  final VoidCallback? onEquip;
   final VoidCallback? onDiscard;
   final VoidCallback? onSplit;
   final bool isConsumable;
@@ -875,6 +876,8 @@ class _InventoryGridItem extends StatelessWidget {
     this.quantity = 1,
     this.onTap,
     this.onUse,
+    // ignore: unused_element_parameter -- wired to UI; awaits backend endpoint
+    this.onEquip,
     this.onDiscard,
     this.onSplit,
     this.isConsumable = false,
@@ -883,45 +886,69 @@ class _InventoryGridItem extends StatelessWidget {
   });
 
   @override
+  State<_InventoryGridItem> createState() => _InventoryGridItemState();
+}
+
+class _InventoryGridItemState extends State<_InventoryGridItem> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    final itemRarity = (itemDetails?['Rarity'] as String?) ?? 'common';
-    final effectiveStackable = itemDetails?['Stackable'] == true;
-    final itemName = itemDetails?['Name'] as String? ?? itemId;
-    final displayName = (effectiveStackable && quantity > 1) ? '$itemName x$quantity' : itemName;
+    final itemRarity = (widget.itemDetails?['Rarity'] as String?) ?? 'common';
+    final effectiveStackable = widget.itemDetails?['Stackable'] == true;
+    final itemName = widget.itemDetails?['Name'] as String? ?? widget.itemId;
     final rarityColor = _rarityColor(itemRarity);
+    final showCount = effectiveStackable && widget.quantity > 1;
 
-    return Tooltip(
-      message: itemName,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(8),
-        child: Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: rarityColor.withValues(alpha: 0.5), width: 2),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _buildIconZone(context, rarityColor, itemName)),
-              _buildNameStrip(context, displayName, rarityColor),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: rarityColor.withValues(alpha: 0.5), width: 2),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: _buildIconZone(context, rarityColor, itemName, showCount: showCount),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              itemName,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: rarityColor,
+                height: 1.1,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
   }
 
   /// Icon zone — tinted background, centered visual (image or fallback sigil),
-  /// with action buttons in corners. Kept distinct from the name strip so
-  /// future artwork has room to breathe.
-  Widget _buildIconZone(BuildContext context, Color rarityColor, String itemName) {
-    final colorScheme = Theme.of(context).colorScheme;
+  /// with the count badge always visible and action buttons overlaid on hover.
+  Widget _buildIconZone(
+    BuildContext context,
+    Color rarityColor,
+    String itemName, {
+    required bool showCount,
+  }) {
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -931,46 +958,56 @@ class _InventoryGridItem extends StatelessWidget {
           padding: const EdgeInsets.all(8),
           child: _buildItemVisual(rarityColor),
         ),
-        if (isConsumable)
+        if (showCount)
           Positioned(
-            right: 2,
-            top: 2,
-            child: _tileActionButton(
-              tooltip: 'Use $itemName',
-              onPressed: isProcessing ? null : onUse,
-              background: colorScheme.primaryContainer,
-              foreground: colorScheme.onPrimaryContainer,
-              child: isProcessing
-                  ? SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimaryContainer),
-                      ),
-                    )
-                  : const Icon(Icons.play_arrow_rounded, size: 14),
+            left: 2,
+            bottom: 2,
+            child: _countBadge(context, rarityColor),
+          ),
+        Positioned.fill(
+          child: IgnorePointer(
+            ignoring: !_hovered && !widget.isProcessing,
+            child: AnimatedOpacity(
+              opacity: (_hovered || widget.isProcessing) ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 120),
+              child: _buildActionOverlay(context, itemName),
             ),
           ),
-        if (onSplit != null && isStackable && quantity > 1)
+        ),
+      ],
+    );
+  }
+
+  /// Hover-revealed action buttons. Use/Equip share the top-right slot — items
+  /// are either consumable or wearable, not both. Split sits top-left, discard
+  /// bottom-right. The count badge lives on the base layer so it stays visible.
+  Widget _buildActionOverlay(BuildContext context, String itemName) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final primaryAction = _primaryActionButton(context, itemName);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (primaryAction != null)
+          Positioned(right: 2, top: 2, child: primaryAction),
+        if (widget.onSplit != null && widget.isStackable && widget.quantity > 1)
           Positioned(
             left: 2,
             top: 2,
             child: _tileActionButton(
               tooltip: 'Split stack',
-              onPressed: isProcessing ? null : onSplit,
+              onPressed: widget.isProcessing ? null : widget.onSplit,
               background: colorScheme.secondaryContainer,
               foreground: colorScheme.onSecondaryContainer,
               child: const Icon(Icons.call_split, size: 14),
             ),
           ),
-        if (onDiscard != null)
+        if (widget.onDiscard != null)
           Positioned(
             right: 2,
             bottom: 2,
             child: _tileActionButton(
               tooltip: 'Discard $itemName',
-              onPressed: isProcessing ? null : onDiscard,
+              onPressed: widget.isProcessing ? null : widget.onDiscard,
               background: colorScheme.errorContainer,
               foreground: colorScheme.onErrorContainer,
               child: const Icon(Icons.delete_outline, size: 14),
@@ -980,38 +1017,55 @@ class _InventoryGridItem extends StatelessWidget {
     );
   }
 
-  /// Name strip below the icon — dedicated row, subtle top border in the
-  /// rarity color to tie it back to the icon zone.
-  Widget _buildNameStrip(BuildContext context, String displayName, Color rarityColor) {
-    final theme = Theme.of(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(color: rarityColor.withValues(alpha: 0.3), width: 1),
-        ),
-      ),
-      child: Text(
-        displayName,
-        textAlign: TextAlign.center,
-        style: theme.textTheme.bodySmall?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: rarityColor,
-          height: 1.1,
-        ),
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
-    );
+  /// Top-right slot holds Use (consumables) or Equip (wearables). During a
+  /// backend call the button shows a spinner so the user sees feedback even
+  /// without hovering.
+  Widget? _primaryActionButton(BuildContext context, String itemName) {
+    final colorScheme = Theme.of(context).colorScheme;
+    if (widget.isConsumable && widget.onUse != null) {
+      return _tileActionButton(
+        tooltip: 'Use $itemName',
+        onPressed: widget.isProcessing ? null : widget.onUse,
+        background: colorScheme.primaryContainer,
+        foreground: colorScheme.onPrimaryContainer,
+        child: widget.isProcessing
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimaryContainer),
+                ),
+              )
+            : const Icon(Icons.play_arrow_rounded, size: 14),
+      );
+    }
+    if (widget.onEquip != null) {
+      return _tileActionButton(
+        tooltip: 'Equip $itemName',
+        onPressed: widget.isProcessing ? null : widget.onEquip,
+        background: colorScheme.tertiaryContainer,
+        foreground: colorScheme.onTertiaryContainer,
+        child: widget.isProcessing
+            ? SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onTertiaryContainer),
+                ),
+              )
+            : const Icon(Icons.shield_outlined, size: 14),
+      );
+    }
+    return null;
   }
 
   /// Render the item's visual. If the prototype provides ``IconUrl`` we load
   /// that image; otherwise fall back to the generic type sigil. ``IconAsset``
   /// is also honored for bundled-asset icons once we ship any.
   Widget _buildItemVisual(Color rarityColor) {
-    final iconUrl = itemDetails?['IconUrl'] as String?;
+    final iconUrl = widget.itemDetails?['IconUrl'] as String?;
     if (iconUrl != null && iconUrl.isNotEmpty) {
       return Image.network(
         iconUrl,
@@ -1019,7 +1073,7 @@ class _InventoryGridItem extends StatelessWidget {
         errorBuilder: (_, _, _) => _fallbackSigil(rarityColor),
       );
     }
-    final iconAsset = itemDetails?['IconAsset'] as String?;
+    final iconAsset = widget.itemDetails?['IconAsset'] as String?;
     if (iconAsset != null && iconAsset.isNotEmpty) {
       return Image.asset(
         iconAsset,
@@ -1034,9 +1088,32 @@ class _InventoryGridItem extends StatelessWidget {
     return FittedBox(
       fit: BoxFit.scaleDown,
       child: Icon(
-        RpgIcons.getItemTypeIcon(itemDetails?['Type'] ?? 'item'),
+        RpgIcons.getItemTypeIcon(widget.itemDetails?['Type'] ?? 'item'),
         size: 40,
         color: rarityColor,
+      ),
+    );
+  }
+
+  /// Small count chip shown in the icon zone for stackable items with qty > 1.
+  /// Uses the rarity color as a tinted background so it reads as part of the
+  /// item rather than as another action button.
+  Widget _countBadge(BuildContext context, Color rarityColor) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: rarityColor.withValues(alpha: 0.7), width: 1),
+      ),
+      child: Text(
+        '${widget.quantity}',
+        style: theme.textTheme.labelSmall?.copyWith(
+          fontWeight: FontWeight.bold,
+          color: rarityColor,
+          height: 1.0,
+        ),
       ),
     );
   }
