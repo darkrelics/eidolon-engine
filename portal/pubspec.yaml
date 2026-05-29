@@ -8,7 +8,7 @@ dependencies:
   flutter:
     sdk: flutter
   cupertino_icons: ^1.0.8
-  amazon_cognito_identity_dart_2: ^3.8.1
+  amazon_cognito_identity_dart_2: ^4.0.0
   http: ^1.4.0
   crypto: ^3.0.6
   provider: ^6.1.5
