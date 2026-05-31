@@ -41,7 +41,7 @@ def coin_registry() -> tuple:
         raise RuntimeError("Failed to load currency prototypes") from err
 
     coins = []
-    for record in records:
+    for record in records or []:
         prototype_id = record.get("PrototypeID")
         value = record.get("Value")
         if prototype_id and value:

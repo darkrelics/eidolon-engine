@@ -433,7 +433,13 @@ class StoryPollingService {
     _completionTimer = null;
     _recoveryTimer?.cancel();
 
-    final backoffSeconds = (_recoveryInitialDelaySeconds << _recoveryAttempt).clamp(
+    // Cap the shift amount before shifting. On web builds `<<` is a signed
+    // 32-bit operation, so an unbounded shift wraps to a negative value and
+    // clamp() collapses the backoff back to the 15s floor -- the opposite of a
+    // cap. 15 << 5 = 480 already exceeds the 300s ceiling, so clamping the shift
+    // at 5 preserves the intended maximum on every platform.
+    final shift = _recoveryAttempt.clamp(0, 5);
+    final backoffSeconds = (_recoveryInitialDelaySeconds << shift).clamp(
       _recoveryInitialDelaySeconds,
       _recoveryMaxDelaySeconds,
     );

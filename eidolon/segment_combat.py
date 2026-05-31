@@ -153,10 +153,11 @@ def apply_round_damage(
 
 
 def check_round_outcome(player_wounds: list, opponent_wounds: list, opponent_health: int) -> tuple:
-    """Return ``(outcome, victor, opponent_defeated)`` if combat ended this round, else None.
+    """Return ``(outcome, victor, opponent_defeated)`` if combat ended this round, else ``()``.
 
     Death and incapacitation are checked before opponent defeat. Opponent wounds
-    count equally since opponents do not heal.
+    count equally since opponents do not heal. An empty tuple signals that combat
+    continues, so callers test the result for truthiness before unpacking.
     """
     # Count both lethal and aggravated wounds for death (aggravated is worse than lethal)
     deadly_wounds = sum(1 for w in player_wounds if w.get("DamageType") in ["lethal", "aggravated"])
@@ -178,7 +179,7 @@ def check_round_outcome(player_wounds: list, opponent_wounds: list, opponent_hea
             outcome = "minimal"  # Costly victory
         return outcome, "player", True
 
-    return None
+    return ()
 
 
 def build_combat_state(

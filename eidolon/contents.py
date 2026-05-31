@@ -303,7 +303,7 @@ def move_item(character: dict, item_id: str, destination_id: str) -> dict:
     if source["parent_kind"] == dest_kind and source["parent_id"] == dest_id:
         raise ValidationError("Item is already in the destination")
 
-    if destination_in_subtree(item_id, dest_id, source.get("item_record")):
+    if destination_in_subtree(item_id, dest_id, source.get("item_record") or {}):
         raise ValidationError("Cannot move a container into itself or its own contents")
 
     new_source_contents = [cid for cid in source["parent_contents"] if cid != item_id]

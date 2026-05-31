@@ -13,17 +13,15 @@ Authentication: Cognito (required)
 from botocore.exceptions import ClientError
 
 from eidolon.character_data import character_get
-from eidolon.contents import PARENT_CHARACTER, PARENT_ITEM, get_item_record
-from eidolon.dynamo import TableName, dynamo
-from eidolon.errors import NotFoundError, UnauthorizedError
+from eidolon.contents import PARENT_CHARACTER, PARENT_ITEM, get_item_record, typed_contents_target
+from eidolon.dynamo import dynamo, to_attribute_value
+from eidolon.errors import ConflictError, NotFoundError, UnauthorizedError
 from eidolon.items import distribute_into_stacks, get_item_prototype_full
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
-from eidolon.player_character import batch_delete_with_fallback
 from eidolon.prototypes import item_is_container
 from eidolon.requests import parse_event_body
-from eidolon.story_rewards import update_reward_stack_quantity
 from eidolon.validation import validate_uuid
 
 
@@ -104,8 +102,10 @@ def consolidate_group(entries: list, max_stack: int) -> tuple:
     """Plan consolidation for one prototype group.
 
     Returns (keep_updates, remove_entries, total_quantity, stacks_after) where
-    keep_updates is a list of (item_id, new_quantity) and remove_entries is a
-    list of entries whose items should be deleted.
+    keep_updates is a list of (item_id, new_quantity, prior_quantity) and
+    remove_entries is a list of entries whose items should be deleted. The prior
+    quantity is carried so the persisting transaction can guard each kept-stack
+    write against a concurrent change.
     """
     if len(entries) < 2:
         return [], [], 0, len(entries)
@@ -116,17 +116,20 @@ def consolidate_group(entries: list, max_stack: int) -> tuple:
 
     keep_entries = entries[:stacks_needed]
     remove_entries = entries[stacks_needed:]
-    keep_updates = [(keep_entries[i]["item_id"], stack_quantities[i]) for i in range(stacks_needed)]
+    keep_updates = []
+    for i in range(stacks_needed):
+        keep_entry = keep_entries[i]
+        prior_quantity = int(keep_entry["item_record"].get("Quantity", 1))
+        keep_updates.append((keep_entry["item_id"], stack_quantities[i], prior_quantity))
     return keep_updates, remove_entries, total_quantity, stacks_needed
 
 
-def apply_removals(remove_entries: list) -> None:
-    """Remove items from their parents' Contents lists, then delete ITEMS records."""
-    if not remove_entries:
-        return
+def group_removals_by_parent(remove_entries: list) -> dict:
+    """Group removed entries by owning parent so each parent is written once.
 
-    # Group removals by parent so each parent is written once.
-    by_parent = {}  # (kind, id) -> {"parent_contents": list, "to_remove": {item_ids}}
+    Returns {(parent_kind, parent_id): {"parent_contents": list, "to_remove": set}}.
+    """
+    by_parent = {}
     for entry in remove_entries:
         key = (entry["parent_kind"], entry["parent_id"])
         bucket = by_parent.setdefault(
@@ -134,27 +137,97 @@ def apply_removals(remove_entries: list) -> None:
             {"parent_contents": entry["parent_contents"], "to_remove": set()},
         )
         bucket["to_remove"].add(entry["item_id"])
+    return by_parent
 
+
+def build_keep_update_ops(keep_updates: list) -> list:
+    """Build guarded Quantity-set transaction ops for the kept stacks.
+
+    Each set is conditioned on the stack's prior Quantity, so a concurrent change
+    to that stack cancels the transaction instead of being overwritten. No-op
+    quantity changes are skipped to keep the transaction small.
+    """
+    ops = []
+    for item_id, new_quantity, prior_quantity in keep_updates:
+        if new_quantity == prior_quantity:
+            continue
+        table_name, typed_key = typed_contents_target(PARENT_ITEM, item_id)
+        ops.append({
+            "Update": {
+                "TableName": table_name,
+                "Key": typed_key,
+                "UpdateExpression": "SET Quantity = :new",
+                "ConditionExpression": "Quantity = :old",
+                "ExpressionAttributeValues": {
+                    ":new": to_attribute_value(new_quantity),
+                    ":old": to_attribute_value(prior_quantity),
+                },
+            }
+        })
+    return ops
+
+
+def build_prune_ops(by_parent: dict) -> list:
+    """Build guarded Contents-prune transaction ops, one per parent.
+
+    Each rewrite drops the removed IDs and is conditioned on the parent's prior
+    Contents value, so a concurrent append to or removal from the same parent
+    cancels the transaction rather than being silently clobbered. A bare
+    ``contains`` guard is insufficient here: it would still let a concurrently
+    appended ItemID be dropped by the stale full-list write.
+    """
+    ops = []
     for (kind, parent_id), bucket in by_parent.items():
-        new_contents = [cid for cid in bucket["parent_contents"] if cid not in bucket["to_remove"]]
-        table = TableName.CHARACTERS if kind == PARENT_CHARACTER else TableName.ITEMS
-        key = {"CharacterID": parent_id} if kind == PARENT_CHARACTER else {"ItemID": parent_id}
-        try:
-            dynamo.update_item(
-                table,
-                Key=key,
-                UpdateExpression="SET Contents = :new",
-                ExpressionAttributeValues={":new": new_contents},
-            )
-        except ClientError as err:
-            logger.error(f"Failed to prune Contents for {kind} {parent_id}: {err}")
-            raise RuntimeError("Failed to update Contents during consolidation") from err
+        old_contents = bucket["parent_contents"]
+        new_contents = [cid for cid in old_contents if cid not in bucket["to_remove"]]
+        table_name, typed_key = typed_contents_target(kind, parent_id)
+        ops.append({
+            "Update": {
+                "TableName": table_name,
+                "Key": typed_key,
+                "UpdateExpression": "SET Contents = :new",
+                "ConditionExpression": "Contents = :old",
+                "ExpressionAttributeValues": {
+                    ":new": to_attribute_value(new_contents),
+                    ":old": to_attribute_value(old_contents),
+                },
+            }
+        })
+    return ops
 
-    delete_keys = [{"ItemID": e["item_id"]} for e in remove_entries]
-    result = batch_delete_with_fallback(TableName.ITEMS, delete_keys, "consolidated item")
-    errors = result.get("Errors", [])
-    if errors:
-        logger.warning(f"Some consolidated item records failed to delete: {errors}")
+
+def build_delete_ops(remove_entries: list) -> list:
+    """Build Delete transaction ops for every redundant stack's ITEMS record."""
+    ops = []
+    for entry in remove_entries:
+        table_name, typed_key = typed_contents_target(PARENT_ITEM, entry["item_id"])
+        ops.append({"Delete": {"TableName": table_name, "Key": typed_key}})
+    return ops
+
+
+def apply_consolidation(keep_updates: list, remove_entries: list) -> None:
+    """Apply stack top-ups and redundant-stack removals in one atomic transaction.
+
+    Kept-stack Quantity sets, parent Contents prunes, and redundant-stack deletes
+    commit together. Each set and prune is guarded by the prior value it read, so
+    any concurrent inventory change cancels the whole transaction (surfaced as a
+    409 conflict) rather than double-counting totals or dropping concurrent edits.
+    """
+    if not remove_entries:
+        return
+
+    ops = build_keep_update_ops(keep_updates)
+    ops.extend(build_prune_ops(group_removals_by_parent(remove_entries)))
+    ops.extend(build_delete_ops(remove_entries))
+
+    try:
+        dynamo.transact_write_items(ops)
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "TransactionCanceledException":
+            logger.warning("Consolidation cancelled (inventory changed during write)")
+            raise ConflictError("Inventory changed during consolidation. Refresh and retry.") from err
+        logger.error(f"Failed to consolidate item stacks: {err}")
+        raise RuntimeError("Failed to consolidate item stacks") from err
 
 
 def handle_consolidation(character_id: str, player_id: str, prototype_id_filter: str) -> dict:
@@ -173,6 +246,7 @@ def handle_consolidation(character_id: str, player_id: str, prototype_id_filter:
     prototype_map, prototype_cache = group_by_prototype(entries, prototype_id_filter)
 
     consolidated_stacks = []
+    all_keep_updates = []
     all_removals = []
     for proto_id, group in prototype_map.items():
         max_stack = prototype_cache[proto_id].get("MaxStack", 99) or 99
@@ -180,9 +254,7 @@ def handle_consolidation(character_id: str, player_id: str, prototype_id_filter:
         if not remove_entries:
             continue
 
-        for item_id, new_qty in keep_updates:
-            update_reward_stack_quantity(item_id, new_qty)
-
+        all_keep_updates.extend(keep_updates)
         consolidated_stacks.append({
             "PrototypeID": proto_id,
             "TotalQuantity": total_qty,
@@ -192,7 +264,7 @@ def handle_consolidation(character_id: str, player_id: str, prototype_id_filter:
         })
         all_removals.extend(remove_entries)
 
-    apply_removals(all_removals)
+    apply_consolidation(all_keep_updates, all_removals)
 
     message = (
         f"Successfully consolidated {len(consolidated_stacks)} item type(s)"

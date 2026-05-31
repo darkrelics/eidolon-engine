@@ -238,9 +238,11 @@ def record_character_decision(active_segment: dict, decision_id: str, character_
     ClientEvents, and writes its history snapshot. Returns the segment definition.
 
     Raises:
-        ValueError: If the decision option is invalid.
+        ValueError: If the active segment is missing its ID or the decision option is invalid.
     """
     active_segment_id = active_segment.get("ActiveSegmentID")
+    if not active_segment_id:
+        raise ValueError("Active segment ID not found")
 
     validate_decision_option(active_segment, decision_id)
     update_segment_decision(active_segment_id, decision_id)
@@ -316,9 +318,12 @@ def advance_after_decision(
     On any failure the decided segment's status is rolled back.
 
     Raises:
+        ValueError: If the active segment is missing its ID.
         RuntimeError: If creating the next segment fails.
     """
     active_segment_id = active_segment.get("ActiveSegmentID")
+    if not active_segment_id:
+        raise ValueError("Active segment ID not found")
     try:
         next_segment_def = get_segment_definition(story_id, next_segment_id)  # type: ignore
 

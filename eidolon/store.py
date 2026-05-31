@@ -71,7 +71,7 @@ def get_store_stock_levels(store_id: str) -> dict:
     except ClientError as err:
         logger.error(f"Failed to read stock for store {store_id}: {err}")
         raise RuntimeError("Failed to read store stock") from err
-    return {row.get("PrototypeID"): int(row.get("Stock", 0)) for row in rows if row.get("PrototypeID")}
+    return {row.get("PrototypeID"): int(row.get("Stock", 0)) for row in rows or [] if row.get("PrototypeID")}
 
 
 def get_live_stock(store_id: str, prototype_id: str):

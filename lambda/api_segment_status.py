@@ -131,8 +131,9 @@ def build_base_status_response(active_segment: dict, now: float) -> tuple:
 def enrich_processed_result(response: dict, active_segment: dict, story_id, segment_id, segment_type: str) -> dict:
     """Add narrative, events, outcome, and next-segment data for a processed segment.
 
-    Mutates ``response`` in place and returns the segment definition (or None) so
-    later enrichment steps can reuse it.
+    Mutates ``response`` in place and returns the segment definition, or an empty
+    dict when it could not be fetched, so later enrichment steps can reuse it and
+    re-fetch when it is empty.
     """
     response["SegmentTitle"] = active_segment.get("SegmentTitle")
     response["ClientEvents"] = active_segment.get("ClientEvents", [])
@@ -140,7 +141,7 @@ def enrich_processed_result(response: dict, active_segment: dict, story_id, segm
     response["Outcome"] = active_segment.get("Outcome")
     response["CombatState"] = active_segment.get("CombatState")
 
-    segment_def = None
+    segment_def = {}
     try:
         segment_def = get_story_segment(story_id, segment_id)  # type: ignore
 
@@ -194,7 +195,7 @@ def enrich_segment_metadata(response: dict, segment_def, story_id, segment_id) -
     """
     if (not response.get("SegmentTitle") or not response.get("SegmentActivity")) and story_id and segment_id:
         try:
-            if segment_def is None:
+            if not segment_def:
                 segment_def = get_story_segment(story_id, segment_id)  # type: ignore
             response["SegmentTitle"] = response.get("SegmentTitle") or segment_def.get("SegmentTitle", "Processing...")
             response["SegmentActivity"] = response.get("SegmentActivity") or segment_def.get("SegmentActivity", "")
@@ -210,7 +211,7 @@ def enrich_decision_data(response: dict, active_segment: dict, segment_def, stor
     """
     response["Decision"] = active_segment.get("Decision")
 
-    if story_id and segment_id and segment_def is None:
+    if story_id and segment_id and not segment_def:
         try:
             segment_def = get_story_segment(story_id, segment_id)  # type: ignore
         except Exception as err:
@@ -275,7 +276,7 @@ def get_segment_status_business_logic(character_id: str, player_id: str) -> dict
     story_id = active_segment.get("StoryID")
     segment_id = active_segment.get("SegmentID")
 
-    segment_def = None
+    segment_def = {}
     if processing_status == "processed":
         segment_def = enrich_processed_result(response, active_segment, story_id, segment_id, segment_type)
     else:
