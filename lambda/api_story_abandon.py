@@ -14,6 +14,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_data import character_get
 from eidolon.dynamo import TableName, dynamo
+from eidolon.errors import ConflictError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.requests import parse_event_body
@@ -41,7 +42,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
 
     if character.get("GameMode", "None") != "Incremental":
         logger.warning(f"Character not in Incremental mode for {character_id}")
-        raise ValueError("409:Character not in Incremental mode")
+        raise ConflictError("Character not in Incremental mode")
 
     active_segment = get_active_story_segment(character_id)
     active_segment_id = active_segment.get("ActiveSegmentID")
@@ -50,7 +51,7 @@ def abandon_story_business_logic(character_id: str, player_id: str) -> dict:
 
     if not active_segment_id or not story_id:
         logger.error(f"Active segment missing required fields for {character_id}")
-        raise ValueError("409:No active story to abandon")
+        raise ConflictError("No active story to abandon")
 
     # Mark segment as abandoned (set Status to "abandoned")
     try:

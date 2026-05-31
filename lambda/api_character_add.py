@@ -13,6 +13,7 @@ Authentication: Cognito (required)
 from eidolon.archetypes import get_archetype
 from eidolon.bloom import character_name_filter
 from eidolon.character_data import check_character_limit, create_character
+from eidolon.errors import ConflictError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.requests import parse_event_body
@@ -44,7 +45,7 @@ def handle_character_creation(player_id: str, character_name: str, archetype_nam
 
     # Check bloom filter for restricted names (approve returns True when allowed)
     if not character_name_filter.approve(character_name.lower()):
-        raise ValueError("409:Character name is not available")
+        raise ConflictError("Character name is not available")
 
     # Check character limit
     can_create = check_character_limit(player_id)

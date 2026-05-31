@@ -793,13 +793,13 @@ paths:
         "500":
           $ref: "#/components/responses/InternalServerError"
 
-  /item/use:
+  /item/consume:
     post:
       tags:
         - Items
-      summary: Use consumable item
-      description: Uses (consumes) an item from character inventory, applying effects and removing/decrementing the item.
-      operationId: useItem
+      summary: Consume inventory item
+      description: Consumes an item from character inventory, applying effects and removing/decrementing the item.
+      operationId: consumeItem
       requestBody:
         required: true
         content:
@@ -817,7 +817,7 @@ paths:
                 ItemID:
                   type: string
                   format: uuid
-                  description: Item UUID to use
+                  description: Item UUID to consume
                 InventorySlot:
                   type: string
                   description: Optional inventory slot for faster lookup
@@ -827,71 +827,51 @@ paths:
               InventorySlot: "1"
       responses:
         "200":
-          description: Successfully used item
+          description: Successfully consumed item
           content:
             application/json:
               schema:
                 type: object
                 required:
-                  - Success
-                  - ItemUsed
-                  - Effects
-                  - Message
-                  - ItemConsumed
+                  - success
+                  - message
+                  - itemName
+                  - effects
+                  - remainingQuantity
+                  - itemRemoved
                 properties:
-                  Success:
+                  success:
                     type: boolean
                     example: true
-                  ItemUsed:
-                    type: object
-                    properties:
-                      ItemID:
-                        type: string
-                        format: uuid
-                      PrototypeID:
-                        type: string
-                        format: uuid
-                      PrototypeName:
-                        type: string
-                        example: Healing Potion
-                  Effects:
-                    type: array
-                    items:
-                      type: string
-                    description: List of effects applied
-                    example:
-                      - "Healed 3 wound(s) (7/10 HP)"
-                  Message:
+                  message:
                     type: string
-                    description: Flavor text from item's Use verb
+                    description: Flavor text from the item's Use verb
                     example: "You drink the healing potion, feeling a warm sensation spread through your body."
-                  ItemConsumed:
-                    type: boolean
-                    description: Whether item was completely consumed (removed from inventory)
-                    example: false
-                  Healing:
+                  itemName:
+                    type: string
+                    description: Display name of the consumed prototype
+                    example: Healing Potion
+                  effects:
                     type: object
-                    description: Healing details if healing occurred
-                    properties:
-                      wounds_healed:
-                        type: integer
-                        example: 3
-                      remaining_wounds:
-                        type: integer
-                        example: 3
-                      current_health:
-                        type: integer
-                        example: 7
-                      max_health:
-                        type: integer
-                        example: 10
-                      was_dead:
-                        type: boolean
-                        example: false
-                  RemainingQuantity:
+                    description: Effect summary returned by the consumable handler. Shape varies by effect type (healing, essence, state change, etc.).
+                    additionalProperties: true
+                    example:
+                      wounds_healed: 3
+                      current_health: 7
+                      max_health: 10
+                  remainingQuantity:
                     type: integer
-                    description: Quantity remaining if not consumed (stackable items only)
+                    description: Quantity remaining in the stack after consumption (0 when the item was removed)
                     example: 4
+                  itemRemoved:
+                    type: boolean
+                    description: Whether the item was completely removed from inventory
+                    example: false
+                  characterState:
+                    type: string
+                    description: Updated character state after consumption (standing, unconscious, dead, ghost)
+                    nullable: true
+                    example: standing
         "400":
           description: Bad request
           content:
@@ -1743,8 +1723,8 @@ components:
           description: List of current wounds
         CharState:
           type: string
-          description: Current character state (not returned in API response - use Dead flag from character list)
-          enum: [standing, unconscious, dead]
+          description: Current character state. Returned on GET /character as part of the Character object.
+          enum: [standing, unconscious, dead, ghost]
           nullable: true
         LeftHandID:
           type: string

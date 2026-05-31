@@ -342,15 +342,10 @@ class CharacterRepository {
       });
     }
 
-    // Inventory updates (if provided)
-    final inventoryUpdates = updates['Inventory'] as Map<String, dynamic>?;
-    final updatedInventory = inventoryUpdates != null ? Map<String, dynamic>.from(inventoryUpdates) : character.inventory;
-
-    // Inventory details updates (if provided)
-    final inventoryDetailsUpdates = updates['InventoryDetails'] as Map<String, dynamic>?;
-    final updatedInventoryDetails = inventoryDetailsUpdates != null
-        ? Map<String, dynamic>.from(inventoryDetailsUpdates)
-        : character.inventoryDetails;
+    // Contents updates (replace the full top-level list if provided)
+    final contentsUpdates = updates['Contents'] as List<dynamic>?;
+    final updatedContents =
+        contentsUpdates != null ? contentsUpdates.whereType<String>().toList() : character.contents;
 
     // Wounds updates
     final woundsUpdate = updates['Wounds'] as List<dynamic>?;
@@ -367,8 +362,7 @@ class CharacterRepository {
       skills: updatedSkills,
       attributes: updatedAttributes,
       resources: updatedResources,
-      inventory: updatedInventory,
-      inventoryDetails: updatedInventoryDetails,
+      contents: updatedContents,
       wounds: updatedWounds,
       progress: updatedProgress,
       lastUpdated: DateTime.now(),
