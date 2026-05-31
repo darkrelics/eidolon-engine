@@ -12,7 +12,8 @@ from botocore.exceptions import ClientError
 
 from eidolon.character_state import determine_character_state_from_wounds
 from eidolon.constants import DEFAULT_DEATH_ROOM_ID, MAX_SKILL_LEVEL, CharState
-from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
+from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo, to_attribute_value
+from eidolon.errors import AccessDeniedError, NotFoundError, ValidationError
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.items import create_items_from_prototypes
 from eidolon.logger import logger
@@ -72,19 +73,18 @@ def check_character_limit(player_id: str) -> bool:
         raise RuntimeError(f"Database error checking character limit: {err}") from err
 
 
-def get_character(character_id: str) -> dict:
-    """
-    Get character by ID.
+def fetch_character_record(character_id: str) -> dict:
+    """Fetch a raw character record by ID, without healing or derived fields.
 
     Args:
         character_id: Character UUID
 
     Returns:
-        Character dict with calculated Health field
+        The raw character dict as stored.
 
     Raises:
-        ValueError: If character ID invalid or not found
-        RuntimeError: If database error occurs
+        ValueError: If the character ID is invalid or the character is missing.
+        RuntimeError: If the database read fails.
     """
     if not validate_uuid(character_id):
         logger.warning(f"Invalid character ID format for {character_id}")
@@ -92,21 +92,45 @@ def get_character(character_id: str) -> dict:
 
     try:
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
-
-        if not character:
-            logger.warning(f"Character not found for {character_id}")
-            raise ValueError("Character not found")
-
     except ClientError as err:
         logger.error(f"Error retrieving character for {character_id} Error: {err}")
         raise RuntimeError(f"Failed to retrieve character: {err}") from err
 
+    if not character:
+        logger.warning(f"Character not found for {character_id}")
+        raise ValueError("Character not found")
+
+    return character
+
+
+def get_character(character_id: str) -> dict:
+    """Get a character by ID with expired wounds healed in memory only.
+
+    Used by the ops and segment workers. This is a write-free read: expired
+    wounds are removed from the returned dict so the derived ``Health`` and any
+    death determination ignore wounds that should have healed, but the database
+    is not modified here. The persisting heal runs on the mutating
+    segment-processing tick via ``persist_healed_wounds``.
+
+    Args:
+        character_id: Character UUID
+
+    Returns:
+        Character dict with expired wounds healed in memory and a derived Health.
+
+    Raises:
+        ValueError: If character ID invalid or not found
+        RuntimeError: If database error occurs
+    """
+    character = fetch_character_record(character_id)
+
     logger.info(f"Character retrieved successfully for {character_id}")
 
-    # Calculate current health from MaxHealth and Wounds
+    heal_expired_wounds_in_memory(character)
+
+    # Calculate current health from MaxHealth and remaining Wounds
     max_health = character.get("MaxHealth", 10)
-    wounds = character.get("Wounds", [])
-    character["Health"] = max_health - len(wounds)
+    character["Health"] = max_health - len(character.get("Wounds", []))
 
     return character
 
@@ -210,6 +234,103 @@ def cleanup_expired_daily_stories(character: dict) -> dict:
     return character
 
 
+def heal_expired_wounds_in_memory(character: dict) -> bool:
+    """Remove wounds whose HealAt time has passed from a character dict in place.
+
+    Pure in-memory operation with no database write: filters the wound list and,
+    when an unconscious character heals below its wound threshold, returns it to
+    standing. A dead character is left untouched. Malformed wound entries are
+    dropped with a warning.
+
+    Args:
+        character: Character dict loaded from DynamoDB.
+
+    Returns:
+        True if the wound list changed, False otherwise.
+    """
+    wounds: list = character.get("Wounds", [])
+    if not wounds or character.get("CharState") == CharState.DEAD.value:
+        return False
+
+    current_time = datetime.now(timezone.utc)
+    remaining_wounds: list = []
+    for wound in wounds:
+        heal_at = wound.get("HealAt")
+        try:
+            if datetime.fromisoformat(heal_at.replace("Z", "+00:00")) > current_time:
+                remaining_wounds.append(wound)
+        except AttributeError as err:
+            logger.warning(f"Malformed wound heal time: {heal_at}, Error: {err}")
+            continue
+
+    if len(remaining_wounds) == len(wounds):
+        return False
+
+    character["Wounds"] = remaining_wounds
+    if character.get("CharState", CharState.STANDING.value) == CharState.UNCONSCIOUS.value:
+        character["CharState"] = CharState.STANDING.value
+
+    return True
+
+
+def write_healed_wounds(character_id: str, character: dict) -> None:
+    """Persist an already-healed wound list and state to DynamoDB.
+
+    Args:
+        character_id: Character UUID.
+        character: Character dict whose Wounds and CharState were healed in memory.
+
+    Raises:
+        RuntimeError: If the update fails.
+    """
+    expression_values: dict = {
+        ":wounds": character.get("Wounds", []),
+        ":state": character.get("CharState", CharState.STANDING.value),
+        ":timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET Wounds = :wounds, CharState = :state, UpdatedAt = :timestamp",
+            ExpressionAttributeValues=expression_values,
+        )
+        logger.info(f"Persisted healed wounds for {character_id}")
+    except ClientError as err:
+        logger.error(f"Failed to persist healed wounds for {character_id}")
+        raise RuntimeError(f"Failed to update character wounds: {err}") from err
+
+
+def persist_healed_wounds(character_id: str) -> dict:
+    """Heal a character's expired wounds and persist the result.
+
+    For mutating paths only (the segment-processing tick). Fetches the character,
+    removes expired wounds in memory, and writes the healed wound list and state
+    back only when something changed. Reads should use ``get_character`` or
+    ``character_get``, which heal in memory without writing.
+
+    Args:
+        character_id: Character UUID.
+
+    Returns:
+        Character dict with expired wounds healed and a derived Health field.
+
+    Raises:
+        ValueError: If the character ID is invalid or the character is missing.
+        RuntimeError: If a database operation fails.
+    """
+    character = fetch_character_record(character_id)
+
+    if heal_expired_wounds_in_memory(character):
+        write_healed_wounds(character_id, character)
+        logger.info(f"Healed expired wounds for {character_id}")
+
+    max_health = character.get("MaxHealth", 10)
+    character["Health"] = max_health - len(character.get("Wounds", []))
+
+    return character
+
+
 def character_get(character_id: str, player_id: str) -> dict:
     """
     Get character by ID and verify ownership.
@@ -227,18 +348,18 @@ def character_get(character_id: str, player_id: str) -> dict:
     """
     if not validate_uuid(character_id):
         logger.warning(f"Invalid character ID format: {character_id}")
-        raise ValueError("Invalid character ID format")
+        raise ValidationError("Invalid character ID format")
 
     if not validate_uuid(player_id):
         logger.warning(f"Invalid player ID format: {player_id}")
-        raise ValueError("Invalid player ID format")
+        raise ValidationError("Invalid player ID format")
 
     try:
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
 
         if not character:
             logger.warning(f"Character not found for {character_id}")
-            raise ValueError("Character not found")
+            raise NotFoundError("Character not found")
 
     except ClientError as err:
         logger.error(f"Error retrieving character for {character_id} Error: {err}")
@@ -246,60 +367,19 @@ def character_get(character_id: str, player_id: str) -> dict:
 
     logger.debug(f"Character retrieved successfully: {character_id}")
 
-    # Heal expired wounds
-
-    if character.get("Wounds") and character.get("CharState") != CharState.DEAD.value:
-        wounds: list = character.get("Wounds", [])
-        current_time: datetime = datetime.now(timezone.utc)
-
-        remaining_wounds: list = []
-
-        for wound in wounds:
-            heal_at: str = wound.get("HealAt")
-
-            try:
-                if datetime.fromisoformat(heal_at.replace("Z", "+00:00")) > current_time:
-                    remaining_wounds.append(wound)
-            except AttributeError as err:
-                logger.warning(f"Malformed wound heal time for character {character_id}: {heal_at}, Error: {err}")
-                continue
-
-        if len(remaining_wounds) < len(wounds):
-            character["Wounds"] = remaining_wounds
-
-            # Update character with healed wounds
-            if character.get("CharState", CharState.STANDING.value) == CharState.UNCONSCIOUS.value:
-                character["CharState"] = CharState.STANDING.value
-
-            # Update the character's wounds in the database
-            update_expression = "SET Wounds = :wounds, CharState = :state, UpdatedAt = :timestamp"
-            expression_values: dict = {
-                ":wounds": remaining_wounds,
-                ":state": character.get("CharState", CharState.STANDING.value),
-                ":timestamp": datetime.now(timezone.utc).isoformat(),
-            }
-
-            try:
-                dynamo.update_item(
-                    TableName.CHARACTERS,
-                    Key={"CharacterID": character_id},
-                    UpdateExpression=update_expression,
-                    ExpressionAttributeValues=expression_values,
-                )
-                logger.info("Updated character wounds after healing")
-            except ClientError as err:
-                logger.error("Failed to update character.")
-                raise RuntimeError(f"Failed to update character wounds: {err}") from err
-
-    # Validate ownership
+    # Validate ownership before any state change, so a request for a character
+    # the caller does not own cannot trigger a wound-healing write on it.
     if character.get("PlayerID") != player_id:
         logger.warning(f"Character ownership mismatch: {character_id} not owned by {player_id}")
-        raise ValueError("Character not owned by player")
+        raise AccessDeniedError("Character not owned by player")
 
-    # Calculate current health from MaxHealth and Wounds
+    # Heal expired wounds in memory only; reads must not write (ARC-1). The
+    # persisting heal runs on the mutating segment-processing tick.
+    heal_expired_wounds_in_memory(character)
+
+    # Calculate current health from MaxHealth and remaining Wounds
     max_health = character.get("MaxHealth", 10)
-    wounds = character.get("Wounds", [])
-    character["Health"] = max_health - len(wounds)
+    character["Health"] = max_health - len(character.get("Wounds", []))
 
     return character
 
@@ -380,13 +460,14 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
 
     logger.info(f"Creating new character for {character_name}")
 
-    # Process starting items. Character is the base container: its Contents
-    # holds equipped items, containers, and any loose items.
-    contents = []
+    # Process starting items. The character is the base container: its Contents
+    # holds equipped items, containers, and loose items. Worn starting items are
+    # assigned equipment slots so they are effective from creation.
+    equipment = {"Contents": [], "LeftHandID": None, "RightHandID": None, "WornSlots": {}}
     starting_items = archetype_data.get("StartingItems", [])
     if starting_items:
         logger.info(f"Processing starting items for character for {character_id}")
-        contents = create_items_from_prototypes(starting_items, character_id)
+        equipment = create_items_from_prototypes(starting_items, character_id)
         logger.info(f"Starting items created for {character_id}")
 
     # Build character record (inlined)
@@ -402,7 +483,8 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         "MaxEssence": archetype_data.get("Essence", DEFAULT_ESSENCE),
         "Wounds": [],
         "RoomID": archetype_data.get("StartRoom", 0),
-        "Contents": contents,
+        "Contents": equipment.get("Contents", []),
+        "WornSlots": equipment.get("WornSlots", {}),
         "Resources": {},
         "Progress": {},
         "AvailableStories": archetype_data.get("AvailableStories", []),
@@ -416,6 +498,13 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
         "UpdatedAt": timestamp,
         "LastPlayed": timestamp,
     }
+
+    # Persist a hand slot only when a starting item occupies it, so an empty hand
+    # satisfies the attribute_not_exists guard used when equipping later.
+    for hand_field in ("LeftHandID", "RightHandID"):
+        hand_item = equipment.get(hand_field)
+        if hand_item:
+            character_item[hand_field] = hand_item
 
     # Create character record
     try:
@@ -441,6 +530,72 @@ def create_character(player_id: str, character_name: str, archetype_name: str, a
     return {"character_id": character_id, "character_name": character_name, "archetype": archetype_name}
 
 
+def build_group_level_updates(group: str, increases: dict, current_members) -> tuple:
+    """Build the SET/ADD expression parts for one level group (Skills or Attributes).
+
+    With ``current_members`` (the character's current levels) the increase is a
+    clamped ``SET``; without it, an atomic ``ADD`` that ``clamp_levels_to_max``
+    caps after the write. Placeholders are prefixed by the group so Skills and
+    Attributes never collide. Returns ``(set_parts, add_parts, names, values)``.
+
+    Args:
+        group: "Skills" or "Attributes".
+        increases: Map of member name to level increase.
+        current_members: Current levels for a clamped SET, or None for atomic ADD.
+    """
+    set_parts: list = []
+    add_parts: list = []
+    names: dict = {}
+    values: dict = {}
+    for member, increase in increases.items():
+        if increase <= 0:
+            continue
+        safe = f"{group}_{member}".replace("-", "_")
+        names[f"#m_{safe}"] = member
+        if current_members is None:
+            add_parts.append(f"{group}.#m_{safe} :v_{safe}")
+            values[f":v_{safe}"] = Decimal(str(increase))
+        else:
+            new_level = min(float(current_members.get(member, 0)) + increase, MAX_SKILL_LEVEL)
+            set_parts.append(f"{group}.#m_{safe} = :v_{safe}")
+            values[f":v_{safe}"] = Decimal(str(new_level))
+    return set_parts, add_parts, names, values
+
+
+def execute_character_update(character_id: str, set_parts: list, add_parts: list, names: dict, values: dict) -> None:
+    """Apply the assembled SET/ADD expressions to the character record.
+
+    When an atomic ADD is present, requests the post-update values and clamps any
+    level that overflowed ``MAX_SKILL_LEVEL`` (the ADD cannot cap itself).
+
+    Raises:
+        RuntimeError: If the database update fails.
+    """
+    if not set_parts and not add_parts:
+        return
+
+    update_parts = []
+    if set_parts:
+        update_parts.append("SET " + ", ".join(set_parts))
+    if add_parts:
+        update_parts.append("ADD " + ", ".join(add_parts))
+
+    update_kwargs = {"UpdateExpression": " ".join(update_parts), "ExpressionAttributeValues": values}
+    if names:
+        update_kwargs["ExpressionAttributeNames"] = names
+    if add_parts:
+        update_kwargs["ReturnValues"] = "UPDATED_NEW"
+
+    try:
+        response = dynamo.update_item(TableName.CHARACTERS, Key={"CharacterID": character_id}, **update_kwargs)
+        if add_parts:
+            clamp_levels_to_max(character_id, response or {})
+        logger.info(f"Character updates applied for {character_id}")
+    except ClientError as err:
+        logger.error(f"Failed to apply character updates for {character_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to apply character updates: {err}") from err
+
+
 def apply_character_updates(character_id: str, updates: dict, current_character=None) -> None:
     """
     Apply accumulated updates to character.
@@ -463,110 +618,82 @@ def apply_character_updates(character_id: str, updates: dict, current_character=
 
     logger.info(f"Applying character updates for {character_id}: {updates}")
 
-    update_expressions = []
-    expression_names = {}
-    expression_values = {}
+    set_parts: list = []
+    add_parts: list = []
+    names: dict = {}
+    values: dict = {}
 
-    # Apply skill increases using DynamoDB ADD for atomic increment
-    skill_increases = updates.get("SkillXP", {})
-    if skill_increases and current_character is None:
-        # Use atomic ADD operation when we don't have current character data
-        add_expressions = []
-        for skill, increase_amount in skill_increases.items():
-            if increase_amount > 0:
-                safe_skill = skill.replace("-", "_")
-                add_expressions.append(f"Skills.#skill_{safe_skill} :inc_{safe_skill}")
-                expression_names[f"#skill_{safe_skill}"] = skill
-                expression_values[f":inc_{safe_skill}"] = Decimal(str(increase_amount))
-        if add_expressions:
-            update_expressions.append("ADD " + ", ".join(add_expressions))
-    elif skill_increases and current_character is not None:
-        # Use SET operation when we have current character data to enforce max
-        current_skills = current_character.get("Skills", {})
-        for skill, increase_amount in skill_increases.items():
-            if increase_amount > 0:
-                current_level = float(current_skills.get(skill, 0))
-                new_level = min(current_level + increase_amount, MAX_SKILL_LEVEL)
-                safe_skill = skill.replace("-", "_")
-                update_expressions.append(f"Skills.#skill_{safe_skill} = :level_{safe_skill}")
-                expression_names[f"#skill_{safe_skill}"] = skill
-                expression_values[f":level_{safe_skill}"] = Decimal(str(new_level))
+    current_skills = current_character.get("Skills", {}) if current_character is not None else None
+    current_attributes = current_character.get("Attributes", {}) if current_character is not None else None
 
-    # Apply attribute increases using DynamoDB ADD for atomic increment
-    attribute_increases = updates.get("AttributeXP", {})
-    if attribute_increases and current_character is None:
-        # Use atomic ADD operation when we don't have current character data
-        add_expressions = []
-        for attribute, increase_amount in attribute_increases.items():
-            if increase_amount > 0:
-                safe_attr = attribute.replace("-", "_")
-                add_expressions.append(f"Attributes.#attr_{safe_attr} :inc_{safe_attr}")
-                expression_names[f"#attr_{safe_attr}"] = attribute
-                expression_values[f":inc_{safe_attr}"] = Decimal(str(increase_amount))
-        if add_expressions:
-            update_expressions.append("ADD " + ", ".join(add_expressions))
-    elif attribute_increases and current_character is not None:
-        # Use SET operation when we have current character data to enforce max
-        current_attributes = current_character.get("Attributes", {})
-        for attribute, increase_amount in attribute_increases.items():
-            if increase_amount > 0:
-                current_level = float(current_attributes.get(attribute, 0))
-                new_level = min(current_level + increase_amount, MAX_SKILL_LEVEL)
-                safe_attr = attribute.replace("-", "_")
-                update_expressions.append(f"Attributes.#attr_{safe_attr} = :level_{safe_attr}")
-                expression_names[f"#attr_{safe_attr}"] = attribute
-                expression_values[f":level_{safe_attr}"] = Decimal(str(new_level))
+    for group, increases, current_members in (
+        ("Skills", updates.get("SkillXP", {}), current_skills),
+        ("Attributes", updates.get("AttributeXP", {}), current_attributes),
+    ):
+        if not increases:
+            continue
+        group_set, group_add, group_names, group_values = build_group_level_updates(group, increases, current_members)
+        set_parts.extend(group_set)
+        add_parts.extend(group_add)
+        names.update(group_names)
+        values.update(group_values)
 
-    # Separate SET expressions from ADD expressions
-    set_expressions = [expr for expr in update_expressions if not expr.startswith("ADD ")]
-    add_expressions = [expr.replace("ADD ", "") for expr in update_expressions if expr.startswith("ADD ")]
-
-    # Apply wounds
     wounds = updates.get("Wounds")
     if wounds:
-        set_expressions.append("Wounds = list_append(Wounds, :new_wounds)")
-        expression_values[":new_wounds"] = wounds
+        set_parts.append("Wounds = list_append(Wounds, :new_wounds)")
+        values[":new_wounds"] = wounds
 
-    # Apply room change
     room_id = updates.get("Room")
     if room_id is not None:
-        set_expressions.append("RoomID = :room")
-        expression_values[":room"] = room_id
+        set_parts.append("RoomID = :room")
+        values[":room"] = room_id
 
-    # Always update timestamp
-    set_expressions.append("UpdatedAt = :updated_at")
-    expression_values[":updated_at"] = datetime.now(timezone.utc).isoformat()
+    set_parts.append("UpdatedAt = :updated_at")
+    values[":updated_at"] = datetime.now(timezone.utc).isoformat()
 
-    # Execute update if there are changes
-    if set_expressions or add_expressions:
-        try:
-            # Build update expression with SET and ADD clauses
-            update_parts = []
-            if set_expressions:
-                update_parts.append("SET " + ", ".join(set_expressions))
-            if add_expressions:
-                update_parts.append("ADD " + ", ".join(add_expressions))
+    execute_character_update(character_id, set_parts, add_parts, names, values)
 
-            update_expression = " ".join(update_parts)
 
-            # Build kwargs to avoid passing None for iterable parameters
-            update_kwargs = {
-                "UpdateExpression": update_expression,
-                "ExpressionAttributeValues": expression_values,
-            }
-            if expression_names:
-                update_kwargs["ExpressionAttributeNames"] = expression_names
+def clamp_levels_to_max(character_id: str, updated_attributes: dict) -> None:
+    """Clamp any skill or attribute that exceeded MAX_SKILL_LEVEL.
 
-            dynamo.update_item(
-                TableName.CHARACTERS,
-                Key={"CharacterID": character_id},
-                **update_kwargs,
-            )
+    Atomic ``ADD`` increments cannot cap their result, so after the increment the
+    post-update values are inspected and any that overflowed are set back down to
+    the ceiling. Non-fatal: a failure here leaves the increment intact.
 
-            logger.info(f"Character updates applied for {character_id}")
-        except ClientError as err:
-            logger.error(f"Failed to apply character updates for {character_id} Error: {err}", exc_info=True)
-            raise RuntimeError(f"Failed to apply character updates: {err}") from err
+    Args:
+        character_id: Character UUID.
+        updated_attributes: The DynamoDB ``UPDATED_NEW`` response, holding the
+            changed ``Skills`` and ``Attributes`` maps.
+    """
+    set_parts: list = []
+    names: dict = {}
+    values: dict = {}
+    for group in ("Skills", "Attributes"):
+        members = updated_attributes.get(group)
+        if not isinstance(members, dict):
+            continue
+        for name, level in members.items():
+            if level is not None and float(level) > MAX_SKILL_LEVEL:
+                safe = f"{group}_{name}".replace("-", "_")
+                set_parts.append(f"{group}.#m_{safe} = :v_{safe}")
+                names[f"#m_{safe}"] = name
+                values[f":v_{safe}"] = Decimal(str(MAX_SKILL_LEVEL))
+
+    if not set_parts:
+        return
+
+    try:
+        dynamo.update_item(
+            TableName.CHARACTERS,
+            Key={"CharacterID": character_id},
+            UpdateExpression="SET " + ", ".join(set_parts),
+            ExpressionAttributeNames=names,
+            ExpressionAttributeValues=values,
+        )
+        logger.info(f"Clamped {len(set_parts)} over-cap level(s) for {character_id}")
+    except ClientError as err:
+        logger.error(f"Failed to clamp over-cap levels for {character_id} Error: {err}", exc_info=True)
 
 
 def character_clear_story(character_id: str) -> None:
@@ -629,9 +756,9 @@ def apply_death_state(character_id: str, character: dict, new_state: str, timest
                     "Key": {"CharacterID": {"S": character_id}},
                     "UpdateExpression": "SET CharState = :state, UpdatedAt = :timestamp, RoomID = :room",
                     "ExpressionAttributeValues": {
-                        ":state": {"S": new_state},
-                        ":timestamp": {"S": timestamp},
-                        ":room": {"N": str(DEFAULT_DEATH_ROOM_ID)},
+                        ":state": to_attribute_value(new_state),
+                        ":timestamp": to_attribute_value(timestamp),
+                        ":room": to_attribute_value(DEFAULT_DEATH_ROOM_ID),
                     },
                 }
             },
@@ -642,8 +769,8 @@ def apply_death_state(character_id: str, character: dict, new_state: str, timest
                     "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :timestamp",
                     "ExpressionAttributeNames": {"#name": character_name},
                     "ExpressionAttributeValues": {
-                        ":dead": {"BOOL": True},
-                        ":timestamp": {"S": timestamp},
+                        ":dead": to_attribute_value(True),
+                        ":timestamp": to_attribute_value(timestamp),
                     },
                 }
             },

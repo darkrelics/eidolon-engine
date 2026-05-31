@@ -2,79 +2,40 @@
 
 import random
 import uuid
-from functools import cache
 
 from botocore.exceptions import ClientError
 
 from eidolon.contents import PARENT_CHARACTER, append_to_contents
 from eidolon.dynamo import TableName, dynamo
+from eidolon.equipment import assign_starting_slot
+from eidolon.errors import NotFoundError
 from eidolon.logger import logger
+from eidolon.prototypes import get_prototype, item_is_stackable
 
 
-def merge_stacks(item1: dict, item2: dict) -> dict:
+def load_top_level_stacks(top_level_ids: list, prototype_id: str) -> list:
+    """Return ``(item_id, current_quantity)`` for top-level stackable items
+    sharing ``prototype_id``.
+
+    Shared by the purchase and story-reward paths so that buying and earning the
+    same stackable item merge identically. Stackability is resolved from the
+    prototype (the source of truth), not from any field copied onto the record.
     """
-    Merge two stackable items.
-    The older stack (by UUIDv7 timestamp) keeps its ItemID.
-
-    Args:
-        item1: First item dict
-        item2: Second item dict
-
-    Returns:
-        Merged item dict or empty dict if items can't stack
-    """
-    # Must be same prototype
-    if item1.get("PrototypeID") != item2.get("PrototypeID"):
-        return {}
-
-    # Get prototype to check if stackable
-    prototype = get_prototype(item1.get("PrototypeID"))
-    if not prototype or not prototype.get("Stackable", False):
-        return {}
-
-    # Check both items have only allowed fields for stackable items
-    allowed_fields = {"ItemID", "PrototypeID", "Quantity", "OwnerID", "LocationID"}
-    item1_fields = set(item1.keys())
-    item2_fields = set(item2.keys())
-
-    # Remove None/empty fields from check
-    item1_fields = {k for k in item1_fields if item1.get(k) is not None}
-    item2_fields = {k for k in item2_fields if item2.get(k) is not None}
-
-    if not item1_fields.issubset(allowed_fields) or not item2_fields.issubset(allowed_fields):
-        return {}
-
-    total_quantity = item1.get("Quantity", 1) + item2.get("Quantity", 1)
-
-    # Check if merged quantity would exceed MaxStack
-    max_stack = prototype.get("MaxStack", 99)
-    if max_stack <= 0:
-        max_stack = 99
-    if total_quantity > max_stack:
-        return {}
-
-    item1_id = item1.get("ItemID", "")
-    item2_id = item2.get("ItemID", "")
-    if not item1_id or not item2_id:
-        return {}
-
-    # UUIDv7 has timestamp, so lexicographic comparison gives older item
-    if item1_id < item2_id:
-        # item1 is older, keep its ID
-        return {
-            "ItemID": item1_id,
-            "PrototypeID": item1.get("PrototypeID", ""),
-            "Quantity": total_quantity,
-            "OwnerID": item1.get("OwnerID"),
-        }
-    else:
-        # item2 is older, keep its ID
-        return {
-            "ItemID": item2_id,
-            "PrototypeID": item2.get("PrototypeID", ""),
-            "Quantity": total_quantity,
-            "OwnerID": item2.get("OwnerID"),
-        }
+    matching: list = []
+    for item_id in top_level_ids:
+        if not item_id:
+            continue
+        try:
+            record = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
+        except ClientError as err:
+            logger.error(f"Failed to inspect item {item_id} for stack merge: {err}")
+            continue
+        if not record or record.get("PrototypeID") != prototype_id:
+            continue
+        if not item_is_stackable(record):
+            continue
+        matching.append((item_id, int(record.get("Quantity", 1) or 0)))
+    return matching
 
 
 def can_add_to_stack(current_quantity: int, add_quantity: int, max_stack: int) -> bool:
@@ -135,21 +96,6 @@ def distribute_into_stacks(total_quantity: int, max_stack: int) -> list:
     return stacks
 
 
-@cache
-def get_prototype(prototype_id: str) -> dict:
-    """
-    Retrieve a prototype from DynamoDB with caching.
-
-    Args:
-        prototype_id: Prototype ID to fetch
-
-    Returns:
-        Prototype data dict or empty dict if not found
-    """
-    result = dynamo.get_item(TableName.PROTOTYPES, {"PrototypeID": prototype_id})
-    return result or {}
-
-
 def get_item_brief(item_id: str) -> dict:
     """
     Retrieve item brief information for IndexedDB caching.
@@ -173,19 +119,18 @@ def get_item_brief(item_id: str) -> dict:
         raise RuntimeError("Failed to retrieve item data") from err
 
     if not item:
-        raise ValueError(f"Item {item_id} not found")
+        raise NotFoundError(f"Item {item_id} not found")
 
     prototype_id = item.get("PrototypeID")
     if not prototype_id:
         logger.error(f"Item {item_id} missing PrototypeID field")
-        raise ValueError("Item data incomplete")
+        raise NotFoundError("Item data incomplete")
 
-    # Get prototype to determine if item is stackable
+    # Resolve type properties from the prototype, the source of truth.
     prototype = get_prototype(prototype_id)
     is_stackable = prototype.get("Stackable", False) if prototype else False
-
     is_container = prototype.get("Container", False) if prototype else False
-    is_worn = bool(item.get("IsWorn", item.get("Equipped", False)))
+    is_worn = bool(item.get("IsWorn", False))
 
     # Build response with Quantity field for API consistency
     # Storage: stackable items have Quantity field, non-stackable don't
@@ -231,7 +176,7 @@ def get_item_prototype_full(prototype_id: str) -> dict:
         raise RuntimeError("Failed to retrieve prototype data") from err
 
     if not prototype:
-        raise ValueError(f"Prototype {prototype_id} not found")
+        raise NotFoundError(f"Prototype {prototype_id} not found")
 
     # Add Name field for client compatibility (prototypes store PrototypeName)
     result = dict(prototype)
@@ -249,48 +194,43 @@ def build_item_payload(
     quantity_override=None,
     owner_id=None,
 ) -> dict:
-    """Construct item payload from a prototype definition.
+    """Construct a minimal item instance that references its prototype.
+
+    Items reference their prototype rather than copying it: type properties
+    (name, mass, value, effects, trait mods) are resolved from the prototype at
+    read time, so the persisted record carries only instance state. A stackable
+    item stores a Quantity; a container stores its Contents; a wearable item
+    stores its worn state. Nothing else is denormalized onto the record.
 
     Args:
         prototype: Prototype definition from DynamoDB
         item_id: UUID assigned to the instance
-        is_worn: Whether the item starts worn
-        contents: Optional contents list for containers
-        quantity_override: Explicit quantity to persist (primarily for stackable rewards)
+        is_worn: Whether a wearable item starts worn
+        contents: Optional initial Contents list for containers
+        quantity_override: Explicit quantity to persist for stackable items
         owner_id: Optional character UUID to persist as OwnerID
     """
 
     payload = {
         "ItemID": item_id,
         "PrototypeID": prototype.get("PrototypeID", ""),
-        "Name": prototype.get("PrototypeName", prototype.get("Name", "Unknown Item")),
-        "Description": prototype.get("Description", ""),
-        "Mass": prototype.get("Mass", 0),
-        "Value": prototype.get("Value", 0),
-        "Stackable": prototype.get("Stackable", False),
-        "MaxStack": prototype.get("MaxStack", 1),
-        "Quantity": prototype.get("Quantity", 1),
-        "Wearable": prototype.get("Wearable", False),
-        "WornOn": prototype.get("WornOn", ""),
-        "Verbs": prototype.get("Verbs", {}),
-        "Overrides": prototype.get("Overrides", {}),
-        "TraitMods": prototype.get("TraitMods", {}),
-        "Container": prototype.get("Container", False),
-        "Contents": contents if contents is not None else [],
-        "IsWorn": is_worn,
-        # Keep compatibility with any consumers that expect 'Equipped'
-        "Equipped": is_worn,
-        "CanPickUp": prototype.get("CanPickUp", True),
-        "Metadata": prototype.get("Metadata", {}),
-        "Consumable": prototype.get("Consumable", False),
-        "ConsumableEffects": prototype.get("ConsumableEffects", {}),
     }
-
-    if quantity_override is not None:
-        payload["Quantity"] = quantity_override
 
     if owner_id:
         payload["OwnerID"] = owner_id
+
+    if prototype.get("Stackable", False):
+        if quantity_override is not None:
+            payload["Quantity"] = quantity_override
+        else:
+            payload["Quantity"] = prototype.get("Quantity", 1)
+        return payload
+
+    if prototype.get("Container", False):
+        payload["Contents"] = contents if contents is not None else []
+
+    if prototype.get("Wearable", False):
+        payload["IsWorn"] = is_worn
 
     return payload
 
@@ -459,23 +399,27 @@ def add_items_to_inventory(character_id: str, prototype_ids: list) -> list:
     return new_ids
 
 
-def create_items_from_prototypes(starting_items: list, character_id: str) -> list:
+def create_items_from_prototypes(starting_items: list, character_id: str) -> dict:
     """Create item instances from starting item definitions.
 
     The character is the base container: its Contents holds equipped items,
     containers, and any loose items that aren't placed inside another container.
     Loose items are nested inside the first container encountered (if any);
-    otherwise they join the character's Contents directly.
+    otherwise they join the character's Contents directly. Items flagged worn are
+    assigned an equipment slot, so a starting item is worn only when a slot backs
+    it (the equipped invariant: a slot references the item and its IsWorn is set).
 
     Args:
         starting_items: List of dicts with PrototypeID, IsWorn, Container fields.
         character_id: Character ID for logging and OwnerID on each item.
 
     Returns:
-        List of ItemIDs carried directly by the character.
+        Dict with ``Contents`` (top-level ItemIDs) plus the ``LeftHandID``,
+        ``RightHandID``, and ``WornSlots`` equipment assignments for worn items.
     """
+    empty_result = {"Contents": [], "LeftHandID": None, "RightHandID": None, "WornSlots": {}}
     if not starting_items:
-        return []
+        return empty_result
 
     try:
         character_contents = []
@@ -484,27 +428,21 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> lis
         loose_bucket = []
         first_container_seen = False
         items_to_create = []
+        equipment = {"LeftHandID": None, "RightHandID": None, "WornSlots": {}}
 
         for item_def in starting_items:
-            prototype_id = item_def.get("PrototypeID")
-            is_worn = item_def.get("IsWorn", False)
-            is_container = item_def.get("Container", False)
-
-            prototype = get_prototype(prototype_id)
+            prototype = get_prototype(item_def.get("PrototypeID"))
             if not prototype:
-                logger.warning(f"Prototype not found for {prototype_id}")
+                logger.warning(f"Prototype not found for {item_def.get('PrototypeID')}")
                 continue
 
             item_id = str(uuid.uuid4())
-            item_data = build_item_payload(
-                prototype,
-                item_id,
-                is_worn=is_worn,
-                owner_id=character_id,
-            )
+            # A worn item stays worn only if a free, valid slot is available.
+            assigned_slot = assign_starting_slot(prototype, equipment, item_id) if item_def.get("IsWorn") else ""
+            item_data = build_item_payload(prototype, item_id, is_worn=bool(assigned_slot), owner_id=character_id)
             items_to_create.append(item_data)
 
-            if is_container:
+            if item_def.get("Container"):
                 if not first_container_seen:
                     # Adopt the bucket: items collected so far (and any that
                     # arrive later as loose) live inside this container.
@@ -512,7 +450,7 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> lis
                     loose_bucket = item_data["Contents"]
                     first_container_seen = True
                 character_contents.append(item_id)
-            elif is_worn:
+            elif assigned_slot:
                 character_contents.append(item_id)
             else:
                 loose_bucket.append(item_id)
@@ -528,10 +466,9 @@ def create_items_from_prototypes(starting_items: list, character_id: str) -> lis
             else:
                 logger.info(f"Created {len(items_to_create)} items from prototypes for {character_id}")
 
-        return character_contents
+        equipment["Contents"] = character_contents
+        return equipment
 
     except Exception as err:
         logger.error(f"Error creating items from prototypes for {character_id} Error: {err}")
-        return []
-
-
+        return empty_result

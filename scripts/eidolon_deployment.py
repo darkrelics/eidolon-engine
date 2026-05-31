@@ -493,6 +493,9 @@ def main():
         "api-item-discard",
         "api-item-consolidate",
         "api-item-split",
+        "api-item-equip",
+        "api-item-unequip",
+        "api-item-move",
         "api-store-list",
         "api-store-purchase",
     ]

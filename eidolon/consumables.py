@@ -1,5 +1,7 @@
 """Consumable item functions for the Eidolon Engine."""
 
+import random
+import re
 from datetime import datetime, timezone
 from decimal import Decimal
 
@@ -8,10 +10,11 @@ from botocore.exceptions import ClientError
 from eidolon.character_state import determine_character_state_from_wounds
 from eidolon.constants import CharState
 from eidolon.contents import PARENT_CHARACTER, PARENT_ITEM, locate_item
-from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo
+from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo, to_attribute_value
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH
-from eidolon.items import get_prototype
+from eidolon.errors import ConflictError, NotFoundError, ValidationError
 from eidolon.logger import logger
+from eidolon.prototypes import get_prototype, item_is_stackable
 
 
 def coerce_int(value, default: int = 0) -> int:
@@ -47,6 +50,47 @@ def normalize_effect_config(effects) -> dict:
             continue
         normalized[key.lower()] = value
     return normalized
+
+
+def parse_dice_notation(notation: str) -> int:
+    """Roll dice notation and return the result.
+
+    Supports "2d4+2", "1d6", "3d8-1", or a plain integer string like "10".
+    Returns at least 1 for any dice roll; returns 0 for empty input.
+    """
+    text = str(notation).strip()
+    if not text:
+        return 0
+    if text.isdigit():
+        return int(text)
+
+    match = re.fullmatch(r"(\d+)d(\d+)(?:([+-])(\d+))?", text, re.IGNORECASE)
+    if not match:
+        logger.warning(f"Invalid dice notation '{notation}', defaulting to 1")
+        return 1
+
+    num_dice = int(match.group(1))
+    die_size = int(match.group(2))
+    if num_dice < 1 or die_size < 1:
+        return 1
+
+    modifier = 0
+    if match.group(3):
+        modifier = int(match.group(4)) if match.group(3) == "+" else -int(match.group(4))
+
+    total = sum(random.randint(1, die_size) for _ in range(num_dice))
+    return max(1, total + modifier)
+
+
+def resolve_effect_amount(value) -> int:
+    """Resolve an effect Amount that may be a fixed number or dice notation.
+
+    String values are rolled as dice notation (for example "2d4+2"); numeric
+    values coerce directly to int. Returns 0 when the amount is missing.
+    """
+    if isinstance(value, str):
+        return parse_dice_notation(value)
+    return coerce_int(value, 0)
 
 
 def remove_wounds(wounds: list, amount: int, priority=None) -> tuple:
@@ -99,23 +143,6 @@ def remove_wounds(wounds: list, amount: int, priority=None) -> tuple:
     return remaining, removed
 
 
-def dynamo_typed_value(value) -> dict:
-    """Convert a Python value to a DynamoDB typed attribute value dict."""
-    if isinstance(value, str):
-        return {"S": value}
-    if isinstance(value, bool):
-        return {"BOOL": value}
-    if isinstance(value, (int, float, Decimal)):
-        return {"N": str(value)}
-    if isinstance(value, list):
-        return {"L": [dynamo_typed_value(v) for v in value]}
-    if isinstance(value, dict):
-        return {"M": {k: dynamo_typed_value(v) for k, v in value.items()}}
-    if value is None:
-        return {"NULL": True}
-    return {"S": str(value)}
-
-
 def build_consume_transaction(
     character_id: str,
     item_id: str,
@@ -139,14 +166,14 @@ def build_consume_transaction(
     parent_id = location.get("parent_id")
 
     # Start with the base character update (state/wounds/essence/UpdatedAt).
-    typed_values = {k: dynamo_typed_value(v) for k, v in expression_values.items()}
+    typed_values = {k: to_attribute_value(v) for k, v in expression_values.items()}
     parts = list(update_expression_parts)
 
     if item_removed and parent_kind == PARENT_CHARACTER:
         # Fold the character Contents mutation into the same character update.
         parts.append("Contents = :new_contents")
-        typed_values[":new_contents"] = dynamo_typed_value(new_parent_contents)
-        typed_values[":expected_item_id"] = {"S": item_id}
+        typed_values[":new_contents"] = to_attribute_value(new_parent_contents)
+        typed_values[":expected_item_id"] = to_attribute_value(item_id)
         character_update = {
             "Update": {
                 "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
@@ -181,8 +208,8 @@ def build_consume_transaction(
                         "UpdateExpression": "SET Contents = :new_contents",
                         "ConditionExpression": "contains(Contents, :expected_item_id)",
                         "ExpressionAttributeValues": {
-                            ":new_contents": dynamo_typed_value(new_parent_contents),
-                            ":expected_item_id": {"S": item_id},
+                            ":new_contents": to_attribute_value(new_parent_contents),
+                            ":expected_item_id": to_attribute_value(item_id),
                         },
                     }
                 }
@@ -198,9 +225,9 @@ def build_consume_transaction(
                     "UpdateExpression": "SET Quantity = :quantity, UpdatedAt = :updated_at",
                     "ConditionExpression": "Quantity = :expected_quantity",
                     "ExpressionAttributeValues": {
-                        ":quantity": {"N": str(remaining_quantity)},
-                        ":updated_at": {"S": timestamp},
-                        ":expected_quantity": {"N": str(current_quantity)},
+                        ":quantity": to_attribute_value(remaining_quantity),
+                        ":updated_at": to_attribute_value(timestamp),
+                        ":expected_quantity": to_attribute_value(current_quantity),
                     },
                 }
             }
@@ -235,13 +262,13 @@ def load_character_for_consumption(character_id: str, item_id: str) -> dict:
         raise RuntimeError("Failed to load character") from err
 
     if not character:
-        raise ValueError("Character not found")
+        raise NotFoundError("Character not found")
     if character.get("ActiveStoryID"):
-        raise ValueError("Cannot consume items during an active story")
+        raise ConflictError("Cannot consume items during an active story")
 
     location = locate_item(character, item_id)
     if not location.get("found"):
-        raise ValueError("Item is not in character inventory")
+        raise NotFoundError("Item is not in character inventory")
 
     return {"character": character, "location": location}
 
@@ -266,26 +293,24 @@ def load_item_and_prototype(item_id: str) -> dict:
         raise RuntimeError("Failed to load item") from err
 
     if not item:
-        raise ValueError("Item not found")
+        raise NotFoundError("Item not found")
 
     prototype_id = item.get("PrototypeID")
     if not prototype_id:
-        raise ValueError("Item prototype reference missing")
+        raise ValidationError("Item prototype reference missing")
 
     prototype = get_prototype(prototype_id)
     if not prototype:
-        raise ValueError("Item prototype not found")
+        raise NotFoundError("Item prototype not found")
 
-    consumable_flag = bool(prototype.get("Consumable", item.get("Consumable", False)))
+    consumable_flag = bool(prototype.get("Consumable", False))
     if not consumable_flag:
-        raise ValueError("Item is not consumable")
+        raise ValidationError("Item is not consumable")
 
-    effects_config = (
-        prototype.get("ConsumableEffects") or item.get("ConsumableEffects") or prototype.get("Effects") or item.get("Effects")
-    )
+    effects_config = prototype.get("ConsumableEffects") or prototype.get("Effects")
     effects = normalize_effect_config(effects_config)
     if not effects:
-        raise ValueError("Consumable item is missing effects configuration")
+        raise ValidationError("Consumable item is missing effects configuration")
 
     return {"item": item, "prototype": prototype, "effects": effects}
 
@@ -300,7 +325,7 @@ def load_consumable_context(character_id: str, item_id: str) -> dict:
         RuntimeError: If database operations fail.
     """
     if not character_id or not item_id:
-        raise ValueError("CharacterID and ItemID are required")
+        raise ValidationError("CharacterID and ItemID are required")
 
     char_ctx = load_character_for_consumption(character_id, item_id)
     item_ctx = load_item_and_prototype(item_id)
@@ -338,12 +363,12 @@ def apply_heal_effect(effects: dict, wounds: list, max_health: int, prototype_id
     heal_amount = 0
     damage_priority = None
     if isinstance(heal_config, dict):
-        heal_amount = coerce_int(heal_config.get("Amount"), 0)
+        heal_amount = resolve_effect_amount(heal_config.get("Amount"))
         priority_raw = heal_config.get("DamageTypes")
         if isinstance(priority_raw, list):
             damage_priority = [str(entry).lower() for entry in priority_raw]
     else:
-        heal_amount = coerce_int(heal_config, 0)
+        heal_amount = resolve_effect_amount(heal_config)
 
     if heal_amount <= 0:
         logger.warning("Heal effect defined for %s but no positive amount provided", prototype_id)
@@ -378,9 +403,9 @@ def apply_essence_effect(effects: dict, character: dict) -> dict:
 
     essence_amount = 0
     if isinstance(essence_config, dict):
-        essence_amount = coerce_int(essence_config.get("Amount"), 0)
+        essence_amount = resolve_effect_amount(essence_config.get("Amount"))
     else:
-        essence_amount = coerce_int(essence_config, 0)
+        essence_amount = resolve_effect_amount(essence_config)
 
     current_essence = coerce_int(character.get("Essence"), DEFAULT_ESSENCE)
     max_essence = coerce_int(character.get("MaxEssence"), DEFAULT_ESSENCE)
@@ -420,7 +445,7 @@ def update_contents_for_consumption(location: dict, item: dict, item_id: str) ->
         Dict with keys: new_parent_contents, current_quantity,
         remaining_quantity, item_removed.
     """
-    stackable = bool(item.get("Stackable"))
+    stackable = item_is_stackable(item)
     current_quantity = coerce_int(item.get("Quantity", 1), 1)
     parent_contents = location.get("parent_contents") or []
 
@@ -504,7 +529,7 @@ def apply_consumable_effects(ctx: dict) -> dict:
     essence_result = apply_essence_effect(ctx.get("effects", {}), character)
 
     if not heal_result.get("effect_applied") and not essence_result.get("effect_applied"):
-        raise ValueError("The item has no effect right now")
+        raise ConflictError("The item has no effect right now")
 
     effect_summary = {}
     effect_summary.update(heal_result.get("effect_summary", {}))
@@ -554,7 +579,7 @@ def consume_item(character_id: str, item_id: str) -> dict:
         inv_result.get("new_parent_contents", []),
         expr.get("update_expression_parts", []),
         expr.get("expression_values", {}),
-        bool(item.get("Stackable")),
+        item_is_stackable(item),
         inv_result.get("item_removed", False),
         inv_result.get("remaining_quantity", 0),
         expr.get("timestamp", ""),
@@ -622,7 +647,7 @@ def execute_consume_transaction(
                         "Key": {"PlayerID": {"S": player_id}},
                         "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
                         "ExpressionAttributeNames": {"#name": character_name},
-                        "ExpressionAttributeValues": {":dead": {"BOOL": False}, ":updated_at": {"S": timestamp}},
+                        "ExpressionAttributeValues": {":dead": to_attribute_value(False), ":updated_at": to_attribute_value(timestamp)},
                     }
                 }
             )
@@ -636,7 +661,7 @@ def execute_consume_transaction(
             first_reason = reasons[0].get("Code", "") if reasons else ""
             if first_reason == "ConditionalCheckFailed":
                 logger.warning("Item %s already consumed (race condition) for character %s", item_id, character_id)
-                raise ValueError("Item has already been consumed") from err
+                raise ConflictError("Item has already been consumed") from err
         logger.error("Failed to consume item %s for character %s Error: %s", item_id, character_id, err, exc_info=True)
         raise RuntimeError("Failed to update character after consumption") from err
 
@@ -668,7 +693,7 @@ def build_consume_result(
     Returns:
         Dict describing the consumption result.
     """
-    item_name = prototype.get("PrototypeName") or prototype.get("Name") or item.get("Name") or "item"
+    item_name = prototype.get("PrototypeName") or prototype.get("Name") or "item"
 
     use_message = "You consume the item."
     verbs = prototype.get("Verbs", {})

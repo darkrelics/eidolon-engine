@@ -9,6 +9,7 @@ from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
+from eidolon.prototypes import item_is_container
 
 
 def delete_single_item(table_name, key: dict, context_label: str = "") -> bool:
@@ -194,9 +195,9 @@ def delete_character_items(character: dict) -> dict:
             item = dynamo.get_item(
                 TableName.ITEMS,
                 {"ItemID": item_id},
-                ProjectionExpression="Container, Contents",
+                ProjectionExpression="PrototypeID, Contents",
             )
-            if item and item.get("Container"):
+            if item and item_is_container(item):
                 for content_id in item.get("Contents", []) or []:
                     if content_id and content_id not in all_item_ids:
                         items_to_process.append(content_id)

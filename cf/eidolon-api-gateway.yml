@@ -583,6 +583,150 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-split/invocations"
 
+  ItemEquipResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: equip
+
+  ItemEquipOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemEquipResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemEquipPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemEquipResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-equip/invocations"
+
+  ItemUnequipResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: unequip
+
+  ItemUnequipOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemUnequipResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemUnequipPost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemUnequipResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-unequip/invocations"
+
+  ItemMoveResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ParentId: !Ref ItemResource
+      PathPart: move
+
+  ItemMoveOptions:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemMoveResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+        IntegrationResponses:
+          - StatusCode: "200"
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: !Sub "'${AllowedOrigins}'"
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Credentials: "'true'"
+              method.response.header.Vary: "'Origin'"
+      MethodResponses:
+        - StatusCode: "200"
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Credentials: true
+            method.response.header.Vary: true
+
+  ItemMovePost:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref EidolonApi
+      ResourceId: !Ref ItemMoveResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref ApiAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:api-item-move/invocations"
+
   StoreResource:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -1076,6 +1220,30 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
 
+  PermItemEquip:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-equip
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  PermItemUnequip:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-unequip
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
+  PermItemMove:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: api-item-move
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${EidolonApi}/*"
+
   PermStoreList:
     Type: AWS::Lambda::Permission
     Properties:
@@ -1165,6 +1333,12 @@ Resources:
       - ItemConsolidatePost
       - ItemSplitOptions
       - ItemSplitPost
+      - ItemEquipOptions
+      - ItemEquipPost
+      - ItemUnequipOptions
+      - ItemUnequipPost
+      - ItemMoveOptions
+      - ItemMovePost
       - StoreListOptions
       - StoreListGet
       - StorePurchaseOptions

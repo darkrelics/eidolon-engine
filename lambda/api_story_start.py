@@ -15,6 +15,7 @@ from uuid_extension import uuid7
 from eidolon.character_data import character_get
 from eidolon.constants import CharState
 from eidolon.dynamo import TableName, dynamo
+from eidolon.errors import ConflictError, NotFoundError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.polling import ensure_polling_enabled
@@ -87,7 +88,7 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
         # Existing game mode error handling
         game_mode = character.get("GameMode", "None")
         logger.warning(f"Character {character_id} in {game_mode} mode, cannot start new story")
-        raise ValueError(f"409:Character is currently in {game_mode} mode with an active story")
+        raise ConflictError(f"Character is currently in {game_mode} mode with an active story")
 
     # Validate story is available
     validate_story_available(character, story_id)
@@ -98,7 +99,7 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     except ValueError as err:
         logger.warning(f"Story {story_id} not found in database, removing from character's available stories")
         remove_invalid_story_from_character(character, character_id, story_id)
-        raise ValueError("404:Story no longer exists") from err
+        raise NotFoundError("Story no longer exists") from err
 
     # Pre-generate IDs so the atomic lock can reference them
     story_instance_id = str(uuid7())
@@ -110,7 +111,7 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
         story_update_character(character_id, story_id, active_segment_id, story_instance_id)
     except ValueError as err:
         logger.warning(f"Character {character_id} already locked by another request: {err}")
-        raise ValueError("409:Character is currently starting another story") from err
+        raise ConflictError("Character is currently starting another story") from err
     except RuntimeError as err:
         logger.error(f"Failed to lock character {character_id} for story start: {err}")
         raise err

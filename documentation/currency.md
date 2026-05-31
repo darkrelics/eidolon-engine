@@ -6,7 +6,19 @@
 
 ## Overview
 
-The Multi-User Dungeon economy operates on a hybrid system where currency exists as both physical items (coins) and tracked value. Coins are stackable items that can be dropped, traded, or stolen, while the Value field tracks total wealth for quick calculations.
+The Multi-User Dungeon economy uses physical coin items as the single source of truth for currency. Coins are stackable items that can be dropped, traded, or stolen; a character's balance is the sum of their coins' Fundamental Unit (FU) value, computed on demand. There is no separate scalar balance field.
+
+## Implemented Model
+
+This is the model implemented in `eidolon/currency.py`:
+
+- **Coins are stackable items.** A coin prototype carries `Metadata.Denomination`, and its worth is the prototype's `Value` in FU (Bronze 10, Silver 120, Gold 2,400). Coins are minimal stackable records `{ItemID, PrototypeID, Quantity, OwnerID}` per the [item system](item-system.md).
+- **Balance is derived, not stored.** `wallet_total(character)` sums the FU value of the coin stacks at the character's top-level Contents (the purse). There is no `Resources.Value` scalar; the earlier hybrid design that tracked both is superseded.
+- **The wallet is canonicalized on every change.** After a debit or credit, the coins are replaced by the minimal canonical set for the new total (greedy, largest denomination first), so a character holds at most one stack per denomination. Coin ItemIDs change whenever the balance changes.
+- **Purchases pay with coins atomically.** `purchase_item` spends coins via `plan_coin_spend`, and the goods records, coin changes, and the character Contents update all commit in a single transaction.
+- **Granting currency** uses `credit_coins(character_id, amount_fu)`; reward and drop paths can call it once they award currency (none do yet).
+
+The remainder of this document is the broader design rationale. Where it shows a `Resources.Value` scalar, exact change-making, or UUIDv7 stack merging, treat the canonicalized coin model above as authoritative.
 
 ## Currency Architecture
 

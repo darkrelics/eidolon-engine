@@ -26,6 +26,7 @@ from eidolon.environment import (
     ROOMS_TABLE,
     SEGMENT_HISTORY_TABLE,
     SEGMENTS_TABLE,
+    STORES_TABLE,
     STORY_HISTORY_TABLE,
     STORY_TABLE,
 )
@@ -49,6 +50,7 @@ class TableName(Enum):
     ROOMS = "rooms"
     EXITS = "exits"
     MOTD = "motd"
+    STORES = "stores"
 
 
 # Map environment variables to table names
@@ -67,6 +69,7 @@ TABLE_ENV_MAP: dict = {
     TableName.ROOMS: ROOMS_TABLE,
     TableName.EXITS: EXITS_TABLE,
     TableName.MOTD: MOTD_TABLE,
+    TableName.STORES: STORES_TABLE,
 }
 
 
@@ -610,6 +613,14 @@ class DynamoInterface:
         Raises:
             ClientError: If transaction fails (e.g., condition check failed)
 
+        Convention:
+            Callers build typed attribute values with
+            ``eidolon.dynamo.to_attribute_value`` for every ``Item`` field and
+            ``ExpressionAttributeValues`` entry. ``Key`` values are literal typed
+            attribute values (always string UUIDs, e.g. ``{"S": id}``). The
+            ``clean_value`` pass below is defensive and is a no-op on values that
+            are already typed.
+
         Example:
             transact_items = [
                 {
@@ -627,10 +638,10 @@ class DynamoInterface:
                 {
                     "Update": {
                         "TableName": TABLE_ENV_MAP[TableName.CHARACTERS],
-                        "Key": {"CharacterID": character_id},
+                        "Key": {"CharacterID": {"S": character_id}},
                         "UpdateExpression": "SET ActiveStoryID = :story",
                         "ConditionExpression": "attribute_not_exists(ActiveStoryID)",
-                        "ExpressionAttributeValues": {":story": story_id},
+                        "ExpressionAttributeValues": {":story": to_attribute_value(story_id)},
                     }
                 },
             ]
@@ -703,6 +714,29 @@ def clean_value(value: object) -> object:
     elif isinstance(value, list):
         return [clean_value(v) for v in value]
     return value
+
+
+def to_attribute_value(value: object) -> dict:
+    """Convert a Python value to a DynamoDB typed attribute value.
+
+    The low-level client used by ``transact_write_items`` requires typed values
+    (for example ``{"S": "abc"}``) rather than the plain Python values accepted
+    by the high-level ``put_item`` / ``update_item`` table methods. ``bool`` is
+    checked before ``int`` because ``bool`` is a subclass of ``int``.
+    """
+    if isinstance(value, bool):
+        return {"BOOL": value}
+    if isinstance(value, str):
+        return {"S": value}
+    if isinstance(value, (int, float, Decimal)):
+        return {"N": str(value)}
+    if isinstance(value, list):
+        return {"L": [to_attribute_value(item) for item in value]}
+    if isinstance(value, dict):
+        return {"M": {key: to_attribute_value(item) for key, item in value.items()}}
+    if value is None:
+        return {"NULL": True}
+    return {"S": str(value)}
 
 
 def decimal_to_float(obj: object) -> object:

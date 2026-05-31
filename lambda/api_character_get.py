@@ -13,6 +13,7 @@ Authentication: Cognito (required)
 from eidolon.character_data import character_get, cleanup_expired_daily_stories
 from eidolon.character_story import get_active_story_and_segment, get_stories_with_character
 from eidolon.dynamo import decimal_to_float
+from eidolon.errors import UnauthorizedError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
@@ -106,7 +107,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Validate player exists
     if not validate_player(player_id):
         logger.error(f"Player: {player_id} not found in database")
-        raise ValueError("401:Unauthorized")
+        raise UnauthorizedError("Unauthorized")
 
     # Get character ID from query parameters
     character_id = get_query_parameter(event, "CharacterID")

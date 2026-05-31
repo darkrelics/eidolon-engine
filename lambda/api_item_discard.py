@@ -15,10 +15,12 @@ from botocore.exceptions import ClientError
 from eidolon.character_data import character_get
 from eidolon.contents import locate_item, write_contents
 from eidolon.dynamo import TableName, dynamo
+from eidolon.errors import NotFoundError, UnauthorizedError
 from eidolon.items import get_item_brief
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
+from eidolon.prototypes import item_is_stackable
 from eidolon.requests import parse_event_body
 from eidolon.story_rewards import update_reward_stack_quantity
 from eidolon.validation import validate_uuid
@@ -31,30 +33,21 @@ def discard_item(character_id: str, player_id: str, item_id: str, quantity_to_di
     the requested quantity, and persists the update on the owning parent
     (character or container item).
     """
-    try:
-        character = character_get(character_id, player_id)
-    except ValueError as err:
-        normalized = str(err).lower()
-        logger.warning(f"Character access denied: {err}")
-        if "not found" in normalized:
-            raise ValueError(f"404:{err}") from err
-        if "not owned" in normalized:
-            raise ValueError(f"403:{err}") from err
-        raise
+    character = character_get(character_id, player_id)
 
     location = locate_item(character, item_id)
     if not location.get("found"):
-        raise ValueError("404:Item not found in character inventory")
+        raise NotFoundError("Item not found in character inventory")
 
     item_record = location.get("item_record") or {}
     try:
         item_brief = get_item_brief(item_id)
         prototype_id = item_brief.get("PrototypeID")
-    except ValueError as err:
+    except NotFoundError as err:
         logger.warning(f"Item brief not found for {item_id}, continuing with discard: {err}")
         prototype_id = "unknown"
 
-    is_stackable = bool(item_record.get("Stackable"))
+    is_stackable = item_is_stackable(item_record)
     current_quantity = int(item_record.get("Quantity", 1)) if is_stackable else 1
 
     if quantity_to_discard is None:
@@ -109,7 +102,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     if not validate_player(player_id):
         logger.error(f"Player {player_id} not found in database")
-        raise ValueError("401:Unauthorized")
+        raise UnauthorizedError("Unauthorized")
 
     body = parse_event_body(event)
     character_id = body.get("CharacterID", "")

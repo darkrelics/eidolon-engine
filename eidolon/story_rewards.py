@@ -12,10 +12,11 @@ from eidolon.items import (
     build_item_from_prototype,
     create_item_from_prototype,
     distribute_into_stacks,
-    get_prototype,
     get_stack_space,
+    load_top_level_stacks,
 )
 from eidolon.logger import logger
+from eidolon.prototypes import get_prototype
 
 
 def create_reward_item(prototype_id: str, quantity=None, owner_id=None) -> dict:
@@ -105,31 +106,6 @@ def update_reward_stack_quantity(item_id: str, new_quantity: int, character_id: 
         logger.error(f"Failed to update quantity for reward stack {item_id} Error: {err}", exc_info=True)
 
 
-def _load_top_level_stacks(character_id: str, top_level_ids: list, prototype_id: str) -> list:
-    """Return ``(item_id, current_quantity)`` tuples for stackable items in the
-    character's top-level Contents that share ``prototype_id``.
-
-    Top-level only — existing stacks inside a container are untouched, which
-    keeps rewards flowing to the character's carry level by default.
-    """
-    matching = []
-    for item_id in top_level_ids:
-        if not item_id:
-            continue
-        try:
-            record = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})
-        except ClientError as err:
-            logger.error(f"Failed to inspect item {item_id} for reward merge: {err}")
-            continue
-        if not record or record.get("PrototypeID") != prototype_id:
-            continue
-        if not record.get("Stackable"):
-            continue
-        current = int(record.get("Quantity", 1) or 0)
-        matching.append((item_id, current))
-    return matching
-
-
 def _plan_item_reward(
     character_id: str,
     top_level_ids: list,
@@ -164,7 +140,7 @@ def _plan_item_reward(
         max_stack = 99
 
     remaining = quantity
-    for item_id, current in _load_top_level_stacks(character_id, top_level_ids, prototype_id):
+    for item_id, current in load_top_level_stacks(top_level_ids, prototype_id):
         if remaining <= 0:
             break
         space = get_stack_space(current, max_stack)

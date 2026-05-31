@@ -15,10 +15,11 @@ from botocore.exceptions import ClientError
 from eidolon.character_data import character_get
 from eidolon.contents import append_to_contents, locate_item
 from eidolon.dynamo import TableName, dynamo
-from eidolon.items import get_prototype
+from eidolon.errors import ConflictError, NotFoundError, UnauthorizedError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
+from eidolon.prototypes import get_prototype
 from eidolon.requests import parse_event_body
 from eidolon.story_rewards import create_reward_item
 from eidolon.validation import validate_uuid
@@ -52,7 +53,7 @@ def execute_split(
     except ClientError as err:
         if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
             logger.warning(f"Split failed: item {item_id} quantity changed (race)")
-            raise ValueError("409:Stack quantity changed during split. Please refresh your inventory.") from err
+            raise ConflictError("Stack quantity changed during split. Please refresh your inventory.") from err
         logger.error(f"Failed to decrement original stack {item_id}: {err}")
         raise RuntimeError("Failed to split stack") from err
 
@@ -120,7 +121,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     if not validate_player(player_id):
         logger.error(f"Player {player_id} not found in database")
-        raise ValueError("401:Unauthorized")
+        raise UnauthorizedError("Unauthorized")
 
     body = parse_event_body(event)
     character_id = body.get("CharacterID", "")
@@ -145,29 +146,20 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     if split_quantity < 1:
         raise ValueError("Quantity must be at least 1")
 
-    try:
-        character = character_get(character_id, player_id)
-    except ValueError as err:
-        normalized = str(err).lower()
-        logger.warning(f"Character access denied: {err}")
-        if "not found" in normalized:
-            raise ValueError(f"404:{err}") from err
-        if "not owned" in normalized:
-            raise ValueError(f"403:{err}") from err
-        raise
+    character = character_get(character_id, player_id)
 
     location = locate_item(character, item_id)
     if not location.get("found"):
-        raise ValueError("404:Item not found in character inventory")
+        raise NotFoundError("Item not found in character inventory")
 
     item_record = location.get("item_record") or {}
     prototype_id = item_record.get("PrototypeID")
     if not prototype_id:
-        raise ValueError("404:Item prototype reference missing")
+        raise NotFoundError("Item prototype reference missing")
 
     prototype = get_prototype(prototype_id)
     if not prototype:
-        raise ValueError("404:Item prototype not found")
+        raise NotFoundError("Item prototype not found")
     if not prototype.get("Stackable", False):
         raise ValueError("Cannot split non-stackable items")
 

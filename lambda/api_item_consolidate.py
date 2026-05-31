@@ -15,11 +15,13 @@ from botocore.exceptions import ClientError
 from eidolon.character_data import character_get
 from eidolon.contents import PARENT_CHARACTER, PARENT_ITEM, get_item_record
 from eidolon.dynamo import TableName, dynamo
+from eidolon.errors import NotFoundError, UnauthorizedError
 from eidolon.items import distribute_into_stacks, get_item_prototype_full
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
 from eidolon.player_character import batch_delete_with_fallback
+from eidolon.prototypes import item_is_container
 from eidolon.requests import parse_event_body
 from eidolon.story_rewards import update_reward_stack_quantity
 from eidolon.validation import validate_uuid
@@ -55,7 +57,7 @@ def walk_tree(character: dict) -> list:
             "item_record": record,
         })
 
-        if record.get("Container"):
+        if item_is_container(record):
             child_contents = record.get("Contents") or []
             for child_id in child_contents:
                 if child_id and child_id not in visited:
@@ -76,7 +78,7 @@ def group_by_prototype(entries: list, prototype_id_filter: str) -> tuple:
 
     for entry in entries:
         record = entry["item_record"]
-        if record.get("IsWorn") or record.get("Equipped"):
+        if record.get("IsWorn"):
             continue
         proto_id = record.get("PrototypeID")
         if not proto_id:
@@ -87,7 +89,7 @@ def group_by_prototype(entries: list, prototype_id_filter: str) -> tuple:
         if proto_id not in prototype_cache:
             try:
                 prototype_cache[proto_id] = get_item_prototype_full(proto_id)
-            except ValueError as err:
+            except NotFoundError as err:
                 logger.warning(f"Could not get prototype {proto_id}, skipping: {err}")
                 continue
         if not prototype_cache[proto_id].get("Stackable", False):
@@ -157,11 +159,7 @@ def apply_removals(remove_entries: list) -> None:
 
 def handle_consolidation(character_id: str, player_id: str, prototype_id_filter: str) -> dict:
     """Consolidate stackable items across the character's Contents tree."""
-    try:
-        character = character_get(character_id, player_id)
-    except ValueError as err:
-        logger.warning(f"Character access denied: {err}")
-        raise ValueError(f"403:{err}") from err
+    character = character_get(character_id, player_id)
 
     entries = walk_tree(character)
     if not entries:
@@ -222,7 +220,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     """
     if not validate_player(player_id):
         logger.error(f"Player {player_id} not found in database")
-        raise ValueError("401:Unauthorized")
+        raise UnauthorizedError("Unauthorized")
 
     body = parse_event_body(event)
     character_id = body.get("CharacterID", "")
