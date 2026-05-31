@@ -30,7 +30,6 @@ from botocore import UNSIGNED
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
-
 DEFAULT_MAX_SEGMENTS = 50
 DEFAULT_POLL_MIN_SECONDS = 2
 DEFAULT_POLL_MAX_SECONDS = 30
@@ -149,9 +148,7 @@ def cognito_login(cfg: dict) -> dict:
 
     auth_params = {"USERNAME": cfg["username"], "PASSWORD": cfg["password"]}
     try:
-        response = cognito.initiate_auth(
-            ClientId=cfg["client_id"], AuthFlow="USER_PASSWORD_AUTH", AuthParameters=auth_params
-        )
+        response = cognito.initiate_auth(ClientId=cfg["client_id"], AuthFlow="USER_PASSWORD_AUTH", AuthParameters=auth_params)
     except ClientError as err:
         raise RuntimeError(f"Cognito auth failed: {err.response.get('Error', {}).get('Message', str(err))}") from err
     except BotoCoreError as err:
@@ -234,8 +231,12 @@ class ApiClient:
             start = time.time()
             try:
                 resp = self.session.request(
-                    method, url, params=params, data=json.dumps(body) if body else None,
-                    headers=headers, timeout=30,
+                    method,
+                    url,
+                    params=params,
+                    data=json.dumps(body) if body else None,
+                    headers=headers,
+                    timeout=30,
                 )
             except requests.RequestException as err:
                 raise RuntimeError(f"{method} {path} network error: {err}") from err
@@ -347,9 +348,7 @@ def walk_story(client: ApiClient, character_id: str, story_id: str, args: argpar
     print(f"\n[OK] Starting story {story_id}")
 
     try:
-        start_resp = client.request(
-            "POST", "/story/start", {}, {"CharacterID": character_id, "StoryID": story_id}
-        )
+        start_resp = client.request("POST", "/story/start", {}, {"CharacterID": character_id, "StoryID": story_id})
     except RuntimeError as err:
         run.failure_reason = f"start failed: {err}"
         print(f"[ERROR] {run.failure_reason}")
@@ -469,10 +468,7 @@ def format_summary(stats: RunStats) -> None:
         flag = "[OK]" if run.completed else "[ERROR]"
         title = run.story_title or run.story_id
         outcomes = ", ".join(f"{k}={v}" for k, v in sorted(run.outcomes.items())) or "none"
-        print(
-            f"    {flag} {title}: segments={run.segments_processed} decisions={run.decisions_made} "
-            f"outcomes=({outcomes})"
-        )
+        print(f"    {flag} {title}: segments={run.segments_processed} decisions={run.decisions_made} " f"outcomes=({outcomes})")
         if run.failure_reason:
             print(f"        reason: {run.failure_reason}")
 

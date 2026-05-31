@@ -647,7 +647,10 @@ def execute_consume_transaction(
                         "Key": {"PlayerID": {"S": player_id}},
                         "UpdateExpression": "SET CharacterList.#name.Dead = :dead, UpdatedAt = :updated_at",
                         "ExpressionAttributeNames": {"#name": character_name},
-                        "ExpressionAttributeValues": {":dead": to_attribute_value(False), ":updated_at": to_attribute_value(timestamp)},
+                        "ExpressionAttributeValues": {
+                            ":dead": to_attribute_value(False),
+                            ":updated_at": to_attribute_value(timestamp),
+                        },
                     }
                 }
             )

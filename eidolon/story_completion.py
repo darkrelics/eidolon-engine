@@ -51,10 +51,13 @@ def _claim_story_completion(character_id: str, story_instance_id: str, outcome: 
         set FinishedAt. history is the story history record used for duration.
     """
     try:
-        history = dynamo.get_item(
-            TableName.STORY_HISTORY,
-            {"CharacterID": character_id, "StoryInstanceID": story_instance_id},
-        ) or {}
+        history = (
+            dynamo.get_item(
+                TableName.STORY_HISTORY,
+                {"CharacterID": character_id, "StoryInstanceID": story_instance_id},
+            )
+            or {}
+        )
     except ClientError as err:
         logger.error(f"Failed to read story history {story_instance_id}: {err}", exc_info=True)
         raise RuntimeError("Failed to read story history") from err

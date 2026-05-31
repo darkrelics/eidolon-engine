@@ -49,13 +49,15 @@ def walk_tree(character: dict) -> list:
         if not record:
             continue
 
-        entries.append({
-            "parent_kind": parent_kind,
-            "parent_id": parent_id,
-            "parent_contents": parent_contents,
-            "item_id": item_id,
-            "item_record": record,
-        })
+        entries.append(
+            {
+                "parent_kind": parent_kind,
+                "parent_id": parent_id,
+                "parent_contents": parent_contents,
+                "item_id": item_id,
+                "item_record": record,
+            }
+        )
 
         if item_is_container(record):
             child_contents = record.get("Contents") or []
@@ -183,13 +185,15 @@ def handle_consolidation(character_id: str, player_id: str, prototype_id_filter:
         for item_id, new_qty in keep_updates:
             update_reward_stack_quantity(item_id, new_qty)
 
-        consolidated_stacks.append({
-            "PrototypeID": proto_id,
-            "TotalQuantity": total_qty,
-            "StacksAfterConsolidation": stacks_after,
-            "StacksConsolidated": len(group),
-            "RemovedItemIDs": [e["item_id"] for e in remove_entries],
-        })
+        consolidated_stacks.append(
+            {
+                "PrototypeID": proto_id,
+                "TotalQuantity": total_qty,
+                "StacksAfterConsolidation": stacks_after,
+                "StacksConsolidated": len(group),
+                "RemovedItemIDs": [e["item_id"] for e in remove_entries],
+            }
+        )
         all_removals.extend(remove_entries)
 
     apply_removals(all_removals)
@@ -234,8 +238,5 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         raise ValueError("Invalid PrototypeID format")
 
     result = handle_consolidation(character_id, player_id, prototype_id)
-    logger.info(
-        f"Stack consolidation for character {character_id}: "
-        f"{len(result.get('ConsolidatedStacks', []))} types"
-    )
+    logger.info(f"Stack consolidation for character {character_id}: " f"{len(result.get('ConsolidatedStacks', []))} types")
     return {"status_code": 200, "body": result}

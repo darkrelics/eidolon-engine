@@ -14,6 +14,9 @@ from eidolon.character_state import calculate_heal_time
 from eidolon.dynamo import TableName, decimal_to_float, dynamo
 from eidolon.logger import logger
 from eidolon.state_machines import GameMode, set_character_game_mode
+
+# Prerequisite checking lives in eidolon.story_validation to avoid divergence.
+from eidolon.story_validation import check_story_prerequisites  # noqa: E402, F401
 from eidolon.validation import validate_uuid
 
 
@@ -112,10 +115,6 @@ def get_story_cooldown(character_id: str, story_id: str, story_type: str):
     except Exception as err:
         logger.error(f"Error checking story cooldown Error: {err}")
         return 0
-
-
-# Prerequisite checking lives in eidolon.story_validation to avoid divergence.
-from eidolon.story_validation import check_story_prerequisites  # noqa: E402, F401
 
 
 def get_stories(character_id: str, player_id: str, available_story_ids: list) -> list:

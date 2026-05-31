@@ -6,7 +6,7 @@ Provides functions for calculating and applying story rewards.
 
 from botocore.exceptions import ClientError
 
-from eidolon.contents import append_to_contents, PARENT_CHARACTER
+from eidolon.contents import PARENT_CHARACTER, append_to_contents
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import (
     build_item_from_prototype,
