@@ -13,6 +13,7 @@ Authentication: Cognito (required)
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
+from eidolon.errors import AccessDeniedError, NotFoundError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
@@ -89,7 +90,7 @@ def get_story_context_from_history(character_id: str) -> dict:
     try:
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
         if not character:
-            raise ValueError("404:Character not found")
+            raise NotFoundError("Character not found")
     except ClientError as err:
         logger.error(f"Failed to get character data: {err}")
         raise RuntimeError(f"Failed to load character: {err}") from err
@@ -228,7 +229,7 @@ def get_segment_history(character_id: str, player_id: str) -> dict:
         RuntimeError: If database operations fail
     """
     if not verify_character_ownership(character_id, player_id):
-        raise ValueError("403:Access denied")
+        raise AccessDeniedError("Access denied")
 
     # Try active segment first, fall back to story history
     context = get_story_context_from_active_segment(character_id)

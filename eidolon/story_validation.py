@@ -7,6 +7,7 @@ Provides functions for checking story availability and prerequisites.
 from datetime import datetime, timezone
 
 from eidolon.constants import CharState
+from eidolon.contents import collect_item_ids
 from eidolon.logger import logger
 
 
@@ -30,16 +31,9 @@ def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
 
     required_items = prerequisites.get("requiredItems", [])
     if required_items:
-        inventory = character.get("Inventory", {})
-        inventory_item_ids = []
-        for item_data in inventory.values():
-            if item_data and isinstance(item_data, dict):
-                item_id = item_data.get("ItemID")
-                if item_id:
-                    inventory_item_ids.append(item_id)
-
+        owned = collect_item_ids(character)
         for item_id in required_items:
-            if item_id not in inventory_item_ids:
+            if item_id not in owned:
                 return False
 
     return True

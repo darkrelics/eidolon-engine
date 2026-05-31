@@ -141,7 +141,12 @@ abstract class BaseApiService {
     }
   }
 
-  /// Generic HTTP request handler
+  /// Generic HTTP request handler.
+  ///
+  /// On a 401 response, this transparently attempts a single token refresh +
+  /// retry so that mid-session expiry does not bubble up as a raw
+  /// UnauthorizedException to every caller. Only one retry is attempted;
+  /// persistent 401s are propagated so the auth layer can redirect to login.
   Future<T> executeRequest<T>({
     required String method,
     required String endpoint,
@@ -150,63 +155,76 @@ abstract class BaseApiService {
     T Function(Map<String, dynamic>)? parser,
     bool returnRawResponse = false,
   }) async {
-    // Validate inputs before making request
     _validateMethod(method);
     _validateEndpoint(endpoint);
     _validateQueryParams(queryParams);
 
     try {
-      // Build URI with query parameters
+      return await _sendOnce<T>(
+        method: method,
+        endpoint: endpoint,
+        body: body,
+        queryParams: queryParams,
+        parser: parser,
+        returnRawResponse: returnRawResponse,
+      );
+    } on UnauthorizedException {
+      final refreshed = await _authService.forceRefreshSession();
+      if (!refreshed) {
+        rethrow;
+      }
+      return _sendOnce<T>(
+        method: method,
+        endpoint: endpoint,
+        body: body,
+        queryParams: queryParams,
+        parser: parser,
+        returnRawResponse: returnRawResponse,
+      );
+    }
+  }
+
+  Future<T> _sendOnce<T>({
+    required String method,
+    required String endpoint,
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParams,
+    T Function(Map<String, dynamic>)? parser,
+    bool returnRawResponse = false,
+  }) async {
+    try {
       final uri = Uri.parse('$baseUrl$endpoint').replace(
         queryParameters: queryParams != null && queryParams.isNotEmpty ? queryParams : null,
       );
 
       debugPrint('API [$method]: $uri');
 
-      // Validate and encode body
       final encodedBody = _validateAndEncodeBody(body);
-
-      // Get headers
       final headers = await getHeaders();
 
-      // Make request
       http.Response response;
       switch (method.toUpperCase()) {
         case 'GET':
           response = await _httpClient.get(uri, headers: headers);
           break;
         case 'POST':
-          response = await _httpClient.post(
-            uri,
-            headers: headers,
-            body: encodedBody,
-          );
+          response = await _httpClient.post(uri, headers: headers, body: encodedBody);
           break;
         case 'PUT':
-          response = await _httpClient.put(
-            uri,
-            headers: headers,
-            body: encodedBody,
-          );
+          response = await _httpClient.put(uri, headers: headers, body: encodedBody);
           break;
         case 'DELETE':
           response = await _httpClient.delete(uri, headers: headers);
           break;
         case 'PATCH':
-          response = await _httpClient.patch(
-            uri,
-            headers: headers,
-            body: encodedBody,
-          );
+          response = await _httpClient.patch(uri, headers: headers, body: encodedBody);
           break;
         default:
-          // This should never happen due to validation above
           throw ArgumentError('Unsupported HTTP method: $method');
       }
 
       debugPrint('API Response [${response.statusCode}]: ${response.body}');
 
-      // Handle response
       if (response.statusCode >= 200 && response.statusCode < 300) {
         if (returnRawResponse) {
           return response.body as T;
@@ -228,9 +246,7 @@ abstract class BaseApiService {
       } else if (response.statusCode == 401) {
         throw UnauthorizedException('Unauthorized');
       } else {
-        // Parse error message
-        String errorMessage =
-            'Request failed with status ${response.statusCode}';
+        String errorMessage = 'Request failed with status ${response.statusCode}';
         try {
           final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
           errorMessage =
@@ -244,7 +260,6 @@ abstract class BaseApiService {
         throw ApiException(errorMessage, statusCode: response.statusCode);
       }
     } on ArgumentError catch (e) {
-      // Input validation errors
       debugPrint('API Validation Error: $e');
       throw ValidationException(e.message);
     } catch (e) {
