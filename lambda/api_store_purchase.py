@@ -11,6 +11,7 @@ Authentication: Cognito (required)
 """
 
 from eidolon.character_data import character_get
+from eidolon.errors import UnauthorizedError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
@@ -42,13 +43,14 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Validate player exists
     if not validate_player(player_id):
         logger.error(f"Player {player_id} not found in database")
-        raise ValueError("401:Unauthorized")
+        raise UnauthorizedError("Unauthorized")
 
     # Parse request body
     body = parse_event_body(event)
     character_id = body.get("CharacterID", "")
     prototype_id = body.get("PrototypeID", "")
     quantity = body.get("Quantity", 1)
+    store_id = body.get("StoreID") or "general-store"
 
     # Validate required parameters
     if not character_id:
@@ -71,50 +73,28 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     if quantity > 99:
         raise ValueError("Quantity cannot exceed 99 per transaction")
 
-    # Verify character ownership
-    try:
-        character_get(character_id, player_id)
-    except ValueError as err:
-        normalized = str(err).lower()
-        logger.warning(f"Character access denied: {err}")
-        if "not found" in normalized:
-            raise ValueError(f"404:{err}") from err
-        if "not owned" in normalized:
-            raise ValueError(f"403:{err}") from err
-        raise
+    # Verify character ownership (character_get raises typed errors -> 404 / 403)
+    character_get(character_id, player_id)
 
-    # Attempt purchase
-    try:
-        result = purchase_item(character_id, prototype_id, quantity)
-        total_cost = result.get("total_cost", 0)
-        item_ids = result.get("item_ids", [])
-        quantity_purchased = result.get("quantity", 0)
-        currency_remaining = result.get("currency_remaining", 0)
+    # Attempt purchase (purchase_item raises typed errors mapped by the decorator:
+    # PaymentRequired 402, NotFound 404, Conflict 409, Validation 400).
+    result = purchase_item(character_id, prototype_id, quantity, store_id=store_id)
+    total_cost = result.get("total_cost", 0)
+    item_ids = result.get("item_ids", [])
+    quantity_purchased = result.get("quantity", 0)
+    currency_remaining = result.get("currency_remaining", 0)
 
-        logger.info(f"Purchase successful: {quantity}x {prototype_id} " f"for character {character_id} (cost: {total_cost})")
+    logger.info(f"Purchase successful: {quantity}x {prototype_id} for character {character_id} (cost: {total_cost})")
 
-        # Return purchase results
-        return {
-            "status_code": 200,
-            "body": {
-                "Success": True,
-                "ItemIDs": item_ids,
-                "Quantity": quantity_purchased,
-                "TotalCost": total_cost,
-                "CurrencyRemaining": currency_remaining,
-                "Message": f"Successfully purchased {quantity_purchased} item(s)",
-            },
-        }
-    except ValueError as err:
-        # Business logic errors (insufficient funds, out of stock, etc.)
-        error_msg = str(err)
-
-        # Map specific errors to appropriate HTTP status codes
-        if "insufficient funds" in error_msg.lower():
-            raise ValueError(f"402:{error_msg}") from err  # 402 Payment Required
-        elif "not available" in error_msg.lower() or "not found" in error_msg.lower():
-            raise ValueError(f"404:{error_msg}") from err
-        elif "insufficient stock" in error_msg.lower():
-            raise ValueError(f"409:{error_msg}") from err  # 409 Conflict
-        else:
-            raise ValueError(f"400:{error_msg}") from err
+    # Return purchase results
+    return {
+        "status_code": 200,
+        "body": {
+            "Success": True,
+            "ItemIDs": item_ids,
+            "Quantity": quantity_purchased,
+            "TotalCost": total_cost,
+            "CurrencyRemaining": currency_remaining,
+            "Message": f"Successfully purchased {quantity_purchased} item(s)",
+        },
+    }

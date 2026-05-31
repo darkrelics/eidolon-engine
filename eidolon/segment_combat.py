@@ -9,6 +9,7 @@ from botocore.exceptions import ClientError
 from eidolon.character_state import calculate_heal_time
 from eidolon.constants import DEFAULT_COMBAT_ROUNDS, PLAYER_DEATH_LETHAL_WOUNDS, PLAYER_INCAPACITATED_TOTAL_WOUNDS
 from eidolon.dynamo import TableName, dynamo
+from eidolon.equipment import compute_effective_combat_traits
 from eidolon.logger import logger
 from eidolon.mechanics import resolve_opposed_check_with_xp
 
@@ -83,6 +84,129 @@ def get_character_defensive_action(offensive_action: str, attributes: dict, skil
     return defensive_action, rating, attribute_name, skill_name
 
 
+def load_opponent(opponent_id: str) -> dict:
+    """Load opponent data from the OPPONENTS table, raising if it is missing."""
+    try:
+        opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+        if not opponent:
+            logger.error(f"Opponent not found for {opponent_id}")
+            raise ValueError(f"Opponent not found: {opponent_id}")
+    except ClientError as err:
+        logger.error(f"Failed to get opponent data for {opponent_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to get opponent data: {err}") from err
+    return opponent
+
+
+def apply_round_damage(
+    round_results: dict,
+    char_off_result: dict,
+    opp_off_result: dict,
+    player_wounds: list,
+    opponent_wounds: list,
+    opponent_weapon_type: str,
+    character_max_health: int,
+) -> None:
+    """Apply one round's damage to the player and opponent wound lists in place.
+
+    Mutates ``player_wounds``, ``opponent_wounds``, and ``round_results["Damage"]``.
+    Reported ``CharacterTook`` is the actual change in wound count, so the
+    unconscious-bashing conversion (which worsens an existing wound instead of
+    adding one) does not report a phantom wound.
+    """
+    # Character takes damage IF opponent's attack succeeded (character defense failed)
+    if not opp_off_result["Success"]:
+        sigma = -opp_off_result["Sigma"]  # Invert to get opponent's perspective
+        damage = 2 if sigma > 3.0 else 1  # Critical hit = 2 wounds, normal = 1 wound
+
+        wounds_before = len(player_wounds)
+        for _ in range(damage):
+            # Check if character is unconscious BEFORE applying this wound
+            is_unconscious = len(player_wounds) >= character_max_health
+            damage_type = opponent_weapon_type
+
+            # Bashing damage to an unconscious character converts existing bashing to lethal
+            if is_unconscious and damage_type == "bashing":
+                for wound in player_wounds:
+                    if wound.get("DamageType") == "bashing":
+                        wound["DamageType"] = "lethal"
+                        wound["HealAt"] = calculate_heal_time("lethal")
+                        break
+                # Whether converted or not, don't add a new wound to an unconscious character
+                continue
+
+            player_wounds.append({"DamageType": damage_type, "HealAt": calculate_heal_time(damage_type)})
+
+        round_results["Damage"]["CharacterTook"] = len(player_wounds) - wounds_before
+        round_results["Damage"]["CharacterWoundType"] = opponent_weapon_type
+
+    # Opponent takes damage IF character's attack succeeded
+    if char_off_result["Success"]:
+        sigma = char_off_result["Sigma"]
+        damage = 2 if sigma > 3.0 else 1  # Critical hit = 2 wounds, normal = 1 wound
+
+        # Apply bashing wounds to opponent (no weapon in interim system)
+        for _ in range(damage):
+            opponent_wounds.append({"DamageType": "bashing", "HealAt": calculate_heal_time("bashing")})
+
+        round_results["Damage"]["OpponentTook"] = damage
+        round_results["Damage"]["OpponentWoundType"] = "bashing"
+
+
+def check_round_outcome(player_wounds: list, opponent_wounds: list, opponent_health: int) -> tuple:
+    """Return ``(outcome, victor, opponent_defeated)`` if combat ended this round, else ``()``.
+
+    Death and incapacitation are checked before opponent defeat. Opponent wounds
+    count equally since opponents do not heal. An empty tuple signals that combat
+    continues, so callers test the result for truthiness before unpacking.
+    """
+    # Count both lethal and aggravated wounds for death (aggravated is worse than lethal)
+    deadly_wounds = sum(1 for w in player_wounds if w.get("DamageType") in ["lethal", "aggravated"])
+
+    if deadly_wounds >= PLAYER_DEATH_LETHAL_WOUNDS:
+        return "death", "opponent", False
+
+    if len(player_wounds) >= PLAYER_INCAPACITATED_TOTAL_WOUNDS:
+        return "failure", "opponent", False
+
+    if len(opponent_wounds) >= opponent_health:
+        # Outcome quality depends on how many wounds the character took
+        player_wound_count = len(player_wounds)
+        if player_wound_count == 0:
+            outcome = "exceptional"  # Flawless victory
+        elif player_wound_count <= 2:
+            outcome = "normal"  # Clean victory
+        else:
+            outcome = "minimal"  # Costly victory
+        return outcome, "player", True
+
+    return ()
+
+
+def build_combat_state(
+    rounds: int,
+    player_wounds: list,
+    opponent_wounds: list,
+    combat_log: list,
+    victor: str,
+    opponent_defeated: bool,
+    opponent_id: str,
+    opponent_name: str,
+    xp_accumulator: dict,
+) -> dict:
+    """Build the combat_state dict returned alongside the outcome."""
+    return {
+        "Rounds": rounds,
+        "PlayerWounds": player_wounds,
+        "OpponentWounds": opponent_wounds,
+        "CombatLog": combat_log,
+        "Victor": victor,
+        "OpponentDefeated": opponent_defeated,
+        "OpponentID": opponent_id,
+        "OpponentName": opponent_name,
+        "XPUpdates": xp_accumulator,
+    }
+
+
 def process_combat_segment(active_segment: dict, segment_def: dict, character: dict) -> tuple:
     """
     Process a combat segment using dual action system (offensive + defensive per combatant).
@@ -99,21 +223,12 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     opponent_id = combat_config.get("OpponentID")
     max_rounds = int(combat_config.get("MaxRounds") or DEFAULT_COMBAT_ROUNDS)
 
-    # Get opponent data
-    try:
-        opponent = dynamo.get_item(TableName.OPPONENTS, {"OpponentID": opponent_id})
+    opponent = load_opponent(opponent_id)
 
-        if not opponent:
-            logger.error(f"Opponent not found for {opponent_id}")
-            raise ValueError(f"Opponent not found: {opponent_id}")
-    except ClientError as err:
-        logger.error(f"Failed to get opponent data for {opponent_id} Error: {err}", exc_info=True)
-        raise RuntimeError(f"Failed to get opponent data: {err}") from err
-
-    # Get character stats
+    # Get character stats, with equipped items' trait mods folded into the
+    # effective attributes and skills so worn gear affects ratings (ITEM-2).
     character_id = character.get("CharacterID")
-    character_attributes = character.get("Attributes", {})
-    character_skills = character.get("Skills", {})
+    character_attributes, character_skills = compute_effective_combat_traits(character)
     character_max_health = character.get("MaxHealth", 10)
 
     # Determine character's best offensive action (done once at combat start)
@@ -216,123 +331,49 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         }
 
         # STEP 3: Apply damage based on opposed check results
-        # Character takes damage IF opponent's attack succeeded (character defense failed)
-        if not opp_off_result["Success"]:  # Inverted because we swapped inputs
-            # Determine damage amount based on opponent's sigma (inverted from result)
-            sigma = -opp_off_result["Sigma"]  # Invert to get opponent's perspective
-            damage = 2 if sigma > 3.0 else 1  # Critical hit = 2 wounds, normal = 1 wound
-
-            # Apply wounds using opponent's weapon type
-            for _ in range(damage):
-                # Check if character is unconscious BEFORE applying this wound
-                total_wounds = len(player_wounds)
-                is_unconscious = total_wounds >= character_max_health
-
-                damage_type = opponent_weapon_type
-
-                # Special rule: bashing damage to unconscious characters converts existing bashing to lethal
-                if is_unconscious and damage_type == "bashing":
-                    # Find an existing bashing wound to convert to lethal
-                    for wound in player_wounds:
-                        if wound.get("DamageType") == "bashing":
-                            wound["DamageType"] = "lethal"
-                            wound["HealAt"] = calculate_heal_time("lethal")
-                            break
-                    # Whether converted or not, don't add a new wound to an unconscious character
-                    continue
-
-                player_wounds.append({"DamageType": damage_type, "HealAt": calculate_heal_time(damage_type)})
-
-            round_results["Damage"]["CharacterTook"] = damage
-            round_results["Damage"]["CharacterWoundType"] = opponent_weapon_type
-
-        # Opponent takes damage IF character's attack succeeded
-        if char_off_result["Success"]:
-            # Determine damage amount based on sigma
-            sigma = char_off_result["Sigma"]
-            damage = 2 if sigma > 3.0 else 1  # Critical hit = 2 wounds, normal = 1 wound
-
-            # Apply bashing wounds to opponent (no weapon in interim system)
-            for _ in range(damage):
-                opponent_wounds.append({"DamageType": "bashing", "HealAt": calculate_heal_time("bashing")})
-
-            round_results["Damage"]["OpponentTook"] = damage
-            round_results["Damage"]["OpponentWoundType"] = "bashing"
+        apply_round_damage(
+            round_results,
+            char_off_result,
+            opp_off_result,
+            player_wounds,
+            opponent_wounds,
+            opponent_weapon_type,
+            character_max_health,
+        )
 
         # Log round results
         combat_log.append(round_results)
 
-        # STEP 6: Check victory conditions after damage applied
-        # Check character death/incapacitation first
-        # Count both lethal and aggravated wounds for death check (aggravated is worse than lethal)
-        deadly_wounds = sum(1 for w in player_wounds if w.get("DamageType") in ["lethal", "aggravated"])
-        total_wounds = len(player_wounds)
-
-        if deadly_wounds >= PLAYER_DEATH_LETHAL_WOUNDS:
-            logger.info(f"Character defeated in round {round_num + 1} (deadly wounds: {deadly_wounds})")
-            return "death", {
-                "Rounds": round_num + 1,
-                "PlayerWounds": player_wounds,
-                "OpponentWounds": opponent_wounds,
-                "CombatLog": combat_log,
-                "Victor": "opponent",
-                "OpponentDefeated": False,
-                "OpponentID": opponent_id,
-                "OpponentName": opponent_name,
-                "XPUpdates": xp_accumulator,
-            }
-
-        if total_wounds >= PLAYER_INCAPACITATED_TOTAL_WOUNDS:
-            logger.info(f"Character incapacitated in round {round_num + 1} (total wounds: {total_wounds})")
-            return "failure", {
-                "Rounds": round_num + 1,
-                "PlayerWounds": player_wounds,
-                "OpponentWounds": opponent_wounds,
-                "CombatLog": combat_log,
-                "Victor": "opponent",
-                "OpponentDefeated": False,
-                "OpponentID": opponent_id,
-                "OpponentName": opponent_name,
-                "XPUpdates": xp_accumulator,
-            }
-
-        # Check opponent defeat - any wounds count equally since opponents don't heal
-        opponent_total_wounds = len(opponent_wounds)
-
-        if opponent_total_wounds >= opponent_health:
-            # Opponent defeated - determine outcome quality based on character wounds taken
-            player_wound_count = len(player_wounds)
-
-            if player_wound_count == 0:
-                outcome = "exceptional"  # Flawless victory
-            elif player_wound_count <= 2:
-                outcome = "normal"  # Clean victory
-            else:
-                outcome = "minimal"  # Costly victory
-
-            logger.info(f"Opponent defeated in round {round_num + 1} (outcome: {outcome}, character wounds: {player_wound_count})")
-            return outcome, {
-                "Rounds": round_num + 1,
-                "PlayerWounds": player_wounds,
-                "OpponentWounds": opponent_wounds,
-                "CombatLog": combat_log,
-                "Victor": "player",
-                "OpponentDefeated": True,
-                "OpponentID": opponent_id,
-                "OpponentName": opponent_name,
-                "XPUpdates": xp_accumulator,
-            }
+        # STEP 4: Check victory conditions after damage applied
+        outcome = check_round_outcome(player_wounds, opponent_wounds, opponent_health)
+        if outcome:
+            outcome_name, victor, opponent_defeated = outcome
+            logger.info(
+                f"Combat ended in round {round_num + 1}: {outcome_name} "
+                f"(victor: {victor}, character wounds: {len(player_wounds)})"
+            )
+            return outcome_name, build_combat_state(
+                round_num + 1,
+                player_wounds,
+                opponent_wounds,
+                combat_log,
+                victor,
+                opponent_defeated,
+                opponent_id,
+                opponent_name,
+                xp_accumulator,
+            )
 
     # Max rounds reached without decisive outcome - opponent escapes
     logger.info(f"Combat reached max rounds ({max_rounds}) - opponent escaped")
-    return "failure", {
-        "Rounds": max_rounds,
-        "PlayerWounds": player_wounds,
-        "OpponentWounds": opponent_wounds,
-        "CombatLog": combat_log,
-        "Victor": "opponent",
-        "OpponentDefeated": False,
-        "OpponentID": opponent_id,
-        "OpponentName": opponent_name,
-        "XPUpdates": xp_accumulator,
-    }
+    return "failure", build_combat_state(
+        max_rounds,
+        player_wounds,
+        opponent_wounds,
+        combat_log,
+        "opponent",
+        False,
+        opponent_id,
+        opponent_name,
+        xp_accumulator,
+    )

@@ -32,7 +32,7 @@ void main() {
         attributes: {'strength': 3.0, 'agility': 2.0},
         skills: {'melee': 2.0, 'dodge': 1.0},
         resources: {'gold': 100},
-        inventory: {},
+        contents: const [],
         progress: {},
         activeStoryID: 'test-story-1',
         activeSegmentID: 'test-segment-1',

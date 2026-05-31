@@ -58,7 +58,14 @@ Items marked with `"Stackable": true` in their prototype are fungible - every in
 - `PrototypeID`: Reference to item prototype
 - `Quantity`: Number of items in stack (1 or more)
 - `OwnerID`: Character or container holding the stack
-- `LocationID`: Optional - where item is stored
+- `LocationID`: Reserved - not used by the current implementation
+
+> Implementation note: items reference their prototype rather than copying it.
+> All type properties (Name, Mass, Value, Stackable, Container, ConsumableEffects,
+> TraitMods, and so on) are resolved from the prototype at read time through
+> `eidolon/prototypes.py` and are not stored on the item record. Placement is
+> tracked by the character-as-container `Contents` tree together with `OwnerID`,
+> so the persisted stackable record is `{ItemID, PrototypeID, Quantity, OwnerID}`.
 
 ## Non-Stackable Items
 
@@ -99,9 +106,14 @@ Items marked with `"Stackable": false` in their prototype are unique instances t
 
 **Allowed fields for non-stackable items**:
 
-- All base fields (ItemID, PrototypeID, OwnerID, LocationID)
+- All base fields (ItemID, PrototypeID, OwnerID)
 - Any custom properties defined by game logic
 - NO Quantity field
+
+> Implementation note: the persisted non-stackable record is
+> `{ItemID, PrototypeID, OwnerID}`, plus `Contents` for containers and `IsWorn`
+> for wearable items. `IsWorn` is the single canonical worn-state field. As with
+> stackable items, all type properties resolve from the prototype at read time.
 
 ## Item Prototypes
 
@@ -187,29 +199,13 @@ Examples:
 
 ### Stack Merging
 
-When picking up stackable items:
-
-```python
-def merge_stacks(existing: dict, new: dict, prototype: dict) -> dict:
-    """
-    Merge new items into existing stack.
-    The older stack (by UUIDv7 timestamp) keeps its ItemID.
-    """
-    if not prototype.get("Stackable"):
-        return None  # Can't merge non-stackable
-
-    total = existing.get("Quantity", 1) + new.get("Quantity", 1)
-
-    # UUIDv7 has timestamp, so lexicographic comparison gives older item
-    if existing["ItemID"] < new["ItemID"]:
-        # Existing is older, keep its ID
-        existing["Quantity"] = total
-        return existing
-    else:
-        # New is older, use its ID
-        new["Quantity"] = total
-        return new
-```
+Stacking happens when stackable items are created (store purchases and story
+rewards). New quantity is merged into existing top-level stacks of the same
+prototype, up to the prototype's `MaxStack`, before any new stack records are
+minted. The shared helper `load_top_level_stacks(top_level_ids, prototype_id)`
+in `eidolon/items.py` finds existing stacks by `PrototypeID`; merging is purely
+by quantity and does not depend on item-ID ordering. Item IDs are random UUIDv4
+and carry no timestamp, so there is no "older stack" relation to rely on.
 
 ### Stack Splitting
 
@@ -234,6 +230,67 @@ def split_stack(stack: dict, split_quantity: int) -> tuple:
     stack["Quantity"] -= split_quantity
     return stack, new_stack
 ```
+
+## Equipment
+
+Wearable items are equipped into character slots. An item is equipped when a
+slot references it and the item's `IsWorn` flag is set; the two facts are kept
+in step by committing them in a single transaction.
+
+### Slots
+
+There are two kinds of slot:
+
+- **Hand slots** `left_hand` and `right_hand`, stored on the character as
+  `LeftHandID` and `RightHandID`. An empty hand is represented by the field
+  being absent.
+- **Body slots**, stored in the character's `WornSlots` map (`{slot: ItemID}`),
+  keyed by the slot name (for example `armor`, `back`, `finger`, `weapon`). One
+  item per slot.
+
+A prototype's `Wearable` flag gates equipping, and its `WornOn` list enumerates
+the slots an item may occupy. The equip request names the target slot, which
+must appear in `WornOn`. Slot names that are not `left_hand` / `right_hand` are
+body slots and live in `WornSlots`.
+
+### Equip and Unequip
+
+`eidolon/equipment.py` provides `equip_item` and `unequip_item`, exposed as
+`POST /item/equip` and `POST /item/unequip`. Equipping validates ownership (the
+item is in the character's inventory), that the prototype is wearable, that the
+requested slot is permitted, and that the item is not already worn. The change
+is a single `transact_write_items` over two records: the character slot
+(conditional on the slot being empty) and the item's `IsWorn` flag (conditional
+on it not already being worn). Either condition failing cancels the whole
+transaction, so a slot and an item can never disagree about what is worn.
+Unequip is the inverse, conditional on the slot still holding the item.
+
+Starting equipment from an archetype follows the same invariant: a worn starting
+item is assigned the first free, valid slot at character creation, and stays
+worn only if a slot backs it.
+
+### Effect on Combat
+
+Combat and derived-stat calculation read the equipped set through
+`compute_effective_combat_traits`, which sums each equipped item's prototype
+`TraitMods` into the character's attributes and skills (a mod whose name matches
+an attribute boosts that attribute; otherwise it applies to skills, where combat
+reads Melee, Parry, Dodge, and the rest). The character's stored attributes and
+skills are not mutated. `Overrides` has no defined stat semantics and is
+reserved; it is not consumed by combat.
+
+## Item Movement
+
+`contents.move_item` (exposed as `POST /item/move`) relocates an item to a new
+parent: another owned container, or the character root when the destination is
+the character's own id. It validates that the item is in the character's tree and
+not currently worn (worn items are unequipped first), that the destination is the
+character or an owned container, that the move is not a no-op, and that a
+container is never moved into itself or one of its descendants. The relocation is
+a single transaction that removes the item from its current parent's `Contents`
+and appends it to the destination's, each guarded by a conditional check, so
+concurrent moves cannot duplicate or lose the item. Numeric container capacity is
+not modeled yet, so containers are treated as unbounded.
 
 ## Validation Rules
 

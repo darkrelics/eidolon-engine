@@ -6,7 +6,6 @@ import 'package:eidolon_incremental/models/story.dart';
 import 'package:eidolon_incremental/repositories/character_repository.dart';
 import 'package:eidolon_incremental/services/api_metrics.dart';
 import 'package:eidolon_incremental/services/api_service.dart';
-import 'package:eidolon_incremental/services/notification_service.dart';
 import 'package:eidolon_incremental/services/rate_limiter.dart';
 import 'package:eidolon_incremental/services/story_polling_service.dart';
 import 'package:eidolon_incremental/utils/debounce.dart';
@@ -41,6 +40,7 @@ class GameScreenController extends ChangeNotifier {
   String? _error;
   bool _isSubmittingDecision = false;
   bool _storyCompletionNotified = false;
+  bool _storyCompletionFinalized = false;
   Future<void>? _activeCharacterLoad;
   StoryLifecycleState _storyLifecycleState = StoryLifecycleState.none;
   bool _disposed = false;
@@ -191,6 +191,7 @@ class GameScreenController extends ChangeNotifier {
     _segmentHistory.reset();
     _lastStoryDetails = null;
     _storyCompletionNotified = false;
+    _storyCompletionFinalized = false;
     _storyLifecycleState = StoryLifecycleState.none;
     _handlingStoryCompletion = false;
   }
@@ -274,6 +275,7 @@ class GameScreenController extends ChangeNotifier {
       _error = null;
       if (character?.activeSegmentID != null) {
         _storyCompletionNotified = false;
+        _storyCompletionFinalized = false;
       }
 
       final storyData = character?.storyState?['Story'] as Map<String, dynamic>?;
@@ -342,6 +344,7 @@ class GameScreenController extends ChangeNotifier {
       _isLoading = true;
       _segmentHistory.segments = [];
       _storyCompletionNotified = false;
+      _storyCompletionFinalized = false;
       notifyListeners();
 
       final initialSegment = await _rateLimiter.limiter.executeHumanDriven(
@@ -487,6 +490,12 @@ class GameScreenController extends ChangeNotifier {
           } catch (fallbackError) {
             if (_disposed) return;
 
+            // Suppress errors from late-arriving segment updates after story end.
+            if (_storyCompletionFinalized) {
+              debugPrint('GameScreenController: Suppressing post-completion segment error: $fallbackError');
+              return;
+            }
+
             _error = 'Failed to update character';
             notifyListeners();
           }
@@ -526,6 +535,10 @@ class GameScreenController extends ChangeNotifier {
             });
           }
         } catch (e) {
+          if (_storyCompletionFinalized) {
+            debugPrint('GameScreenController: Suppressing post-completion reload error: $e');
+            return;
+          }
           _error = 'Failed to update character';
           notifyListeners();
         }
@@ -685,34 +698,6 @@ class GameScreenController extends ChangeNotifier {
         await _handleStoryCompletion(refreshCharacter: true);
       }
 
-      if (context.mounted && completedSegment != null) {
-        final outcome = completedSegment['Outcome'];
-        String? outcomeType;
-        Map<String, dynamic>? rewards;
-
-        if (outcome is Map<String, dynamic>) {
-          outcomeType = outcome['Type'] as String?;
-          final rawRewards = outcome['Rewards'];
-          if (rawRewards is Map<String, dynamic>) {
-            rewards = rawRewards;
-          }
-        } else if (outcome is String) {
-          outcomeType = outcome;
-        }
-
-        if (outcomeType != null) {
-          NotificationService.showSegmentComplete(context, segmentType: 'decision', outcome: outcomeType);
-
-          if (rewards != null) {
-            for (final reward in rewards.entries) {
-              await Future.delayed(const Duration(milliseconds: 500));
-              if (context.mounted) {
-                NotificationService.showReward(context, type: reward.key, value: reward.value);
-              }
-            }
-          }
-        }
-      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -732,7 +717,17 @@ class GameScreenController extends ChangeNotifier {
     bool showMessage = true,
     Map<String, dynamic>? finalActiveSegment,
   }) async {
-    // Prevent re-entry from concurrent callbacks (polling + character reload)
+    // Two-tier guard:
+    //  - _storyCompletionFinalized is a sticky flag set at the end of a successful
+    //    run and only cleared when a new story starts. It prevents sequential
+    //    re-entry from different callbacks (onCharacterReload, onStoryComplete,
+    //    decision-path) all racing to finalize the same story.
+    //  - _handlingStoryCompletion guards concurrent re-entry while an in-flight
+    //    call is awaiting (e.g. refreshCharacter: true).
+    if (_storyCompletionFinalized) {
+      debugPrint('GameScreenController: Story completion already finalized - skipping duplicate call');
+      return;
+    }
     if (_handlingStoryCompletion) {
       debugPrint('GameScreenController: Story completion already in progress - skipping duplicate call');
       return;
@@ -742,6 +737,11 @@ class GameScreenController extends ChangeNotifier {
     try {
       _runtime.stopPolling();
       ApiMetrics.endSegment();
+
+      // Clear any transient error from late onSegmentComplete / onCharacterReload
+      // callbacks that arrived after the story finished. Otherwise the panel's
+      // error state hides the completion screen.
+      _error = null;
 
       if (_storyLifecycleState != StoryLifecycleState.completed) {
         _storyLifecycleState = StoryLifecycleState.completed;
@@ -780,6 +780,8 @@ class GameScreenController extends ChangeNotifier {
       if (showMessage && !_storyCompletionNotified) {
         _storyCompletionNotified = true;
       }
+
+      _storyCompletionFinalized = true;
     } finally {
       _handlingStoryCompletion = false;
     }
@@ -854,6 +856,7 @@ class GameScreenController extends ChangeNotifier {
 
     _segmentHistory.segments = [];
     _storyCompletionNotified = false;
+    _storyCompletionFinalized = false;
     _lastStoryDetails = null;
     notifyListeners();
 

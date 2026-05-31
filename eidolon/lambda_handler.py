@@ -12,6 +12,7 @@ from functools import wraps
 
 from eidolon.cognito import extract_player_id
 from eidolon.cors import cors_handler
+from eidolon.errors import EidolonError
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.responses import lambda_error, lambda_response
 
@@ -71,17 +72,15 @@ def authenticated_handler(business_logic_func):
             status_code = result.get("status_code", 200)
             body = result.get("body", {})
             return lambda_response(status_code, body, event)
+        except EidolonError as err:
+            # Typed library errors carry their own HTTP status code.
+            logger.warning(f"Business logic error ({err.status_code}): {err}")
+            return lambda_response(err.status_code, {"Error": str(err)}, event)
         except ValueError as err:
-            # Business logic validation errors (400/403/404/409)
+            # Plain validation errors (bad input) map to 400. Status-specific
+            # outcomes are raised as typed EidolonError and handled above.
             logger.warning(f"Business logic validation error: {err}")
-            # Allow business logic to specify status code via error message prefix
-            # Format: "STATUS_CODE:Error message"
-            error_msg = str(err)
-            if ":" in error_msg and error_msg.split(":", 1)[0].isdigit():
-                status_code = int(error_msg.split(":", 1)[0])
-                error_text = error_msg.split(":", 1)[1].strip()
-                return lambda_response(status_code, {"Error": error_text}, event)
-            return lambda_response(400, {"Error": error_msg}, event)
+            return lambda_response(400, {"Error": str(err)}, event)
         except RuntimeError as err:
             # System errors (500)
             logger.error(f"System error: {err}", exc_info=True)

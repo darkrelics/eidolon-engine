@@ -6,16 +6,17 @@ Provides functions for calculating and applying story rewards.
 
 from botocore.exceptions import ClientError
 
+from eidolon.contents import PARENT_CHARACTER, append_to_contents
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import (
+    build_item_from_prototype,
     create_item_from_prototype,
     distribute_into_stacks,
-    find_matching_stack,
-    find_next_available_slot,
-    get_prototype,
     get_stack_space,
+    load_top_level_stacks,
 )
 from eidolon.logger import logger
+from eidolon.prototypes import get_prototype
 
 
 def create_reward_item(prototype_id: str, quantity=None, owner_id=None) -> dict:
@@ -105,165 +106,132 @@ def update_reward_stack_quantity(item_id: str, new_quantity: int, character_id: 
         logger.error(f"Failed to update quantity for reward stack {item_id} Error: {err}", exc_info=True)
 
 
-def apply_story_rewards(character_id: str, rewards: dict) -> None:
+def _plan_item_reward(
+    character_id: str,
+    top_level_ids: list,
+    prototype_id: str,
+    quantity: int,
+    planned_new_items: list,
+    planned_stack_updates: list,
+) -> list:
+    """Plan ITEMS-table writes for a single reward entry.
+
+    Returns the list of new ItemIDs that must be appended to the character's
+    top-level Contents. Also appends payloads to ``planned_new_items`` and
+    ``(item_id, new_quantity)`` tuples to ``planned_stack_updates`` for stack
+    top-ups.
     """
-    Apply calculated rewards to a character.
+    prototype = get_prototype(prototype_id)
+    is_stackable = prototype.get("Stackable", False) if prototype else False
+    new_item_ids: list = []
 
-    Args:
-        character_id: Character UUID
-        rewards: Dict containing items and currency
+    if not is_stackable:
+        for _ in range(quantity):
+            payload = build_item_from_prototype(prototype_id, owner_id=character_id)
+            if not payload:
+                continue
+            planned_new_items.append(payload)
+            new_item_ids.append(payload["ItemID"])
+            logger.info(f"Planned reward item: {payload['ItemID']}")
+        return new_item_ids
 
-    Raises:
-        RuntimeError: If database operations fail
+    max_stack = prototype.get("MaxStack", 99) if prototype else 99
+    if max_stack <= 0:
+        max_stack = 99
+
+    remaining = quantity
+    for item_id, current in load_top_level_stacks(top_level_ids, prototype_id):
+        if remaining <= 0:
+            break
+        space = get_stack_space(current, max_stack)
+        if space <= 0:
+            continue
+        add_qty = min(remaining, space)
+        new_quantity = current + add_qty
+        remaining -= add_qty
+        planned_stack_updates.append((item_id, new_quantity))
+        logger.info(f"Planned merge into stack {item_id}: +{add_qty}")
+
+    for stack_qty in distribute_into_stacks(remaining, max_stack) if remaining > 0 else []:
+        payload = build_item_from_prototype(prototype_id, quantity=stack_qty, owner_id=character_id)
+        if not payload:
+            continue
+        planned_new_items.append(payload)
+        new_item_ids.append(payload["ItemID"])
+        logger.info(f"Planned new reward stack: {payload['ItemID']} x{stack_qty}")
+
+    return new_item_ids
+
+
+def _persist_new_reward_items(planned_new_items: list) -> set:
+    """Persist newly-planned items; returns the set of ItemIDs that failed."""
+    if not planned_new_items:
+        return set()
+    failed_payloads = dynamo.batch_write_with_retries(TableName.ITEMS, planned_new_items, operation="put")
+    return {payload.get("ItemID") for payload in failed_payloads}
+
+
+def apply_story_rewards(character_id: str, rewards: dict) -> None:
+    """Append reward items to a character's top-level Contents.
+
+    Existing top-level stackables share a prototype get topped up first;
+    anything left over becomes new items appended to the character's Contents.
+    Stack-quantity bumps happen on the ITEMS records (Contents is a pure ID list
+    and doesn't duplicate quantity).
     """
     try:
-        # Get character data from DynamoDB
         character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id})
         if not character:
             raise RuntimeError(f"Character {character_id} not found")
 
-        # Get current inventory
-        inventory = character.get("Inventory", {})
-        if not isinstance(inventory, dict):
-            inventory = {}
+        top_level = list(character.get("Contents") or [])
 
-        # Capture original inventory slots for conditional check
-        original_inventory = set(inventory.keys())
+        planned_new_items: list = []
+        planned_stack_updates: list = []
+        items_to_append: list = []
 
-        items_created = []
-        update_expressions = []
-        expression_names = {}
-        expression_values = {}
+        for item_reward in rewards.get("items", []):
+            if not isinstance(item_reward, dict):
+                continue
+            prototype_id = item_reward.get("PrototypeID")
+            if not prototype_id:
+                continue
+            quantity = item_reward.get("Quantity", 1)
+            new_ids = _plan_item_reward(
+                character_id,
+                top_level,
+                prototype_id,
+                quantity,
+                planned_new_items,
+                planned_stack_updates,
+            )
+            items_to_append.extend(new_ids)
 
-        # Handle item rewards from story with MaxStack enforcement
-        item_rewards = rewards.get("items", [])
-        for item_reward in item_rewards:
-            if isinstance(item_reward, dict):
-                prototype_id = item_reward.get("PrototypeID")
-                quantity = item_reward.get("Quantity", 1)
+        if not planned_new_items and not planned_stack_updates:
+            logger.info(f"No reward items planned for {character_id}")
+            return
 
-                if prototype_id:
-                    # Get MaxStack from prototype
-                    prototype = get_prototype(prototype_id)
-                    is_stackable = prototype.get("Stackable", False) if prototype else False
+        failed_ids = _persist_new_reward_items(planned_new_items)
+        if failed_ids:
+            logger.error(f"Failed to persist {len(failed_ids)} reward items for {character_id}")
+            items_to_append = [item_id for item_id in items_to_append if item_id not in failed_ids]
 
-                    if not is_stackable:
-                        # Non-stackable: create individual items
-                        for _ in range(quantity):
-                            new_item = create_reward_item(
-                                prototype_id=prototype_id,
-                                quantity=None,
-                                owner_id=character_id,
-                            )
-                            if not new_item:
-                                continue
-                            item_id = new_item.get("ItemID")
-                            if not item_id:
-                                continue
-                            next_slot = find_next_available_slot(inventory)
-                            inventory[next_slot] = {"ItemID": item_id}
-                            items_created.append(item_id)
-                            logger.info(f"Created reward item in slot {next_slot}: {item_id}")
-                    else:
-                        # Stackable: respect MaxStack
-                        max_stack = prototype.get("MaxStack", 99) if prototype else 99
-                        if max_stack <= 0:
-                            max_stack = 99
+        for item_id, new_quantity in planned_stack_updates:
+            update_reward_stack_quantity(item_id, new_quantity, character_id)
 
-                        remaining_quantity = quantity
+        if items_to_append:
+            append_to_contents(PARENT_CHARACTER, character_id, items_to_append)
 
-                        # First, try to fill existing stacks
-                        while remaining_quantity > 0:
-                            existing_stack = find_matching_stack(inventory, prototype_id, quantity_to_add=1)
-                            if not existing_stack:
-                                break
-
-                            stack_slot, stack_data = existing_stack
-                            item_id = stack_data.get("ItemID")
-                            current_quantity = stack_data.get("Quantity", 0) or 0
-                            space_available = get_stack_space(current_quantity, max_stack)
-
-                            if space_available <= 0:
-                                break
-
-                            add_qty = min(remaining_quantity, space_available)
-                            new_quantity = current_quantity + add_qty
-                            remaining_quantity -= add_qty
-
-                            if isinstance(inventory.get(stack_slot), dict):
-                                inventory[stack_slot]["Quantity"] = new_quantity
-                            else:
-                                inventory[stack_slot] = {"ItemID": item_id, "Quantity": new_quantity}
-
-                            if item_id:
-                                update_reward_stack_quantity(item_id, new_quantity, character_id)
-                            logger.info(f"Merged reward item with existing stack in slot {stack_slot}: +{add_qty}")
-
-                        # Create new stacks for remaining quantity
-                        if remaining_quantity > 0:
-                            stack_quantities = distribute_into_stacks(remaining_quantity, max_stack)
-                            for stack_qty in stack_quantities:
-                                new_item = create_reward_item(
-                                    prototype_id=prototype_id,
-                                    quantity=stack_qty,
-                                    owner_id=character_id,
-                                )
-                                if not new_item:
-                                    continue
-                                item_id = new_item.get("ItemID")
-                                if not item_id:
-                                    continue
-                                next_slot = find_next_available_slot(inventory)
-                                inventory[next_slot] = {"ItemID": item_id, "Quantity": stack_qty}
-                                items_created.append(item_id)
-                                logger.info(f"Created reward item in slot {next_slot}: {item_id}")
-
-        # Update inventory in update expression
-        update_expressions.append("Inventory = :inventory")
-        expression_values[":inventory"] = inventory
-
-        # Build and execute the update
-        if update_expressions:
-            update_expression = "SET " + ", ".join(update_expressions)
-
-            # Use inventory slot check to prevent race conditions
-            first_new_slot = None
-            for slot in inventory:
-                if slot not in original_inventory:
-                    first_new_slot = slot
-                    break
-
-            if first_new_slot:
-                expression_names["#check_slot"] = first_new_slot
-                dynamo.update_item(
-                    TableName.CHARACTERS,
-                    Key={"CharacterID": character_id},
-                    UpdateExpression=update_expression,
-                    ExpressionAttributeNames=expression_names,
-                    ExpressionAttributeValues=expression_values,
-                    ConditionExpression="attribute_not_exists(Inventory.#check_slot)",
-                )
-            else:
-                # Only updating existing stacks, no new slots
-                update_kwargs = {
-                    "Key": {"CharacterID": character_id},
-                    "UpdateExpression": update_expression,
-                    "ExpressionAttributeValues": expression_values,
-                }
-                if expression_names:
-                    update_kwargs["ExpressionAttributeNames"] = expression_names
-                dynamo.update_item(TableName.CHARACTERS, **update_kwargs)
-
-        logger.info(f"Applied story rewards for {character_id}: {len(items_created)} items created")
+        logger.info(
+            f"Applied story rewards for {character_id}: "
+            f"{len(items_to_append)} new top-level items, {len(planned_stack_updates)} merged"
+        )
 
     except ClientError as err:
-        # Check if this was a conditional check failure (rewards already applied = race condition)
-        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
-            logger.warning("Rewards failed: inventory changed during application (race condition detected)")
-            raise RuntimeError("Rewards already applied or character state changed") from err
-
         logger.error(f"Failed to apply rewards for {character_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply rewards: {err}") from err
+    except RuntimeError:
+        raise
     except Exception as err:
         logger.error(f"Unexpected error applying rewards for {character_id}: {err}", exc_info=True)
         raise RuntimeError(f"Failed to apply rewards: {err}") from err

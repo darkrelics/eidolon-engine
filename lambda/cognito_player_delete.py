@@ -75,7 +75,13 @@ def lambda_handler(event: dict, context: object) -> dict:
 
         # Extract player ID based on event source
         if "detail" in event and "requestParameters" in event.get("detail", {}):
-            # CloudWatch Events from Cognito
+            # CloudWatch Events from Cognito user deletion.
+            # ASSUMPTION: the Cognito user pool uses the `sub` (UUID) as the
+            # username, so `requestParameters.username` equals the PlayerID. If
+            # the pool is ever configured to use email or a custom username, this
+            # branch must resolve the `sub` before deleting or it will target the
+            # wrong PlayerID. The API Gateway and direct-invocation paths use the
+            # authenticated `sub` directly and are unaffected.
             player_id = event.get("detail", {}).get("requestParameters", {}).get("username", "")
         elif "requestContext" in event and "authorizer" in event.get("requestContext", {}):
             # API Gateway with Cognito authorizer
