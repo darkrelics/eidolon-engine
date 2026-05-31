@@ -34,7 +34,7 @@ py-serializable==2.1.0
 pycodestyle==2.14.0
 pygments==2.20.0
 pyparsing==3.2.5
-requests==2.33.0
+requests==2.34.2
 rich==14.3.3
 six==1.17.0
 sortedcontainers==2.4.0
