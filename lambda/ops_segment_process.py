@@ -7,7 +7,7 @@ Lambda function to process segments.
 Triggered by SQS with ActiveSegmentID messages.
 """
 
-from eidolon.character_data import get_character
+from eidolon.character_data import persist_healed_wounds
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.segment_core import get_active_segment, get_segment_definition
 from eidolon.segment_polling import claim_segment_for_processing
@@ -49,8 +49,10 @@ def process_segment(active_segment: dict) -> None:
         logger.error(f"Failed to get segment definition for {active_segment.get('SegmentID')}: {err}", exc_info=True)
         raise err
 
-    # Get character
-    character = get_character(active_segment.get("CharacterID"))  # type: ignore
+    # Get character and persist any expired-wound healing on this mutating tick,
+    # so the stored wound list stays consistent before new combat wounds are
+    # appended (reads heal in memory only; this is where the heal is persisted).
+    character = persist_healed_wounds(active_segment.get("CharacterID"))  # type: ignore
 
     # Process based on type (computes outcome without applying effects to database)
     outcome, results = route_segment_processing(segment_def, character, active_segment)

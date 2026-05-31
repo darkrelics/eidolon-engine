@@ -231,6 +231,128 @@ def get_next_segment_time(active_segment: dict, decision_id: str) -> int:
         return 0
 
 
+def record_character_decision(active_segment: dict, decision_id: str, character_id: str, story_id, segment_id) -> dict:
+    """Validate the chosen option, persist the decision, and record history.
+
+    Marks the active segment decided (outcome, decision, timestamp), generates its
+    ClientEvents, and writes its history snapshot. Returns the segment definition.
+
+    Raises:
+        ValueError: If the active segment is missing its ID or the decision option is invalid.
+    """
+    active_segment_id = active_segment.get("ActiveSegmentID")
+    if not active_segment_id:
+        raise ValueError("Active segment ID not found")
+
+    validate_decision_option(active_segment, decision_id)
+    update_segment_decision(active_segment_id, decision_id)
+
+    active_segment["Outcome"] = "normal"
+    active_segment["Decision"] = decision_id
+    active_segment["DecisionMadeAt"] = now_iso()
+
+    if not active_segment.get("StoryInstanceID"):
+        logger.warning(f"StoryInstanceID missing for segment {active_segment_id}, history tracking may be incomplete")
+
+    segment_def = get_segment_definition(str(story_id), str(segment_id))
+
+    # Generate ClientEvents for the decision to enrich history
+    process_decision_segment(active_segment, segment_def)
+    record_segment_history(character_id, story_id, active_segment_id, active_segment)
+
+    return segment_def
+
+
+def build_completed_segment_response(active_segment: dict, segment_def: dict, decision_id: str) -> dict:
+    """Build the response payload describing the just-completed decision segment.
+
+    Included so the client can display the decision's narrative without a reload.
+    """
+    return {
+        "Accepted": True,
+        "CompletedSegment": {
+            "ActiveSegmentID": active_segment.get("ActiveSegmentID"),
+            "SegmentID": active_segment.get("SegmentID"),
+            "SegmentType": "decision",
+            "Status": "completed",
+            "Decision": decision_id,
+            "Outcome": "normal",
+            "ProcessingStatus": "processed",
+            "ClientEvents": active_segment.get("ClientEvents", []),
+            "DecisionOptions": segment_def.get("DecisionOptions", {}),
+            "SegmentTitle": active_segment.get("SegmentTitle"),
+            "SegmentActivity": active_segment.get("SegmentActivity"),
+        },
+    }
+
+
+def build_next_segment_response(next_active_segment_id: str, story_id, next_segment_id, next_segment_def: dict, duration) -> dict:
+    """Build the NextSegment payload so the client need not reload after advancing."""
+    next_segment = {
+        "ActiveSegmentID": next_active_segment_id,
+        "StoryID": story_id,
+        "SegmentID": next_segment_id,
+        "SegmentType": next_segment_def.get("SegmentType"),
+        "Status": "active",
+        "StartTime": now_iso(),
+        "EndTime": future_iso(duration),
+        "ProcessingStatus": "pending",
+        "SegmentActivity": next_segment_def.get("SegmentActivity"),
+        "SegmentTitle": next_segment_def.get("SegmentTitle"),
+        "Duration": duration,
+    }
+    if next_segment_def.get("SegmentType") == "decision":
+        next_segment["DecisionText"] = next_segment_def.get("DecisionText")
+        next_segment["DecisionOptions"] = next_segment_def.get("DecisionOptions", {})
+        next_segment["DefaultDecision"] = next_segment_def.get("DefaultDecision")
+    return next_segment
+
+
+def advance_after_decision(
+    character_id: str, player_id: str, story_id, story_instance_id, active_segment: dict, next_segment_id, response_data: dict
+) -> None:
+    """Create the segment that follows a decision and enrich ``response_data``.
+
+    Starts the next segment at the current segment's end time, points the
+    character at it, queues it when mechanical, and cleans up the decided segment.
+    On any failure the decided segment's status is rolled back.
+
+    Raises:
+        ValueError: If the active segment is missing its ID.
+        RuntimeError: If creating the next segment fails.
+    """
+    active_segment_id = active_segment.get("ActiveSegmentID")
+    if not active_segment_id:
+        raise ValueError("Active segment ID not found")
+    try:
+        next_segment_def = get_segment_definition(story_id, next_segment_id)  # type: ignore
+
+        next_active_segment_id = create_next_active_segment(
+            character_id,
+            player_id,
+            story_id,
+            next_segment_def,
+            story_instance_id,
+            active_segment.get("EndTime"),  # Start next segment at current segment's end time
+        )
+        update_character_active_segment(character_id, next_active_segment_id)
+
+        duration = next_segment_def.get("SegmentDuration", DEFAULT_SEGMENT_DURATION)
+        response_data["NextSegmentTime"] = future_iso(duration)
+        response_data["NextSegment"] = build_next_segment_response(
+            next_active_segment_id, story_id, next_segment_id, next_segment_def, duration
+        )
+
+        cleanup_old_segment(active_segment_id, character_id)
+
+        if next_segment_def.get("SegmentType") == "mechanical":
+            queue_mechanical_segment(next_active_segment_id)
+    except Exception as err:
+        logger.error(f"Failed to create next segment after decision for {next_segment_id} Error: {err}", exc_info=True)
+        rollback_segment_status(active_segment_id)
+        raise RuntimeError(f"Failed to create next segment: {err}") from err
+
+
 def submit_decision_for_character(character_id: str, decision_id: str, player_id: str) -> dict:
     """
     Submit a decision for a character's active decision segment.
@@ -257,118 +379,32 @@ def submit_decision_for_character(character_id: str, decision_id: str, player_id
 
     if not active_segment_id:
         raise ValueError("Active segment ID not found")
+    if not story_id:
+        raise ValueError("Story ID not found in active segment")
+    if not segment_id:
+        raise ValueError("Segment ID not found in active segment")
 
     logger.info(
         f"Submitting decision for character={character_id}: "
         f"StoryID={story_id}, SegmentID={segment_id}, ActiveSegmentID={active_segment_id}, Decision={decision_id}"
     )
 
-    validate_decision_option(active_segment, decision_id)
+    segment_def = record_character_decision(active_segment, decision_id, character_id, story_id, segment_id)
+    response_data = build_completed_segment_response(active_segment, segment_def, decision_id)
 
-    update_segment_decision(active_segment_id, decision_id)
-
-    if not story_id:
-        raise ValueError("Story ID not found in active segment")
-
-    active_segment["Outcome"] = "normal"
-    active_segment["Decision"] = decision_id
-    active_segment["DecisionMadeAt"] = now_iso()
-
+    next_segment_id = get_next_segment_id_from_decision(segment_def.get("DecisionOptions", {}), decision_id)
     story_instance_id = active_segment.get("StoryInstanceID")
-    if not story_instance_id:
-        logger.warning(f"StoryInstanceID missing for segment {active_segment_id}, history tracking may be incomplete")
 
-    segment_id = active_segment.get("SegmentID")
-    if not segment_id:
-        raise ValueError("Segment ID not found in active segment")
-
-    segment_def = get_segment_definition(str(story_id), str(segment_id))
-
-    # Generate ClientEvents for the decision to enrich history
-    process_decision_segment(active_segment, segment_def)
-
-    record_segment_history(character_id, story_id, active_segment_id, active_segment)
-
-    # Get next segment ID from the decision options (supports both legacy and rich formats)
-    decision_options = segment_def.get("DecisionOptions", {})
-    next_segment_id = get_next_segment_id_from_decision(decision_options, decision_id)
-
-    response_data: dict = {
-        "Accepted": True,
-        # Include the completed decision segment so frontend can display narrative immediately
-        "CompletedSegment": {
-            "ActiveSegmentID": active_segment_id,
-            "SegmentID": segment_id,
-            "SegmentType": "decision",
-            "Status": "completed",
-            "Decision": decision_id,
-            "Outcome": "normal",
-            "ProcessingStatus": "processed",
-            "ClientEvents": active_segment.get("ClientEvents", []),
-            "DecisionOptions": segment_def.get("DecisionOptions", {}),
-            "SegmentTitle": active_segment.get("SegmentTitle"),
-            "SegmentActivity": active_segment.get("SegmentActivity"),
-        },
-    }
-
-    if next_segment_id:
-        try:
-            next_segment_def = get_segment_definition(story_id, next_segment_id)  # type: ignore
-
-            next_active_segment_id = create_next_active_segment(
-                character_id,
-                player_id,
-                story_id,
-                next_segment_def,
-                story_instance_id,
-                active_segment.get("EndTime"),  # Start next segment at current segment's end time
-            )
-
-            update_character_active_segment(character_id, next_active_segment_id)
-
-            next_segment_duration = next_segment_def.get("SegmentDuration", DEFAULT_SEGMENT_DURATION)
-            response_data["NextSegmentTime"] = future_iso(next_segment_duration)
-
-            # Return the next segment data so Flutter doesn't need to reload
-            response_data["NextSegment"] = {
-                "ActiveSegmentID": next_active_segment_id,
-                "StoryID": story_id,
-                "SegmentID": next_segment_id,
-                "SegmentType": next_segment_def.get("SegmentType"),
-                "Status": "active",
-                "StartTime": now_iso(),
-                "EndTime": future_iso(next_segment_duration),
-                "ProcessingStatus": "pending",
-                "SegmentActivity": next_segment_def.get("SegmentActivity"),
-                "SegmentTitle": next_segment_def.get("SegmentTitle"),
-                "Duration": next_segment_duration,
-            }
-
-            # Add decision-specific fields if next is a decision
-            if next_segment_def.get("SegmentType") == "decision":
-                response_data["NextSegment"]["DecisionText"] = next_segment_def.get("DecisionText")
-                response_data["NextSegment"]["DecisionOptions"] = next_segment_def.get("DecisionOptions", {})
-                response_data["NextSegment"]["DefaultDecision"] = next_segment_def.get("DefaultDecision")
-
-            cleanup_old_segment(active_segment_id, character_id)
-
-            if next_segment_def.get("SegmentType") == "mechanical":
-                queue_mechanical_segment(next_active_segment_id)
-        except Exception as err:
-            logger.error(f"Failed to create next segment after decision for {next_segment_id} Error: {err}", exc_info=True)
-            rollback_segment_status(active_segment_id)
-            raise RuntimeError(f"Failed to create next segment: {err}") from err
-    else:
+    if not next_segment_id:
         complete_story(character_id, story_id, story_instance_id, "normal")
         logger.info(f"Story completed after final decision for character={character_id}, StoryID={story_id}")
         return response_data
 
-    # Log final success with new segment context
-    next_active_segment_id = response_data.get("NextSegment", {}).get("ActiveSegmentID")
-    next_segment_id = response_data.get("NextSegment", {}).get("SegmentID")
+    advance_after_decision(character_id, player_id, story_id, story_instance_id, active_segment, next_segment_id, response_data)
+
     logger.info(
         f"Decision submitted and story advanced for character={character_id}: "
-        f"Decision={decision_id}, NextActiveSegmentID={next_active_segment_id}, NextSegmentID={next_segment_id}"
+        f"Decision={decision_id}, NextActiveSegmentID={response_data.get('NextSegment', {}).get('ActiveSegmentID')}, "
+        f"NextSegmentID={response_data.get('NextSegment', {}).get('SegmentID')}"
     )
-
     return response_data

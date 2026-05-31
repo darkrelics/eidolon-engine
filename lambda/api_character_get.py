@@ -13,7 +13,7 @@ Authentication: Cognito (required)
 from eidolon.character_data import character_get, cleanup_expired_daily_stories
 from eidolon.character_story import get_active_story_and_segment, get_stories_with_character
 from eidolon.dynamo import decimal_to_float
-from eidolon.items import get_inventory
+from eidolon.errors import UnauthorizedError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
@@ -58,10 +58,8 @@ def get_character_logic(character_id: str, player_id: str) -> dict:
     # Note: Attributes and skills maintain their original casing from the database
     # The Flutter client handles any casing differences flexibly
 
-    # Enrich inventory with item details
-    inventory = character.get("Inventory")
-    if inventory:
-        character["InventoryDetails"] = get_inventory(inventory)
+    # The client enriches character.Contents via /item/brief and /item/prototype,
+    # so the character payload stays a flat list of ItemIDs.
 
     response_data: dict = {"Character": decimal_to_float(character)}
 
@@ -109,7 +107,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Validate player exists
     if not validate_player(player_id):
         logger.error(f"Player: {player_id} not found in database")
-        raise ValueError("401:Unauthorized")
+        raise UnauthorizedError("Unauthorized")
 
     # Get character ID from query parameters
     character_id = get_query_parameter(event, "CharacterID")

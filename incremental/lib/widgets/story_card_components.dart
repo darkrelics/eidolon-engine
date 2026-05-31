@@ -141,7 +141,7 @@ class PrerequisitesDisplay extends StatelessWidget {
           if (requiredItems.isNotEmpty) ...[
             const SizedBox(height: 4),
             ...requiredItems.map((item) {
-              final hasItem = character.inventory.values.contains(item);
+              final hasItem = character.contents.contains(item);
 
               return Padding(
                 padding: const EdgeInsets.only(left: 20, top: 2),
