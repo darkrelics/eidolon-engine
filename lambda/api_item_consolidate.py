@@ -154,18 +154,20 @@ def build_keep_update_ops(keep_updates: list) -> list:
         if new_quantity == prior_quantity:
             continue
         table_name, typed_key = typed_contents_target(PARENT_ITEM, item_id)
-        ops.append({
-            "Update": {
-                "TableName": table_name,
-                "Key": typed_key,
-                "UpdateExpression": "SET Quantity = :new",
-                "ConditionExpression": "Quantity = :old",
-                "ExpressionAttributeValues": {
-                    ":new": to_attribute_value(new_quantity),
-                    ":old": to_attribute_value(prior_quantity),
-                },
+        ops.append(
+            {
+                "Update": {
+                    "TableName": table_name,
+                    "Key": typed_key,
+                    "UpdateExpression": "SET Quantity = :new",
+                    "ConditionExpression": "Quantity = :old",
+                    "ExpressionAttributeValues": {
+                        ":new": to_attribute_value(new_quantity),
+                        ":old": to_attribute_value(prior_quantity),
+                    },
+                }
             }
-        })
+        )
     return ops
 
 
@@ -183,18 +185,20 @@ def build_prune_ops(by_parent: dict) -> list:
         old_contents = bucket["parent_contents"]
         new_contents = [cid for cid in old_contents if cid not in bucket["to_remove"]]
         table_name, typed_key = typed_contents_target(kind, parent_id)
-        ops.append({
-            "Update": {
-                "TableName": table_name,
-                "Key": typed_key,
-                "UpdateExpression": "SET Contents = :new",
-                "ConditionExpression": "Contents = :old",
-                "ExpressionAttributeValues": {
-                    ":new": to_attribute_value(new_contents),
-                    ":old": to_attribute_value(old_contents),
-                },
+        ops.append(
+            {
+                "Update": {
+                    "TableName": table_name,
+                    "Key": typed_key,
+                    "UpdateExpression": "SET Contents = :new",
+                    "ConditionExpression": "Contents = :old",
+                    "ExpressionAttributeValues": {
+                        ":new": to_attribute_value(new_contents),
+                        ":old": to_attribute_value(old_contents),
+                    },
+                }
             }
-        })
+        )
     return ops
 
 
