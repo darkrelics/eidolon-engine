@@ -22,6 +22,13 @@ def update_config_from_stacks(cf_client, config_path: Path, deployment_config: d
 
     deployment_mode = deployment_config.get("deployment_mode", "")
 
+    # Persist AWS region (prompted but otherwise untracked)
+    region = deployment_config.get("region", "")
+    if region:
+        if "AWS" not in config:
+            config["AWS"] = {}
+        config["AWS"]["Region"] = region
+
     # Persist deployment parameters
     if "Deployment" not in config:
         config["Deployment"] = {}
@@ -38,6 +45,12 @@ def update_config_from_stacks(cf_client, config_path: Path, deployment_config: d
 
     if "GitHub" not in config:
         config["GitHub"] = {}
+    github_owner = deployment_config.get("github_owner", "")
+    github_repo = deployment_config.get("github_repo", "")
+    if github_owner:
+        config["GitHub"]["Owner"] = github_owner
+    if github_repo:
+        config["GitHub"]["Repo"] = github_repo
     config["GitHub"]["Branch"] = deployment_config.get("github_branch", "")
 
     # Cognito outputs

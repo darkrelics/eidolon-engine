@@ -14,6 +14,7 @@ Authentication: Cognito (required)
 from botocore.exceptions import ClientError
 
 from eidolon.dynamo import TableName, dynamo
+from eidolon.errors import AccessDeniedError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import verify_character_ownership
@@ -101,7 +102,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         }
 
     if not verify_character_ownership(character_id, player_id):
-        raise ValueError("403:Access denied")
+        raise AccessDeniedError("Access denied")
 
     # Validate UUID format for each requested story instance
     invalid_ids = [sid for sid in story_instance_ids if not validate_uuid(sid)]

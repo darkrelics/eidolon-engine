@@ -81,8 +81,11 @@ class ApiMetrics {
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint('');
 
-    // Reset for next segment
+    // Reset for next segment. Clearing _callCounts is important so that a
+    // bogus second endSegment() call (which would still be caught by the
+    // _segmentStartTime guard above, but defensively) cannot report stale counts.
     _segmentStartTime = null;
+    _callCounts.clear();
   }
 
   /// Get total call count for current segment

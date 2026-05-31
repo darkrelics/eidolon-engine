@@ -16,7 +16,6 @@ import 'package:idb_shim/idb_browser.dart';
 /// - item_prototypes: Item template storage (full prototype data)
 class IndexedDBService {
   static const String _dbName = 'EidolonDB';
-  static const int _dbVersion = 1;
 
   // Object store names
   static const String storeStories = 'stories';
@@ -45,32 +44,24 @@ class IndexedDBService {
     try {
       _db = await _idbFactory.open(
         _dbName,
-        version: _dbVersion,
-        onUpgradeNeeded: _onUpgradeNeeded,
+        version: 1,
+        onUpgradeNeeded: _createStores,
       );
-      debugPrint('IndexedDB initialized successfully: $_dbName v$_dbVersion');
+      debugPrint('IndexedDB initialized: $_dbName');
     } catch (e) {
       debugPrint('Failed to initialize IndexedDB: $e');
       // Database operations will fall back to server fetches
     }
   }
 
-  /// Handle database schema creation and upgrades
-  void _onUpgradeNeeded(VersionChangeEvent event) {
+  /// Create all object stores on first open.
+  void _createStores(VersionChangeEvent event) {
     final db = event.database;
-    final oldVersion = event.oldVersion;
-    final newVersion = event.newVersion;
-
-    debugPrint('Upgrading IndexedDB from v$oldVersion to v$newVersion');
-
-    // Version 1: Initial schema
-    if (oldVersion < 1) {
-      _createStoriesStore(db);
-      _createStorySegmentsStore(db);
-      _createCharactersStore(db);
-      _createItemsStore(db);
-      _createItemPrototypesStore(db);
-    }
+    _createStoriesStore(db);
+    _createStorySegmentsStore(db);
+    _createCharactersStore(db);
+    _createItemsStore(db);
+    _createItemPrototypesStore(db);
   }
 
   /// Create stories object store for historical preservation

@@ -12,6 +12,7 @@ Authentication: Cognito (required)
 
 from eidolon.character_data import character_get
 from eidolon.dynamo import decimal_to_float
+from eidolon.errors import UnauthorizedError
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
 from eidolon.player import validate_player
@@ -40,7 +41,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Validate player exists
     if not validate_player(player_id):
         logger.error(f"Player {player_id} not found in database")
-        raise ValueError("401:Unauthorized")
+        raise UnauthorizedError("Unauthorized")
 
     # Get store ID (default to general-store)
     store_id = get_query_parameter(event, "StoreID") or "general-store"
@@ -54,23 +55,14 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
         if not validate_uuid(character_id):
             raise ValueError("Invalid CharacterID format")
 
-        # Get character and verify ownership
-        try:
-            character = character_get(character_id, player_id)
-            character_level = character.get("Level", 0)
-            logger.info(f"Fetching store for character {character_id} (Level {character_level})")
-        except ValueError as err:
-            # Character not found or not owned by player
-            logger.warning(f"Character access denied: {err}")
-            raise ValueError(f"403:{err}") from err
+        # Get character and verify ownership (raises typed errors -> 404 / 403)
+        character = character_get(character_id, player_id)
+        character_level = character.get("Level", 0)
+        logger.info(f"Fetching store for character {character_id} (Level {character_level})")
 
-    # Get store items
-    try:
-        store_data = get_store_items(store_id, character_level)
-        store_data_converted = decimal_to_float(store_data)
-    except ValueError as err:
-        logger.warning(f"Store listing failed: {err}")
-        raise ValueError(f"404:{err}") from err
+    # Get store items (get_store_items raises NotFoundError if the store is missing)
+    store_data = get_store_items(store_id, character_level)
+    store_data_converted = decimal_to_float(store_data)
 
     logger.info(f"Retrieved {len(store_data.get('Items', []))} items from store '{store_id}' for player {player_id}")
 

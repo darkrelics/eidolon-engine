@@ -11,6 +11,7 @@ from botocore.exceptions import ClientError
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.player_character import batch_delete_with_fallback, delete_character_history, process_character_deletion
+from eidolon.prototypes import item_is_container
 
 
 def create_player_record(user_uuid: str, email: str) -> None:
@@ -219,44 +220,27 @@ def get_character_list(player_id: str) -> list:
 
 
 def character_contains_item(character: dict, item_id: str, *, character_id=None) -> bool:
-    """
-    Determine whether the provided character owns the supplied item ID.
+    """Return True when ``item_id`` is reachable from the character's tree.
 
-    Inspects inventory slots, equipped hand slots, and recursively traverses container contents.
+    Walks ``character.Contents`` recursively through container items. Equipped
+    hand-slot pointers are treated as valid ownership evidence too (they may
+    reference items that also appear in Contents, but callers can't assume so).
     """
     if not character or not item_id:
         return False
 
-    top_level_items = []
-
-    inventory = character.get("Inventory", {})
-    for slot_data in inventory.values():
-        if slot_data and isinstance(slot_data, dict):
-            slot_item_id = slot_data.get("ItemID")
-            if slot_item_id:
-                if slot_item_id == item_id:
-                    return True
-                top_level_items.append(slot_item_id)
-
-    left_id = character.get("LeftHandID")
-    if left_id:
-        if left_id == item_id:
-            return True
-        top_level_items.append(left_id)
-
-    right_id = character.get("RightHandID")
-    if right_id:
-        if right_id == item_id:
-            return True
-        top_level_items.append(right_id)
+    if character.get("LeftHandID") == item_id or character.get("RightHandID") == item_id:
+        return True
 
     processed = set()
-    items_to_process = list(top_level_items)
+    queue = list(character.get("Contents") or [])
 
-    while items_to_process:
-        current_id = items_to_process.pop()
+    while queue:
+        current_id = queue.pop()
         if not current_id or current_id in processed:
             continue
+        if current_id == item_id:
+            return True
 
         processed.add(current_id)
 
@@ -264,7 +248,7 @@ def character_contains_item(character: dict, item_id: str, *, character_id=None)
             item_record = dynamo.get_item(
                 TableName.ITEMS,
                 {"ItemID": current_id},
-                ProjectionExpression="Container, Contents",
+                ProjectionExpression="PrototypeID, Contents",
             )
         except ClientError as err:
             logger.error(
@@ -276,17 +260,12 @@ def character_contains_item(character: dict, item_id: str, *, character_id=None)
             )
             raise RuntimeError(f"Failed to verify item ownership: {err}") from err
 
-        if not item_record or not item_record.get("Container"):
+        if not item_record or not item_is_container(item_record):
             continue
 
-        contents = item_record.get("Contents", [])
-        for nested_id in contents:
-            if not nested_id:
-                continue
-            if nested_id == item_id:
-                return True
-            if nested_id not in processed:
-                items_to_process.append(nested_id)
+        for nested_id in item_record.get("Contents", []) or []:
+            if nested_id and nested_id not in processed:
+                queue.append(nested_id)
 
     return False
 
@@ -331,7 +310,7 @@ def player_owns_item(player_id: str, item_id: str) -> bool:
             character = dynamo.get_item(
                 TableName.CHARACTERS,
                 {"CharacterID": char_id},
-                ProjectionExpression="Inventory, LeftHandID, RightHandID",
+                ProjectionExpression="Contents, LeftHandID, RightHandID",
             )
         except ClientError as err:
             logger.error(
@@ -353,47 +332,42 @@ def player_owns_item(player_id: str, item_id: str) -> bool:
 
 def verify_character_ownership(character_id: str, player_id: str) -> bool:
     """
-    Verify that a character belongs to a player by checking the player record.
+    Verify that a character belongs to a player.
 
-    This is more efficient than fetching the full character record since the
-    player record is smaller and the players table is accessed less frequently.
+    Ownership is resolved from the character record's ``PlayerID`` field, the
+    single source of truth also used by ``character_data.character_get``. This is
+    the light, yes/no check for handlers that do not need the full record; a
+    missing character is treated as not owned.
 
     Args:
         character_id: Character UUID to verify
         player_id: Cognito user ID (player UUID)
 
     Returns:
-        True if the character belongs to the player, False otherwise
+        True if the character's PlayerID matches the player, False otherwise
 
     Raises:
-        ValueError: If player not found
         RuntimeError: If database query fails
     """
     try:
-        player = dynamo.get_item(
-            TableName.PLAYERS,
-            {"PlayerID": player_id},
-            ProjectionExpression="CharacterList",
+        character = dynamo.get_item(
+            TableName.CHARACTERS,
+            {"CharacterID": character_id},
+            ProjectionExpression="PlayerID",
         )
-
-        if not player:
-            logger.warning(f"Player not found for ownership check: {player_id}")
-            raise ValueError(f"Player {player_id} not found")
-
-        # Check if character_id exists in player's character list
-        character_list = player.get("CharacterList", {})
-
-        for char_info in character_list.values():
-            if char_info.get("UUID") == character_id:
-                logger.debug(f"Character ownership verified: {character_id} belongs to {player_id}")
-                return True
-
-        logger.warning(f"Character ownership failed: {character_id} not owned by {player_id}")
-        return False
-
     except ClientError as err:
         logger.error(f"Failed to verify character ownership for {character_id}, {player_id} Error: {err}", exc_info=True)
         raise RuntimeError(f"Failed to verify character ownership: {err}") from err
+
+    if not character:
+        logger.warning(f"Character ownership failed: {character_id} not found")
+        return False
+
+    if character.get("PlayerID") == player_id:
+        return True
+
+    logger.warning(f"Character ownership failed: {character_id} not owned by {player_id}")
+    return False
 
 
 def delete_player_record(player_id: str) -> None:
