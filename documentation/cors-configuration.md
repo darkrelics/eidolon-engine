@@ -79,7 +79,7 @@ All CORS logic is centralized in `eidolon/cors.py`:
 **Fallback Logic:**
 
 1. If "_" in ALLOWED_ORIGINS: Always return "_" without credentials
-2. If ALLOWED_ORIGINS empty: Return "\*" without credentials (permissive degradation)
+2. If ALLOWED_ORIGINS empty: Omit the Access-Control-Allow-Origin header (fail closed)
 3. If origin in allowed list: Return origin with credentials if enabled
 4. If single origin configured: Return that origin with credentials (fallback for mismatched origin)
 5. If multiple origins configured and origin not in list: Return None (block request)
@@ -385,7 +385,7 @@ Or configure ALLOWED_ORIGINS to include localhost as shown above.
 - API Gateway preflight uses explicit origin from deployment config
 - Lambda functions validate against ALLOWED_ORIGINS environment variable
 - Credentials only allowed with explicit origins (never wildcard)
-- Misconfiguration defaults to permissive mode (prevents service disruption)
+- Misconfiguration fails closed (Access-Control-Allow-Origin omitted)
 
 ## Migration Notes
 

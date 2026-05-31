@@ -430,6 +430,46 @@ def store_opponents(opponents_data):
         raise
 
 
+def store_store_stock(store_data):
+    """Seed mutable stock rows for a store's limited-stock items.
+
+    The store catalog (Price, MinLevel, Category) stays in the JSON config; only
+    items with a finite Stock (not -1, the unlimited marker) get a row in the
+    STORES table, which holds the authoritative mutable count. Seeding is
+    conditional on the row not already existing, so re-running the loader never
+    clobbers a live stock count.
+
+    Args:
+        store_data (dict): A store definition with StoreID and Inventory.
+    """
+    store_id = store_data.get("StoreID")
+    if not store_id:
+        logging.warning("Store data missing StoreID; skipping stock seed")
+        return
+
+    seeded = 0
+    for item in store_data.get("Inventory", []):
+        prototype_id = item.get("PrototypeID")
+        stock = item.get("Stock", -1)
+        if not prototype_id or stock == -1:
+            continue  # unlimited / untracked items hold no stock row
+
+        try:
+            dynamo.put_item(
+                TableName.STORES,
+                {"StoreID": store_id, "PrototypeID": prototype_id, "Stock": stock},
+                ConditionExpression="attribute_not_exists(StoreID)",
+            )
+            seeded += 1
+        except ClientError as err:
+            if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                continue  # stock already initialized; preserve the live count
+            logging.error(f"Failed to seed stock for {store_id}/{prototype_id}: {err}")
+            raise
+
+    logging.info(f"Seeded stock for {seeded} limited item(s) in store '{store_id}'")
+
+
 def store_story(story_data):
     """
     Stores story and segments data into DynamoDB tables.
@@ -839,6 +879,11 @@ def main():
         default="../data/test_opponents.json",
         help="Path to the Opponents JSON file (default: ../data/test_opponents.json)",
     )
+    parser.add_argument(
+        "--stores",
+        default="../data/store_general_store.json",
+        help="Path to a store JSON file to seed stock from (default: ../data/store_general_store.json)",
+    )
     parser.add_argument("-region", default="us-east-1", help="AWS region for DynamoDB.")
     args = parser.parse_args()
 
@@ -920,6 +965,15 @@ def main():
         logging.warning(f"Opponents file not found: {args.opponents}")
     except Exception as err:
         logging.error(f"Failed to load/store opponents: {err}")
+
+    # Seed store stock for limited-stock items (catalog stays in JSON config)
+    try:
+        store_data = load_json(args.stores)
+        store_store_stock(store_data)
+    except FileNotFoundError:
+        logging.warning(f"Store file not found: {args.stores}")
+    except Exception as err:
+        logging.error(f"Failed to seed store stock: {err}")
 
     # Load data from DynamoDB and display
     loaded_exits = load_exits()

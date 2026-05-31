@@ -692,6 +692,13 @@ class AuthService {
     }
   }
 
+  /// Force-refresh the current session using the stored refresh token.
+  ///
+  /// Exposed for API callers that receive a 401 despite a locally-valid session
+  /// (e.g. clock skew, revoked token, backend-initiated invalidation). Returns
+  /// true if the session was refreshed, false otherwise.
+  Future<bool> forceRefreshSession() => _refreshSession();
+
   /// Refreshes the current session
   Future<bool> _refreshSession() async {
     try {
