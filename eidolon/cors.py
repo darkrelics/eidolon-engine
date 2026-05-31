@@ -6,10 +6,10 @@ Provides centralized CORS configuration and validation for API responses.
 Behavior notes:
 - If ALLOWED_ORIGINS contains "*", the handler always returns
   Access-Control-Allow-Origin: "*" and does NOT allow credentials.
-- If ALLOWED_ORIGINS is empty or unset, the handler defaults to a
-  permissive wildcard response ("*") without credentials. This keeps
-  cross-origin reads working during misconfiguration, but cookies/
-  credentials will not be sent.
+- If ALLOWED_ORIGINS is empty or unset, the handler fails closed and omits
+  the Access-Control-Allow-Origin header entirely, so a misconfigured deploy
+  is restrictive rather than permissive. Set ALLOWED_ORIGINS to "*"
+  deliberately to opt into a wildcard response (without credentials).
 - When one or more explicit origins are configured, the handler reflects
   the request origin only if it is present in the list, and includes the
   Access-Control-Allow-Credentials header when enabled by environment.
@@ -31,10 +31,10 @@ class CorsHandler:
         # If '*' is present, always return '*' without credentials regardless of other entries
         self._wildcard = "*" in self.allowed_origins
 
-        # Default to permissive CORS if no origins specified
-        # (Wildcard origin without credentials; see get_allowed_origin_header)
+        # Fail closed if no origins specified
+        # (Access-Control-Allow-Origin omitted; see get_allowed_origin_header)
         if not self.allowed_origins and not self._wildcard:
-            logger.warning("No ALLOWED_ORIGINS configured, CORS will be permissive (wildcard, no credentials)")
+            logger.warning("No ALLOWED_ORIGINS configured; CORS will fail closed (Access-Control-Allow-Origin omitted)")
             self.allowed_origins = []
 
         # Whether to allow credentials
@@ -59,8 +59,11 @@ class CorsHandler:
         Returns:
             Origin string or empty string if not found
         """
-        headers = event.get("headers", {})
-        return headers.get("origin") or headers.get("Origin", "")
+        headers = event.get("headers") or {}
+        for key, value in headers.items():
+            if isinstance(key, str) and key.lower() == "origin":
+                return value or ""
+        return ""
 
     def get_base_cors_headers(self) -> dict:
         """
@@ -99,7 +102,8 @@ class CorsHandler:
 
         Logic summary:
         - If "*" is configured in ALLOWED_ORIGINS, always return ("*", False).
-        - If ALLOWED_ORIGINS is empty, return ("*", False) (permissive, no creds).
+        - If ALLOWED_ORIGINS is empty, return (None, False) to omit the header
+          (fail closed).
         - If origin is in ALLOWED_ORIGINS, return (origin, allow_credentials).
         - If only a single origin is configured, fall back to that origin with
           configured credential policy.
@@ -109,9 +113,10 @@ class CorsHandler:
         if self._wildcard:
             return "*", False
 
-        # No origins configured - use wildcard without credentials
+        # No origins configured - fail closed: omit the header rather than emit a
+        # wildcard, so a misconfigured deploy is restrictive instead of permissive.
         if not self.allowed_origins:
-            return "*", False
+            return None, False
 
         # Origin is in allowed list
         if self.is_origin_allowed(origin):

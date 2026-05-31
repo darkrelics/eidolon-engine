@@ -11,6 +11,7 @@ Authentication: Cognito (required)
 """
 
 from eidolon.dynamo import decimal_to_float
+from eidolon.errors import UnauthorizedError
 from eidolon.items import get_item_prototype_full
 from eidolon.lambda_handler import authenticated_handler
 from eidolon.logger import logger
@@ -35,7 +36,7 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     # Validate player exists
     if not validate_player(player_id):
         logger.error(f"Player {player_id} not found in database")
-        raise ValueError("401:Unauthorized")
+        raise UnauthorizedError("Unauthorized")
 
     # Get prototype ID from query parameters
     prototype_id = get_query_parameter(event, "PrototypeID")
@@ -46,13 +47,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     if not validate_uuid(prototype_id):
         raise ValueError("Invalid PrototypeID format")
 
-    # Get item prototype data
-    try:
-        result = get_item_prototype_full(prototype_id)
-        result_converted = decimal_to_float(result)
-    except ValueError as err:
-        logger.warning(f"Item prototype request failed: {err}")
-        raise ValueError(f"404:{err}") from err
+    # Get item prototype data (raises NotFoundError if the prototype is missing)
+    result = get_item_prototype_full(prototype_id)
+    result_converted = decimal_to_float(result)
 
     logger.info(f"Retrieved item prototype for {prototype_id} for player {player_id}")
     return {"status_code": 200, "body": result_converted}

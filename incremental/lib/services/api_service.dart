@@ -398,21 +398,17 @@ class ApiService extends BaseApiService {
   Future<Map<String, dynamic>> discardItem({
     required String characterId,
     required String itemId,
-    String? slot,
     int? quantity,
   }) async {
     ApiMetrics.recordCall(
       'POST /item/discard',
-      details: 'characterId=$characterId, itemId=$itemId, slot=$slot, qty=$quantity',
+      details: 'characterId=$characterId, itemId=$itemId, qty=$quantity',
     );
 
     final body = <String, dynamic>{
       'CharacterID': characterId,
       'ItemID': itemId,
     };
-    if (slot != null) {
-      body['InventorySlot'] = slot;
-    }
     if (quantity != null) {
       body['Quantity'] = quantity;
     }
@@ -452,27 +448,27 @@ class ApiService extends BaseApiService {
 
   /// Split a stackable item into two stacks.
   ///
-  /// Creates a new stack with the specified quantity from an existing stack.
+  /// The new stack is placed alongside the original in the same parent container.
   ///
   /// Parameters:
   /// - [characterId]: Character UUID
-  /// - [slot]: Inventory slot containing the stack to split
-  /// - [quantity]: Number of items to split into the new stack
+  /// - [itemId]: ItemID of the stack to split
+  /// - [quantity]: Number of items to split off into the new stack
   Future<Map<String, dynamic>> splitStack({
     required String characterId,
-    required String slot,
+    required String itemId,
     required int quantity,
   }) async {
     ApiMetrics.recordCall(
       'POST /item/split',
-      details: 'characterId=$characterId, slot=$slot, qty=$quantity',
+      details: 'characterId=$characterId, itemId=$itemId, qty=$quantity',
     );
 
     return post<Map<String, dynamic>>(
       '/item/split',
       body: {
         'CharacterID': characterId,
-        'Slot': slot,
+        'ItemID': itemId,
         'Quantity': quantity,
       },
     );

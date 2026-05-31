@@ -26,6 +26,7 @@ OPPONENTS_TABLE = os.environ.get("OPPONENTS_TABLE", "opponents")
 ROOMS_TABLE = os.environ.get("ROOMS_TABLE", "rooms")
 EXITS_TABLE = os.environ.get("EXITS_TABLE", "exits")
 MOTD_TABLE = os.environ.get("MOTD_TABLE", "motd")
+STORES_TABLE = os.environ.get("STORES_TABLE", "stores")
 
 # Lambda Function Names
 PROCESS_SEGMENT_FUNCTION = os.environ.get("PROCESS_SEGMENT_FUNCTION", "process-segment")
