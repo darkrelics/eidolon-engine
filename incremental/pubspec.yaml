@@ -39,7 +39,7 @@ dependencies:
   provider: ^6.1.2
 
   # AWS integration
-  amazon_cognito_identity_dart_2: ^3.6.4
+  amazon_cognito_identity_dart_2: ^4.0.0
 
   # Local storage
   shared_preferences: ^2.3.4

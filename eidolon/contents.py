@@ -13,7 +13,6 @@ from eidolon.errors import ConflictError, NotFoundError, ValidationError
 from eidolon.logger import logger
 from eidolon.prototypes import item_is_container
 
-
 PARENT_CHARACTER = "character"
 PARENT_ITEM = "item"
 
@@ -21,7 +20,7 @@ PARENT_ITEM = "item"
 def get_item_record(item_id: str) -> dict:
     """Fetch a single item record from the ITEMS table, or None if missing."""
     try:
-        record: dict = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id}) # type: ignore
+        record: dict = dynamo.get_item(TableName.ITEMS, {"ItemID": item_id})  # type: ignore
     except ClientError as err:
         logger.error(f"Failed to fetch item {item_id}: {err}")
         raise RuntimeError(f"Failed to fetch item {item_id}") from err

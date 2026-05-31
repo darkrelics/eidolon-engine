@@ -24,7 +24,6 @@ from eidolon.errors import ConflictError, NotFoundError, ValidationError
 from eidolon.logger import logger
 from eidolon.prototypes import get_prototype
 
-
 HAND_SLOTS = {"left_hand", "right_hand"}
 HAND_SLOT_FIELDS = {"left_hand": "LeftHandID", "right_hand": "RightHandID"}
 
