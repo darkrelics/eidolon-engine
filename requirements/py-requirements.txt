@@ -26,7 +26,7 @@ msgpack==1.1.2
 packageurl-python==0.17.6
 packaging==25.0
 pbr==7.0.1
-pip==26.1
+pip==26.1.2
 pip-api==0.0.34
 pip-requirements-parser==32.0.1
 platformdirs==4.5.0
