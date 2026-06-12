@@ -180,13 +180,13 @@ void main() {
             'completed-story-1': {
               'StoryType': 'one-time',
               'CompletedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-            }
+            },
           },
           {
             'completed-story-2': {
               'StoryType': 'daily',
               'CompletedAt': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-            }
+            },
           },
         ],
       );

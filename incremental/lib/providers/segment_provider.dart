@@ -76,8 +76,6 @@ class SegmentProvider extends ChangeNotifier {
     }
   }
 
-  
-
   /// Handle segment completion
   Future<void> completeSegment(String characterId) async {
     try {

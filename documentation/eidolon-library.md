@@ -215,9 +215,15 @@ def lambda_handler(event, context):
 - add_items_to_inventory() - Adds items to character
 - create_items_from_prototypes() - Batch item creation
 - process_items_with_probability() - Handles item drop chances
-- merge_stacks() - Merges two stackable items, oldest wins
-- find_matching_stack() - Finds existing stack for prototype
-- create_coins_from_value() - Converts FU value to coin items
+- load_top_level_stacks() - Finds existing top-level stacks for a prototype
+- stack_merge_quantity() - How much fits on a stack (MaxStack <= 0 is unbounded)
+- distribute_into_stacks() - Splits a quantity into MaxStack-sized stacks
+
+**currency.py** - Coins as stackable items (see currency.md)
+
+- wallet_total() - Derives the balance from a character's coin stacks
+- coin_rewards_for_amount() - Converts an FU amount into coin item entries
+- plan_coin_spend() - Plans the atomic coin payment for a purchase
 
 **archetypes.py** - Archetype management
 

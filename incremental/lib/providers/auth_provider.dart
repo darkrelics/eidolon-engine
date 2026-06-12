@@ -108,7 +108,11 @@ class AuthProvider extends ChangeNotifier {
     await _authService.forgotPassword(email);
   }
 
-  Future<void> confirmPassword(String email, String code, String newPassword) async {
+  Future<void> confirmPassword(
+    String email,
+    String code,
+    String newPassword,
+  ) async {
     await _authService.confirmPassword(email, code, newPassword);
   }
 

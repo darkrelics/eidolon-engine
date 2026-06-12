@@ -35,25 +35,36 @@ class LoginScreenController extends ChangeNotifier {
 
     try {
       final authProvider = context.read<AuthProvider>();
-      await authProvider.signIn(emailController.text.trim(), passwordController.text);
+      await authProvider.signIn(
+        emailController.text.trim(),
+        passwordController.text,
+      );
 
       if (context.mounted) {
         Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
       }
     } catch (e) {
-      debugPrint('LoginScreenController: Sign in error caught: ${e.runtimeType}');
+      debugPrint(
+        'LoginScreenController: Sign in error caught: ${e.runtimeType}',
+      );
       debugPrint('LoginScreenController: Error message: $e');
 
       if (context.mounted) {
-        final isMfaRequired = e is CognitoClientException && e.code == 'MFA_REQUIRED';
+        final isMfaRequired =
+            e is CognitoClientException && e.code == 'MFA_REQUIRED';
 
         if (isMfaRequired) {
           _isLoading = false;
           notifyListeners();
           await _showMfaDialog(context);
         } else {
-          final errorMessage = ErrorHandler.getUserFriendlyMessage(e, context: 'signIn');
-          debugPrint('LoginScreenController: Showing error SnackBar: $errorMessage');
+          final errorMessage = ErrorHandler.getUserFriendlyMessage(
+            e,
+            context: 'signIn',
+          );
+          debugPrint(
+            'LoginScreenController: Showing error SnackBar: $errorMessage',
+          );
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(errorMessage),
@@ -63,7 +74,9 @@ class LoginScreenController extends ChangeNotifier {
           );
         }
       } else {
-        debugPrint('LoginScreenController: Context not mounted, cannot show error');
+        debugPrint(
+          'LoginScreenController: Context not mounted, cannot show error',
+        );
       }
     } finally {
       _isLoading = false;
@@ -89,14 +102,20 @@ class LoginScreenController extends ChangeNotifier {
             const SizedBox(height: 16),
             TextField(
               controller: codeController,
-              decoration: const InputDecoration(labelText: 'Code', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Code',
+                border: OutlineInputBorder(),
+              ),
               keyboardType: TextInputType.number,
               maxLength: 6,
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () async {
               if (codeController.text.length < 6) return;
@@ -113,7 +132,9 @@ class LoginScreenController extends ChangeNotifier {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Invalid code: ${e.toString()}'),
-                      backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                      backgroundColor: Theme.of(
+                        dialogContext,
+                      ).colorScheme.error,
                     ),
                   );
                 }

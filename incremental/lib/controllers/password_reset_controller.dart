@@ -8,7 +8,8 @@ class PasswordResetController extends ChangeNotifier {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController codeController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
 
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
@@ -80,17 +81,26 @@ class PasswordResetController extends ChangeNotifier {
       await authProvider.forgotPassword(emailController.text.trim());
 
       if (context.mounted) {
-        Navigator.pushNamed(context, '/password-reset-confirm', arguments: emailController.text.trim());
-
-        ScaffoldMessenger.of(
+        Navigator.pushNamed(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Reset code sent to your email'), backgroundColor: Colors.green));
+          '/password-reset-confirm',
+          arguments: emailController.text.trim(),
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reset code sent to your email'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'forgotPassword'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -105,9 +115,12 @@ class PasswordResetController extends ChangeNotifier {
     if (!formKey.currentState!.validate()) return;
     if (_email == null) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Email not found. Please start over.'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Email not found. Please start over.'),
+            backgroundColor: Colors.red,
+          ),
+        );
         Navigator.pushReplacementNamed(context, '/forgot-password');
       }
       return;
@@ -118,11 +131,18 @@ class PasswordResetController extends ChangeNotifier {
 
     try {
       final authProvider = context.read<AuthProvider>();
-      await authProvider.confirmPassword(_email!, codeController.text.trim(), passwordController.text);
+      await authProvider.confirmPassword(
+        _email!,
+        codeController.text.trim(),
+        passwordController.text,
+      );
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Password reset successfully! Please sign in.'), backgroundColor: Colors.green),
+          const SnackBar(
+            content: Text('Password reset successfully! Please sign in.'),
+            backgroundColor: Colors.green,
+          ),
         );
         Navigator.pushReplacementNamed(context, '/login');
       }
@@ -130,7 +150,12 @@ class PasswordResetController extends ChangeNotifier {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'confirmPassword')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(
+                e,
+                context: 'confirmPassword',
+              ),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -152,15 +177,20 @@ class PasswordResetController extends ChangeNotifier {
       await authProvider.forgotPassword(_email!);
 
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('New reset code sent'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('New reset code sent'),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'resendCode')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'resendCode'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

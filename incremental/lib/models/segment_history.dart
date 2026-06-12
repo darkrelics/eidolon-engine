@@ -79,7 +79,8 @@ class SegmentHistoryEntry {
 
   /// Get total XP earned from this segment
   int get totalXP {
-    return JsonParser.sumMapValues(skillXP) + JsonParser.sumMapValues(attributeXP);
+    return JsonParser.sumMapValues(skillXP) +
+        JsonParser.sumMapValues(attributeXP);
   }
 
   /// Get a display-friendly outcome string
@@ -182,6 +183,7 @@ class StoryHistoryEntry {
 
   /// Get total XP earned from the story
   int get totalXP {
-    return JsonParser.sumMapValues(totalSkillXP) + JsonParser.sumMapValues(totalAttributeXP);
+    return JsonParser.sumMapValues(totalSkillXP) +
+        JsonParser.sumMapValues(totalAttributeXP);
   }
 }

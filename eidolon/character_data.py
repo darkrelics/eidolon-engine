@@ -11,7 +11,7 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 
 from eidolon.character_state import determine_character_state_from_wounds
-from eidolon.constants import DEFAULT_DEATH_ROOM_ID, MAX_SKILL_LEVEL, CharState
+from eidolon.constants import DAILY_STORY_COOLDOWN_SECONDS, DEFAULT_DEATH_ROOM_ID, MAX_SKILL_LEVEL, CharState
 from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo, to_attribute_value
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.errors import AccessDeniedError, NotFoundError, ValidationError
@@ -204,10 +204,10 @@ def cleanup_expired_daily_stories(character: dict) -> dict:
             filtered_stories.append(entry)
             continue
 
-        # Check if daily story has expired (24 hours = 86400 seconds)
+        # Check if daily story has expired (shared rule with validate_story_available)
         if story_type == "daily":
             time_elapsed = current_timestamp - completed_at
-            if time_elapsed < 86400:
+            if time_elapsed < DAILY_STORY_COOLDOWN_SECONDS:
                 # Still on cooldown, keep it
                 filtered_stories.append(entry)
             else:

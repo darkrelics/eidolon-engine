@@ -38,37 +38,22 @@ def load_top_level_stacks(top_level_ids: list, prototype_id: str) -> list:
     return matching
 
 
-def can_add_to_stack(current_quantity: int, add_quantity: int, max_stack: int) -> bool:
+def stack_merge_quantity(current_quantity: int, add_quantity: int, max_stack: int) -> int:
     """
-    Check if quantity can be added to a stack without exceeding MaxStack.
+    Calculate how much of add_quantity fits onto an existing stack.
 
     Args:
         current_quantity: Current stack quantity
-        add_quantity: Quantity to add
-        max_stack: Maximum stack size from prototype
+        add_quantity: Quantity the caller wants to add
+        max_stack: Maximum stack size from the prototype; zero or less means
+            the stack is unbounded and everything fits
 
     Returns:
-        True if the addition would not exceed MaxStack
+        The quantity to merge into this stack (0 if the stack is full)
     """
     if max_stack <= 0:
-        max_stack = 99
-    return current_quantity + add_quantity <= max_stack
-
-
-def get_stack_space(current_quantity: int, max_stack: int) -> int:
-    """
-    Calculate how many items can be added to a stack.
-
-    Args:
-        current_quantity: Current stack quantity
-        max_stack: Maximum stack size from prototype
-
-    Returns:
-        Number of items that can be added (0 if stack is full)
-    """
-    if max_stack <= 0:
-        max_stack = 99
-    return max(0, max_stack - current_quantity)
+        return add_quantity
+    return min(add_quantity, max(0, max_stack - current_quantity))
 
 
 def distribute_into_stacks(total_quantity: int, max_stack: int) -> list:
@@ -77,15 +62,16 @@ def distribute_into_stacks(total_quantity: int, max_stack: int) -> list:
 
     Args:
         total_quantity: Total quantity to distribute
-        max_stack: Maximum stack size
+        max_stack: Maximum stack size; zero or less means unbounded, so the
+            whole quantity goes into a single stack
 
     Returns:
-        List of quantities, each <= max_stack
+        List of quantities, each <= max_stack (or one entry when unbounded)
     """
-    if max_stack <= 0:
-        max_stack = 99
     if total_quantity <= 0:
         return []
+    if max_stack <= 0:
+        return [total_quantity]
 
     stacks = []
     remaining = total_quantity

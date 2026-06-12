@@ -85,7 +85,8 @@ Functions are deployed via Character, Player, and Story stacks (not Lambda Stack
 Each function has a fixed logical ID to prevent recreation:
 
 ```python
-# From deployment/stacks/character_stack.py, player_stack.py, story_stack.py
+# Logical IDs as defined in cf/eidolon-lambda-character.yml,
+# cf/eidolon-lambda-cognito.yml, and cf/eidolon-lambda-story.yml
 logical_id_map = {
     # Character Stack (8 functions)
     "api-archetype-list": "ApiArchetypeListFunction",

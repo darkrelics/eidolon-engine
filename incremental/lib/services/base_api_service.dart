@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -9,6 +10,9 @@ abstract class BaseApiService {
   final AuthService _authService;
   final http.Client _httpClient;
   final String baseUrl;
+
+  /// Maximum time to wait for any single HTTP request
+  static const Duration requestTimeout = Duration(seconds: 30);
 
   /// Maximum request body size in bytes (5MB)
   static const int maxRequestBodySize = 5 * 1024 * 1024;
@@ -68,12 +72,16 @@ abstract class BaseApiService {
 
     // Check for invalid characters that could cause injection attacks
     if (endpoint.contains('..') || endpoint.contains('//')) {
-      throw ArgumentError('Endpoint contains invalid path traversal: $endpoint');
+      throw ArgumentError(
+        'Endpoint contains invalid path traversal: $endpoint',
+      );
     }
 
     // Ensure endpoint doesn't contain query parameters (use queryParams instead)
     if (endpoint.contains('?')) {
-      throw ArgumentError('Endpoint should not contain query parameters. Use queryParams parameter instead: $endpoint');
+      throw ArgumentError(
+        'Endpoint should not contain query parameters. Use queryParams parameter instead: $endpoint',
+      );
     }
   }
 
@@ -84,7 +92,9 @@ abstract class BaseApiService {
     }
 
     if (queryParams.length > maxQueryParams) {
-      throw ArgumentError('Too many query parameters (${queryParams.length}). Maximum: $maxQueryParams');
+      throw ArgumentError(
+        'Too many query parameters (${queryParams.length}). Maximum: $maxQueryParams',
+      );
     }
 
     for (final entry in queryParams.entries) {
@@ -96,12 +106,18 @@ abstract class BaseApiService {
       }
 
       if (value.length > maxQueryParamLength) {
-        throw ArgumentError('Query parameter "$key" value too long (${value.length} chars). Maximum: $maxQueryParamLength');
+        throw ArgumentError(
+          'Query parameter "$key" value too long (${value.length} chars). Maximum: $maxQueryParamLength',
+        );
       }
 
       // Check for null bytes or control characters that could cause issues
-      if (value.contains('\u0000') || value.contains('\n') || value.contains('\r')) {
-        throw ArgumentError('Query parameter "$key" contains invalid characters');
+      if (value.contains('\u0000') ||
+          value.contains('\n') ||
+          value.contains('\r')) {
+        throw ArgumentError(
+          'Query parameter "$key" contains invalid characters',
+        );
       }
     }
   }
@@ -137,7 +153,9 @@ abstract class BaseApiService {
     final upperMethod = method.toUpperCase();
 
     if (!allowedMethods.contains(upperMethod)) {
-      throw ArgumentError('Unsupported HTTP method: $method. Allowed: ${allowedMethods.join(", ")}');
+      throw ArgumentError(
+        'Unsupported HTTP method: $method. Allowed: ${allowedMethods.join(", ")}',
+      );
     }
   }
 
@@ -194,7 +212,9 @@ abstract class BaseApiService {
   }) async {
     try {
       final uri = Uri.parse('$baseUrl$endpoint').replace(
-        queryParameters: queryParams != null && queryParams.isNotEmpty ? queryParams : null,
+        queryParameters: queryParams != null && queryParams.isNotEmpty
+            ? queryParams
+            : null,
       );
 
       debugPrint('API [$method]: $uri');
@@ -202,26 +222,27 @@ abstract class BaseApiService {
       final encodedBody = _validateAndEncodeBody(body);
       final headers = await getHeaders();
 
-      http.Response response;
+      final Future<http.Response> request;
       switch (method.toUpperCase()) {
         case 'GET':
-          response = await _httpClient.get(uri, headers: headers);
+          request = _httpClient.get(uri, headers: headers);
           break;
         case 'POST':
-          response = await _httpClient.post(uri, headers: headers, body: encodedBody);
+          request = _httpClient.post(uri, headers: headers, body: encodedBody);
           break;
         case 'PUT':
-          response = await _httpClient.put(uri, headers: headers, body: encodedBody);
+          request = _httpClient.put(uri, headers: headers, body: encodedBody);
           break;
         case 'DELETE':
-          response = await _httpClient.delete(uri, headers: headers);
+          request = _httpClient.delete(uri, headers: headers);
           break;
         case 'PATCH':
-          response = await _httpClient.patch(uri, headers: headers, body: encodedBody);
+          request = _httpClient.patch(uri, headers: headers, body: encodedBody);
           break;
         default:
           throw ArgumentError('Unsupported HTTP method: $method');
       }
+      final response = await request.timeout(requestTimeout);
 
       debugPrint('API Response [${response.statusCode}]: ${response.body}');
 
@@ -246,7 +267,8 @@ abstract class BaseApiService {
       } else if (response.statusCode == 401) {
         throw UnauthorizedException('Unauthorized');
       } else {
-        String errorMessage = 'Request failed with status ${response.statusCode}';
+        String errorMessage =
+            'Request failed with status ${response.statusCode}';
         try {
           final errorBody = jsonDecode(response.body) as Map<String, dynamic>;
           errorMessage =
@@ -262,6 +284,11 @@ abstract class BaseApiService {
     } on ArgumentError catch (e) {
       debugPrint('API Validation Error: $e');
       throw ValidationException(e.message);
+    } on TimeoutException {
+      debugPrint('API Timeout [$method]: $endpoint');
+      throw ApiException(
+        'Request timed out. Please check your connection and try again.',
+      );
     } catch (e) {
       if (e is ApiException) {
         rethrow;

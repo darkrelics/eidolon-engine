@@ -20,7 +20,7 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 
 ## Stack Deployment Order
 
-Refer to the canonical sequence in [Deployment Guide](deployment.md#stack-deployment-order); this document focuses on how each mode changes the selection of stacks rather than repeating the step-by-step list.
+Refer to the canonical sequence in [Deployment Guide](deployment.md#system-architecture); this document focuses on how each mode changes the selection of stacks rather than repeating the step-by-step list.
 
 ## Deployment Process
 

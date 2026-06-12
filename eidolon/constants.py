@@ -65,6 +65,16 @@ class CharState(str, Enum):
     DEAD = "dead"
 
 
-# Time windows for segment processing (seconds)
-SEGMENT_STUCK_THRESHOLD = 900  # 15 minutes - segment considered stuck
-SEGMENT_RETRY_WINDOW = 900  # 15 minutes - minimum time remaining to retry
+# Segment recovery windows (seconds), used by ops-segment-poller. A worker
+# normally processes a segment within seconds of its StartTime, so a segment
+# still pending/processing after SEGMENT_STUCK_RETRY_SECONDS (2x the worker
+# Lambda's 30s timeout) is presumed lost and requeued, as long as at least
+# SEGMENT_RETRY_MIN_REMAINING_SECONDS remain before its EndTime. A segment
+# still "processing" SEGMENT_PROCESSING_GRACE_SECONDS past its EndTime has a
+# dead worker and is resolved with the exceptional outcome.
+SEGMENT_STUCK_RETRY_SECONDS = 60
+SEGMENT_RETRY_MIN_REMAINING_SECONDS = 30
+SEGMENT_PROCESSING_GRACE_SECONDS = 120
+
+# Daily stories may be repeated this long after completion (24 hours)
+DAILY_STORY_COOLDOWN_SECONDS = 86400

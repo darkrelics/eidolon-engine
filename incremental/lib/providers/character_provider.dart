@@ -21,9 +21,11 @@ class CharacterProvider extends BaseProvider {
 
   static const String _activeCharacterIdKey = 'active_character_id';
 
-  CharacterProvider({required SharedPreferences prefs, required CharacterRepository repository})
-    : _prefs = prefs,
-      _repository = repository {
+  CharacterProvider({
+    required SharedPreferences prefs,
+    required CharacterRepository repository,
+  }) : _prefs = prefs,
+       _repository = repository {
     // Load data asynchronously after construction to avoid blocking
     _loadFromStorage();
   }
@@ -34,7 +36,9 @@ class CharacterProvider extends BaseProvider {
       final characterId = _prefs.getString(_activeCharacterIdKey);
 
       if (characterId != null) {
-        debugPrint('CharacterProvider: Loading active character ID: $characterId');
+        debugPrint(
+          'CharacterProvider: Loading active character ID: $characterId',
+        );
         try {
           final character = await _repository.getCharacter(characterId);
           if (character != null) {

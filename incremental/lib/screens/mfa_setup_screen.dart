@@ -46,7 +46,9 @@ class _MfaSetupScreenState extends State<MfaSetupScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'MFA Setup')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'MFA Setup'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -62,14 +64,21 @@ class _MfaSetupScreenState extends State<MfaSetupScreen> {
     });
 
     try {
-      final success = await context.read<AuthProvider>().verifyMfaSetup(_codeController.text);
+      final success = await context.read<AuthProvider>().verifyMfaSetup(
+        _codeController.text,
+      );
       if (mounted) {
         if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('MFA Enabled Successfully')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('MFA Enabled Successfully')),
+          );
           Navigator.of(context).pop();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: const Text('Invalid code. Please try again.'), backgroundColor: Theme.of(context).colorScheme.error),
+            SnackBar(
+              content: const Text('Invalid code. Please try again.'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
           );
         }
       }
@@ -77,7 +86,9 @@ class _MfaSetupScreenState extends State<MfaSetupScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'MFA Verify')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(e, context: 'MFA Verify'),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -132,13 +143,26 @@ class _MfaSetupScreenState extends State<MfaSetupScreen> {
                             backgroundColor: Colors.white,
                           ),
                         const SizedBox(height: 16),
-                        const Text('Secret Key:', style: TextStyle(fontWeight: FontWeight.bold)),
+                        const Text(
+                          'Secret Key:',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
                         const SizedBox(height: 8),
-                        SelectableText(_secretKey!, style: const TextStyle(fontFamily: 'monospace', fontSize: 16)),
+                        SelectableText(
+                          _secretKey!,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 16,
+                          ),
+                        ),
                         TextButton.icon(
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: _secretKey!));
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Secret copied to clipboard')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Secret copied to clipboard'),
+                              ),
+                            );
                           },
                           icon: const Icon(Icons.copy),
                           label: const Text('Copy Secret'),
@@ -161,7 +185,11 @@ class _MfaSetupScreenState extends State<MfaSetupScreen> {
                   FilledButton(
                     onPressed: _isVerifying ? null : _verifyCode,
                     child: _isVerifying
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Verify and Enable'),
                   ),
                 ],

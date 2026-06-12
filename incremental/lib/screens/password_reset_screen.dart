@@ -7,7 +7,10 @@ class PasswordResetScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(create: (_) => PasswordResetController(), child: const _PasswordResetScreenView());
+    return ChangeNotifierProvider(
+      create: (_) => PasswordResetController(),
+      child: const _PasswordResetScreenView(),
+    );
   }
 }
 
@@ -30,7 +33,11 @@ class _PasswordResetScreenView extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Forgot Your Password?', style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
+                  Text(
+                    'Forgot Your Password?',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Enter your email address and we\'ll send you a code to reset your password.',
@@ -47,12 +54,15 @@ class _PasswordResetScreenView extends StatelessWidget {
                     ),
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => controller.handlePasswordResetRequest(context),
+                    onFieldSubmitted: (_) =>
+                        controller.handlePasswordResetRequest(context),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please enter your email';
                       }
-                      if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value)) {
                         return 'Please enter a valid email';
                       }
                       return null;
@@ -60,9 +70,15 @@ class _PasswordResetScreenView extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: controller.isLoading ? null : () => controller.handlePasswordResetRequest(context),
+                    onPressed: controller.isLoading
+                        ? null
+                        : () => controller.handlePasswordResetRequest(context),
                     child: controller.isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Send Reset Code'),
                   ),
                   const SizedBox(height: 16),

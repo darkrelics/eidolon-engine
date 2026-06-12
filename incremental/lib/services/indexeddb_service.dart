@@ -88,7 +88,10 @@ class IndexedDBService {
     );
 
     // Indexes for efficient querying
-    store.createIndex('storyInstance', ['CharacterID', 'StoryInstanceID'], unique: false);
+    store.createIndex('storyInstance', [
+      'CharacterID',
+      'StoryInstanceID',
+    ], unique: false);
     store.createIndex('segmentType', 'SegmentType', unique: false);
     store.createIndex('outcome', 'Outcome', unique: false);
 
@@ -97,10 +100,7 @@ class IndexedDBService {
 
   /// Create characters object store for primary character storage
   void _createCharactersStore(Database db) {
-    final store = db.createObjectStore(
-      storeCharacters,
-      keyPath: 'CharacterID',
-    );
+    final store = db.createObjectStore(storeCharacters, keyPath: 'CharacterID');
 
     // Indexes for efficient querying
     store.createIndex('playerId', 'PlayerID', unique: false);
@@ -112,10 +112,7 @@ class IndexedDBService {
   /// Create items object store for item instance storage
   /// Stores only ItemID and PrototypeID for minimal storage
   void _createItemsStore(Database db) {
-    final store = db.createObjectStore(
-      storeItems,
-      keyPath: 'ItemID',
-    );
+    final store = db.createObjectStore(storeItems, keyPath: 'ItemID');
 
     // Index for retrieving all items belonging to a character
     store.createIndex('characterId', 'CharacterID', unique: false);
@@ -149,16 +146,13 @@ class IndexedDBService {
     if (_db == null || !isSupported) return;
 
     try {
-      final transaction = _db!.transaction(
-        [
-          storeStories,
-          storeStorySegments,
-          storeCharacters,
-          storeItems,
-          storeItemPrototypes,
-        ],
-        idbModeReadWrite,
-      );
+      final transaction = _db!.transaction([
+        storeStories,
+        storeStorySegments,
+        storeCharacters,
+        storeItems,
+        storeItemPrototypes,
+      ], idbModeReadWrite);
 
       transaction.objectStore(storeStories).clear();
       transaction.objectStore(storeStorySegments).clear();
@@ -218,7 +212,9 @@ class IndexedDBService {
   }
 
   /// Get all characters for a player
-  Future<List<Map<String, dynamic>>> getPlayerCharacters(String playerId) async {
+  Future<List<Map<String, dynamic>>> getPlayerCharacters(
+    String playerId,
+  ) async {
     if (_db == null || !isSupported) return [];
 
     try {
@@ -226,9 +222,7 @@ class IndexedDBService {
       final index = store.index('playerId');
       final results = await index.getAll(playerId);
 
-      return results
-          .map((e) => e as Map<String, dynamic>)
-          .toList();
+      return results.map((e) => e as Map<String, dynamic>).toList();
     } catch (e) {
       debugPrint('Failed to get player characters: $e');
       return [];
@@ -266,7 +260,9 @@ class IndexedDBService {
   }
 
   /// Get all stories for a character
-  Future<List<Map<String, dynamic>>> getCharacterStories(String characterId) async {
+  Future<List<Map<String, dynamic>>> getCharacterStories(
+    String characterId,
+  ) async {
     if (_db == null || !isSupported) return [];
 
     try {
@@ -274,9 +270,7 @@ class IndexedDBService {
       final index = store.index('characterId');
       final results = await index.getAll(characterId);
 
-      return results
-          .map((e) => e as Map<String, dynamic>)
-          .toList();
+      return results.map((e) => e as Map<String, dynamic>).toList();
     } catch (e) {
       debugPrint('Failed to get character stories: $e');
       return [];
@@ -312,9 +306,7 @@ class IndexedDBService {
       final index = store.index('storyInstance');
       final results = await index.getAll([characterId, storyInstanceId]);
 
-      return results
-          .map((e) => e as Map<String, dynamic>)
-          .toList();
+      return results.map((e) => e as Map<String, dynamic>).toList();
     } catch (e) {
       debugPrint('Failed to get story segments: $e');
       return [];

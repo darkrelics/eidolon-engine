@@ -18,7 +18,8 @@ class AccountSettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => AccountSettingsController(authProvider: context.read<AuthProvider>()),
+      create: (_) =>
+          AccountSettingsController(authProvider: context.read<AuthProvider>()),
       child: const _AccountSettingsView(),
     );
   }
@@ -70,7 +71,9 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
           Navigator.pushReplacementNamed(
             context,
             '/login',
-            arguments: {NavigationConstants.messageKey: 'Your account has been deleted'},
+            arguments: {
+              NavigationConstants.messageKey: 'Your account has been deleted',
+            },
           );
         }
       },
@@ -98,10 +101,15 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
                 'Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently lost.',
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                  ),
                   child: const Text('Delete'),
                 ),
               ],
@@ -122,10 +130,15 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
                 'This is your last chance. Your account and all associated data will be permanently deleted. Are you absolutely sure?',
               ),
               actions: [
-                TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Cancel'),
+                ),
                 FilledButton(
                   onPressed: () => Navigator.of(context).pop(true),
-                  style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
                   child: const Text('Yes, Delete My Account'),
                 ),
               ],
@@ -141,7 +154,10 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Local cache cleared'), backgroundColor: Colors.green),
+        const SnackBar(
+          content: Text('Local cache cleared'),
+          backgroundColor: Colors.green,
+        ),
       );
     }
   }
@@ -180,7 +196,9 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
                   ListTile(
                     leading: const Icon(Icons.brightness_6),
                     title: const Text('Theme'),
-                    subtitle: const Text('Choose between light, dark, or system theme'),
+                    subtitle: const Text(
+                      'Choose between light, dark, or system theme',
+                    ),
                     trailing: const ThemeModeSelector(),
                   ),
                 ],
@@ -242,7 +260,11 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
                     subtitle: const Text('Secure your account with 2FA'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
-                      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MfaSetupScreen()));
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const MfaSetupScreen(),
+                        ),
+                      );
                     },
                   ),
                   const Divider(),
@@ -264,15 +286,28 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
               child: Column(
                 children: [
                   ListTile(
-                    leading: Icon(Icons.warning, color: Theme.of(context).colorScheme.error),
+                    leading: Icon(
+                      Icons.warning,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                     title: const Text('Danger Zone'),
                     subtitle: const Text('Irreversible actions'),
                   ),
                   const Divider(height: 1),
                   ListTile(
-                    leading: Icon(Icons.delete_forever, color: Theme.of(context).colorScheme.error),
-                    title: Text('Delete Account', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    subtitle: const Text('Permanently delete your account and all data'),
+                    leading: Icon(
+                      Icons.delete_forever,
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    title: Text(
+                      'Delete Account',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'Permanently delete your account and all data',
+                    ),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: isLoading ? null : _handleDeleteAccount,
                   ),
@@ -285,7 +320,11 @@ class _AccountSettingsViewState extends State<_AccountSettingsView> {
                 onPressed: isLoading ? null : _handleSignOut,
                 icon: const Icon(Icons.logout),
                 label: isLoading
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Sign Out'),
               ),
             ),

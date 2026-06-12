@@ -266,8 +266,8 @@ This document defines the functional and non-functional requirements for the Inc
 - **COMPLETE**: Seamless character transitions between game modes (GameMode field)
 - **COMPLETE**: Proper timeout handling with default decisions (EventBridge polling)
 - **COMPLETE**: Equipment and wound persistence across modes (shared tables)
-- **BROKEN**: Currency rewards from story completion (apply_story_rewards empty)
-- **BROKEN**: Dead character prevention (story_eligibility doesn't check CharState)
+- **COMPLETE**: Currency rewards from story completion (reward tiers grant coin items; see currency.md)
+- **COMPLETE**: Dead character prevention (story_eligibility checks CharState)
 
 ### 5.2 Performance Acceptance
 
@@ -277,21 +277,17 @@ This document defines the functional and non-functional requirements for the Inc
 
 ### 5.3 Known Implementation Gaps
 
-**Critical Gaps:**
+Resolved since this section was first written: the currency/economy system
+(story rewards grant coin items; store purchases spend them atomically), dead
+character prevention, inventory name display, store endpoints, and item
+discarding are all implemented.
 
-1. Currency/economy system non-functional (apply_story_rewards empty)
-2. Dead characters can start stories (story_eligibility bug)
-3. Inventory displays UUIDs (get_inventory or Items table issue)
-4. Flutter polling timing violates INITIAL_POLL_DELAY specification
+**Remaining Gaps:**
 
-**Missing Features:**
+1. Flutter polling timing violates INITIAL_POLL_DELAY specification
+2. Ghost state (health.md spec, not in Python constants)
 
-1. Store system (no endpoints)
-2. Store system (pending)
-3. Item discarding (no api_item_discard endpoint)
-4. Ghost state (health.md spec, not in Python constants)
-
-See INCREMENTAL-STATUS.md for complete bug tracking.
+See GitHub issues and incremental-remediation-plan.md for complete tracking.
 
 ## 6. Frequently Asked Questions
 

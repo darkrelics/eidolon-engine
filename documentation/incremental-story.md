@@ -797,43 +797,61 @@ stateDiagram-v2
 
 ## Error Recovery and Edge Cases
 
-### Timeout Recovery
+The poller (`ops-segment-poller`, every minute while polling is enabled) is
+the recovery authority. Every segment is guaranteed to either process normally
+or resolve deterministically; the constants live in `eidolon/constants.py`.
 
-- Segments past EndTime marked "exceptional"
-- Gives players best possible outcome
-- Prevents indefinite waiting
+### Stuck Segment Recovery (mid-flight)
 
-### Stuck Segment Recovery
+A worker normally processes a mechanical segment within seconds of its
+StartTime, so one still `pending` or `processing` more than
+`SEGMENT_STUCK_RETRY_SECONDS` (60s) after StartTime means the queue message
+was lost or the worker died. While at least
+`SEGMENT_RETRY_MIN_REMAINING_SECONDS` (30s) remain before EndTime, the poller
+resets a `processing` claim back to `pending` and requeues the segment.
+Segments too short to ever satisfy both bounds are recovered at expiry
+instead (below).
 
-- Mechanical segments stuck >15 minutes get retried
-- ProcessingStatus reset to pending to allow reprocessing
-- Maximum 3 retry attempts
+### Expiry Recovery
+
+When a segment comes within 60 seconds of its EndTime (or is already past
+it), the poller resolves it by ProcessingStatus:
+
+- **processed**: queued for normal advancement.
+- **pending, mechanical**: requeued once for a final processing attempt
+  (tracked by a conditional `RecoveryAttempted` flag, so concurrent pollers
+  cannot double-queue it). If it is still unprocessed on the next poll, it is
+  marked completed with the **exceptional** outcome - the player-favorable
+  system-failure protection - and advanced.
+- **pending, decision**: queued for advancement, which applies the
+  DefaultDecision or failure handling.
+- **processing**: left alone while the claim is plausibly alive; once
+  `SEGMENT_PROCESSING_GRACE_SECONDS` (120s) past EndTime - far beyond the
+  worker's 30s timeout - the worker is presumed dead and the segment is
+  resolved exceptionally rather than stranded.
 
 ### Concurrent Processing Prevention
 
 - ProcessingStatus state machine prevents duplicate processing
 - Atomic DynamoDB operations ensure consistency
-- SQS provides at-least-once delivery
+- SQS provides at-least-once delivery; duplicate enqueues are benign because
+  workers must win the conditional pending-to-processing claim before doing
+  any work
 
 ### Failure Modes
 
-**Processing Failure**:
-
-- Segment remains in processing state
-- Poller eventually marks as exceptional
-- Player protected from system errors
-
 **Queue Message Loss**:
 
-- Poller re-queues unprocessed segments
-- Idempotent processing prevents issues
+- The stuck scan requeues mid-flight segments; the expiry path requeues
+  short segments once
+- Idempotent processing prevents double application
 - History tables provide audit trail
 
-**Lambda Timeout**:
+**Worker Death (Lambda timeout or crash)**:
 
-- ProcessingStatus remains in processing state
-- Poller detects stuck segment
-- Automatic retry after 15 minutes
+- Mid-flight: claim reset to pending and requeued by the stuck scan
+- Near or past EndTime: resolved exceptionally after the processing grace
+  period, so no segment stays `processing` forever
 
 ## Summary
 

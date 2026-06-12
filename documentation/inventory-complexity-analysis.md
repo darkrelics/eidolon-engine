@@ -452,4 +452,4 @@ The container hierarchies, equipment relationships, and item state management cr
 - All enabled by IndexedDB relational capabilities
 
 **Implementation Roadmap:**
-These features are lower priority than fixing core gameplay bugs (currency system, death mechanics, inventory UUID display). See INCREMENTAL-STATUS.md for current priorities.
+These features are lower priority than core gameplay work. See GitHub issues and incremental-remediation-plan.md for current priorities.

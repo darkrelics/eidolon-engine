@@ -7,7 +7,10 @@ class PasswordResetConfirmScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(create: (_) => PasswordResetController(), child: const _PasswordResetConfirmScreenView());
+    return ChangeNotifierProvider(
+      create: (_) => PasswordResetController(),
+      child: const _PasswordResetConfirmScreenView(),
+    );
   }
 }
 
@@ -15,10 +18,12 @@ class _PasswordResetConfirmScreenView extends StatefulWidget {
   const _PasswordResetConfirmScreenView();
 
   @override
-  State<_PasswordResetConfirmScreenView> createState() => _PasswordResetConfirmScreenViewState();
+  State<_PasswordResetConfirmScreenView> createState() =>
+      _PasswordResetConfirmScreenViewState();
 }
 
-class _PasswordResetConfirmScreenViewState extends State<_PasswordResetConfirmScreenView> {
+class _PasswordResetConfirmScreenViewState
+    extends State<_PasswordResetConfirmScreenView> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -42,7 +47,11 @@ class _PasswordResetConfirmScreenViewState extends State<_PasswordResetConfirmSc
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Create New Password', style: Theme.of(context).textTheme.headlineMedium, textAlign: TextAlign.center),
+                  Text(
+                    'Create New Password',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 16),
                   if (controller.email != null)
                     Text(
@@ -75,7 +84,11 @@ class _PasswordResetConfirmScreenViewState extends State<_PasswordResetConfirmSc
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock),
                       suffixIcon: IconButton(
-                        icon: Icon(controller.isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          controller.isPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
                         onPressed: controller.togglePasswordVisibility,
                       ),
                     ),
@@ -91,13 +104,18 @@ class _PasswordResetConfirmScreenViewState extends State<_PasswordResetConfirmSc
                       border: const OutlineInputBorder(),
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
-                        icon: Icon(controller.isConfirmPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                        icon: Icon(
+                          controller.isConfirmPasswordVisible
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                        ),
                         onPressed: controller.toggleConfirmPasswordVisibility,
                       ),
                     ),
                     obscureText: !controller.isConfirmPasswordVisible,
                     textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => controller.handlePasswordResetConfirm(context),
+                    onFieldSubmitted: (_) =>
+                        controller.handlePasswordResetConfirm(context),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Please confirm your password';
@@ -116,14 +134,22 @@ class _PasswordResetConfirmScreenViewState extends State<_PasswordResetConfirmSc
                   ),
                   const SizedBox(height: 24),
                   FilledButton(
-                    onPressed: controller.isLoading ? null : () => controller.handlePasswordResetConfirm(context),
+                    onPressed: controller.isLoading
+                        ? null
+                        : () => controller.handlePasswordResetConfirm(context),
                     child: controller.isLoading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Text('Reset Password'),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
-                    onPressed: controller.isLoading ? null : () => controller.resendCode(context),
+                    onPressed: controller.isLoading
+                        ? null
+                        : () => controller.resendCode(context),
                     child: const Text('Resend Code'),
                   ),
                 ],

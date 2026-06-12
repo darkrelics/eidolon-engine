@@ -891,16 +891,17 @@ CloudWatch metrics:
 
 ## 10. Deployment
 
-### 10.1 CDK Deployment Architecture
+### 10.1 Deployment Architecture
 
-Incremental mode uses the shared deployment system described in [Deployment Guide](deployment.md#stack-deployment-order); this document focuses on design implications rather than repeating the stack list.
+Incremental mode uses the shared deployment system described in [Deployment Guide](deployment.md#system-architecture); this document focuses on design implications rather than repeating the stack list.
 
 **Lambda Stack Implementation:**
 
 ```python
-# From lambda_stack.py - Fixed logical IDs prevent recreation
-# Note: This is a simplified view. Actual deployment splits functions across Character, Player, and Story stacks.
-# See deployment/stacks/character_stack.py, player_stack.py, story_stack.py for actual deployment.
+# Fixed logical IDs prevent recreation. This is a simplified view: the actual
+# deployment splits functions across the character, cognito, and story stacks.
+# See cf/eidolon-lambda-character.yml, cf/eidolon-lambda-cognito.yml, and
+# cf/eidolon-lambda-story.yml for the deployed definitions.
 
 lambda_configs = [
     # Character Stack (7 functions)

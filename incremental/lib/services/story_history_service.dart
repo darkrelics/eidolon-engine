@@ -5,7 +5,9 @@ class StoryHistoryService {
   static const Duration _maxReasonableDuration = Duration(hours: 24);
 
   /// Processes raw segment data into structured story history entries
-  List<StoryHistoryEntry> processStoryHistory(List<Map<String, dynamic>> rawSegments) {
+  List<StoryHistoryEntry> processStoryHistory(
+    List<Map<String, dynamic>> rawSegments,
+  ) {
     if (rawSegments.isEmpty) return const [];
 
     // Group segments by story instance
@@ -41,18 +43,30 @@ class StoryHistoryService {
       );
     }
 
-    final successfulStories = entries.where((e) => e.outcomeCategory == 'success').length;
-    final normalStories = entries.where((e) => e.outcomeCategory == 'normal').length;
+    final successfulStories = entries
+        .where((e) => e.outcomeCategory == 'success')
+        .length;
+    final normalStories = entries
+        .where((e) => e.outcomeCategory == 'normal')
+        .length;
     final failedStories = entries.where((e) => e.outcome == 'failure').length;
     final deathStories = entries.where((e) => e.outcome == 'death').length;
 
-    final totalTimePlayed = entries.fold<Duration>(Duration.zero, (sum, entry) => sum + entry.duration);
+    final totalTimePlayed = entries.fold<Duration>(
+      Duration.zero,
+      (sum, entry) => sum + entry.duration,
+    );
 
     final averageDuration = entries.isNotEmpty
-        ? Duration(milliseconds: totalTimePlayed.inMilliseconds ~/ entries.length)
+        ? Duration(
+            milliseconds: totalTimePlayed.inMilliseconds ~/ entries.length,
+          )
         : Duration.zero;
 
-    final totalXpGained = entries.fold<int>(0, (sum, entry) => sum + entry.totalXpGained);
+    final totalXpGained = entries.fold<int>(
+      0,
+      (sum, entry) => sum + entry.totalXpGained,
+    );
 
     return StoryHistoryStats(
       totalStories: entries.length,
@@ -67,7 +81,10 @@ class StoryHistoryService {
   }
 
   /// Filters story history entries based on outcome
-  List<StoryHistoryEntry> filterByOutcome(List<StoryHistoryEntry> entries, String filter) {
+  List<StoryHistoryEntry> filterByOutcome(
+    List<StoryHistoryEntry> entries,
+    String filter,
+  ) {
     if (filter == 'all') return List.from(entries);
 
     return entries.where((entry) {
@@ -85,7 +102,10 @@ class StoryHistoryService {
   }
 
   /// Sorts story history entries
-  List<StoryHistoryEntry> sortEntries(List<StoryHistoryEntry> entries, String sortBy) {
+  List<StoryHistoryEntry> sortEntries(
+    List<StoryHistoryEntry> entries,
+    String sortBy,
+  ) {
     final sorted = List<StoryHistoryEntry>.from(entries);
 
     switch (sortBy) {
@@ -106,18 +126,25 @@ class StoryHistoryService {
     return sorted;
   }
 
-  Map<String, List<Map<String, dynamic>>> _groupSegmentsByStory(List<Map<String, dynamic>> segments) {
+  Map<String, List<Map<String, dynamic>>> _groupSegmentsByStory(
+    List<Map<String, dynamic>> segments,
+  ) {
     final grouped = <String, List<Map<String, dynamic>>>{};
 
     for (final segment in segments) {
-      final storyId = segment['StoryID']?.toString() ?? segment['StoryInstanceID']?.toString() ?? 'unknown';
+      final storyId =
+          segment['StoryID']?.toString() ??
+          segment['StoryInstanceID']?.toString() ??
+          'unknown';
       grouped.putIfAbsent(storyId, () => []).add(segment);
     }
 
     return grouped;
   }
 
-  StoryHistoryEntry? _createStoryHistoryEntry(List<Map<String, dynamic>> segments) {
+  StoryHistoryEntry? _createStoryHistoryEntry(
+    List<Map<String, dynamic>> segments,
+  ) {
     if (segments.isEmpty) return null;
 
     // Sort segments by completion time
@@ -151,14 +178,21 @@ class StoryHistoryService {
     );
   }
 
-  List<SegmentHistoryEntry> _createSegmentEntries(List<Map<String, dynamic>> segments) {
+  List<SegmentHistoryEntry> _createSegmentEntries(
+    List<Map<String, dynamic>> segments,
+  ) {
     return segments.map((segment) {
-      final segmentId = segment['SegmentID']?.toString() ?? segment['ActiveSegmentID']?.toString() ?? 'unknown';
+      final segmentId =
+          segment['SegmentID']?.toString() ??
+          segment['ActiveSegmentID']?.toString() ??
+          'unknown';
       final title = _extractSegmentTitle(segment);
       final subtitle = _extractSegmentSubtitle(segment);
       final narrative = _extractSegmentNarrative(segment);
       final outcome = segment['Outcome']?.toString() ?? 'normal';
-      final completedAt = _parseDate(segment['CompletedAt'] ?? segment['EndTime']);
+      final completedAt = _parseDate(
+        segment['CompletedAt'] ?? segment['EndTime'],
+      );
 
       return SegmentHistoryEntry(
         segmentId: segmentId,
@@ -199,7 +233,9 @@ class StoryHistoryService {
   DateTime? _findLatestCompletionTime(List<Map<String, dynamic>> segments) {
     DateTime? latest;
     for (final segment in segments) {
-      final time = _parseDate(segment['CompletedAt'] ?? segment['EndTime'] ?? segment['ProcessedAt']);
+      final time = _parseDate(
+        segment['CompletedAt'] ?? segment['EndTime'] ?? segment['ProcessedAt'],
+      );
       if (time != null && (latest == null || time.isAfter(latest))) {
         latest = time;
       }
@@ -281,7 +317,9 @@ class StoryHistoryService {
     ];
 
     for (final candidate in candidates) {
-      if (candidate != null && candidate.trim().isNotEmpty && !_isProcessingPlaceholder(candidate)) {
+      if (candidate != null &&
+          candidate.trim().isNotEmpty &&
+          !_isProcessingPlaceholder(candidate)) {
         return candidate.trim();
       }
     }
@@ -291,7 +329,10 @@ class StoryHistoryService {
 
   String? _extractSegmentSubtitle(Map<String, dynamic> segment) {
     final title = _extractSegmentTitle(segment);
-    final candidates = [segment['SegmentActivity']?.toString(), segment['Prompt']?.toString()];
+    final candidates = [
+      segment['SegmentActivity']?.toString(),
+      segment['Prompt']?.toString(),
+    ];
 
     for (final candidate in candidates) {
       if (candidate != null &&
@@ -309,7 +350,11 @@ class StoryHistoryService {
     final clientEvents = segment['ClientEvents'] as List<dynamic>?;
     if (clientEvents != null && clientEvents.isNotEmpty) {
       final descriptions = clientEvents
-          .map((event) => event is Map ? event['Description']?.toString() ?? '' : event.toString())
+          .map(
+            (event) => event is Map
+                ? event['Description']?.toString() ?? ''
+                : event.toString(),
+          )
           .where((text) => text.trim().isNotEmpty)
           .toList();
       if (descriptions.isNotEmpty) {
@@ -336,7 +381,8 @@ class StoryHistoryService {
     final normalized = value.trim().toLowerCase();
     if (normalized.isEmpty) return false;
     if (normalized.startsWith('processing')) return true;
-    return normalized == '...processing...' || normalized == 'processing your actions...';
+    return normalized == '...processing...' ||
+        normalized == 'processing your actions...';
   }
 
   DateTime? _parseDate(dynamic value) {
@@ -345,9 +391,15 @@ class StoryHistoryService {
       final timestamp = value.toDouble();
       if (timestamp.isNaN) return null;
       if (timestamp > 1000000000000) {
-        return DateTime.fromMillisecondsSinceEpoch(timestamp.round(), isUtc: true);
+        return DateTime.fromMillisecondsSinceEpoch(
+          timestamp.round(),
+          isUtc: true,
+        );
       }
-      return DateTime.fromMillisecondsSinceEpoch((timestamp * 1000).round(), isUtc: true);
+      return DateTime.fromMillisecondsSinceEpoch(
+        (timestamp * 1000).round(),
+        isUtc: true,
+      );
     }
     if (value is String && value.isNotEmpty) {
       try {
@@ -365,8 +417,12 @@ class StoryHistoryService {
   }
 
   int _compareSegmentsByTime(Map<String, dynamic> a, Map<String, dynamic> b) {
-    final aTime = _parseDate(a['CompletedAt'] ?? a['EndTime'] ?? a['StartTime']);
-    final bTime = _parseDate(b['CompletedAt'] ?? b['EndTime'] ?? b['StartTime']);
+    final aTime = _parseDate(
+      a['CompletedAt'] ?? a['EndTime'] ?? a['StartTime'],
+    );
+    final bTime = _parseDate(
+      b['CompletedAt'] ?? b['EndTime'] ?? b['StartTime'],
+    );
 
     if (aTime == null && bTime == null) return 0;
     if (aTime == null) return -1;

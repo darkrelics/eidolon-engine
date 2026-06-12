@@ -14,6 +14,7 @@ class Character {
   final Map<String, double> attributes;
   final Map<String, double> skills;
   final Map<String, int> resources;
+
   /// Top-level ItemIDs the character carries directly.
   /// Mirrors an item's Contents list; the character is the base container.
   final List<String> contents;
@@ -24,9 +25,12 @@ class Character {
   final String gameMode; // "None", "Incremental", or "MUD"
   final DateTime lastUpdated;
   final List<String> availableStories;
-  final List<Map<String, dynamic>> completedStories; // Format: [{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]
-  final List<Map<String, dynamic>>? availableStoriesDetails; // Full story metadata when no active story
-  final List<Map<String, dynamic>>? wounds; // List of wound objects with DamageType and HealAt
+  final List<Map<String, dynamic>>
+  completedStories; // Format: [{story_id: {"StoryType": "daily", "CompletedAt": timestamp}}, ...]
+  final List<Map<String, dynamic>>?
+  availableStoriesDetails; // Full story metadata when no active story
+  final List<Map<String, dynamic>>?
+  wounds; // List of wound objects with DamageType and HealAt
   final String? charState; // 'standing' | 'unconscious' | 'dead' | 'ghost'
 
   Character({
@@ -78,7 +82,9 @@ class Character {
 
       // Log warning for unexpected types and provide safe default
       // This could happen if server data format changes unexpectedly
-      debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0.0');
+      debugPrint(
+        'Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0.0',
+      );
       return MapEntry(key, 0.0);
     });
   }
@@ -103,7 +109,9 @@ class Character {
       }
 
       // Log warning for unexpected types and provide safe default
-      debugPrint('Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0');
+      debugPrint(
+        'Warning: Expected numeric value for $key, got ${value.runtimeType}. Defaulting to 0',
+      );
       return MapEntry(key, 0);
     });
   }
@@ -111,9 +119,15 @@ class Character {
   /// Create character from server response
   factory Character.fromJson(Map<String, dynamic> json) {
     // Parse attributes and skills, converting numbers to doubles
-    final Map<String, double> parsedAttributes = parseMapToDouble(json['Attributes'] ?? {});
-    final Map<String, double> parsedSkills = parseMapToDouble(json['Skills'] ?? {});
-    final Map<String, int> parsedResources = parseMapToInt(json['Resources'] ?? {});
+    final Map<String, double> parsedAttributes = parseMapToDouble(
+      json['Attributes'] ?? {},
+    );
+    final Map<String, double> parsedSkills = parseMapToDouble(
+      json['Skills'] ?? {},
+    );
+    final Map<String, int> parsedResources = parseMapToInt(
+      json['Resources'] ?? {},
+    );
 
     // The archetype from server is just a string name, not an object with ID
     final archetypeName = json['Archetype'] as String? ?? 'default';
@@ -132,20 +146,30 @@ class Character {
       attributes: parsedAttributes,
       skills: parsedSkills,
       resources: parsedResources,
-      contents: (json['Contents'] as List? ?? const []).whereType<String>().toList(),
+      contents: (json['Contents'] as List? ?? const [])
+          .whereType<String>()
+          .toList(),
       progress: Map<String, dynamic>.from(json['Progress'] ?? {}),
       storyState: json['StoryState'] as Map<String, dynamic>?,
       activeStoryID: json['ActiveStoryID'] as String?,
       activeSegmentID: json['ActiveSegmentID'] as String?,
       gameMode: json['GameMode'] as String? ?? 'None',
       lastUpdated: DateTime.parse(json['UpdatedAt'] as String),
-      availableStories: (json['AvailableStories'] as List? ?? []).map((storyId) => storyId as String).toList(),
-      completedStories: (json['CompletedStories'] as List? ?? []).map((entry) => entry as Map<String, dynamic>).toList(),
+      availableStories: (json['AvailableStories'] as List? ?? [])
+          .map((storyId) => storyId as String)
+          .toList(),
+      completedStories: (json['CompletedStories'] as List? ?? [])
+          .map((entry) => entry as Map<String, dynamic>)
+          .toList(),
       availableStoriesDetails: json['AvailableStoriesDetails'] != null
-          ? (json['AvailableStoriesDetails'] as List).map((story) => story as Map<String, dynamic>).toList()
+          ? (json['AvailableStoriesDetails'] as List)
+                .map((story) => story as Map<String, dynamic>)
+                .toList()
           : null,
       wounds: json['Wounds'] != null
-          ? (json['Wounds'] as List).map((wound) => wound as Map<String, dynamic>).toList()
+          ? (json['Wounds'] as List)
+                .map((wound) => wound as Map<String, dynamic>)
+                .toList()
           : null,
       charState: json['CharState'] as String?,
     );
@@ -173,7 +197,8 @@ class Character {
       'UpdatedAt': lastUpdated.toIso8601String(),
       'AvailableStories': availableStories,
       'CompletedStories': completedStories,
-      if (availableStoriesDetails != null) 'AvailableStoriesDetails': availableStoriesDetails,
+      if (availableStoriesDetails != null)
+        'AvailableStoriesDetails': availableStoriesDetails,
       if (wounds != null) 'Wounds': wounds,
       if (charState != null) 'CharState': charState,
     };
@@ -219,7 +244,8 @@ class Character {
       lastUpdated: lastUpdated ?? this.lastUpdated,
       availableStories: availableStories ?? this.availableStories,
       completedStories: completedStories ?? this.completedStories,
-      availableStoriesDetails: availableStoriesDetails ?? this.availableStoriesDetails,
+      availableStoriesDetails:
+          availableStoriesDetails ?? this.availableStoriesDetails,
       wounds: wounds ?? this.wounds,
       charState: charState,
     );
@@ -241,7 +267,10 @@ class Character {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Character && runtimeType == other.runtimeType && id == other.id && lastUpdated == other.lastUpdated;
+      other is Character &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          lastUpdated == other.lastUpdated;
 
   @override
   int get hashCode => id.hashCode ^ lastUpdated.hashCode;
@@ -259,7 +288,17 @@ class Attributes {
   static const String intelligence = 'Intelligence';
   static const String cunning = 'Cunning';
 
-  static const List<String> all = [strength, agility, endurance, charisma, intrigue, presence, perception, intelligence, cunning];
+  static const List<String> all = [
+    strength,
+    agility,
+    endurance,
+    charisma,
+    intrigue,
+    presence,
+    perception,
+    intelligence,
+    cunning,
+  ];
 }
 
 /// Skill names matching server implementation

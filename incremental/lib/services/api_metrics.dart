@@ -30,7 +30,9 @@ class ApiMetrics {
       elapsed = ' (+${duration.inSeconds}s)';
     }
 
-    debugPrint('[API-METRICS] ${_formatTime(now)}$elapsed: $endpoint${details != null ? ' ($details)' : ''} [total: ${_callCounts[endpoint]}]');
+    debugPrint(
+      '[API-METRICS] ${_formatTime(now)}$elapsed: $endpoint${details != null ? ' ($details)' : ''} [total: ${_callCounts[endpoint]}]',
+    );
   }
 
   /// Mark the start of a new segment
@@ -50,7 +52,9 @@ class ApiMetrics {
   /// Mark the end of current segment and print summary
   static void endSegment() {
     if (_segmentStartTime == null) {
-      debugPrint('[API-METRICS] Warning: endSegment called without startSegment');
+      debugPrint(
+        '[API-METRICS] Warning: endSegment called without startSegment',
+      );
       return;
     }
 
@@ -61,7 +65,9 @@ class ApiMetrics {
     debugPrint('');
     debugPrint('═══════════════════════════════════════════════════════════');
     debugPrint('[API-METRICS] SEGMENT #$_segmentNumber COMPLETE');
-    debugPrint('[API-METRICS] Duration: ${duration.inSeconds}s (${duration.inMinutes}m ${duration.inSeconds % 60}s)');
+    debugPrint(
+      '[API-METRICS] Duration: ${duration.inSeconds}s (${duration.inMinutes}m ${duration.inSeconds % 60}s)',
+    );
     debugPrint('[API-METRICS] Total API calls: $totalCalls');
     debugPrint('───────────────────────────────────────────────────────────');
 
@@ -72,7 +78,9 @@ class ApiMetrics {
 
       for (final entry in sortedEntries) {
         final percentage = (entry.value / totalCalls * 100).toStringAsFixed(1);
-        debugPrint('[API-METRICS]   ${entry.key}: ${entry.value} calls ($percentage%)');
+        debugPrint(
+          '[API-METRICS]   ${entry.key}: ${entry.value} calls ($percentage%)',
+        );
       }
     } else {
       debugPrint('[API-METRICS] No API calls recorded');
@@ -106,12 +114,14 @@ class ApiMetrics {
         : _callHistory.where((call) => call.segmentNumber == forSegment);
 
     return List.unmodifiable(
-      calls.map((call) => {
-        'timestamp': call.timestamp.toIso8601String(),
-        'endpoint': call.endpoint,
-        'details': call.details,
-        'segmentNumber': call.segmentNumber,
-      }),
+      calls.map(
+        (call) => {
+          'timestamp': call.timestamp.toIso8601String(),
+          'endpoint': call.endpoint,
+          'details': call.details,
+          'segmentNumber': call.segmentNumber,
+        },
+      ),
     );
   }
 
@@ -148,7 +158,8 @@ class ApiMetrics {
       final callsByEndpoint = <String, int>{};
 
       for (final call in calls) {
-        callsByEndpoint[call.endpoint] = (callsByEndpoint[call.endpoint] ?? 0) + 1;
+        callsByEndpoint[call.endpoint] =
+            (callsByEndpoint[call.endpoint] ?? 0) + 1;
       }
 
       debugPrint('[API-METRICS] Segment #$segmentNum: ${calls.length} calls');
@@ -163,9 +174,9 @@ class ApiMetrics {
 
   static String _formatTime(DateTime time) {
     return '${time.hour.toString().padLeft(2, '0')}:'
-           '${time.minute.toString().padLeft(2, '0')}:'
-           '${time.second.toString().padLeft(2, '0')}.'
-           '${(time.millisecond ~/ 100).toString()}';
+        '${time.minute.toString().padLeft(2, '0')}:'
+        '${time.second.toString().padLeft(2, '0')}.'
+        '${(time.millisecond ~/ 100).toString()}';
   }
 }
 

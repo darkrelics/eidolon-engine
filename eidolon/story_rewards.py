@@ -7,13 +7,14 @@ Provides functions for calculating and applying story rewards.
 from botocore.exceptions import ClientError
 
 from eidolon.contents import PARENT_CHARACTER, append_to_contents
+from eidolon.currency import coin_rewards_for_amount
 from eidolon.dynamo import TableName, dynamo
 from eidolon.items import (
     build_item_from_prototype,
     create_item_from_prototype,
     distribute_into_stacks,
-    get_stack_space,
     load_top_level_stacks,
+    stack_merge_quantity,
 )
 from eidolon.logger import logger
 from eidolon.prototypes import get_prototype
@@ -46,6 +47,10 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
     """
     Calculate rewards based on story outcome and segments completed.
 
+    The tier's ``currency`` amount (FU) is converted into coin item entries, so
+    currency flows through the same item-granting path as every other reward
+    and merges into the character's existing coin stacks.
+
     Args:
         story_metadata: Story data from STORY table
         outcome: Final outcome (death, failure, minimal, normal, exceptional)
@@ -72,10 +77,14 @@ def calculate_story_rewards(story_metadata: dict, outcome: str, segments_complet
     # Normalize outcome to lowercase since reward_tiers keys are lowercase
     outcome_key = outcome.lower() if outcome else "normal"
     tier_rewards = reward_tiers.get(outcome_key, {})
-    if isinstance(tier_rewards, dict):
-        rewards["items"] = tier_rewards.get("items", [])
-    else:
-        rewards["items"] = []
+    if not isinstance(tier_rewards, dict):
+        return rewards
+
+    rewards["items"] = list(tier_rewards.get("items", []))
+
+    currency_fu = tier_rewards.get("currency", 0)
+    if isinstance(currency_fu, (int, float)) and currency_fu > 0:
+        rewards["items"].extend(coin_rewards_for_amount(int(currency_fu)))
 
     return rewards
 
@@ -136,17 +145,14 @@ def _plan_item_reward(
         return new_item_ids
 
     max_stack = prototype.get("MaxStack", 99) if prototype else 99
-    if max_stack <= 0:
-        max_stack = 99
 
     remaining = quantity
     for item_id, current in load_top_level_stacks(top_level_ids, prototype_id):
         if remaining <= 0:
             break
-        space = get_stack_space(current, max_stack)
-        if space <= 0:
+        add_qty = stack_merge_quantity(current, remaining, max_stack)
+        if add_qty <= 0:
             continue
-        add_qty = min(remaining, space)
         new_quantity = current + add_qty
         remaining -= add_qty
         planned_stack_updates.append((item_id, new_quantity))

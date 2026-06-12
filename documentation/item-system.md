@@ -202,10 +202,14 @@ Examples:
 Stacking happens when stackable items are created (store purchases and story
 rewards). New quantity is merged into existing top-level stacks of the same
 prototype, up to the prototype's `MaxStack`, before any new stack records are
-minted. The shared helper `load_top_level_stacks(top_level_ids, prototype_id)`
-in `eidolon/items.py` finds existing stacks by `PrototypeID`; merging is purely
-by quantity and does not depend on item-ID ordering. Item IDs are random UUIDv4
-and carry no timestamp, so there is no "older stack" relation to rely on.
+minted. A `MaxStack` of zero or less means the stack is unbounded - everything
+merges into the existing stack and overflow never splits; coins use
+`MaxStack: -1`. The shared helpers `load_top_level_stacks(top_level_ids,
+prototype_id)` and `stack_merge_quantity(current, add, max_stack)` in
+`eidolon/items.py` find existing stacks by `PrototypeID` and decide how much
+fits; merging is purely by quantity and does not depend on item-ID ordering.
+Item IDs are random UUIDv4 and carry no timestamp, so there is no "older
+stack" relation to rely on.
 
 ### Stack Splitting
 

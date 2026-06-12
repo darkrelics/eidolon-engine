@@ -4,11 +4,10 @@ Story validation and prerequisites.
 Provides functions for checking story availability and prerequisites.
 """
 
-from datetime import datetime, timezone
-
-from eidolon.constants import CharState
+from eidolon.constants import DAILY_STORY_COOLDOWN_SECONDS, CharState
 from eidolon.contents import collect_item_ids
 from eidolon.logger import logger
+from eidolon.time_utils import now_unix
 
 
 def check_story_prerequisites(character: dict, prerequisites: dict) -> bool:
@@ -71,16 +70,16 @@ def validate_story_available(character: dict, story_id: str) -> None:
                 raise ValueError("Story already completed")
 
             if story_type == "daily":
-                # Check if cooldown has actually expired (cleanup may have missed this entry)
-                completed_at = story_data.get("CompletedAt", "")
-                if completed_at:
-                    try:
-                        finished = datetime.fromisoformat(completed_at)
-                        now = datetime.now(timezone.utc)
-                        if finished.date() < now.date():
-                            continue  # Cooldown expired, story is available
-                    except (ValueError, TypeError):
-                        pass  # Can't parse date, block to be safe
+                # Check if the cooldown has expired (cleanup may not have
+                # trimmed this entry yet). CompletedAt is a Unix timestamp -
+                # the same representation cleanup_expired_daily_stories reads.
+                completed_at = story_data.get("CompletedAt", 0)
+                try:
+                    completed_ts = int(completed_at)
+                except (TypeError, ValueError):
+                    completed_ts = 0  # Unreadable timestamp - block to be safe
+                if completed_ts > 0 and now_unix() - completed_ts >= DAILY_STORY_COOLDOWN_SECONDS:
+                    continue  # Cooldown expired, story is available
                 raise ValueError("Story available again tomorrow")
 
 

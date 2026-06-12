@@ -8,9 +8,13 @@ class AccountSettingsController extends ChangeNotifier {
 
   bool get isLoading => _isLoading;
 
-  AccountSettingsController({required AuthProvider authProvider}) : _authProvider = authProvider;
+  AccountSettingsController({required AuthProvider authProvider})
+    : _authProvider = authProvider;
 
-  Future<void> signOut({required VoidCallback onSuccess, required Function(String) onError}) async {
+  Future<void> signOut({
+    required VoidCallback onSuccess,
+    required Function(String) onError,
+  }) async {
     _setLoading(true);
     try {
       await _authProvider.signOut();
@@ -22,13 +26,18 @@ class AccountSettingsController extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteAccount({required VoidCallback onSuccess, required Function(String) onError}) async {
+  Future<void> deleteAccount({
+    required VoidCallback onSuccess,
+    required Function(String) onError,
+  }) async {
     _setLoading(true);
     try {
       await _authProvider.deleteAccount();
       onSuccess();
     } catch (e) {
-      onError(ErrorHandler.getUserFriendlyMessage(e, context: 'deleting account'));
+      onError(
+        ErrorHandler.getUserFriendlyMessage(e, context: 'deleting account'),
+      );
     } finally {
       _setLoading(false);
     }

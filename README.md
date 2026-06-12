@@ -122,28 +122,27 @@ Status: Production-ready and fully functional.
 
 ### Incremental Mode
 
-Status: Core gameplay functional, but critical mechanics broken.
+Status: Core gameplay functional.
 
 - ✅ Character creation and progression
 - ✅ Story progression and branching narratives
 - ✅ Skill/attribute XP system
 - ✅ Combat mechanics (rounds execute, wounds apply)
-- ⚠️ Item drops (items acquired but names not displayed)
-- ❌ Inventory display (players see UUIDs instead of item names)
-- ❌ Death mechanics (dead characters can continue playing)
-- ❌ Currency rewards (broken - applies 0 gold)
-- ❌ Store system (not implemented)
-- ❌ Item consumption (not implemented)
+- ✅ Item drops and inventory display (names resolved from prototypes)
+- ✅ Death mechanics (dead characters cannot start or continue stories)
+- ✅ Currency rewards (story reward tiers grant coin items)
+- ✅ Store system (atomic purchases paying with coins)
+- ✅ Item consumption, equipment, split/consolidate/move
 
-**Current State:** Players can create characters, run stories, gain XP, and collect items. However, inventory displays raw UUIDs instead of item names ("a47ac10b-..." instead of "Healing Potion"), dead characters become immortal zombies that can play indefinitely, and no currency is earned. The economy loop (earn currency → buy items → use items) is incomplete.
+**Current State:** The economy loop (earn currency → buy items → use items) is complete: story rewards grant coins as unbounded stackable items, and store purchases spend them atomically. See [Currency](documentation/currency.md) for the coin model.
 
-**Details:** See [Incremental Status Document](documentation/INCREMENTAL-STATUS.md) for a complete code-level analysis of what works, what's broken, and what's missing.
+**Details:** Remaining work is tracked in GitHub issues and the [Incremental Remediation Plan](documentation/incremental-remediation-plan.md).
 
 ## Documentation
 
 Comprehensive documentation is available in the `/documentation` directory:
 
-- [Incremental Implementation Status](documentation/INCREMENTAL-STATUS.md) - Current state analysis (updated regularly)
+- [Incremental Remediation Plan](documentation/incremental-remediation-plan.md) - Current findings and remaining work
 - [Deployment Design](documentation/deployment-design.md) - Architecture and infrastructure design
 - [Deployment Guide](documentation/deployment.md) - Step-by-step deployment instructions
 - [Incremental Game Design](documentation/incremental-design.md) - Game system design

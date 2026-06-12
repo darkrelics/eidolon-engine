@@ -15,9 +15,11 @@ class CharacterScreenController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  CharacterScreenController({required ApiService apiService, required CharacterProvider characterProvider})
-    : _apiService = apiService,
-      _characterProvider = characterProvider;
+  CharacterScreenController({
+    required ApiService apiService,
+    required CharacterProvider characterProvider,
+  }) : _apiService = apiService,
+       _characterProvider = characterProvider;
 
   bool _loadInProgress = false;
 
@@ -35,7 +37,10 @@ class CharacterScreenController extends ChangeNotifier {
       final characters = await _apiService.listCharacters();
       _characters = characters;
     } catch (e) {
-      _error = ErrorHandler.getUserFriendlyMessage(e, context: 'loading characters');
+      _error = ErrorHandler.getUserFriendlyMessage(
+        e,
+        context: 'loading characters',
+      );
     } finally {
       _loadInProgress = false;
       _isLoading = false;
@@ -62,7 +67,10 @@ class CharacterScreenController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await _apiService.addCharacter(name: name, archetype: archetype);
+      final result = await _apiService.addCharacter(
+        name: name,
+        archetype: archetype,
+      );
 
       final createdName = result['CharacterName'] ?? name;
       final createdArchetype = result['Archetype'] ?? archetype;
@@ -77,7 +85,9 @@ class CharacterScreenController extends ChangeNotifier {
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      onError(ErrorHandler.getUserFriendlyMessage(e, context: 'creating character'));
+      onError(
+        ErrorHandler.getUserFriendlyMessage(e, context: 'creating character'),
+      );
     }
   }
 
@@ -106,11 +116,17 @@ class CharacterScreenController extends ChangeNotifier {
     } catch (e) {
       _isLoading = false;
       notifyListeners();
-      onError(ErrorHandler.getUserFriendlyMessage(e, context: 'deleting character'));
+      onError(
+        ErrorHandler.getUserFriendlyMessage(e, context: 'deleting character'),
+      );
     }
   }
 
-  Future<void> enterGame(CharacterInfo character, {required VoidCallback onSuccess, required Function(String) onError}) async {
+  Future<void> enterGame(
+    CharacterInfo character, {
+    required VoidCallback onSuccess,
+    required Function(String) onError,
+  }) async {
     try {
       final fullCharacter = await _apiService.getCharacterById(character.id);
 
@@ -121,7 +137,9 @@ class CharacterScreenController extends ChangeNotifier {
         onError('Failed to load character data');
       }
     } catch (e) {
-      onError(ErrorHandler.getUserFriendlyMessage(e, context: 'loading character'));
+      onError(
+        ErrorHandler.getUserFriendlyMessage(e, context: 'loading character'),
+      );
     }
   }
 }
