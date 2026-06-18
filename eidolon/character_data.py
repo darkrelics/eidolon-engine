@@ -589,7 +589,11 @@ def execute_character_update(character_id: str, set_parts: list, add_parts: list
     try:
         response = dynamo.update_item(TableName.CHARACTERS, Key={"CharacterID": character_id}, **update_kwargs)
         if add_parts:
-            clamp_levels_to_max(character_id, response or {})
+            # update_item(ReturnValues=UPDATED_NEW) nests the changed Skills/Attributes
+            # maps under the response's "Attributes" key; clamp expects those maps at
+            # the top level. Passing the raw response made it iterate the group maps as
+            # if they were level values (float(dict) -> TypeError), failing every XP apply.
+            clamp_levels_to_max(character_id, (response or {}).get("Attributes", {}))
         logger.info(f"Character updates applied for {character_id}")
     except ClientError as err:
         logger.error(f"Failed to apply character updates for {character_id} Error: {err}", exc_info=True)
