@@ -3,8 +3,71 @@
 import os
 from pathlib import Path
 
+import boto3
 from botocore.exceptions import ClientError, WaiterError
 from deployment.aws_utils import retry_on_transient_error
+
+# CloudFormation rejects an inline TemplateBody larger than this many bytes;
+# larger templates must be uploaded to S3 and referenced via TemplateURL.
+_MAX_INLINE_TEMPLATE_BYTES = 51200
+
+# Set once per deployment via configure_template_uploads(); used to stage
+# oversized templates in S3 so they can be deployed by URL.
+_TEMPLATE_BUCKET = None
+_TEMPLATE_REGION = None
+
+
+def configure_template_uploads(s3_bucket: str, region: str) -> None:
+    """Configure the S3 bucket used to stage oversized CloudFormation templates.
+
+    Args:
+        s3_bucket: Bucket that can hold templates over the inline size limit
+        region: AWS region of the bucket
+    """
+    global _TEMPLATE_BUCKET, _TEMPLATE_REGION
+    _TEMPLATE_BUCKET = s3_bucket
+    _TEMPLATE_REGION = region
+
+
+def _template_source_kwargs(stack_name: str, template_body: str) -> dict:
+    """Return the CloudFormation template argument for a stack operation.
+
+    Templates within the inline limit are passed as TemplateBody. Larger
+    templates are uploaded to the configured S3 bucket and referenced by
+    TemplateURL, which is CloudFormation's only way to accept them.
+
+    Args:
+        stack_name: Stack name (used to build the S3 key)
+        template_body: Full template text
+
+    Returns:
+        dict: Either {"TemplateBody": ...} or {"TemplateURL": ...}
+
+    Raises:
+        RuntimeError: If the template is too large and no staging bucket is set
+    """
+    if len(template_body.encode("utf-8")) <= _MAX_INLINE_TEMPLATE_BYTES:
+        return {"TemplateBody": template_body}
+
+    if not _TEMPLATE_BUCKET:
+        raise RuntimeError(
+            f"Template for {stack_name} exceeds the {_MAX_INLINE_TEMPLATE_BYTES}-byte inline limit "
+            "and no S3 staging bucket is configured (call configure_template_uploads)."
+        )
+
+    key = f"cf-templates/{stack_name}.yml"
+    s3_client = boto3.client("s3", region_name=_TEMPLATE_REGION)
+    retry_on_transient_error(
+        lambda: s3_client.put_object(
+            Bucket=_TEMPLATE_BUCKET,
+            Key=key,
+            Body=template_body.encode("utf-8"),
+            ContentType="application/x-yaml",
+        )
+    )
+    template_url = f"https://{_TEMPLATE_BUCKET}.s3.{_TEMPLATE_REGION}.amazonaws.com/{key}"
+    print(f"  Template exceeds inline limit, staged to S3: {template_url}")
+    return {"TemplateURL": template_url}
 
 
 def get_stack_failure_reason(cf_client, stack_name: str) -> list:
@@ -169,9 +232,10 @@ def deploy_stack(
         if stack_exists:
             print("  Updating existing stack...")
             try:
+                template_kwargs = _template_source_kwargs(stack_name, template_body)
                 retry_on_transient_error(
                     lambda: cf_client.update_stack(
-                        StackName=stack_name, TemplateBody=template_body, Parameters=params, Capabilities=caps
+                        StackName=stack_name, Parameters=params, Capabilities=caps, **template_kwargs
                     )
                 )
                 waiter = cf_client.get_waiter("stack_update_complete")
@@ -227,8 +291,9 @@ def create_new_stack(cf_client, stack_name: str, template_body: str, params: lis
     """
     print("  Creating new stack...")
     try:
+        template_kwargs = _template_source_kwargs(stack_name, template_body)
         retry_on_transient_error(
-            lambda: cf_client.create_stack(StackName=stack_name, TemplateBody=template_body, Parameters=params, Capabilities=caps)
+            lambda: cf_client.create_stack(StackName=stack_name, Parameters=params, Capabilities=caps, **template_kwargs)
         )
         waiter = cf_client.get_waiter("stack_create_complete")
         waiter.wait(StackName=stack_name, WaiterConfig={"Delay": 10, "MaxAttempts": 180})

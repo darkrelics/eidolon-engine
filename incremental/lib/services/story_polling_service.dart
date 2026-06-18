@@ -36,6 +36,13 @@ class StoryPollingService {
   static const int _recoveryInitialDelaySeconds = 15;
   static const int _recoveryMaxDelaySeconds = 300;
   int _recoveryAttempt = 0;
+  // Consecutive polls that returned no active segment while the character
+  // still has an active story (the brief advancement gap between segments).
+  // Bounded so a genuinely stuck story escalates to recovery backoff instead
+  // of tight-looping on the short gap delay.
+  int _emptyStatusPolls = 0;
+  static const int _maxEmptyStatusPolls = 5;
+  static const int _segmentGapPollDelaySeconds = 3;
 
   void dispose() {
     stopPolling();
@@ -51,6 +58,7 @@ class StoryPollingService {
     _isPolling = false;
     _characterId = null;
     _consecutiveErrors = 0;
+    _emptyStatusPolls = 0;
     _lastSeenActiveSegmentId = null;
     _lastReloadedSegmentId = null;
     _pendingCompletionSegmentId = null;
@@ -187,26 +195,81 @@ class StoryPollingService {
       }
 
       if (activeSegmentId == null) {
-        debugPrint('StoryPollingService: Story complete - reloading character');
+        // No active segment. This is EITHER true story completion OR the brief
+        // gap during advancement, when the finished segment has been marked
+        // complete but the next segment has not been created yet. The backend
+        // returns the same empty status in both cases, so disambiguate using
+        // the character's authoritative ActiveStoryID, which is cleared only on
+        // true completion or abandonment (eidolon/character_story.py). Without
+        // this check the client falsely declares the story complete during the
+        // sub-second advancement gap and stops polling.
+        debugPrint(
+          'StoryPollingService: No active segment - reloading character to confirm completion',
+        );
 
-        // Reload character to get authoritative state (XP, wounds, inventory)
+        Map<String, dynamic>? character;
         try {
-          final character = await _apiService.getCharacter(
-            characterId: characterId,
-          );
+          character = await _apiService.getCharacter(characterId: characterId);
           onCharacterReload(character);
         } catch (e) {
           debugPrint(
-            'StoryPollingService: Failed to reload character after completion: $e',
+            'StoryPollingService: Failed to reload character on empty status: $e',
           );
-          // Continue to onStoryComplete even if reload fails
           onError?.call(e);
         }
 
+        final activeStoryId = character?['ActiveStoryID'] as String?;
+        final storyStillActive =
+            activeStoryId != null && activeStoryId.isNotEmpty;
+
+        // Keep polling when the story is still active (advancement gap) or when
+        // we could not confirm completion because the reload failed - never
+        // false-complete on an unconfirmed state.
+        if (storyStillActive || character == null) {
+          _emptyStatusPolls++;
+          if (_emptyStatusPolls >= _maxEmptyStatusPolls) {
+            debugPrint(
+              'StoryPollingService: No segment but story still active after '
+              '$_emptyStatusPolls polls - escalating to recovery backoff',
+            );
+            _scheduleRecovery(
+              characterId: characterId,
+              onStatusUpdate: onStatusUpdate,
+              onCharacterReload: onCharacterReload,
+              onSegmentComplete: onSegmentComplete,
+              onStoryComplete: onStoryComplete,
+              onError: onError,
+            );
+            return;
+          }
+          debugPrint(
+            'StoryPollingService: Advancement gap (activeStoryId=$activeStoryId) '
+            '- continuing to poll',
+          );
+          _scheduleNextPoll(
+            const Duration(seconds: _segmentGapPollDelaySeconds),
+            characterId: characterId,
+            onStatusUpdate: onStatusUpdate,
+            onCharacterReload: onCharacterReload,
+            onSegmentComplete: onSegmentComplete,
+            onStoryComplete: onStoryComplete,
+            onError: onError,
+          );
+          return;
+        }
+
+        // No active segment AND no active story => genuine completion.
+        debugPrint(
+          'StoryPollingService: Story complete - no active segment and no active story',
+        );
+        _emptyStatusPolls = 0;
         stopPolling();
         onStoryComplete();
         return;
       }
+
+      // We have an active segment; reset the advancement-gap counter.
+      _emptyStatusPolls = 0;
 
       // Check ProcessingStatus to determine next action
       final processingStatus =
