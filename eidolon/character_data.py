@@ -534,9 +534,11 @@ def build_group_level_updates(group: str, increases: dict, current_members) -> t
     """Build the SET/ADD expression parts for one level group (Skills or Attributes).
 
     With ``current_members`` (the character's current levels) the increase is a
-    clamped ``SET``; without it, an atomic ``ADD`` that ``clamp_levels_to_max``
-    caps after the write. Placeholders are prefixed by the group so Skills and
-    Attributes never collide. Returns ``(set_parts, add_parts, names, values)``.
+    bounded ``SET``; without it, an atomic ``ADD``. Either way no separate clamp
+    is needed: ``calculate_skill_increase`` already caps each increment to the
+    headroom remaining below ``MAX_SKILL_LEVEL``. Placeholders are prefixed by the
+    group so Skills and Attributes never collide. Returns
+    ``(set_parts, add_parts, names, values)``.
 
     Args:
         group: "Skills" or "Attributes".
@@ -565,8 +567,12 @@ def build_group_level_updates(group: str, increases: dict, current_members) -> t
 def execute_character_update(character_id: str, set_parts: list, add_parts: list, names: dict, values: dict) -> None:
     """Apply the assembled SET/ADD expressions to the character record.
 
-    When an atomic ADD is present, requests the post-update values and clamps any
-    level that overflowed ``MAX_SKILL_LEVEL`` (the ADD cannot cap itself).
+    No post-write clamp is performed: ``calculate_skill_increase`` caps every
+    increment to the headroom below ``MAX_SKILL_LEVEL`` before it is accumulated,
+    and the exponential XP curve drives increments toward zero as a level nears
+    the cap, so an atomic ``ADD`` cannot carry a level past the ceiling through
+    normal play. (A skill/attribute already above the cap can only arrive that
+    way by inserting an over-cap entity into the data, which is a content error.)
 
     Raises:
         RuntimeError: If the database update fails.
@@ -583,17 +589,9 @@ def execute_character_update(character_id: str, set_parts: list, add_parts: list
     update_kwargs = {"UpdateExpression": " ".join(update_parts), "ExpressionAttributeValues": values}
     if names:
         update_kwargs["ExpressionAttributeNames"] = names
-    if add_parts:
-        update_kwargs["ReturnValues"] = "UPDATED_NEW"
 
     try:
-        response = dynamo.update_item(TableName.CHARACTERS, Key={"CharacterID": character_id}, **update_kwargs)
-        if add_parts:
-            # update_item(ReturnValues=UPDATED_NEW) nests the changed Skills/Attributes
-            # maps under the response's "Attributes" key; clamp expects those maps at
-            # the top level. Passing the raw response made it iterate the group maps as
-            # if they were level values (float(dict) -> TypeError), failing every XP apply.
-            clamp_levels_to_max(character_id, (response or {}).get("Attributes", {}))
+        dynamo.update_item(TableName.CHARACTERS, Key={"CharacterID": character_id}, **update_kwargs)
         logger.info(f"Character updates applied for {character_id}")
     except ClientError as err:
         logger.error(f"Failed to apply character updates for {character_id} Error: {err}", exc_info=True)
@@ -656,48 +654,6 @@ def apply_character_updates(character_id: str, updates: dict, current_character=
     values[":updated_at"] = datetime.now(timezone.utc).isoformat()
 
     execute_character_update(character_id, set_parts, add_parts, names, values)
-
-
-def clamp_levels_to_max(character_id: str, updated_attributes: dict) -> None:
-    """Clamp any skill or attribute that exceeded MAX_SKILL_LEVEL.
-
-    Atomic ``ADD`` increments cannot cap their result, so after the increment the
-    post-update values are inspected and any that overflowed are set back down to
-    the ceiling. Non-fatal: a failure here leaves the increment intact.
-
-    Args:
-        character_id: Character UUID.
-        updated_attributes: The DynamoDB ``UPDATED_NEW`` response, holding the
-            changed ``Skills`` and ``Attributes`` maps.
-    """
-    set_parts: list = []
-    names: dict = {}
-    values: dict = {}
-    for group in ("Skills", "Attributes"):
-        members = updated_attributes.get(group)
-        if not isinstance(members, dict):
-            continue
-        for name, level in members.items():
-            if level is not None and float(level) > MAX_SKILL_LEVEL:
-                safe = f"{group}_{name}".replace("-", "_")
-                set_parts.append(f"{group}.#m_{safe} = :v_{safe}")
-                names[f"#m_{safe}"] = name
-                values[f":v_{safe}"] = Decimal(str(MAX_SKILL_LEVEL))
-
-    if not set_parts:
-        return
-
-    try:
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET " + ", ".join(set_parts),
-            ExpressionAttributeNames=names,
-            ExpressionAttributeValues=values,
-        )
-        logger.info(f"Clamped {len(set_parts)} over-cap level(s) for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to clamp over-cap levels for {character_id} Error: {err}", exc_info=True)
 
 
 def character_clear_story(character_id: str) -> None:
