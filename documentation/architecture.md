@@ -15,7 +15,7 @@ graph TB
     subgraph "AWS Cloud"
         APIGW[API Gateway<br/>api.domain]
         Lambda[Lambda Functions<br/>24 Total]
-        DynamoDB[(DynamoDB<br/>14 Tables)]
+        DynamoDB[(DynamoDB<br/>15 Tables)]
         EventBridge[EventBridge<br/>1 min Poller]
         ProcessQ[SQS Queue<br/>Processing]
         AdvanceQ[SQS Queue<br/>Advancement]
@@ -40,13 +40,13 @@ graph TB
 
 **AWS Services:**
 
-- **10 CDK Stacks**: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
+- **12 CloudFormation Stacks** (`cf/eidolon-*.yml`, orchestrated by `scripts/eidolon_deployment.py`; see [Deployment Guide](deployment.md#system-architecture))
 - **3 Deployment Modes**: MUD, Incremental, Hybrid (default)
-- **24 Lambda Functions**: All deployed
-  - API Layer: 19 functions (character, archetype, item, store, story, segment)
+- **Lambda Functions** (Python 3.12):
+  - API Layer: character, archetype, item, store, story, and segment endpoints
   - Operational Layer: 3 functions (polling, processing, advancement)
-  - Cognito Layer: 2 functions (player creation, player deletion)
-- **14 DynamoDB Tables**: All with RemovalPolicy.RETAIN
+  - Cognito Layer: player creation and deletion triggers
+- **15 DynamoDB Tables**: All with deletion protection enabled
 - **2 SQS Queues**: Processing and advancement queues
 - **1 EventBridge Rule**: 1-minute polling for segment completion
 
@@ -88,7 +88,7 @@ The incremental subsystem provides timer-based story progression with narrative 
 
 ### 2. Database Schema
 
-**14 DynamoDB Tables:**
+**15 DynamoDB Tables:**
 
 1. **players**: Player accounts and authentication data
 2. **characters**: Character records with skills, attributes, inventory
@@ -104,10 +104,11 @@ The incremental subsystem provides timer-based story progression with narrative 
 12. **story_history**: Completed story records
 13. **segment_history**: Archived segment instances
 14. **opponents**: Combat opponent definitions
+15. **stores**: Live store stock counts (catalog stays in JSON config)
 
 **Key Schema Patterns:**
 
-- All tables use RemovalPolicy.RETAIN for data persistence
+- All tables use DeletionProtectionEnabled for data persistence
 - GSI for secondary access patterns (CharacterNameIndex, EndTimeIndex)
 - Server-side state authority with no client caching
 - ProcessingStatus field for idempotent segment processing
@@ -164,7 +165,7 @@ All Lambda functions use `eidolon-lambda-execution-role` with:
 - **Memory**: 128MB
 - **Timeout**: 30 seconds
 - **Layer**: `eidolon-dependencies` (shared Python packages)
-- **Post-Deploy Updates**: Functions updated from S3 artifacts after CDK deployment
+- **Post-Deploy Updates**: Functions updated from S3 artifacts after stack deployment
 
 ### 4. Queue Architecture
 
@@ -174,13 +175,18 @@ The dual-queue design separates immediate mechanical processing from timed segme
 
 - Target: `ops-segment-process` Lambda
 - Purpose: Immediate processing of mechanical segments
-- Configuration: 4-day retention, 30-second visibility, 3 retries before DLQ
+- Configuration: 24-hour retention (matches the longest segment cycle),
+  180-second visibility (6x the worker timeout)
 
 **advancement-queue:**
 
 - Target: `ops-story-advance` Lambda
 - Purpose: Timed processing of all segment types
-- Configuration: 4-day retention, 30-second visibility, 3 retries before DLQ
+- Configuration: 24-hour retention, 180-second visibility
+
+There are deliberately no dead-letter queues: the database is the
+authoritative state and messages are disposable nudges the poller regenerates
+from table state, so a lost or expired message costs nothing.
 
 **Processing Flow:**
 
@@ -240,10 +246,12 @@ stateDiagram-v2
 
 **Stuck Segment Recovery:**
 
-- Segments stuck >5 minutes get retried
+- Segments stuck longer than 60 seconds get retried while at least 30 seconds
+  remain before EndTime
 - ProcessingStatus reset to "pending" to allow reprocessing
-- Maximum 3 retry attempts via DLQ
-- Timeout past EndTime marked "exceptional" (player-favorable)
+- At expiry, an unprocessed segment gets one recovery requeue, then is marked
+  "exceptional" (player-favorable); dead-worker claims resolve after a grace
+  period (see incremental-story.md, Error Recovery and Edge Cases)
 
 ## Game Mechanics
 
@@ -499,38 +507,36 @@ Each wound is a map structure:
 
 ```mermaid
 graph LR
-    CodeBuild -->|provides artifacts for| Lambda
-    DynamoDB -->|policy attached to| Lambda
-    Lambda -->|functions used by| Player
-    Lambda -->|functions used by| Story
-    Lambda -->|functions used by| API
-    Player -->|authorizer for| API
-    API -->|URL passed to| Client
+    Roles -->|execution role for| LambdaStacks[Lambda Stacks]
+    CodeBuild -->|builds layer + artifacts for| LambdaStacks
+    Dynamo -->|tables used by| LambdaStacks
+    LambdaStacks -->|functions wired into| APIGateway
+    Cognito -->|authorizer for| APIGateway
+    APIGateway -->|URL passed to| ClientBuild[Client CloudFront + CodeBuild]
 
     style CodeBuild fill:#e1f5ff
-    style DynamoDB fill:#fff3cd
-    style Lambda fill:#d4edda
-    style Player fill:#f8d7da
-    style Story fill:#f8d7da
-    style API fill:#d1ecf1
-    style Client fill:#e2e3e5
+    style Dynamo fill:#fff3cd
+    style LambdaStacks fill:#d4edda
+    style Cognito fill:#f8d7da
+    style APIGateway fill:#d1ecf1
+    style ClientBuild fill:#e2e3e5
 ```
 
 ### Deployment Modes
 
-**MUD Mode (9 Stacks):**
+**MUD Mode (11 Stacks):**
 
-- Excludes Story Stack (no SQS/EventBridge)
-- Includes S3 Scripts and CloudWatch for Lua support
+- Excludes the story stack (no SQS/EventBridge)
+- Includes the Lua scripts bucket and CloudWatch
 - Portal frontend via `buildspec/portal.yml`
 
-**Incremental Mode (8 Stacks):**
+**Incremental Mode (11 Stacks):**
 
-- Includes Story Stack for segment processing
-- Excludes S3 Scripts and CloudWatch stacks
+- Includes the story stack for segment processing
+- Excludes the CloudWatch stack
 - Incremental frontend via `buildspec/incremental.yml`
 
-**Hybrid Mode (10 Stacks - Default):**
+**Hybrid Mode (12 Stacks - Default):**
 
 - Includes all stacks for complete functionality
 - Supports both MUD and Incremental gameplay
@@ -538,26 +544,19 @@ graph LR
 
 ### Deployment Process
 
-**Phase-Based Deployment:**
-
-1. **CodeBuild Stack**: Build infrastructure and artifacts bucket
-2. **DynamoDB Stack**: 14 tables with managed IAM policy
-3. **Lambda Stack**: Layer, execution role, Lambda functions
-4. **Player Stack**: Cognito User Pool with PostConfirmation trigger
-5. **Character Stack**: Character-related Lambda resources
-6. **Story Stack** (Incremental/Hybrid only): SSM, SQS, EventBridge
-7. **S3 Stack** (MUD/Hybrid only): Scripts bucket with Lua upload
-8. **CloudWatch Stack** (MUD/Hybrid only): Logging infrastructure
-9. **API Stack**: API Gateway with Lambda integrations
-10. **Client Stack**: CloudFront, S3, automated portal build
-11. **Lambda Updates**: Update function code from S3 artifacts
+The canonical stack inventory and sequence live in
+[Deployment Guide](deployment.md#system-architecture). In brief: roles ->
+DynamoDB -> certificates -> CodeBuild (layer and function builds) -> Cognito
+functions and pool -> character functions -> story functions
+(incremental/hybrid) -> API Gateway -> client CloudFront and CodeBuild ->
+client build -> Lua scripts (MUD) -> CloudWatch (MUD/hybrid) -> config
+update.
 
 **Key Deployment Features:**
 
-- Fixed logical IDs prevent resource recreation
-- CDK context pattern for all parameters
-- No AWS API calls during CDK synthesis
-- Automated end-to-end from infrastructure to portal
+- Fixed logical IDs and resource names prevent resource recreation
+- Parameters flow from `config.yml` and prior stacks' outputs
+- Automated end-to-end from infrastructure to client
 - Post-deployment Lambda updates from S3
 
 ### Multi-Account Strategy
@@ -607,17 +606,16 @@ The system uses DynamoDB conditional writes to ensure atomic state transitions a
 | ------------------------- | ---------------------- | -------------------------- | --------------------- |
 | Client crash/network loss | Next API call          | Automatic GameMode cleanup | Immediate             |
 | Lambda timeout            | Polling system         | Retry with new Lambda      | 1 minute              |
-| Processing stuck          | ProcessingStatus check | Reset to pending           | 5 minutes             |
-| Orphaned segments         | EndTime exceeded       | Mark exceptional           | 2 minutes             |
+| Processing stuck          | ProcessingStatus check | Reset to pending           | ~2 minutes            |
+| Orphaned segments         | EndTime exceeded       | Recovery requeue, then exceptional | 2-3 minutes   |
 | Queue message loss        | Poller scan            | Re-queue segment           | 1 minute              |
-| DLQ overflow              | CloudWatch alarm       | Manual intervention        | N/A                   |
 
 **Protection Mechanisms:**
 
 - Player-favorable defaults for all timeout scenarios
-- Maximum 3 retry attempts before DLQ
 - History tables provide complete audit trail
-- No data loss - all state persisted in DynamoDB
+- No data loss - all state persisted in DynamoDB (queue messages are
+  disposable; the poller regenerates them)
 
 ## Performance Optimization
 
@@ -695,7 +693,7 @@ See [Incremental Design](incremental-design.md#indexeddb-cache-layer-integration
 
 - Lambda: Duration, errors, throttles
 - DynamoDB: Read/write capacity, throttles
-- SQS: Message age, DLQ depth
+- SQS: Message age, queue depth
 - Custom game event metrics
 
 **Note**: Dashboards and alarms deferred until revenue generation.

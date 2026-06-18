@@ -74,7 +74,7 @@ graph TB
         end
 
         subgraph "Data Layer"
-            DynamoDB[(DynamoDB<br/>14 Tables)]
+            DynamoDB[(DynamoDB<br/>15 Tables)]
             S3[(S3<br/>Story Content)]
         end
 
@@ -398,7 +398,7 @@ sequenceDiagram
 
 ### DynamoDB Table Relationships
 
-The entity relationship diagram shows how the 14 DynamoDB tables connect to support character progression and story tracking.
+The entity relationship diagram shows how the 15 DynamoDB tables connect to support character progression and story tracking.
 
 ```mermaid
 erDiagram
@@ -575,7 +575,11 @@ flowchart TD
 
 ## Deployment Architecture
 
-The deployment architecture shows the complete AWS infrastructure created by CDK and the CI/CD pipeline for story validation.
+The deployment architecture shows the AWS infrastructure created by the
+CloudFormation templates in `cf/` (orchestrated by
+`scripts/eidolon_deployment.py`) and the CI pipeline for story validation;
+see [Deployment Guide](deployment.md#system-architecture) for the stack
+inventory.
 
 ```mermaid
 graph TB
@@ -584,18 +588,18 @@ graph TB
     end
 
     subgraph "CI/CD"
-        GH[GitHub Actions<br/>Story Validation]
-        CDK[AWS CDK<br/>Infrastructure as Code]
+        GH[GitHub Actions<br/>Story Validation + cfn-lint]
+        CFN[CloudFormation Templates cf/<br/>via eidolon_deployment.py]
     end
 
     subgraph "AWS Account"
         subgraph "Compute"
-            Lambda[17 Lambda Functions<br/>Python 3.12]
+            Lambda[Lambda Functions<br/>Python 3.12]
             Layer[Lambda Layer<br/>eidolon Library]
         end
 
         subgraph "Storage"
-            Tables[(14 DynamoDB Tables<br/>On-Demand)]
+            Tables[(15 DynamoDB Tables<br/>On-Demand)]
             Bucket[S3 Buckets<br/>Content & Artifacts]
         end
 
@@ -610,19 +614,19 @@ graph TB
         end
 
         subgraph "Monitoring"
-            CW[CloudWatch<br/>Logs & Metrics]
+            CW[CloudWatch<br/>Logs]
             EB[EventBridge<br/>Poller Rule]
         end
     end
 
     Dev -->|Push Code| GH
-    GH -->|Validate Stories| GH
-    GH -->|Deploy| CDK
+    GH -->|Validate Stories,<br/>Lint Templates| GH
+    Dev -->|Run Deployment Script| CFN
 
-    CDK -->|Create/Update| Lambda
-    CDK -->|Create/Update| Tables
-    CDK -->|Create/Update| APIGW
-    CDK -->|Create/Update| Cognito
+    CFN -->|Create/Update| Lambda
+    CFN -->|Create/Update| Tables
+    CFN -->|Create/Update| APIGW
+    CFN -->|Create/Update| Cognito
 
     Lambda -->|Use| Layer
     Lambda -->|Access| Tables
@@ -636,7 +640,7 @@ graph TB
     EB -->|Trigger| Lambda
 
     style Dev fill:#50C878,stroke:#3A9B5C,stroke-width:2px,color:#fff
-    style CDK fill:#FF9900,stroke:#CC7A00,stroke-width:2px,color:#000
+    style CFN fill:#FF9900,stroke:#CC7A00,stroke-width:2px,color:#000
     style Lambda fill:#FF9900,stroke:#CC7A00,stroke-width:2px,color:#000
     style Tables fill:#4053D6,stroke:#2E3B99,stroke-width:2px,color:#fff
 ```
@@ -645,7 +649,12 @@ graph TB
 
 ## Failure Recovery Patterns
 
-The failure recovery pattern uses atomic claims, idempotent processing, and exponential backoff to handle errors gracefully.
+The failure recovery pattern uses atomic claims, idempotent processing, and
+poller-driven recovery. There is deliberately no dead-letter queue: the
+database is the authoritative state and queue messages are disposable nudges
+the poller regenerates, so every segment eventually resolves - one recovery
+requeue, then the player-favorable exceptional outcome (see
+[incremental-story.md](incremental-story.md#error-recovery-and-edge-cases)).
 
 ```mermaid
 flowchart TD
@@ -661,31 +670,29 @@ flowchart TD
     Process --> Update{Update State<br/>Success?}
 
     Update -->|Yes| Complete[Work Complete]
-    Update -->|No| Retry{Retryable?}
-
-    Retry -->|Yes| Backoff[Exponential Backoff]
-    Retry -->|No| DLQ[Send to DLQ]
-
-    Backoff --> Lambda
+    Update -->|No| Logged[Log to CloudWatch]
 
     Process -->|Timeout| Timeout[Lambda Timeout]
-    Timeout --> Requeue[Auto-Retry via SQS]
+    Timeout --> Requeue[Redelivery via SQS]
     Requeue --> Lambda
 
     Process -->|Exception| Exception[Unhandled Error]
-    Exception --> Logged[Log to CloudWatch]
-    Logged --> Requeue
+    Exception --> Logged
+
+    Logged --> Poller[Poller Recovery<br/>from DB state]
+    Poller -->|Stuck scan /<br/>one recovery requeue| Lambda
+    Poller -->|Still unprocessed<br/>at expiry| Exceptional[Exceptional Outcome<br/>player-favorable]
 
     Complete --> Cleanup[Delete from Queue]
     IdemExit --> Cleanup
 
     Cleanup --> End([Success])
-    DLQ --> Alert[CloudWatch Alarm]
+    Exceptional --> End
 
     style Claim fill:#FFD93D,stroke:#CCB031,stroke-width:2px,color:#000
     style IdemExit fill:#6BCB77,stroke:#56A360,stroke-width:2px,color:#fff
-    style DLQ fill:#FF6B6B,stroke:#CC5555,stroke-width:2px,color:#fff
-    style Alert fill:#FF4757,stroke:#CC3946,stroke-width:2px,color:#fff
+    style Poller fill:#4053D6,stroke:#2E3B99,stroke-width:2px,color:#fff
+    style Exceptional fill:#6BCB77,stroke:#56A360,stroke-width:2px,color:#fff
 ```
 
 ---

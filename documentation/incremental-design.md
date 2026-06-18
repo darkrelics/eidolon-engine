@@ -11,7 +11,7 @@ graph TB
     subgraph "AWS Cloud"
         APIGW[API Gateway<br/>api.domain]
         Lambda[Lambda Functions<br/>17 Deployed]
-        DynamoDB[(DynamoDB<br/>14 Tables)]
+        DynamoDB[(DynamoDB<br/>15 Tables)]
         EventBridge[EventBridge<br/>1 min Poller]
         ProcessQ[SQS Queue<br/>Processing]
         AdvanceQ[SQS Queue<br/>Advancement]
@@ -152,7 +152,12 @@ All functions use:
 
 **ops-segment-poller** (EventBridge triggered)
 
-- EventBridge rule: `eidolon-story-poller` (1-minute schedule)
+- EventBridge rule: `eidolon-story-poller` (1-minute schedule, deployed
+  disabled; `api-story-start` enables it before creating story records and
+  fails the request if it cannot, and the poller disables it again when no
+  active segments remain - the full adaptive lifecycle and recovery behavior
+  are documented in
+  [incremental-story.md](incremental-story.md#polling-infrastructure))
 - Reads SSM parameter `/eidolon/story/config` for run/stop state
 - Queries EndTimeIndex for segments where EndTime <= Now
 - Sends ALL completed segments to `eidolon-advancement-queue`
@@ -199,7 +204,7 @@ All functions use:
 
 **Client Guidance**: Flutter clients should never generate UUIDs - always receive them from server to ensure proper type selection and avoid collisions.
 
-Production deployment includes 14 DynamoDB tables with RemovalPolicy.RETAIN:
+Production deployment includes 15 DynamoDB tables with deletion protection enabled:
 
 ### 4.1 Table Usage
 
@@ -840,10 +845,10 @@ pollingService.start(
 
 **DynamoDB Tables:**
 
-- 14 tables deployed via DynamoDB Stack
+- 15 tables deployed via the `eidolon-dynamo` stack
 - Pay-per-request pricing
-- Point-in-time recovery enabled
-- RemovalPolicy.RETAIN for data persistence
+- Deletion protection enabled (no point-in-time recovery - a cost decision;
+  see cloudformation.md)
 
 **Story Stack Components:**
 
@@ -981,12 +986,11 @@ All Lambda functions receive standardized environment variables:
 
 **Deployment Metrics:**
 
-- **10 CDK Stacks**: All operational in production
-- **17 Lambda Functions**: Deployed with fixed logical IDs (18 total, cognito-player-delete not deployed)
-- **14 DynamoDB Tables**: Created with RemovalPolicy.RETAIN
+- **12 CloudFormation Stacks** (`cf/eidolon-*.yml`): All operational in production
+- **Lambda Functions**: Deployed with fixed logical IDs (cognito-player-delete not deployed)
+- **15 DynamoDB Tables**: Created with deletion protection enabled
 - **Module Size**: 94% under 300 lines (modular architecture)
 - **Deployment Time**: Full deployment in under 15 minutes
-- **Lessons Applied**: 140 documented improvements implemented
 
 **Key Implementation Details:**
 

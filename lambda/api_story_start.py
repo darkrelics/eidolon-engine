@@ -93,6 +93,12 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
     # Validate story is available
     validate_story_available(character, story_id)
 
+    # Enable polling BEFORE creating any records: a story started without a
+    # running poller would never advance, so fail the request cleanly while
+    # there is nothing to roll back. (If the start fails later, the poller
+    # simply finds no active segments and disables itself again.)
+    ensure_polling_enabled()
+
     # Get story and first segment - handle case where story no longer exists
     try:
         story, first_segment = get_story_and_first_segment(story_id)
@@ -143,9 +149,6 @@ def start_story(character_id: str, story_id: str, player_id: str) -> dict:
         except RuntimeError as err:
             logger.error(f"Failed to queue segment {active_segment_id}: {err}")
             raise ValueError("Unable to start story - processing queue unavailable. Please try again later.") from err
-
-    # Enable polling
-    ensure_polling_enabled()
 
     logger.info(f"Story started successfully for {character_id}")
 

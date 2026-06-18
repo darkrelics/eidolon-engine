@@ -1370,38 +1370,6 @@ def test_error_case():
     pass
 ```
 
-## CDK-Specific Guidelines
-
-### No AWS Access During Synthesis
-
-CDK synthesis phase must not make AWS API calls. All resource checks should happen in deployment layer:
-
-```python
-# Bad - AWS calls during CDK synthesis fail
-class MyStack(Stack):
-    def __init__(self):
-        if check_resource_exists():  # This always returns False during synthesis
-            Resource.from_name(...)
-
-# Good - Use fixed logical IDs and let CDK handle
-class MyStack(Stack):
-    def __init__(self):
-        Resource(self, "FixedLogicalId", ...)
-```
-
-### Fixed Logical IDs
-
-Always use fixed logical IDs for resources to prevent recreation on updates:
-
-```python
-# Production pattern from Lambda Stack
-logical_id_map = {
-    "api-character-list": "ApiCharacterListFunction",
-    "cognito-player-new": "CognitoPlayerNewFunction",
-    # ... etc
-}
-```
-
 ## Deployment Module Patterns
 
 ### Script vs Library Distinction
@@ -1428,4 +1396,4 @@ Be explicit with parameter passing:
 - Keep functions small and focused (max 50 lines)
 - Use meaningful variable names
 - Ensure all code follows PEP 8 where not overridden by this guide
-- These guidelines have been validated through production deployment of 10 CDK stacks
+- These guidelines have been validated through production deployment

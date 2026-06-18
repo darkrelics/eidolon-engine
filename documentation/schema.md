@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the complete database schema for the Eidolon Engine's unified backend infrastructure. The schema provides shared data structures used by both MUD and Incremental game modes, with 14 DynamoDB tables that support all game functionality while preventing concurrent access through the GameMode field on characters.
+This document defines the complete database schema for the Eidolon Engine's unified backend infrastructure. The schema provides shared data structures used by both MUD and Incremental game modes, with 15 DynamoDB tables that support all game functionality while preventing concurrent access through the GameMode field on characters.
 
 **Key Design Principles:**
 
@@ -545,6 +545,24 @@ Records the complete history of each segment played by a character. This table s
 
 ---
 
+## Stores Table
+
+| Field         | Type     | Key       | Description                                |
+| ------------- | -------- | --------- | ------------------------------------------ |
+| `StoreID`     | `STRING` | **HASH**  | Store identifier (e.g., `general-store`).  |
+| `PrototypeID` | `STRING` | **RANGE** | Prototype of the stock-tracked item.       |
+| `Stock`       | `NUMBER` |           | Live remaining stock (authoritative).      |
+
+**Primary Key:** StoreID (HASH) + PrototypeID (RANGE)
+
+**Note:** Only mutable stock lives here; the store catalog (Price, MinLevel,
+Category) stays in the JSON config (`data/store_*.json`). An item with no row
+is not stock-tracked (a catalog Stock of `-1` means unlimited). Stock is
+decremented atomically inside the purchase transaction; rows are seeded once
+by `data_loader.store_store_stock` and never clobbered by reseeding.
+
+---
+
 ## Data Structure Definitions
 
 ### Currency System
@@ -564,9 +582,12 @@ The economy uses Fundamental Units (FU) as the base currency unit, which is conv
 
 **Stack Management:**
 
-- Coins are stackable items with Quantity field
-- Stack merging uses UUIDv7 timestamp comparison (oldest wins)
-- Character Resources.Value tracks total currency in FU
+- Coins are ordinary stackable items with unbounded stacks (prototype
+  `MaxStack: -1`)
+- Stack merging is by PrototypeID via the shared helpers in
+  `eidolon/items.py` (no item-ID ordering)
+- The balance is derived from the coin stacks (`currency.wallet_total`);
+  there is no Resources.Value scalar
 
 ### Items Structure
 

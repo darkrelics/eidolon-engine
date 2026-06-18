@@ -20,9 +20,9 @@ This guide documents the actual implementation of the Incremental Game system as
 
 **AWS Infrastructure:**
 
-- 10 CDK Stacks: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
-- 17 Lambda Functions deployed (18 total, cognito-player-delete not deployed)
-- 14 DynamoDB Tables with RemovalPolicy.RETAIN
+- 12 CloudFormation Stacks (`cf/eidolon-*.yml`; see deployment.md for the inventory)
+- Lambda Functions deployed per mode (cognito-player-delete not deployed)
+- 15 DynamoDB Tables with deletion protection enabled
 - 2 SQS Queues (processing, advancement)
 - 1 EventBridge Rule (1-minute polling, disabled by default)
 - 1 SSM Parameter (polling state)
@@ -43,7 +43,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 
 ### 2.1 DynamoDB Tables
 
-**14 Tables:**
+**15 Tables:**
 
 **Core Tables:**
 
@@ -52,6 +52,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 - archetypes: Character class templates
 - items: Item instances
 - prototypes: Item templates
+- stores: Live store stock counts (catalog stays in JSON config)
 - rooms: MUD world rooms
 - exits: MUD world connections
 - motd: Message of the day
@@ -965,25 +966,17 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 
 ### 9.1 Infrastructure as Code
 
-**10 CDK Stacks:**
-
-1. CodeBuild: Build projects and artifacts bucket
-2. DynamoDB: 14 tables with managed policy
-3. Lambda: Shared layer and execution role
-4. Player: Cognito User Pool and cognito-player-new function
-5. Character: 7 Lambda functions
-6. Story: 9 Lambda functions, SQS queues, EventBridge, SSM
-7. S3: Scripts bucket (MUD/Hybrid only)
-8. CloudWatch: Logging (MUD/Hybrid only)
-9. API: API Gateway with Lambda integrations
-10. Client: CloudFront, S3, automated portal build
+Infrastructure is plain CloudFormation: the `cf/eidolon-*.yml` templates,
+deployed in dependency order by `scripts/eidolon_deployment.py` according to
+the deployment mode. The canonical stack inventory and sequence are
+maintained in [Deployment Guide](deployment.md#system-architecture).
 
 **Post-Deployment:**
 
-- Phase 11: Lambda function code updates from S3
-- Cognito trigger configuration for imported pools
+- Lambda function code updates from S3 artifacts
 - S3 bucket policies for CloudFront
-- Portal build via CodeBuild
+- Client build via CodeBuild
+- `config.yml` updated with stack outputs
 
 ### 9.2 Deployment Modes
 

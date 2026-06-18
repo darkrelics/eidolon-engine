@@ -22,7 +22,6 @@ This document defines coding standards and naming conventions for AWS infrastruc
 #### Format Rules
 
 - CloudFormation templates: YAML only (`.yml` extension)
-- CDK configuration: JSON allowed only for `cdk.json`
 - Infrastructure definitions: YAML
 - Project configuration: YAML
 
@@ -59,35 +58,32 @@ Since each environment uses separate AWS accounts, prefixes are only needed for 
 - Cognito Functions: `cognito-player-new`
 - Ops Functions: `ops-segment-poller`, `ops-story-advance`
 
-### 4. CDK Code Style Standards
+### 4. CloudFormation Template Standards
 
-#### Module Organization Rules
+#### Template Organization Rules
 
-- **Maximum Size**: 1000 lines (300 lines preferred)
-- **Single Responsibility**: Each stack focuses on one service area
+- **One template per stack** (`cf/eidolon-<stack>.yml`), each focused on one
+  service area
 - **Fixed Logical IDs**: Use consistent identifiers for persistent resources
-- **No AWS Calls**: CDK stack classes must not contain boto3 client instantiations
-
-#### Resource Management Style
-
-- Use `RemovalPolicy.RETAIN` for persistent data resources
-- Pass region as explicit parameter, not CDK token
-- Use CDK context for parameters, not argparse
-- Separate app file for each stack
+- **Parameters over hardcoding**: cross-stack values arrive as parameters
+  (passed by `scripts/eidolon_deployment.py` from prior stacks' outputs);
+  optional parameters carry a `Default`
+- **Linting**: all templates must pass `cfn-lint` (gated by the
+  `cloudformation-analysis` GitHub workflow)
 
 ### 5. Resource Management Standards
 
 #### Data Resource Protection
 
-- Use `RemovalPolicy.RETAIN` for all persistent data resources (S3, DynamoDB)
-- Implement both CloudFormation deletion policies for DynamoDB tables
+- Use `DeletionProtectionEnabled: true` on all DynamoDB tables
 - Apply fixed logical IDs to prevent resource recreation during updates
 
 #### Import Patterns
 
-- Check for existing resources in deployment layer, not CDK stacks
-- Pass existence status via CDK context to stack constructors
-- Use `from_bucket_name()` and similar methods for existing resources
+- Check for existing resources in the deployment script layer
+  (`scripts/deployment/`), not inside templates
+- Adopt pre-existing resources via CloudFormation resource import
+  (`deploy_stack`'s `resources_to_import`)
 
 #### S3 Bucket Management
 
@@ -116,9 +112,10 @@ def update_bucket_policy_for_cloudfront(bucket_name: str, distribution_id: str):
 
 #### DynamoDB Configuration
 
-- Use on-demand billing for development and testing environments
-- Implement auto-scaling for production workloads
-- Enable point-in-time recovery selectively based on data criticality
+- Use on-demand (PAY_PER_REQUEST) billing for all tables
+- Point-in-time recovery is not enabled (cost decision; see
+  cloudformation.md) - anything with a recurring charge needs explicit owner
+  approval
 
 #### Lambda Resource Sizing
 
@@ -168,11 +165,9 @@ Before committing infrastructure code changes:
 #### Code Style
 
 - [ ] Uses fixed logical IDs for all persistent resources
-- [ ] No boto3 calls in CDK stack classes
-- [ ] Passes region as explicit parameter, not CDK token
-- [ ] Uses CDK context for parameters, not argparse
-- [ ] Each module under 1000 lines (300 preferred)
-- [ ] Separate app file for each stack
+- [ ] One template per stack (`cf/eidolon-<stack>.yml`)
+- [ ] Cross-stack values arrive as template parameters (optional ones carry a Default)
+- [ ] Template passes `cfn-lint`
 
 #### Naming Conventions
 
@@ -183,8 +178,7 @@ Before committing infrastructure code changes:
 
 #### Resource Standards
 
-- [ ] S3 buckets have RemovalPolicy.RETAIN
-- [ ] DynamoDB tables have retention policies
+- [ ] DynamoDB tables have DeletionProtectionEnabled
 - [ ] Uses import patterns for existing resources
 - [ ] Implements post-deployment permission updates
 - [ ] Includes required tags (Project: eidolon)
@@ -201,7 +195,7 @@ Before committing infrastructure code changes:
 ## References
 
 - [AWS Well-Architected Framework](https://aws.amazon.com/architecture/well-architected/)
-- [AWS CDK Best Practices](https://docs.aws.amazon.com/cdk/v2/guide/best-practices.html)
+- [CloudFormation Best Practices](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/best-practices.html)
 
 For implementation details, deployment procedures, and architectural patterns, see:
 

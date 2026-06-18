@@ -79,6 +79,14 @@ Recorded owner decisions that shape this plan:
   No unification, shared-package extraction, or retirement work is planned;
   incremental-subsystem fixes target `incremental/` only. See DOC-5's
   resolution.
+- **Minimize recurring AWS cost** (2026-06-12). No dead-letter queues, no
+  CloudWatch alarms or SNS topics, and no DynamoDB point-in-time recovery.
+  The database is the authoritative state and the poller is the recovery
+  mechanism - SQS messages are disposable nudges, and the 24-hour queue
+  retention deliberately matches the longest segment cycle. Observability is
+  logs-based. Free-tier hardening (queue visibility timeouts,
+  ReportBatchItemFailures, fail-fast code paths) is kept; anything with a
+  recurring charge needs explicit owner approval first.
 
 ## Status Legend
 
@@ -97,12 +105,12 @@ Recorded owner decisions that shape this plan:
 | COR-3 | MEDIUM | Engine / recovery | `eidolon/segment_polling.py` | [DONE] |
 | COR-4 | LOW | Engine / poller | `lambda/ops_segment_poller.py` | [PENDING] |
 | COR-5 | LOW | API / hardening | `lambda/api_story_history.py` | [DONE] |
-| INF-1 | HIGH | Infra / SQS | `cf/eidolon-lambda-story.yml` | [PENDING] |
-| INF-2 | HIGH | Infra / observability | `cf/` templates | [PENDING] |
-| INF-3 | MEDIUM | Infra / durability | `cf/eidolon-dynamo.yml` | [PENDING] |
+| INF-1 | HIGH | Infra / SQS | `cf/eidolon-lambda-story.yml` | [DONE] |
+| INF-2 | HIGH | Infra / observability | `cf/` templates | [DEFERRED] |
+| INF-3 | MEDIUM | Infra / durability | `cf/eidolon-dynamo.yml` | [DEFERRED] |
 | INF-4 | MEDIUM | Infra / data growth | history tables, `CompletedStories` | [PENDING] |
 | INF-5 | MEDIUM | Infra / IaC hygiene | `cloudformation/`, `documentation/deployment.md` | [DONE] |
-| INF-6 | LOW | Infra / tuning + docs | poller rule, queue timeouts | [PENDING] |
+| INF-6 | LOW | Infra / tuning + docs | poller rule, queue timeouts | [DONE] |
 | CLI-1 | MEDIUM | Client / errors | `incremental/lib/utils/error_handler.dart` | [DONE] |
 | CLI-2 | MEDIUM | Client / network | `incremental/lib/services/base_api_service.dart` | [DONE] |
 | CLI-3 | MEDIUM | Client / lifecycle | `incremental/lib/controllers/game_screen_controller.dart` | [PENDING] |
@@ -118,27 +126,28 @@ Recorded owner decisions that shape this plan:
 | CI-5 | MEDIUM | CI / deploy pipeline | `buildspec/incremental.yml` | [DONE] |
 | DOC-1 | MEDIUM | Docs / dead links | `incremental.md`, `README.md` | [DONE] |
 | DOC-2 | MEDIUM | Docs / stale status | `incremental.md`, `README.md` | [DONE] |
-| DOC-3 | MEDIUM | Docs / API drift | `incremental-api.md`, `incremental-openapi.yml` | [PENDING] |
-| DOC-4 | LOW | Docs / hygiene | `documentation/issues.md`, doc index | [PENDING] |
+| DOC-3 | MEDIUM | Docs / API drift | `incremental-api.md`, `incremental-openapi.yml` | [DONE] |
+| DOC-4 | LOW | Docs / hygiene | `documentation/issues.md`, doc index | [DONE] |
 | DOC-5 | DESIGN | Client / duplication | `incremental/` vs `portal/` shared screens | [DONE] |
 
 ## Remediation Sequence
 
 Most of the plan has shipped: the engine correctness fixes (COR-1, COR-2,
 COR-3, COR-5), the client fixes (CLI-1, CLI-2, CLI-6, CLI-7), the CI gates
-(CI-1, CI-5), the IaC cleanup (INF-5), and the documentation quick wins
-(DOC-1, DOC-2, DOC-5). Tests (CI-2, CI-3) are deferred. What remains:
+(CI-1, CI-5), and the zero-cost infrastructure items (INF-1 resolved by
+design decision, INF-5, INF-6 - the template changes take effect on the next
+deploy). Tests (CI-2, CI-3) and the recurring-cost items (INF-2 alarms,
+INF-3 PITR) are deferred by owner decision. What remains:
 
 ```mermaid
 flowchart TD
-    INF["INF-1, INF-2\nDLQs + alarms (highest value left)"] --> INFB["INF-3 PITR, INF-4 history growth,\nINF-6 polling docs + queue tuning"]
+    DECIDE["INF-4 history growth\n(needs a retention decision)"]
     CLI["CLI-3 lifecycle polling, CLI-4 retry,\nCLI-5 resend verification (runtime test)"]
-    REST["COR-4 poller duplicates, CLI-8 god files,\nCI-4 schema in CI, DOC-3 API docs, DOC-4 archiving"]
+    REST["COR-4 poller duplicates, CLI-8 god files,\nCI-4 schema in CI"]
 ```
 
-The infrastructure items (INF-1, INF-2) are independent of code changes and
-are the highest-value remaining work; CLI-5 needs a deployed environment to
-test against.
+CLI-5 and the deployed-environment verification of the INF-6 changes pair
+well with the next deploy; INF-4 is blocked on a retention decision.
 
 ## Priority 0 - Engine Correctness
 
@@ -325,8 +334,8 @@ messages without marking them as queued, so overlapping poller invocations (or
 an EventBridge redelivery) can enqueue the same segment twice. This is
 *benign for correctness* - the processor claims each segment with an atomic
 conditional transition before doing work, and advancement marks completion
-conditionally - but it produces duplicate work, duplicate log noise, and
-spurious failed-claim metrics that will pollute the alarms added under INF-2.
+conditionally - but it produces duplicate work and duplicate log noise that
+makes the logs (the project's observability surface) harder to read.
 
 **Remediation:** Either set a `QueuedAt` attribute with a conditional write
 before enqueueing and skip segments claimed by a concurrent poller, or accept
@@ -369,7 +378,19 @@ ownership first.
 
 ### INF-1 SQS queues have no dead-letter queues
 
-`[PENDING]` - Severity: HIGH
+`[DONE]` - Severity: HIGH
+
+**Resolution (owner decision - no DLQs by design):** This finding assumed the
+classic DLQ rationale, which does not apply to this architecture: the database
+is the authoritative state and SQS messages are disposable nudges
+(ActiveSegmentID strings) that the poller regenerates from table state, so a
+lost or expired message costs nothing and a dead-lettered message would never
+be worth replaying (the poller will already have resolved the segment). The
+24-hour `MessageRetentionPeriod` was specifically chosen to match the longest
+segment cycle. The design rationale is now recorded in the template comment,
+`deployment.md` (Operations), and `cloudformation.md` (Pipeline Reliability),
+so the original concern - that the failure mode was undocumented and looked
+like an oversight - is addressed.
 
 **Location:** `cf/eidolon-lambda-story.yml:23-41` (`ProcessingQueue`,
 `AdvancementQueue` - no `RedrivePolicy`).
@@ -395,7 +416,12 @@ replay procedure (or a small redrive script) in the deployment docs.
 
 ### INF-2 No CloudWatch alarms on the async pipeline
 
-`[PENDING]` - Severity: HIGH
+`[DEFERRED]` - Severity: HIGH - Declined by owner decision (see
+[Decisions](#decisions)): alarms and SNS carry recurring cost, and
+observability for this project is logs-based by design. An implementation
+(nine alarms plus an SNS topic in the story stack) was built and then removed
+at the owner's direction before any deploy. Revisit only if operational
+blindness becomes a real problem, with explicit cost approval first.
 
 **Location:** `cf/eidolon-lambda-story.yml` (no `AWS::CloudWatch::Alarm`
 resources); `cf/eidolon-cloudwatch.yml`; tracked as issue #603.
@@ -422,7 +448,15 @@ thresholds conservative; tune after a burn-in period.
 
 ### INF-3 No point-in-time recovery on DynamoDB tables
 
-`[PENDING]` - Severity: MEDIUM
+`[DEFERRED]` - Severity: MEDIUM - Declined by owner decision (see
+[Decisions](#decisions)): PITR bills continuously per GB and was judged not
+worth the recurring cost. Tables keep `DeletionProtectionEnabled`, and the
+static game-data tables are reloadable from the repository via
+`database/data_loader.py`; the decision is recorded in
+`documentation/cloudformation.md` (Data Protection). A side benefit of
+working this item: `cloudformation.md` still documented the deleted
+`cloudformation/` tree (an INF-5 miss) and was rewritten to describe the live
+`cf/` conventions.
 
 **Location:** all table definitions in `cf/eidolon-dynamo.yml`.
 
@@ -524,7 +558,22 @@ templates. Sweep `documentation/` for `deployment/stacks/` references.
 
 ### INF-6 Undocumented adaptive polling design and queue-timeout tuning
 
-`[PENDING]` - Severity: LOW
+`[DONE]` - Severity: LOW
+
+**Resolution:** Queue visibility timeouts raised to 180s (6x the 30s consumer
+timeout) and `ReportBatchItemFailures` enabled on both event source mappings -
+which also activated a latent intent: `ops_story_advance` already returned
+per-record `batchItemFailures` that Lambda had been silently ignoring without
+the mapping setting (`ops_segment_process` deliberately returns none;
+poller-driven recovery). The enable-failure mode is now fail-fast:
+`ensure_polling_enabled` raises when the EventBridge rule cannot be enabled,
+and `api-story-start` calls it before creating any story records, so the
+request fails cleanly with nothing to roll back instead of minting a story
+that can never advance (an SSM-parameter failure stays non-fatal because the
+poller self-corrects it). The lifecycle documentation in
+`incremental-story.md` (Polling Infrastructure) was corrected - stale 90s/5min
+windows updated to the COR-3 constants, fail-fast behavior recorded - and
+`incremental-design.md`'s poller section now points to it as canonical.
 
 **Location:** `cf/eidolon-lambda-story.yml:397` (`State: DISABLED` on the
 poller rule), `eidolon/polling.py:102-132` (`ensure_polling_enabled`, called
@@ -982,7 +1031,17 @@ do the same to any contributor.
 
 ### DOC-3 API documentation drift
 
-`[PENDING]` - Severity: MEDIUM
+`[DONE]` - Severity: MEDIUM
+
+**Resolution:** `incremental-api.md`'s stale "Stack Operations (Future)"
+section (which claimed split/consolidate were planned and repeated the wrong
+UUIDv7 merge rule) was replaced with real documentation for all eight missing
+endpoints - `/item/split`, `/item/consolidate`, `/item/discard`,
+`/item/equip`, `/item/unequip`, `/item/move`, `/store/list`,
+`/store/purchase` - with request/response shapes taken from the handlers and
+library return values, plus the unbounded-stack rules. The OpenAPI spec's
+`/story/abandon` now declares `CharacterID` in the request body, matching the
+handler and client. YAML validated.
 
 **Location:** `documentation/incremental-api.md` (missing
 `/store/list`, `/store/purchase`, `/item/equip`, `/item/unequip`,
@@ -1004,7 +1063,14 @@ sweeping for other gaps (this review found the spec otherwise aligned across
 
 ### DOC-4 Stale point-in-time artifacts and missing doc index
 
-`[PENDING]` - Severity: LOW
+`[DONE]` - Severity: LOW
+
+**Resolution:** `documentation/README.md` now indexes every document by role -
+current references vs dated historical records - naming this plan as the
+authoritative status source. `issues.md` carries a historical-snapshot banner
+noting that ten of its open issues were closed in the 2026-06-12 audit.
+Historical files stay in place (no `archive/` move) so existing links keep
+resolving; the index and banners carry the distinction instead.
 
 **Location:** `documentation/issues.md` (a GitHub-issue audit snapshot dated
 2025-10-19, including CDK paths that do not exist); ~30 documents in
@@ -1116,11 +1182,10 @@ pytest                               # once CI-2 lands
 cd incremental && flutter analyze && flutter test
 ```
 
-For each item, exercise the acceptance criteria listed above. Infrastructure
-items (INF-1, INF-2, INF-3, INF-6) should be verified in a deployed
-environment: force a processing failure and confirm the DLQ and alarm behave;
-confirm PITR shows enabled on the console. Land Priority 0 with its tests
-before starting the client track, so the engine fixes are protected first.
+For each item, exercise the acceptance criteria listed above. The INF-6
+template changes (visibility timeouts, ReportBatchItemFailures, fail-fast
+polling enable) should be verified in a deployed environment after the next
+run of `scripts/eidolon_deployment.py`.
 
 ## Related Documentation
 

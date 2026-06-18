@@ -331,17 +331,11 @@ All eidolon modules are packaged in the `eidolon-dependencies` Lambda layer:
 
 **apply_story_rewards():**
 
-- [OK] NOW fully implemented
-- [OK] Creates coins from currency values
-- [OK] Adds coins to inventory with proper stacking
-- [OK] Updates Resources.Value field
-- [OK] Fixed: Currency and story rewards properly applied
-
-**apply_combat_rewards() (lines 72-95):**
-
-- Function exists but does nothing
-- Comment says "segment/story data must trigger distribution"
-- May be intentionally empty
+- [OK] Fully implemented
+- [OK] Reward tiers' currency amounts convert to coin items
+  (currency.coin_rewards_for_amount) and merge into existing unbounded stacks
+- [OK] There is no Resources.Value scalar - the balance is derived from the
+  coin stacks (see currency.md)
 - **Impact:** Combat rewards not applied
 
 ### Death Check

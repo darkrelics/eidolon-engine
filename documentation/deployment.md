@@ -101,6 +101,17 @@ deployment the script writes the generated identifiers (Cognito pool/client
 IDs, queue URLs, distribution IDs, bucket names) back into `config.yml`, so
 subsequent runs and operational scripts can use them.
 
+## Operations
+
+- **Queue recovery**: there are deliberately no dead-letter queues. The
+  database is the authoritative state and SQS messages are disposable nudges
+  the poller regenerates from table state, so lost or expired messages cost
+  nothing; queue retention is 24 hours to match the longest segment cycle.
+- **Observability is logs-based by design** (a cost decision - no CloudWatch
+  alarms, SNS topics, or DynamoDB point-in-time recovery are provisioned).
+  Investigate pipeline issues through the Lambda log groups; static game-data
+  tables are reloadable from the repository via `database/data_loader.py`.
+
 ## Verification and Troubleshooting
 
 - **ACM validation**: first-time certificate creation waits for DNS

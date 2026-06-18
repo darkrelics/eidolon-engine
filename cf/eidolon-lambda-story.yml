@@ -19,12 +19,16 @@ Parameters:
     Description: Allowed CORS origins
 
 Resources:
-  # SQS Queues
+  # SQS Queues. Visibility timeout is 6x the consumer Lambda timeout (30s) per
+  # AWS guidance for SQS event source mappings. There are deliberately no
+  # dead-letter queues: the database is the authoritative state and messages
+  # are disposable nudges the poller regenerates, so a lost or expired message
+  # costs nothing. Retention is 24 hours to match the longest segment cycle.
   ProcessingQueue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: eidolon-processing-queue
-      VisibilityTimeout: 90
+      VisibilityTimeout: 180
       MessageRetentionPeriod: 86400
       Tags:
         - Key: System
@@ -34,7 +38,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: eidolon-advancement-queue
-      VisibilityTimeout: 90
+      VisibilityTimeout: 180
       MessageRetentionPeriod: 86400
       Tags:
         - Key: System
@@ -407,7 +411,9 @@ Resources:
       Principal: events.amazonaws.com
       SourceArn: !GetAtt StoryPollerRule.Arn
 
-  # SQS Event Source Mappings
+  # SQS Event Source Mappings. ReportBatchItemFailures makes the handlers'
+  # batchItemFailures responses meaningful, so one failing record retries alone
+  # instead of forcing redelivery of its whole batch.
   ProcessingQueueMapping:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -415,6 +421,8 @@ Resources:
       FunctionName: !Ref OpsSegmentProcessFunction
       BatchSize: 10
       MaximumBatchingWindowInSeconds: 5
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
 
   AdvancementQueueMapping:
     Type: AWS::Lambda::EventSourceMapping
@@ -423,6 +431,8 @@ Resources:
       FunctionName: !Ref OpsStoryAdvanceFunction
       BatchSize: 10
       MaximumBatchingWindowInSeconds: 5
+      FunctionResponseTypes:
+        - ReportBatchItemFailures
 
 Outputs:
   ProcessingQueueUrl:
