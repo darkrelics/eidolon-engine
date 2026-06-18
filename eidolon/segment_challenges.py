@@ -4,10 +4,8 @@ Skill challenge processing for mechanical segments.
 Provides functions for processing skill challenges and determining outcomes.
 """
 
-import math
-import random
-
 from eidolon.constants import SIGMA_CRITICAL_FAILURE, SIGMA_DEATH_AVG, SIGMA_FAILURE, SIGMA_MINIMAL, SIGMA_NORMAL
+from eidolon.mechanics import resolve_opposed_check
 
 
 def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
@@ -57,27 +55,17 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
         # Combined effective score
         effective_score = attribute_value + skill_value
 
-        # Run multiple attempts for this challenge
+        # Run multiple attempts for this challenge. Each attempt is the signed
+        # margin between the character's effective score and the difficulty,
+        # via the shared opposed-check model (mechanics.resolve_opposed_check).
         challenge_attempts = []
         best_sigma = -999
+        challenge_sigma_sum = 0.0
 
         for _ in range(attempts):
-            # Simulate static check using normal distribution
-            diff = effective_score - difficulty
-
-            # Constants from MUD mechanics
-            k_shift = 0.20  # How much rating difference matters
-            k_var = 0.35  # Variance scaling
-            min_sig = 0.25  # Minimum variance
-
-            # Calculate mean and variance
-            mean = k_shift * diff
-            variance = 1.0 + k_var * math.tanh(diff / 10.0)
-            variance = max(variance, min_sig)
-
-            # Generate outcome using normal distribution
-            sigma = random.gauss(mean, variance)
-            success = sigma >= 0
+            result = resolve_opposed_check(effective_score, difficulty)
+            sigma = result["Sigma"]
+            success = result["Success"]
 
             challenge_attempts.append(
                 {
@@ -97,9 +85,14 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
 
             total_attempts += 1
             total_sigma += sigma
+            challenge_sigma_sum += sigma
 
-        # Determine if challenge was passed (best attempt succeeded)
-        passed = best_sigma >= 0
+        # "Passed" reflects the challenge's AVERAGE performance - the same basis
+        # as the segment outcome below - so the displayed success/failure can no
+        # longer contradict the outcome tier (a multi-attempt challenge no longer
+        # reads "succeeded" while the segment resolves to "failure").
+        challenge_avg_sigma = challenge_sigma_sum / len(challenge_attempts) if challenge_attempts else 0.0
+        passed = challenge_avg_sigma >= 0
         if passed:
             successes += 1
 
@@ -110,6 +103,7 @@ def process_skill_challenges(segment_def: dict, character: dict) -> tuple:
                 "Difficulty": difficulty,
                 "Attempts": challenge_attempts,
                 "BestSigma": round(best_sigma, 2),
+                "AverageSigma": round(challenge_avg_sigma, 2),
                 "Passed": passed,
             }
         )

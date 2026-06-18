@@ -7,7 +7,7 @@ Provides functions for processing combat encounters using dual action system.
 from botocore.exceptions import ClientError
 
 from eidolon.character_state import calculate_heal_time
-from eidolon.constants import DEFAULT_COMBAT_ROUNDS, PLAYER_DEATH_LETHAL_WOUNDS, PLAYER_INCAPACITATED_TOTAL_WOUNDS
+from eidolon.constants import DEFAULT_COMBAT_ROUNDS
 from eidolon.dynamo import TableName, dynamo
 from eidolon.equipment import compute_effective_combat_traits
 from eidolon.logger import logger
@@ -105,13 +105,17 @@ def apply_round_damage(
     opponent_wounds: list,
     opponent_weapon_type: str,
     character_max_health: int,
+    existing_wound_count: int = 0,
 ) -> None:
     """Apply one round's damage to the player and opponent wound lists in place.
 
-    Mutates ``player_wounds``, ``opponent_wounds``, and ``round_results["Damage"]``.
-    Reported ``CharacterTook`` is the actual change in wound count, so the
-    unconscious-bashing conversion (which worsens an existing wound instead of
-    adding one) does not report a phantom wound.
+    Mutates ``player_wounds`` (the wounds taken *this* combat), ``opponent_wounds``,
+    and ``round_results["Damage"]``. ``existing_wound_count`` is the number of
+    wounds the character already carried entering combat, so the unconscious
+    threshold is measured against the character's *total* wound track rather than
+    only this fight's wounds. Reported ``CharacterTook`` is the actual change in
+    wound count, so the unconscious-bashing conversion (which worsens an existing
+    wound instead of adding one) does not report a phantom wound.
     """
     # Character takes damage IF opponent's attack succeeded (character defense failed)
     if not opp_off_result["Success"]:
@@ -120,8 +124,9 @@ def apply_round_damage(
 
         wounds_before = len(player_wounds)
         for _ in range(damage):
-            # Check if character is unconscious BEFORE applying this wound
-            is_unconscious = len(player_wounds) >= character_max_health
+            # Check if character is unconscious BEFORE applying this wound,
+            # counting wounds carried into combat plus those taken so far.
+            is_unconscious = (existing_wound_count + len(player_wounds)) >= character_max_health
             damage_type = opponent_weapon_type
 
             # Bashing damage to an unconscious character converts existing bashing to lethal
@@ -152,20 +157,33 @@ def apply_round_damage(
         round_results["Damage"]["OpponentWoundType"] = "bashing"
 
 
-def check_round_outcome(player_wounds: list, opponent_wounds: list, opponent_health: int) -> tuple:
+def check_round_outcome(
+    player_wounds: list,
+    opponent_wounds: list,
+    opponent_health: int,
+    character_max_health: int,
+    existing_wounds: list | None = None,
+) -> tuple:
     """Return ``(outcome, victor, opponent_defeated)`` if combat ended this round, else ``()``.
 
-    Death and incapacitation are checked before opponent defeat. Opponent wounds
-    count equally since opponents do not heal. An empty tuple signals that combat
-    continues, so callers test the result for truthiness before unpacking.
+    Death and incapacitation are checked before opponent defeat, against the
+    character's *total* wound track (wounds carried into combat plus those taken
+    this fight) using the same MaxHealth-based rule as
+    ``character_state.determine_character_state_from_wounds`` - deadly wounds
+    (lethal/aggravated) filling MaxHealth is death; the full track filled is
+    incapacitation. Opponent wounds count equally since opponents do not heal.
+    An empty tuple signals that combat continues, so callers test the result for
+    truthiness before unpacking.
     """
-    # Count both lethal and aggravated wounds for death (aggravated is worse than lethal)
-    deadly_wounds = sum(1 for w in player_wounds if w.get("DamageType") in ["lethal", "aggravated"])
+    all_player_wounds = (existing_wounds or []) + player_wounds
 
-    if deadly_wounds >= PLAYER_DEATH_LETHAL_WOUNDS:
+    # Count both lethal and aggravated wounds for death (aggravated is worse than lethal)
+    deadly_wounds = sum(1 for w in all_player_wounds if w.get("DamageType") in ["lethal", "aggravated"])
+
+    if deadly_wounds >= character_max_health:
         return "death", "opponent", False
 
-    if len(player_wounds) >= PLAYER_INCAPACITATED_TOTAL_WOUNDS:
+    if len(all_player_wounds) >= character_max_health:
         return "failure", "opponent", False
 
     if len(opponent_wounds) >= opponent_health:
@@ -230,6 +248,11 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
     character_id = character.get("CharacterID")
     character_attributes, character_skills = compute_effective_combat_traits(character)
     character_max_health = character.get("MaxHealth", 10)
+    # Wounds the character already carried into combat. player_wounds below tracks
+    # only wounds taken this fight (appended to the stored track afterwards), but
+    # the death/incapacitation checks must consider the total so a wounded
+    # character can be finished and the combat outcome matches the persisted state.
+    existing_wounds = list(character.get("Wounds", []) or [])
 
     # Determine character's best offensive action (done once at combat start)
     char_off_action, char_off_rating, char_off_attr, char_off_skill = get_character_best_offensive_action(
@@ -339,13 +362,16 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
             opponent_wounds,
             opponent_weapon_type,
             character_max_health,
+            len(existing_wounds),
         )
 
         # Log round results
         combat_log.append(round_results)
 
         # STEP 4: Check victory conditions after damage applied
-        outcome = check_round_outcome(player_wounds, opponent_wounds, opponent_health)
+        outcome = check_round_outcome(
+            player_wounds, opponent_wounds, opponent_health, character_max_health, existing_wounds
+        )
         if outcome:
             outcome_name, victor, opponent_defeated = outcome
             logger.info(

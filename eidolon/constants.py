@@ -13,7 +13,13 @@ BASE_XP = 0.25  # Base experience per action
 FAILURE_XP_PENALTY = 0.5  # Failed actions give 50% XP (when D >= S; 0% XP when S > D)
 ATTRIBUTE_XP_RATIO = 0.1  # Attributes gain 10% of skill XP
 
-MAX_SKILL_LEVEL = 10.0  # Hard cap on skill/attribute values
+# Hard cap on any single skill or attribute. By design the scale runs 0-10 where
+# ~5 is the expected upper limit for player characters and 10 is "god-like";
+# effective scores (attribute + skill) therefore span 0-20. The exponential
+# growth curve (see mechanics.calculate_skill_increase) makes the ~6-10 band a
+# deliberately long, largely-unreachable tail rather than normal play - this is
+# intended, not a balance defect.
+MAX_SKILL_LEVEL = 10.0
 
 # Segment polling behavior
 # Aligned with EventBridge 1-minute heartbeat for segment processing
@@ -43,10 +49,12 @@ PLAYER_INCAPACITATED_TOTAL_WOUNDS = 10  # Total wounds causing incapacitation
 # Opponent defeat heuristics
 DEFAULT_OPPONENT_HEALTH = 5  # Default opponent health when unknown
 
-# Opposed check mechanics (MUD mechanics)
-OPPOSED_SHIFT = 0.20  # How much rating difference matters
-OPPOSED_VARIANCE = 0.35  # Variance scaling
-OPPOSED_MIN_SIGMA = 0.25  # Minimum variance
+# Opposed check mechanics: the signed margin between two normal distributions
+# centred on the challenger's and target's effective scores (see
+# mechanics.resolve_opposed_check).
+OPPOSED_SHIFT = 0.20  # How strongly a score gap shifts the margin mean (per point, in std-devs)
+OPPOSED_VARIANCE = 0.35  # How much the margin's standard deviation widens with the score gap
+OPPOSED_MIN_SIGMA = 0.25  # Floor on the margin's standard deviation (spread)
 
 
 BASHING_HEAL_TIME = timedelta(minutes=15)

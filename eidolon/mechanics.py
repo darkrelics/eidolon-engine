@@ -8,40 +8,55 @@ This module has no dependencies on character_data to avoid circular imports.
 import math
 import random
 
-from eidolon.constants import ATTRIBUTE_XP_RATIO, BASE_XP, FAILURE_XP_PENALTY, MAX_SKILL_LEVEL
+from eidolon.constants import (
+    ATTRIBUTE_XP_RATIO,
+    BASE_XP,
+    FAILURE_XP_PENALTY,
+    MAX_SKILL_LEVEL,
+    OPPOSED_MIN_SIGMA,
+    OPPOSED_SHIFT,
+    OPPOSED_VARIANCE,
+)
 
 
-def resolve_opposed_check(aggressor: float, defender: float) -> dict:
+def resolve_opposed_check(challenger: float, target: float) -> dict:
     """
-    Resolve an opposed check using MUD mechanics (without XP).
+    Resolve an opposed check as the signed margin between two normal distributions.
+
+    The challenger and the target are each modelled as a normal distribution
+    centred on their effective score (attribute + skill). The result is the
+    signed *margin* between them, drawn directly from the difference of those
+    two distributions; the challenger succeeds when the margin is non-negative.
+
+    - ``mean`` shifts the margin in favour of the higher score, scaled by
+      ``OPPOSED_SHIFT`` (a one-point score gap moves the mean by 0.2 of the
+      spread).
+    - ``std_dev`` is the standard deviation (spread) of the margin: ~1.0,
+      widening slightly with the score gap via ``tanh`` and floored at
+      ``OPPOSED_MIN_SIGMA``. Note ``random.gauss(mu, sigma)`` takes a standard
+      deviation, not a variance.
+
+    The returned ``Sigma`` is that signed margin in standard-deviation units;
+    callers grade its magnitude into outcome tiers (see ``segment_challenges``).
 
     Args:
-        aggressor: Aggressor's rating
-        defender: Defender's rating
+        challenger: Challenger's effective score (attribute + skill).
+        target: Target's effective score, or a static difficulty.
 
     Returns:
         Dict:
-            - Success: bool
-            - Sigma: float
+            - Success: bool (margin >= 0)
+            - Sigma: float (signed margin)
     """
-    # Constants from MUD mechanics
-    k_shift = 0.20  # How much rating difference matters
-    k_var = 0.35  # Variance scaling
-    min_sig = 0.25  # Minimum variance
+    score_gap: float = challenger - target
 
-    # Calculate difference
-    diff: float = aggressor - defender
+    mean: float = OPPOSED_SHIFT * score_gap
+    std_dev: float = 1.0 + OPPOSED_VARIANCE * math.tanh(score_gap / 10.0)
+    std_dev = max(std_dev, OPPOSED_MIN_SIGMA)
 
-    # Calculate mean and variance
-    mean: float = k_shift * diff
-    variance: float = 1.0 + k_var * math.tanh(diff / 10.0)
-    variance = max(variance, min_sig)
+    margin: float = random.gauss(mean, std_dev)
 
-    # Generate outcome using normal distribution
-    sigma: float = random.gauss(mean, variance)
-    success: bool = sigma >= 0
-
-    return {"Success": success, "Sigma": sigma}
+    return {"Success": margin >= 0, "Sigma": margin}
 
 
 def calculate_skill_increase(effective_score: float, difficulty: float, current_skill: float, success: bool) -> float:

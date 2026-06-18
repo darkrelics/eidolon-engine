@@ -178,11 +178,14 @@ def set_character_game_mode(
                     logger.debug(f"Story {active_story_id} is repeatable, not adding to CompletedStories")
 
             except ClientError as err:
-                logger.warning(f"Failed to fetch story {active_story_id} for CompletedStories tracking: {err}")
-                # Continue without adding to CompletedStories - non-critical
+                logger.error(f"Failed to fetch story {active_story_id} for CompletedStories tracking: {err}")
+                # Fail closed: without the story type we cannot record a one-time/daily
+                # completion, which would let a one-time story be replayed. Abort the
+                # start (nothing is persisted yet) rather than silently skipping it.
+                raise RuntimeError(f"Could not determine story type for replay tracking: {err}") from err
             except Exception as err:
-                logger.warning(f"Unexpected error checking story type for CompletedStories: {err}")
-                # Continue without adding to CompletedStories - non-critical
+                logger.error(f"Unexpected error checking story type for CompletedStories: {err}")
+                raise RuntimeError(f"Could not determine story type for replay tracking: {err}") from err
 
         # Require that current mode allows transition to Incremental
         if not expected_current:

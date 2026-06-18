@@ -846,6 +846,14 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
     max_health = character.get("MaxHealth", DEFAULT_HEALTH)
     new_state = determine_character_state_from_wounds(max_health, wounds)
 
+    # A "death" outcome means the character died even when the segment inflicted
+    # no wounds - e.g. a skill-check death (any sigma <= SIGMA_CRITICAL_FAILURE,
+    # or an average below SIGMA_DEATH_AVG). The wound-derived state only reflects
+    # combat damage, so a death outcome that leaves the wound track non-lethal
+    # would otherwise leave the character standing and able to start new stories.
+    if new_state == CharState.STANDING.value:
+        new_state = CharState.DEAD.value
+
     if new_state == character.get("CharState", CharState.STANDING.value):
         return new_state
 
