@@ -369,9 +369,7 @@ def process_combat_segment(active_segment: dict, segment_def: dict, character: d
         combat_log.append(round_results)
 
         # STEP 4: Check victory conditions after damage applied
-        outcome = check_round_outcome(
-            player_wounds, opponent_wounds, opponent_health, character_max_health, existing_wounds
-        )
+        outcome = check_round_outcome(player_wounds, opponent_wounds, opponent_health, character_max_health, existing_wounds)
         if outcome:
             outcome_name, victor, opponent_defeated = outcome
             logger.info(

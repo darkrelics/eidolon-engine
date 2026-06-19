@@ -234,9 +234,7 @@ def deploy_stack(
             try:
                 template_kwargs = _template_source_kwargs(stack_name, template_body)
                 retry_on_transient_error(
-                    lambda: cf_client.update_stack(
-                        StackName=stack_name, Parameters=params, Capabilities=caps, **template_kwargs
-                    )
+                    lambda: cf_client.update_stack(StackName=stack_name, Parameters=params, Capabilities=caps, **template_kwargs)
                 )
                 waiter = cf_client.get_waiter("stack_update_complete")
                 waiter.wait(StackName=stack_name, WaiterConfig={"Delay": 10, "MaxAttempts": 180})
