@@ -51,6 +51,11 @@ def stack_merge_quantity(current_quantity: int, add_quantity: int, max_stack: in
     Returns:
         The quantity to merge into this stack (0 if the stack is full)
     """
+    # DynamoDB numbers arrive as float (decimal_to_float), so coerce to keep
+    # quantities integral; trailing-zero floats must never reach Quantity fields.
+    current_quantity = int(current_quantity)
+    add_quantity = int(add_quantity)
+    max_stack = int(max_stack)
     if max_stack <= 0:
         return add_quantity
     return min(add_quantity, max(0, max_stack - current_quantity))
@@ -68,6 +73,10 @@ def distribute_into_stacks(total_quantity: int, max_stack: int) -> list:
     Returns:
         List of quantities, each <= max_stack (or one entry when unbounded)
     """
+    # DynamoDB numbers arrive as float (decimal_to_float), so coerce to keep
+    # quantities integral; trailing-zero floats must never reach Quantity fields.
+    total_quantity = int(total_quantity)
+    max_stack = int(max_stack)
     if total_quantity <= 0:
         return []
     if max_stack <= 0:
