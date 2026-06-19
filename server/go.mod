@@ -16,7 +16,7 @@ require (
 	github.com/goccy/go-yaml v1.19.2
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/paul-mannino/go-fuzzywuzzy v0.0.0-20200127021948-54652b135d0e
-	github.com/yuin/gopher-lua v1.1.1
+	github.com/yuin/gopher-lua v1.1.2
 	golang.org/x/crypto v0.49.0
 	golang.org/x/text v0.35.0
 	golang.org/x/time v0.15.0
