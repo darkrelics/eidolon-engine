@@ -72,9 +72,11 @@ class GameScreenController extends ChangeNotifier {
   List<Map<String, dynamic>> get segmentHistory => _segmentHistory.segments;
   int get selectedPanelIndex => _selectedPanelIndex;
 
-  GameScreenController({required ApiService apiService, required CharacterRepository characterRepository})
-      : _apiService = apiService,
-        _characterRepository = characterRepository {
+  GameScreenController({
+    required ApiService apiService,
+    required CharacterRepository characterRepository,
+  }) : _apiService = apiService,
+       _characterRepository = characterRepository {
     _segmentHistory = SegmentHistoryManager();
     _runtime = StoryPollingService(apiService: _apiService);
     _decisionDebouncer = Debouncer(delay: const Duration(milliseconds: 300));
@@ -107,7 +109,11 @@ class GameScreenController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void initialize(Character? character, CharacterInfo? info, {Character? savedCharacter}) {
+  void initialize(
+    Character? character,
+    CharacterInfo? info, {
+    Character? savedCharacter,
+  }) {
     // Determine the ID of the character being initialized
     final incomingId = character?.id ?? info?.id ?? savedCharacter?.id;
 
@@ -121,12 +127,18 @@ class GameScreenController extends ChangeNotifier {
     if (character != null) {
       // Direct character object with story state
       if (_character == null || _character!.id != character.id) {
-        final storyData = character.storyState?['Story'] as Map<String, dynamic>?;
-        final completedSegments = character.storyState?['CompletedSegments'] as List<dynamic>?;
+        final storyData =
+            character.storyState?['Story'] as Map<String, dynamic>?;
+        final completedSegments =
+            character.storyState?['CompletedSegments'] as List<dynamic>?;
 
         _resetForNewCharacter();
         _character = character;
-        _characterInfo = CharacterInfo(name: character.name, id: character.id, dead: character.health <= 0);
+        _characterInfo = CharacterInfo(
+          name: character.name,
+          id: character.id,
+          dead: character.health <= 0,
+        );
         _isLoading = false;
         _error = null;
 
@@ -135,9 +147,13 @@ class GameScreenController extends ChangeNotifier {
         }
 
         if (completedSegments != null) {
-          final typedSegments = completedSegments.whereType<Map<String, dynamic>>().toList();
+          final typedSegments = completedSegments
+              .whereType<Map<String, dynamic>>()
+              .toList();
           final indexed = _segmentHistory.assignIndices(typedSegments);
-          _segmentHistory.segments = indexed.where(_segmentHistory.isSegmentComplete).toList();
+          _segmentHistory.segments = indexed
+              .where(_segmentHistory.isSegmentComplete)
+              .toList();
         }
 
         _synchronizeStoryCompletionState();
@@ -158,14 +174,22 @@ class GameScreenController extends ChangeNotifier {
         _initializedCharacterId = info.id;
         notifyListeners();
 
-        _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate).then((_) => _loadSegmentHistory());
+        _loadCharacterData(
+          strategy: CharacterLoadRateLimitStrategy.immediate,
+        ).then((_) => _loadSegmentHistory());
       }
     } else if (savedCharacter != null) {
       // Load from provider/local storage
-      debugPrint('GameScreenController: Found saved character: ${savedCharacter.name}');
+      debugPrint(
+        'GameScreenController: Found saved character: ${savedCharacter.name}',
+      );
       _resetForNewCharacter();
       _character = savedCharacter;
-      _characterInfo = CharacterInfo(name: savedCharacter.name, id: savedCharacter.id, dead: savedCharacter.health <= 0);
+      _characterInfo = CharacterInfo(
+        name: savedCharacter.name,
+        id: savedCharacter.id,
+        dead: savedCharacter.health <= 0,
+      );
       _isLoading = false;
       _error = null;
       _initializedCharacterId = savedCharacter.id;
@@ -175,7 +199,10 @@ class GameScreenController extends ChangeNotifier {
       _manageCharacterUpdateTimer();
 
       // Refresh character data from server in background
-      _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate, showLoadingIndicator: false);
+      _loadCharacterData(
+        strategy: CharacterLoadRateLimitStrategy.immediate,
+        showLoadingIndicator: false,
+      );
     } else {
       // No character found
       _isLoading = false;
@@ -208,7 +235,9 @@ class GameScreenController extends ChangeNotifier {
     } else {
       if (_characterUpdateTimer == null && _character != null) {
         _characterUpdateTimerCount = 0;
-        _characterUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) {
+        _characterUpdateTimer = Timer.periodic(const Duration(minutes: 2), (
+          timer,
+        ) {
           _characterUpdateTimerCount++;
           if (_characterUpdateTimerCount >= 60) {
             timer.cancel();
@@ -217,14 +246,18 @@ class GameScreenController extends ChangeNotifier {
             return;
           }
 
-          _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.automated, showLoadingIndicator: false);
+          _loadCharacterData(
+            strategy: CharacterLoadRateLimitStrategy.automated,
+            showLoadingIndicator: false,
+          );
         });
       }
     }
   }
 
   Future<void> _loadCharacterData({
-    CharacterLoadRateLimitStrategy strategy = CharacterLoadRateLimitStrategy.automated,
+    CharacterLoadRateLimitStrategy strategy =
+        CharacterLoadRateLimitStrategy.automated,
     bool showLoadingIndicator = true,
   }) {
     final activeLoad = _activeCharacterLoad;
@@ -232,7 +265,10 @@ class GameScreenController extends ChangeNotifier {
       return activeLoad;
     }
 
-    final future = _loadCharacterDataInternal(strategy: strategy, showLoadingIndicator: showLoadingIndicator);
+    final future = _loadCharacterDataInternal(
+      strategy: strategy,
+      showLoadingIndicator: showLoadingIndicator,
+    );
     _activeCharacterLoad = future;
     future.whenComplete(() {
       if (identical(_activeCharacterLoad, future)) {
@@ -258,11 +294,15 @@ class GameScreenController extends ChangeNotifier {
         notifyListeners();
       }
 
-      final character = await retryWithBackoff(() => _executeCharacterLoad(strategy));
+      final character = await retryWithBackoff(
+        () => _executeCharacterLoad(strategy),
+      );
 
       // Check if disposed after async operation
       if (_disposed) {
-        debugPrint('GameScreenController: Disposed during character load - ignoring result');
+        debugPrint(
+          'GameScreenController: Disposed during character load - ignoring result',
+        );
         return;
       }
 
@@ -278,7 +318,8 @@ class GameScreenController extends ChangeNotifier {
         _storyCompletionFinalized = false;
       }
 
-      final storyData = character?.storyState?['Story'] as Map<String, dynamic>?;
+      final storyData =
+          character?.storyState?['Story'] as Map<String, dynamic>?;
       if (storyData != null) {
         _lastStoryDetails = Map<String, dynamic>.from(storyData);
       }
@@ -291,21 +332,30 @@ class GameScreenController extends ChangeNotifier {
     } catch (e) {
       // Check if disposed before error handling
       if (_disposed) {
-        debugPrint('GameScreenController: Disposed during character load error - ignoring');
+        debugPrint(
+          'GameScreenController: Disposed during character load error - ignoring',
+        );
         return;
       }
 
       debugPrint('GameScreenController: ERROR loading character: $e');
-      _error = ErrorHandler.getUserFriendlyMessage(e, context: 'loading character');
+      _error = ErrorHandler.getUserFriendlyMessage(
+        e,
+        context: 'loading character',
+      );
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<Character?> _executeCharacterLoad(CharacterLoadRateLimitStrategy strategy) {
+  Future<Character?> _executeCharacterLoad(
+    CharacterLoadRateLimitStrategy strategy,
+  ) {
     switch (strategy) {
       case CharacterLoadRateLimitStrategy.immediate:
-        return _apiService.getCharacterById(_characterInfo!.id).then((character) {
+        return _apiService.getCharacterById(_characterInfo!.id).then((
+          character,
+        ) {
           _rateLimiter.limiter.recordCall(GlobalRateLimiter.getCharacter);
           return character;
         });
@@ -329,14 +379,26 @@ class GameScreenController extends ChangeNotifier {
 
     _refreshDebouncer.runImmediate(() {});
 
-    return _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate, showLoadingIndicator: false);
+    return _loadCharacterData(
+      strategy: CharacterLoadRateLimitStrategy.immediate,
+      showLoadingIndicator: false,
+    );
   }
 
-  Future<void> handleStorySelect(BuildContext context, StoryMetadata story) async {
+  Future<void> handleStorySelect(
+    BuildContext context,
+    StoryMetadata story,
+  ) async {
     if (!story.available) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(story.cooldownRemaining > 0 ? 'Story on cooldown' : 'Story not available')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            story.cooldownRemaining > 0
+                ? 'Story on cooldown'
+                : 'Story not available',
+          ),
+        ),
+      );
       return;
     }
 
@@ -349,12 +411,17 @@ class GameScreenController extends ChangeNotifier {
 
       final initialSegment = await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.startStory,
-        () => _apiService.startStory(characterId: _character!.id, storyId: story.storyID),
+        () => _apiService.startStory(
+          characterId: _character!.id,
+          storyId: story.storyID,
+        ),
         throwOnRateLimit: true,
       );
 
       // Build story state and active IDs for immediate UI
-      final newStoryState = Map<String, dynamic>.from(_character?.storyState ?? <String, dynamic>{});
+      final newStoryState = Map<String, dynamic>.from(
+        _character?.storyState ?? <String, dynamic>{},
+      );
       newStoryState['ActiveSegment'] = initialSegment;
       newStoryState['Story'] = {
         'Title': story.title,
@@ -365,12 +432,16 @@ class GameScreenController extends ChangeNotifier {
 
       _character = _character!.copyWith(
         activeStoryId: initialSegment['StoryID']?.toString(),
-        activeSegmentId: initialSegment['ActiveSegmentID']?.toString() ?? initialSegment['SegmentID']?.toString(),
+        activeSegmentId:
+            initialSegment['ActiveSegmentID']?.toString() ??
+            initialSegment['SegmentID']?.toString(),
         storyState: newStoryState,
         gameMode: 'Incremental',
       );
 
-      _lastStoryDetails = Map<String, dynamic>.from(newStoryState['Story'] as Map<String, dynamic>);
+      _lastStoryDetails = Map<String, dynamic>.from(
+        newStoryState['Story'] as Map<String, dynamic>,
+      );
 
       // Add initial segment to history for tracking
       final initialSegmentCopy = Map<String, dynamic>.from(initialSegment);
@@ -388,7 +459,10 @@ class GameScreenController extends ChangeNotifier {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
       }
       _isLoading = false;
@@ -415,7 +489,9 @@ class GameScreenController extends ChangeNotifier {
     final activeSegment = _character!.storyState?['ActiveSegment'];
     if (activeSegment != null && activeSegment['StartTime'] != null) {
       try {
-        segmentStartTime = DateTime.parse(activeSegment['StartTime'] as String).toUtc();
+        segmentStartTime = DateTime.parse(
+          activeSegment['StartTime'] as String,
+        ).toUtc();
       } catch (e) {
         // If parsing fails, polling service will use default 60-second delay
         debugPrint('GameScreenController: Failed to parse StartTime: $e');
@@ -429,17 +505,25 @@ class GameScreenController extends ChangeNotifier {
         if (_disposed || _character == null) return;
 
         final segmentKey = _segmentHistory.segmentIdentity(status);
-        final exists = _segmentHistory.segments.any((s) => _segmentHistory.segmentIdentity(s) == segmentKey);
+        final exists = _segmentHistory.segments.any(
+          (s) => _segmentHistory.segmentIdentity(s) == segmentKey,
+        );
         final processingStatus = status['ProcessingStatus'];
 
         final currentActiveSegmentId = _character!.activeSegmentID;
-        final newActiveSegmentId = status['ActiveSegmentID']?.toString() ?? status['SegmentID']?.toString();
+        final newActiveSegmentId =
+            status['ActiveSegmentID']?.toString() ??
+            status['SegmentID']?.toString();
         final segmentChanged = currentActiveSegmentId != newActiveSegmentId;
-        final statusChanged = processingStatus != _character!.storyState?['ActiveSegment']?['ProcessingStatus'];
+        final statusChanged =
+            processingStatus !=
+            _character!.storyState?['ActiveSegment']?['ProcessingStatus'];
 
         _segmentHistory.addOrUpdateSegment(status, _lastStoryDetails);
 
-        final storyState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{});
+        final storyState = Map<String, dynamic>.from(
+          _character!.storyState ?? <String, dynamic>{},
+        );
         storyState['ActiveSegment'] = status;
 
         final story = status['Story'] as Map<String, dynamic>?;
@@ -451,13 +535,19 @@ class GameScreenController extends ChangeNotifier {
         if (segmentChanged || statusChanged || !exists) {
           _statusUpdateDebounce?.cancel();
           _statusUpdateDebounce = Timer(const Duration(milliseconds: 200), () {
-            _character = _character!.copyWith(activeSegmentId: newActiveSegmentId, storyState: storyState);
+            _character = _character!.copyWith(
+              activeSegmentId: newActiveSegmentId,
+              storyState: storyState,
+            );
             _error = null;
             _segmentHistory.invalidateCache();
             notifyListeners();
           });
         } else {
-          _character = _character!.copyWith(activeSegmentId: newActiveSegmentId, storyState: storyState);
+          _character = _character!.copyWith(
+            activeSegmentId: newActiveSegmentId,
+            storyState: storyState,
+          );
           notifyListeners();
         }
       },
@@ -465,7 +555,8 @@ class GameScreenController extends ChangeNotifier {
         if (_disposed || _character == null) return;
 
         try {
-          final updatedCharacter = await _characterRepository.updateCharacterFromSegment(_character!.id, segmentUpdates);
+          final updatedCharacter = await _characterRepository
+              .updateCharacterFromSegment(_character!.id, segmentUpdates);
 
           if (_disposed) return;
 
@@ -478,7 +569,9 @@ class GameScreenController extends ChangeNotifier {
           if (_disposed) return;
 
           try {
-            final character = await _apiService.getCharacterById(_character!.id);
+            final character = await _apiService.getCharacterById(
+              _character!.id,
+            );
 
             if (_disposed) return;
 
@@ -492,7 +585,9 @@ class GameScreenController extends ChangeNotifier {
 
             // Suppress errors from late-arriving segment updates after story end.
             if (_storyCompletionFinalized) {
-              debugPrint('GameScreenController: Suppressing post-completion segment error: $fallbackError');
+              debugPrint(
+                'GameScreenController: Suppressing post-completion segment error: $fallbackError',
+              );
               return;
             }
 
@@ -507,19 +602,30 @@ class GameScreenController extends ChangeNotifier {
         try {
           final updated = Character.fromJson(characterData);
 
-          final wasRunning = _storyLifecycleState == StoryLifecycleState.running;
+          final wasRunning =
+              _storyLifecycleState == StoryLifecycleState.running;
           final hasActiveSegmentField = updated.activeSegmentID != null;
           final hasActiveStoryField = updated.activeStoryID != null;
-          final hasActiveSegmentInState = updated.storyState?['ActiveSegment'] != null;
-          final hasActiveStoryInState = updated.storyState?['ActiveStory'] != null;
+          final hasActiveSegmentInState =
+              updated.storyState?['ActiveSegment'] != null;
+          final hasActiveStoryInState =
+              updated.storyState?['ActiveStory'] != null;
 
           final storyCompleted =
-              wasRunning && !hasActiveSegmentField && !hasActiveStoryField && !hasActiveSegmentInState && !hasActiveStoryInState;
+              wasRunning &&
+              !hasActiveSegmentField &&
+              !hasActiveStoryField &&
+              !hasActiveSegmentInState &&
+              !hasActiveStoryInState;
 
-          final newActiveSegment = updated.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+          final newActiveSegment =
+              updated.storyState?['ActiveSegment'] as Map<String, dynamic>?;
 
           if (newActiveSegment != null) {
-            _segmentHistory.addOrUpdateSegment(newActiveSegment, _lastStoryDetails);
+            _segmentHistory.addOrUpdateSegment(
+              newActiveSegment,
+              _lastStoryDetails,
+            );
           }
 
           _character = updated;
@@ -530,13 +636,18 @@ class GameScreenController extends ChangeNotifier {
             _runtime.stopPolling();
             _storyLifecycleState = StoryLifecycleState.completed;
             notifyListeners();
-            _handleStoryCompletion(refreshCharacter: false, showMessage: true).then((_) {
+            _handleStoryCompletion(
+              refreshCharacter: false,
+              showMessage: true,
+            ).then((_) {
               _manageCharacterUpdateTimer();
             });
           }
         } catch (e) {
           if (_storyCompletionFinalized) {
-            debugPrint('GameScreenController: Suppressing post-completion reload error: $e');
+            debugPrint(
+              'GameScreenController: Suppressing post-completion reload error: $e',
+            );
             return;
           }
           _error = 'Failed to update character';
@@ -544,13 +655,17 @@ class GameScreenController extends ChangeNotifier {
         }
       },
       onStoryComplete: () async {
-        if (_disposed || _storyLifecycleState == StoryLifecycleState.completed) return;
+        if (_disposed ||
+            _storyLifecycleState == StoryLifecycleState.completed) {
+          return;
+        }
 
         _storyLifecycleState = StoryLifecycleState.completed;
         notifyListeners();
 
         try {
-          final refreshedCharacter = await _characterRepository.refreshCharacterFromServer(_character!.id);
+          final refreshedCharacter = await _characterRepository
+              .refreshCharacterFromServer(_character!.id);
 
           if (_disposed) return;
 
@@ -561,12 +676,17 @@ class GameScreenController extends ChangeNotifier {
         } catch (e) {
           if (_disposed) return;
 
-          debugPrint('GameScreenController: Failed to refresh character from server: $e');
+          debugPrint(
+            'GameScreenController: Failed to refresh character from server: $e',
+          );
         }
 
         if (_disposed) return;
 
-        await _handleStoryCompletion(refreshCharacter: false, showMessage: true);
+        await _handleStoryCompletion(
+          refreshCharacter: false,
+          showMessage: true,
+        );
         _manageCharacterUpdateTimer();
       },
       onError: (err) {
@@ -593,32 +713,43 @@ class GameScreenController extends ChangeNotifier {
     }
 
     try {
-      final historyResponse = await _apiService.getSegmentHistory(characterId: _character!.id);
+      final historyResponse = await _apiService.getSegmentHistory(
+        characterId: _character!.id,
+      );
 
-      final history = historyResponse.map((segment) => Map<String, dynamic>.from(segment)).where((segment) {
-        final completedAt = segment['CompletedAt'];
-        if (completedAt is String && completedAt.isNotEmpty) return true;
-        if (completedAt is num && completedAt > 0) return true;
-        if (segment['Status']?.toString().toLowerCase() == 'completed') return true;
-        return _segmentHistory.isSegmentComplete(segment);
-      }).toList();
+      final history = historyResponse
+          .map((segment) => Map<String, dynamic>.from(segment))
+          .where((segment) {
+            final completedAt = segment['CompletedAt'];
+            if (completedAt is String && completedAt.isNotEmpty) return true;
+            if (completedAt is num && completedAt > 0) return true;
+            if (segment['Status']?.toString().toLowerCase() == 'completed') {
+              return true;
+            }
+            return _segmentHistory.isSegmentComplete(segment);
+          })
+          .toList();
 
       if (mergeWithExisting) {
         final mergedByKey = <String, Map<String, dynamic>>{};
         for (final existing in _segmentHistory.segments) {
-          mergedByKey[_segmentHistory.segmentIdentity(existing)] = Map<String, dynamic>.from(existing);
+          mergedByKey[_segmentHistory.segmentIdentity(existing)] =
+              Map<String, dynamic>.from(existing);
         }
         for (final segment in history) {
           final key = _segmentHistory.segmentIdentity(segment);
           final existingSegment = mergedByKey[key];
           final merged = Map<String, dynamic>.from(segment);
-          if (existingSegment != null && existingSegment.containsKey('_index')) {
+          if (existingSegment != null &&
+              existingSegment.containsKey('_index')) {
             merged['_index'] = existingSegment['_index'];
           }
           mergedByKey[key] = merged;
         }
         final mergedSegments = mergedByKey.values.toList();
-        _segmentHistory.segments = _segmentHistory.assignIndices(mergedSegments);
+        _segmentHistory.segments = _segmentHistory.assignIndices(
+          mergedSegments,
+        );
         _segmentHistory.sortSegmentsChronologically(_segmentHistory.segments);
       } else {
         _segmentHistory.segments = _segmentHistory.assignIndices(history);
@@ -631,14 +762,19 @@ class GameScreenController extends ChangeNotifier {
   }
 
   void _synchronizeStoryCompletionState() {
-    final updated = _segmentHistory.synchronizeStoryCompletionState(_character, _lastStoryDetails);
+    final updated = _segmentHistory.synchronizeStoryCompletionState(
+      _character,
+      _lastStoryDetails,
+    );
     if (updated != null) {
       _character = updated;
     }
   }
 
   Map<String, dynamic>? _buildCompletedStoryState() {
-    final completedSegmentsCopy = _segmentHistory.segments.map((segment) => Map<String, dynamic>.from(segment)).toList();
+    final completedSegmentsCopy = _segmentHistory.segments
+        .map((segment) => Map<String, dynamic>.from(segment))
+        .toList();
     _segmentHistory.sortSegmentsChronologically(completedSegmentsCopy);
 
     if (completedSegmentsCopy.isEmpty && _lastStoryDetails == null) {
@@ -655,7 +791,10 @@ class GameScreenController extends ChangeNotifier {
     return storyStateUpdate;
   }
 
-  Future<void> handleDecisionSelect(BuildContext context, String choiceId) async {
+  Future<void> handleDecisionSelect(
+    BuildContext context,
+    String choiceId,
+  ) async {
     if (_isSubmittingDecision || _decisionDebouncer.isActive) return;
 
     _isSubmittingDecision = true;
@@ -667,28 +806,40 @@ class GameScreenController extends ChangeNotifier {
     try {
       final response = await _rateLimiter.limiter.executeHumanDriven(
         GlobalRateLimiter.submitDecision,
-        () => _apiService.submitDecision(characterId: _character!.id, decision: choiceId),
+        () => _apiService.submitDecision(
+          characterId: _character!.id,
+          decision: choiceId,
+        ),
         throwOnRateLimit: true,
       );
 
-      final completedSegment = response['CompletedSegment'] as Map<String, dynamic>?;
+      final completedSegment =
+          response['CompletedSegment'] as Map<String, dynamic>?;
 
       if (response['NextSegment'] != null) {
         final nextSegment = response['NextSegment'] as Map<String, dynamic>;
 
         if (completedSegment != null) {
-          _segmentHistory.addOrUpdateSegment(completedSegment, _lastStoryDetails);
+          _segmentHistory.addOrUpdateSegment(
+            completedSegment,
+            _lastStoryDetails,
+          );
         }
 
         _segmentHistory.addOrUpdateSegment(nextSegment, _lastStoryDetails);
 
-        final updatedStoryState = Map<String, dynamic>.from(_character!.storyState ?? <String, dynamic>{})
-          ..['ActiveSegment'] = nextSegment;
+        final updatedStoryState = Map<String, dynamic>.from(
+          _character!.storyState ?? <String, dynamic>{},
+        )..['ActiveSegment'] = nextSegment;
 
-        final dynamic nextSegmentIdValue = nextSegment['ActiveSegmentID'] ?? nextSegment['SegmentID'];
+        final dynamic nextSegmentIdValue =
+            nextSegment['ActiveSegmentID'] ?? nextSegment['SegmentID'];
         final String? nextSegmentId = nextSegmentIdValue?.toString();
 
-        _character = _character!.copyWith(activeSegmentId: nextSegmentId, storyState: updatedStoryState);
+        _character = _character!.copyWith(
+          activeSegmentId: nextSegmentId,
+          storyState: updatedStoryState,
+        );
         notifyListeners();
 
         _startOrchestrationIfNeeded(force: true);
@@ -697,11 +848,13 @@ class GameScreenController extends ChangeNotifier {
         _runtime.stopPolling();
         await _handleStoryCompletion(refreshCharacter: true);
       }
-
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
+          SnackBar(
+            content: Text(ErrorHandler.getUserFriendlyMessage(e)),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
         );
       }
       _error = ErrorHandler.getUserFriendlyMessage(e);
@@ -725,11 +878,15 @@ class GameScreenController extends ChangeNotifier {
     //  - _handlingStoryCompletion guards concurrent re-entry while an in-flight
     //    call is awaiting (e.g. refreshCharacter: true).
     if (_storyCompletionFinalized) {
-      debugPrint('GameScreenController: Story completion already finalized - skipping duplicate call');
+      debugPrint(
+        'GameScreenController: Story completion already finalized - skipping duplicate call',
+      );
       return;
     }
     if (_handlingStoryCompletion) {
-      debugPrint('GameScreenController: Story completion already in progress - skipping duplicate call');
+      debugPrint(
+        'GameScreenController: Story completion already in progress - skipping duplicate call',
+      );
       return;
     }
     _handlingStoryCompletion = true;
@@ -748,8 +905,12 @@ class GameScreenController extends ChangeNotifier {
         notifyListeners();
       }
 
-      final activeSegment = finalActiveSegment ?? (_character?.storyState?['ActiveSegment'] as Map<String, dynamic>?);
-      final shouldIncludeFinalSegment = activeSegment != null && _segmentHistory.isSegmentComplete(activeSegment);
+      final activeSegment =
+          finalActiveSegment ??
+          (_character?.storyState?['ActiveSegment'] as Map<String, dynamic>?);
+      final shouldIncludeFinalSegment =
+          activeSegment != null &&
+          _segmentHistory.isSegmentComplete(activeSegment);
 
       try {
         if (shouldIncludeFinalSegment) {
@@ -757,10 +918,15 @@ class GameScreenController extends ChangeNotifier {
         }
 
         if (refreshCharacter) {
-          await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate, showLoadingIndicator: false);
+          await _loadCharacterData(
+            strategy: CharacterLoadRateLimitStrategy.immediate,
+            showLoadingIndicator: false,
+          );
         }
       } catch (e) {
-        debugPrint('GameScreenController: Error updating state after story completion: $e');
+        debugPrint(
+          'GameScreenController: Error updating state after story completion: $e',
+        );
       }
 
       if (_character != null) {
@@ -792,7 +958,10 @@ class GameScreenController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> handleAbandonStory({required Function(String) onAbandon, required Function(String) onError}) async {
+  Future<void> handleAbandonStory({
+    required Function(String) onAbandon,
+    required Function(String) onError,
+  }) async {
     try {
       _isLoading = true;
       notifyListeners();
@@ -807,9 +976,16 @@ class GameScreenController extends ChangeNotifier {
 
       // Handle abandonment
       try {
-        await Future.wait([_loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate), _loadSegmentHistory()]);
+        await Future.wait([
+          _loadCharacterData(
+            strategy: CharacterLoadRateLimitStrategy.immediate,
+          ),
+          _loadSegmentHistory(),
+        ]);
       } catch (e) {
-        debugPrint('GameScreenController: Error updating state after story abandonment: $e');
+        debugPrint(
+          'GameScreenController: Error updating state after story abandonment: $e',
+        );
       }
 
       if (_character != null) {
@@ -827,9 +1003,12 @@ class GameScreenController extends ChangeNotifier {
       _manageCharacterUpdateTimer();
 
       if (!_storyCompletionNotified) {
-        final storyData = _character?.storyState?['Story'] as Map<String, dynamic>?;
+        final storyData =
+            _character?.storyState?['Story'] as Map<String, dynamic>?;
         final segments = _segmentHistory.segments;
-        final fallbackStoryTitle = segments.isNotEmpty ? segments.last['StoryTitle'] as String? : null;
+        final fallbackStoryTitle = segments.isNotEmpty
+            ? segments.last['StoryTitle'] as String?
+            : null;
         final storyTitle = storyData?['Title'] ?? fallbackStoryTitle ?? 'Story';
 
         onAbandon('$storyTitle abandoned');
@@ -852,7 +1031,10 @@ class GameScreenController extends ChangeNotifier {
     _storyLifecycleState = StoryLifecycleState.none;
     notifyListeners();
 
-    await _loadCharacterData(strategy: CharacterLoadRateLimitStrategy.immediate, showLoadingIndicator: false);
+    await _loadCharacterData(
+      strategy: CharacterLoadRateLimitStrategy.immediate,
+      showLoadingIndicator: false,
+    );
 
     _segmentHistory.segments = [];
     _storyCompletionNotified = false;

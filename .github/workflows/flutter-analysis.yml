@@ -12,17 +12,19 @@ on:
       - "incremental/**"
 
 permissions:
-  pull-requests: write
-  contents: write
+  contents: read
 
 jobs:
   format-and-analyze:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [portal, incremental]
+
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0 # Fetch all history for all branches and tags
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -30,39 +32,14 @@ jobs:
           flutter-version: "3.x"
           channel: "stable"
 
-      - name: Configure Git
-        run: |
-          git fetch --prune
-          git checkout ${{github.head_ref}} --progress
-          git config --global user.name "Dark Relics Automatic"
-          git config --global user.email "contact@darkrelics.net"
-
       - name: Install dependencies
-        working-directory: portal
+        working-directory: ${{ matrix.app }}
         run: flutter pub get
 
       - name: Verify formatting
-        working-directory: portal
-        run: dart format .
+        working-directory: ${{ matrix.app }}
+        run: dart format --output=none --set-exit-if-changed .
 
       - name: Analyze project source
-        working-directory: portal
-        run: |
-          dart fix --apply 
-          flutter analyze
-
-      - name: Check for changes
-        id: git-check
-        run: |
-          git add . -vv
-          if git diff-index --quiet HEAD; then
-              echo "changes=false" >> $GITHUB_OUTPUT
-          else
-              echo "changes=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Commit and push changes
-        if: steps.git-check.outputs.changes == 'true'
-        run: |
-          git commit -m "Apply Flutter Autoformatting" -vv
-          git push -vv
+        working-directory: ${{ matrix.app }}
+        run: flutter analyze

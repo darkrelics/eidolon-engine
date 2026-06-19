@@ -12,7 +12,7 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 | **Stack Count**        | 9 stacks             | 8 stacks                      | 10 stacks                     |
 | **Excluded Stacks**    | Story Stack          | S3, CloudWatch Stacks         | None (all stacks)             |
 | **Lambda Functions**   | 17 deployed          | 17 deployed                   | 17 deployed                   |
-| **DynamoDB Tables**    | 14 tables            | 14 tables                     | 14 tables                     |
+| **DynamoDB Tables**    | 15 tables            | 15 tables                     | 15 tables                     |
 | **Story Processing**   | Not available        | SQS, EventBridge, SSM         | SQS, EventBridge, SSM         |
 | **Scripts Support**    | Lua scripts in S3    | Not available                 | Lua scripts in S3             |
 | **CloudWatch Logging** | Full logging         | Basic Lambda logs only        | Full logging                  |
@@ -20,7 +20,7 @@ The Eidolon Engine supports three deployment modes, each tailored for different 
 
 ## Stack Deployment Order
 
-Refer to the canonical sequence in [Deployment Guide](deployment.md#stack-deployment-order); this document focuses on how each mode changes the selection of stacks rather than repeating the step-by-step list.
+Refer to the canonical sequence in [Deployment Guide](deployment.md#system-architecture); this document focuses on how each mode changes the selection of stacks rather than repeating the step-by-step list.
 
 ## Deployment Process
 
@@ -92,19 +92,18 @@ Refer to [Deployment System Design](deployment-design.md) for stack-by-stack det
 
 ## Technical Implementation Details
 
-### CDK Context Configuration
+### Mode Selection
 
-The deployment mode is passed to all CDK stacks via context:
+The deployment mode lives in `config.yml` (`deployment_mode`) and drives the
+`STACK_MODE_MATRIX` in `scripts/eidolon_deployment.py`, which decides per
+stack whether to deploy it:
 
-```python
-context_args = ["-c", f"deployment_mode={params.deployment_mode}"]
-```
-
-Stacks use this to make mode-aware decisions:
-
-- **CodeBuild Stack**: Selects appropriate buildspec file
-- **Client Stack**: Configures portal build for selected mode
-- **Story Stack**: Only deployed for Incremental/Hybrid modes
+- **Buildspec selection**: mud uses `buildspec/portal.yml`; incremental and
+  hybrid use `buildspec/incremental.yml`
+- **Story stack** (`eidolon-lambda-story`): only deployed for
+  Incremental/Hybrid modes
+- **CloudWatch stack**: only deployed for MUD/Hybrid modes; Lua scripts
+  upload only in MUD mode
 
 ### Post-Deployment Operations
 

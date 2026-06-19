@@ -223,17 +223,29 @@ class ScreenReaderAnnouncer {
 
   static void announceSuccess(BuildContext context, String message) {
     final view = View.of(context);
-    SemanticsService.sendAnnouncement(view, 'Success: $message', TextDirection.ltr);
+    SemanticsService.sendAnnouncement(
+      view,
+      'Success: $message',
+      TextDirection.ltr,
+    );
   }
 
   static void announceError(BuildContext context, String message) {
     final view = View.of(context);
-    SemanticsService.sendAnnouncement(view, 'Error: $message', TextDirection.ltr);
+    SemanticsService.sendAnnouncement(
+      view,
+      'Error: $message',
+      TextDirection.ltr,
+    );
   }
 
   static void announceLoading(BuildContext context, String message) {
     final view = View.of(context);
-    SemanticsService.sendAnnouncement(view, 'Loading: $message', TextDirection.ltr);
+    SemanticsService.sendAnnouncement(
+      view,
+      'Loading: $message',
+      TextDirection.ltr,
+    );
   }
 }
 

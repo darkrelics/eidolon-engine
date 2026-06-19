@@ -88,7 +88,7 @@ Characters can transition between modes with these safeguards:
 
 ### 5. Persistent State Between Modes
 
-Character state persists across mode transitions in the 14 DynamoDB tables (all with RemovalPolicy.RETAIN):
+Character state persists across mode transitions in the shared DynamoDB tables (all with deletion protection enabled):
 
 **Health and Wounds:**
 

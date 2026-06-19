@@ -13,7 +13,8 @@ import 'api_service.dart';
 /// 5. GET /segment/status to check for next segment
 /// 6. Repeat until story complete (404 response)
 class StoryPollingService {
-  StoryPollingService({required ApiService apiService}) : _apiService = apiService;
+  StoryPollingService({required ApiService apiService})
+    : _apiService = apiService;
 
   final ApiService _apiService;
 
@@ -28,12 +29,20 @@ class StoryPollingService {
   String? _pendingCompletionSegmentId;
   static const int _maxConsecutiveErrors = 3;
   static const int _errorRetryDelaySeconds = 30;
-  static const int _defaultPollDelaySeconds = 60;  // Fallback if no PollAfter
-  static const int _initialPollDelaySeconds = 60;  // Backend design spec: INITIAL_POLL_DELAY
+  static const int _defaultPollDelaySeconds = 60; // Fallback if no PollAfter
+  static const int _initialPollDelaySeconds =
+      60; // Backend design spec: INITIAL_POLL_DELAY
   // Exponential backoff for recovery: 15s, 30s, 60s, 120s, 300s cap
   static const int _recoveryInitialDelaySeconds = 15;
   static const int _recoveryMaxDelaySeconds = 300;
   int _recoveryAttempt = 0;
+  // Consecutive polls that returned no active segment while the character
+  // still has an active story (the brief advancement gap between segments).
+  // Bounded so a genuinely stuck story escalates to recovery backoff instead
+  // of tight-looping on the short gap delay.
+  int _emptyStatusPolls = 0;
+  static const int _maxEmptyStatusPolls = 5;
+  static const int _segmentGapPollDelaySeconds = 3;
 
   void dispose() {
     stopPolling();
@@ -49,6 +58,7 @@ class StoryPollingService {
     _isPolling = false;
     _characterId = null;
     _consecutiveErrors = 0;
+    _emptyStatusPolls = 0;
     _lastSeenActiveSegmentId = null;
     _lastReloadedSegmentId = null;
     _pendingCompletionSegmentId = null;
@@ -72,12 +82,15 @@ class StoryPollingService {
     DateTime? segmentStartTime,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
     required void Function(Map<String, dynamic> character) onCharacterReload,
-    required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
+    required void Function(Map<String, dynamic> segmentUpdates)
+    onSegmentComplete,
     required void Function() onStoryComplete,
     void Function(Object error)? onError,
   }) {
     if (_isPolling && _characterId == characterId) {
-      debugPrint('StoryPollingService: Already polling for character $characterId');
+      debugPrint(
+        'StoryPollingService: Already polling for character $characterId',
+      );
       return;
     }
 
@@ -86,7 +99,9 @@ class StoryPollingService {
     _isPolling = true;
     _consecutiveErrors = 0;
 
-    debugPrint('StoryPollingService: Started polling for character $characterId');
+    debugPrint(
+      'StoryPollingService: Started polling for character $characterId',
+    );
 
     // Calculate delay before first poll (60 seconds from segment start per backend spec)
     Duration initialDelay;
@@ -98,16 +113,22 @@ class StoryPollingService {
 
       if (remainingDelay > 0) {
         initialDelay = Duration(seconds: remainingDelay);
-        debugPrint('StoryPollingService: Waiting $remainingDelay seconds before first poll (segment started ${elapsedSeconds}s ago)');
+        debugPrint(
+          'StoryPollingService: Waiting $remainingDelay seconds before first poll (segment started ${elapsedSeconds}s ago)',
+        );
       } else {
         // Segment started more than 60 seconds ago, poll immediately
         initialDelay = Duration.zero;
-        debugPrint('StoryPollingService: Polling immediately (segment started ${elapsedSeconds}s ago)');
+        debugPrint(
+          'StoryPollingService: Polling immediately (segment started ${elapsedSeconds}s ago)',
+        );
       }
     } else {
       // No start time provided, wait full 60 seconds
       initialDelay = const Duration(seconds: _initialPollDelaySeconds);
-      debugPrint('StoryPollingService: Waiting $_initialPollDelaySeconds seconds before first poll (no start time provided)');
+      debugPrint(
+        'StoryPollingService: Waiting $_initialPollDelaySeconds seconds before first poll (no start time provided)',
+      );
     }
 
     // Schedule first poll after initial delay
@@ -127,7 +148,8 @@ class StoryPollingService {
     required String characterId,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
     required void Function(Map<String, dynamic> character) onCharacterReload,
-    required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
+    required void Function(Map<String, dynamic> segmentUpdates)
+    onSegmentComplete,
     required void Function() onStoryComplete,
     void Function(Object error)? onError,
   }) async {
@@ -138,13 +160,19 @@ class StoryPollingService {
 
     try {
       // Get segment status
-      final segmentStatus = await _apiService.getSegmentStatus(characterId: characterId);
+      final segmentStatus = await _apiService.getSegmentStatus(
+        characterId: characterId,
+      );
 
       // Cancel any stale completion timer if segment has changed
       // This handles the case where a new poll happens before the completion timer fires
-      final currentActiveSegmentId = segmentStatus['ActiveSegmentID'] as String?;
-      if (_pendingCompletionSegmentId != null && _pendingCompletionSegmentId != currentActiveSegmentId) {
-        debugPrint('StoryPollingService: Canceling stale completion timer for segment $_pendingCompletionSegmentId');
+      final currentActiveSegmentId =
+          segmentStatus['ActiveSegmentID'] as String?;
+      if (_pendingCompletionSegmentId != null &&
+          _pendingCompletionSegmentId != currentActiveSegmentId) {
+        debugPrint(
+          'StoryPollingService: Canceling stale completion timer for segment $_pendingCompletionSegmentId',
+        );
         _completionTimer?.cancel();
         _completionTimer = null;
         _pendingCompletionSegmentId = null;
@@ -167,25 +195,85 @@ class StoryPollingService {
       }
 
       if (activeSegmentId == null) {
-        debugPrint('StoryPollingService: Story complete - reloading character');
+        // No active segment. This is EITHER true story completion OR the brief
+        // gap during advancement, when the finished segment has been marked
+        // complete but the next segment has not been created yet. The backend
+        // returns the same empty status in both cases, so disambiguate using
+        // the character's authoritative ActiveStoryID, which is cleared only on
+        // true completion or abandonment (eidolon/character_story.py). Without
+        // this check the client falsely declares the story complete during the
+        // sub-second advancement gap and stops polling.
+        debugPrint(
+          'StoryPollingService: No active segment - reloading character to confirm completion',
+        );
 
-        // Reload character to get authoritative state (XP, wounds, inventory)
+        Map<String, dynamic>? character;
         try {
-          final character = await _apiService.getCharacter(characterId: characterId);
+          character = await _apiService.getCharacter(characterId: characterId);
           onCharacterReload(character);
         } catch (e) {
-          debugPrint('StoryPollingService: Failed to reload character after completion: $e');
-          // Continue to onStoryComplete even if reload fails
+          debugPrint(
+            'StoryPollingService: Failed to reload character on empty status: $e',
+          );
           onError?.call(e);
         }
 
+        final activeStoryId = character?['ActiveStoryID'] as String?;
+        final storyStillActive =
+            activeStoryId != null && activeStoryId.isNotEmpty;
+
+        // Keep polling when the story is still active (advancement gap) or when
+        // we could not confirm completion because the reload failed - never
+        // false-complete on an unconfirmed state.
+        if (storyStillActive || character == null) {
+          _emptyStatusPolls++;
+          if (_emptyStatusPolls >= _maxEmptyStatusPolls) {
+            debugPrint(
+              'StoryPollingService: No segment but story still active after '
+              '$_emptyStatusPolls polls - escalating to recovery backoff',
+            );
+            _scheduleRecovery(
+              characterId: characterId,
+              onStatusUpdate: onStatusUpdate,
+              onCharacterReload: onCharacterReload,
+              onSegmentComplete: onSegmentComplete,
+              onStoryComplete: onStoryComplete,
+              onError: onError,
+            );
+            return;
+          }
+          debugPrint(
+            'StoryPollingService: Advancement gap (activeStoryId=$activeStoryId) '
+            '- continuing to poll',
+          );
+          _scheduleNextPoll(
+            const Duration(seconds: _segmentGapPollDelaySeconds),
+            characterId: characterId,
+            onStatusUpdate: onStatusUpdate,
+            onCharacterReload: onCharacterReload,
+            onSegmentComplete: onSegmentComplete,
+            onStoryComplete: onStoryComplete,
+            onError: onError,
+          );
+          return;
+        }
+
+        // No active segment AND no active story => genuine completion.
+        debugPrint(
+          'StoryPollingService: Story complete - no active segment and no active story',
+        );
+        _emptyStatusPolls = 0;
         stopPolling();
         onStoryComplete();
         return;
       }
 
+      // We have an active segment; reset the advancement-gap counter.
+      _emptyStatusPolls = 0;
+
       // Check ProcessingStatus to determine next action
-      final processingStatus = (segmentStatus['ProcessingStatus'] as String?)?.toLowerCase() ?? '';
+      final processingStatus =
+          (segmentStatus['ProcessingStatus'] as String?)?.toLowerCase() ?? '';
       final timeRemaining = segmentStatus['TimeRemaining'] as int? ?? 0;
 
       if (processingStatus == 'pending') {
@@ -205,11 +293,15 @@ class StoryPollingService {
               delay = Duration.zero;
             }
           } catch (e) {
-            debugPrint('StoryPollingService: Error parsing PollAfter, using default delay: $e');
+            debugPrint(
+              'StoryPollingService: Error parsing PollAfter, using default delay: $e',
+            );
           }
         }
 
-        debugPrint('StoryPollingService: Segment still processing (pending), retrying in ${delay.inSeconds}s');
+        debugPrint(
+          'StoryPollingService: Segment still processing (pending), retrying in ${delay.inSeconds}s',
+        );
         _scheduleNextPoll(
           delay,
           characterId: characterId,
@@ -221,11 +313,15 @@ class StoryPollingService {
         );
       } else if (processingStatus == 'processed' && timeRemaining > 0) {
         // Segment processed but timer not expired - wait for timer then apply incremental updates
-        debugPrint('StoryPollingService: Segment processed, waiting $timeRemaining seconds then applying updates');
+        debugPrint(
+          'StoryPollingService: Segment processed, waiting $timeRemaining seconds then applying updates',
+        );
 
         // Check if we already have a pending completion for this segment
         if (_pendingCompletionSegmentId == activeSegmentId) {
-          debugPrint('StoryPollingService: Completion timer already scheduled for segment $activeSegmentId - skipping duplicate');
+          debugPrint(
+            'StoryPollingService: Completion timer already scheduled for segment $activeSegmentId - skipping duplicate',
+          );
           return;
         }
 
@@ -250,17 +346,23 @@ class StoryPollingService {
 
           // Verify polling is still active for this character
           if (!_isPolling || _characterId != characterId) {
-            debugPrint('StoryPollingService: Completion timer fired but polling stopped');
+            debugPrint(
+              'StoryPollingService: Completion timer fired but polling stopped',
+            );
             return;
           }
 
           try {
             // Check for duplicate processing
             if (_lastReloadedSegmentId == pendingSegmentId) {
-              debugPrint('StoryPollingService: Skipping segment updates for segment $pendingSegmentId - already synchronized');
+              debugPrint(
+                'StoryPollingService: Skipping segment updates for segment $pendingSegmentId - already synchronized',
+              );
             } else {
               // Apply incremental updates from segment response
-              debugPrint('StoryPollingService: Applying incremental character updates from segment');
+              debugPrint(
+                'StoryPollingService: Applying incremental character updates from segment',
+              );
               onSegmentComplete(capturedSegmentStatus);
               _lastReloadedSegmentId = pendingSegmentId;
             }
@@ -276,13 +378,17 @@ class StoryPollingService {
               onError: onError,
             );
           } catch (e) {
-            debugPrint('StoryPollingService: Error applying segment updates: $e');
+            debugPrint(
+              'StoryPollingService: Error applying segment updates: $e',
+            );
             onError?.call(e);
 
             // Retry with backoff
             _consecutiveErrors++;
             if (_consecutiveErrors >= _maxConsecutiveErrors) {
-              debugPrint('StoryPollingService: Too many consecutive errors - scheduling recovery with exponential backoff');
+              debugPrint(
+                'StoryPollingService: Too many consecutive errors - scheduling recovery with exponential backoff',
+              );
               _scheduleRecovery(
                 characterId: characterId,
                 onStatusUpdate: onStatusUpdate,
@@ -307,19 +413,25 @@ class StoryPollingService {
         });
       } else {
         // Segment complete (TimeRemaining = 0) - apply incremental updates and check for next segment
-        debugPrint('StoryPollingService: Segment complete, applying incremental updates');
+        debugPrint(
+          'StoryPollingService: Segment complete, applying incremental updates',
+        );
 
         final segmentIdForReload = activeSegmentId;
 
         if (_lastReloadedSegmentId == segmentIdForReload) {
-          debugPrint('StoryPollingService: Skipping segment updates for segment $segmentIdForReload - already synchronized');
+          debugPrint(
+            'StoryPollingService: Skipping segment updates for segment $segmentIdForReload - already synchronized',
+          );
         } else {
           try {
             // Apply incremental updates from segment response
             onSegmentComplete(segmentStatus);
             _lastReloadedSegmentId = segmentIdForReload;
           } catch (e) {
-            debugPrint('StoryPollingService: Error applying segment updates: $e');
+            debugPrint(
+              'StoryPollingService: Error applying segment updates: $e',
+            );
             onError?.call(e);
           }
         }
@@ -342,14 +454,20 @@ class StoryPollingService {
       // Check for "no active segment" which indicates story completion
       final errorMsg = e.toString().toLowerCase();
       if (errorMsg.contains('no active segment') || errorMsg.contains('404')) {
-        debugPrint('StoryPollingService: No active segment - story complete, reloading character');
+        debugPrint(
+          'StoryPollingService: No active segment - story complete, reloading character',
+        );
 
         // Reload character to get authoritative state (XP, wounds, inventory)
         try {
-          final character = await _apiService.getCharacter(characterId: characterId);
+          final character = await _apiService.getCharacter(
+            characterId: characterId,
+          );
           onCharacterReload(character);
         } catch (reloadErr) {
-          debugPrint('StoryPollingService: Failed to reload character after completion: $reloadErr');
+          debugPrint(
+            'StoryPollingService: Failed to reload character after completion: $reloadErr',
+          );
           // Continue to onStoryComplete even if reload fails
           onError?.call(reloadErr);
         }
@@ -364,7 +482,9 @@ class StoryPollingService {
 
       // Schedule recovery after too many consecutive errors
       if (_consecutiveErrors >= _maxConsecutiveErrors) {
-        debugPrint('StoryPollingService: Too many consecutive errors ($_consecutiveErrors) - scheduling recovery with exponential backoff');
+        debugPrint(
+          'StoryPollingService: Too many consecutive errors ($_consecutiveErrors) - scheduling recovery with exponential backoff',
+        );
         _scheduleRecovery(
           characterId: characterId,
           onStatusUpdate: onStatusUpdate,
@@ -377,7 +497,9 @@ class StoryPollingService {
       }
 
       // Retry after 30 seconds on error
-      debugPrint('StoryPollingService: Retrying in $_errorRetryDelaySeconds seconds (error count: $_consecutiveErrors)');
+      debugPrint(
+        'StoryPollingService: Retrying in $_errorRetryDelaySeconds seconds (error count: $_consecutiveErrors)',
+      );
       _scheduleNextPoll(
         const Duration(seconds: _errorRetryDelaySeconds),
         characterId: characterId,
@@ -396,7 +518,8 @@ class StoryPollingService {
     required String characterId,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
     required void Function(Map<String, dynamic> character) onCharacterReload,
-    required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
+    required void Function(Map<String, dynamic> segmentUpdates)
+    onSegmentComplete,
     required void Function() onStoryComplete,
     void Function(Object error)? onError,
   }) {
@@ -422,7 +545,8 @@ class StoryPollingService {
     required String characterId,
     required void Function(Map<String, dynamic> status) onStatusUpdate,
     required void Function(Map<String, dynamic> character) onCharacterReload,
-    required void Function(Map<String, dynamic> segmentUpdates) onSegmentComplete,
+    required void Function(Map<String, dynamic> segmentUpdates)
+    onSegmentComplete,
     required void Function() onStoryComplete,
     void Function(Object error)? onError,
   }) {
@@ -444,7 +568,9 @@ class StoryPollingService {
       _recoveryMaxDelaySeconds,
     );
     _recoveryAttempt++;
-    debugPrint('StoryPollingService: Recovery attempt #$_recoveryAttempt in ${backoffSeconds}s');
+    debugPrint(
+      'StoryPollingService: Recovery attempt #$_recoveryAttempt in ${backoffSeconds}s',
+    );
 
     _recoveryTimer = Timer(Duration(seconds: backoffSeconds), () {
       _recoveryTimer = null;
@@ -455,7 +581,9 @@ class StoryPollingService {
         return;
       }
 
-      debugPrint('StoryPollingService: Attempting recovery after extended timeout');
+      debugPrint(
+        'StoryPollingService: Attempting recovery after extended timeout',
+      );
 
       // Reset error counter for fresh start
       _consecutiveErrors = 0;

@@ -83,7 +83,9 @@ class _InventoryPanelState extends State<InventoryPanel> {
         _isLoading = true;
         _errorMessage = null;
       });
-      final enriched = await _itemRepository!.loadInventoryDetails(widget.character.contents);
+      final enriched = await _itemRepository!.loadInventoryDetails(
+        widget.character.contents,
+      );
       setState(() {
         _enrichedInventory = enriched;
         _isLoading = false;
@@ -165,9 +167,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   )
                 else if (widget.character.contents.isNotEmpty) ...[
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 2,
+                    ),
                     decoration: BoxDecoration(
-                      color: colorScheme.onPrimaryContainer.withValues(alpha: 0.2),
+                      color: colorScheme.onPrimaryContainer.withValues(
+                        alpha: 0.2,
+                      ),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
@@ -197,10 +204,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
             child: _isLoading
                 ? _buildLoadingState(context)
                 : _errorMessage != null
-                    ? _buildErrorState(context)
-                    : widget.character.contents.isEmpty
-                        ? _buildEmptyInventory(context)
-                        : _buildInventoryBody(context),
+                ? _buildErrorState(context)
+                : widget.character.contents.isEmpty
+                ? _buildEmptyInventory(context)
+                : _buildInventoryBody(context),
           ),
         ],
       ),
@@ -231,11 +238,16 @@ class _InventoryPanelState extends State<InventoryPanel> {
           const SizedBox(height: 16),
           Text(
             _errorMessage ?? 'Failed to load inventory',
-            style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.error,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          ElevatedButton(onPressed: _loadInventoryDetails, child: const Text('Retry')),
+          ElevatedButton(
+            onPressed: _loadInventoryDetails,
+            child: const Text('Retry'),
+          ),
         ],
       ),
     );
@@ -254,11 +266,19 @@ class _InventoryPanelState extends State<InventoryPanel> {
             color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
-          Text('No Items',
-              style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.onSurfaceVariant)),
+          Text(
+            'No Items',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
           const SizedBox(height: 8),
-          Text('Items you acquire will appear here',
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant)),
+          Text(
+            'Items you acquire will appear here',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -294,13 +314,20 @@ class _InventoryPanelState extends State<InventoryPanel> {
                   itemDetails: _enrichedInventory[itemId],
                   quantity: _quantity(_enrichedInventory[itemId]),
                   isEquipped: true,
-                  onTap: widget.onItemTap != null ? () => widget.onItemTap!(itemId) : null,
+                  onTap: widget.onItemTap != null
+                      ? () => widget.onItemTap!(itemId)
+                      : null,
                 ),
               ),
             const SizedBox(height: 20),
           ],
           for (final containerId in containerIds) ...[
-            _buildContainerSection(context, containerId, depth: 0, visited: const <String>{}),
+            _buildContainerSection(
+              context,
+              containerId,
+              depth: 0,
+              visited: const <String>{},
+            ),
             const SizedBox(height: 20),
           ],
           if (looseIds.isNotEmpty) ...[
@@ -425,9 +452,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
           isStackable: isStackable,
           isProcessing: _isItemProcessing(itemId),
           onUse: isConsumable ? () => _handleUseItem(itemId) : null,
-          onDiscard: () => _showDiscardDialog(itemId, itemName, qty, isStackable),
-          onSplit: isStackable && qty > 1 ? () => _showSplitDialog(itemId, itemName, qty) : null,
-          onTap: widget.onItemTap != null ? () => widget.onItemTap!(itemId) : null,
+          onDiscard: () =>
+              _showDiscardDialog(itemId, itemName, qty, isStackable),
+          onSplit: isStackable && qty > 1
+              ? () => _showSplitDialog(itemId, itemName, qty)
+              : null,
+          onTap: widget.onItemTap != null
+              ? () => widget.onItemTap!(itemId)
+              : null,
         );
       },
     );
@@ -457,8 +489,16 @@ class _InventoryPanelState extends State<InventoryPanel> {
       );
 
       final remainingQuantity = JsonParser.getInt(result, 'remainingQuantity');
-      final itemRemoved = JsonParser.getBool(result, 'itemRemoved', defaultValue: remainingQuantity <= 0);
-      final message = JsonParser.getString(result, 'message', defaultValue: 'Item consumed.');
+      final itemRemoved = JsonParser.getBool(
+        result,
+        'itemRemoved',
+        defaultValue: remainingQuantity <= 0,
+      );
+      final message = JsonParser.getString(
+        result,
+        'message',
+        defaultValue: 'Item consumed.',
+      );
 
       if (itemRemoved) {
         widget.character.contents.remove(itemId);
@@ -475,9 +515,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
       }
       if (widget.onRefresh != null) await widget.onRefresh!();
     } on ApiException catch (err) {
-      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to consume item.';
+      final errorMessage = err.message.isNotEmpty
+          ? err.message
+          : 'Failed to consume item.';
       _showSnackBar(errorMessage, isError: true);
-      if (err.statusCode == 409 && widget.onRefresh != null) await widget.onRefresh!();
+      if (err.statusCode == 409 && widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
     } catch (err) {
       _showSnackBar('Unexpected error: $err', isError: true);
     } finally {
@@ -496,9 +540,17 @@ class _InventoryPanelState extends State<InventoryPanel> {
         quantity: quantity,
       );
 
-      final itemFullyDiscarded = JsonParser.getBool(result, 'ItemFullyDiscarded', defaultValue: true);
+      final itemFullyDiscarded = JsonParser.getBool(
+        result,
+        'ItemFullyDiscarded',
+        defaultValue: true,
+      );
       final remainingQuantity = JsonParser.getInt(result, 'RemainingQuantity');
-      final quantityDiscarded = JsonParser.getInt(result, 'QuantityDiscarded', defaultValue: quantity ?? 1);
+      final quantityDiscarded = JsonParser.getInt(
+        result,
+        'QuantityDiscarded',
+        defaultValue: quantity ?? 1,
+      );
 
       if (itemFullyDiscarded) {
         widget.character.contents.remove(itemId);
@@ -515,9 +567,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
       }
       if (widget.onRefresh != null) await widget.onRefresh!();
     } on ApiException catch (err) {
-      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to discard item.';
+      final errorMessage = err.message.isNotEmpty
+          ? err.message
+          : 'Failed to discard item.';
       _showSnackBar(errorMessage, isError: true);
-      if (err.statusCode == 409 && widget.onRefresh != null) await widget.onRefresh!();
+      if (err.statusCode == 409 && widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
     } catch (err) {
       _showSnackBar('Unexpected error: $err', isError: true);
     } finally {
@@ -544,7 +600,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
         characterId: widget.character.id,
         consolidateAll: true,
       );
-      final totalStacksRemoved = JsonParser.getInt(result, 'TotalStacksRemoved');
+      final totalStacksRemoved = JsonParser.getInt(
+        result,
+        'TotalStacksRemoved',
+      );
       final message = JsonParser.getString(
         result,
         'Message',
@@ -555,9 +614,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
       if (mounted) _showSnackBar(message);
       if (widget.onRefresh != null) await widget.onRefresh!();
     } on ApiException catch (err) {
-      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to consolidate stacks.';
+      final errorMessage = err.message.isNotEmpty
+          ? err.message
+          : 'Failed to consolidate stacks.';
       _showSnackBar(errorMessage, isError: true);
-      if (err.statusCode == 409 && widget.onRefresh != null) await widget.onRefresh!();
+      if (err.statusCode == 409 && widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
     } catch (err) {
       _showSnackBar('Unexpected error: $err', isError: true);
     } finally {
@@ -565,7 +628,12 @@ class _InventoryPanelState extends State<InventoryPanel> {
     }
   }
 
-  void _showDiscardDialog(String itemId, String itemName, int quantity, bool isStackable) {
+  void _showDiscardDialog(
+    String itemId,
+    String itemName,
+    int quantity,
+    bool isStackable,
+  ) {
     if (!isStackable || quantity <= 1) {
       showDialog<bool>(
         context: context,
@@ -573,8 +641,14 @@ class _InventoryPanelState extends State<InventoryPanel> {
           title: const Text('Discard Item'),
           content: Text('Discard $itemName?'),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Discard')),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Discard'),
+            ),
           ],
         ),
       ).then((confirmed) {
@@ -598,32 +672,48 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    onPressed: discardQuantity > 1 ? () => setDialogState(() => discardQuantity--) : null,
+                    onPressed: discardQuantity > 1
+                        ? () => setDialogState(() => discardQuantity--)
+                        : null,
                     icon: const Icon(Icons.remove),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Theme.of(context).colorScheme.outline),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text('$discardQuantity', style: Theme.of(context).textTheme.titleLarge),
+                    child: Text(
+                      '$discardQuantity',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                   IconButton(
-                    onPressed: discardQuantity < quantity ? () => setDialogState(() => discardQuantity++) : null,
+                    onPressed: discardQuantity < quantity
+                        ? () => setDialogState(() => discardQuantity++)
+                        : null,
                     icon: const Icon(Icons.add),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               TextButton(
-                onPressed: () => setDialogState(() => discardQuantity = quantity),
+                onPressed: () =>
+                    setDialogState(() => discardQuantity = quantity),
                 child: const Text('Discard All'),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(null), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(discardQuantity),
               child: const Text('Discard'),
@@ -651,7 +741,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
       final newStack = result['NewStack'] as Map<String, dynamic>?;
 
       if (originalStack != null) {
-        final remainingQty = JsonParser.getInt(originalStack, 'RemainingQuantity');
+        final remainingQty = JsonParser.getInt(
+          originalStack,
+          'RemainingQuantity',
+        );
         final details = _enrichedInventory[itemId];
         if (details != null) details['Quantity'] = remainingQty;
       }
@@ -670,9 +763,13 @@ class _InventoryPanelState extends State<InventoryPanel> {
         _showSnackBar('Split $quantity items into new stack');
       }
     } on ApiException catch (err) {
-      final errorMessage = err.message.isNotEmpty ? err.message : 'Failed to split stack.';
+      final errorMessage = err.message.isNotEmpty
+          ? err.message
+          : 'Failed to split stack.';
       _showSnackBar(errorMessage, isError: true);
-      if (err.statusCode == 409 && widget.onRefresh != null) await widget.onRefresh!();
+      if (err.statusCode == 409 && widget.onRefresh != null) {
+        await widget.onRefresh!();
+      }
     } catch (err) {
       _showSnackBar('Unexpected error: $err', isError: true);
     } finally {
@@ -703,26 +800,40 @@ class _InventoryPanelState extends State<InventoryPanel> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   IconButton(
-                    onPressed: splitQuantity > 1 ? () => setDialogState(() => splitQuantity--) : null,
+                    onPressed: splitQuantity > 1
+                        ? () => setDialogState(() => splitQuantity--)
+                        : null,
                     icon: const Icon(Icons.remove),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Theme.of(context).colorScheme.outline),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text('$splitQuantity', style: Theme.of(context).textTheme.titleLarge),
+                    child: Text(
+                      '$splitQuantity',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                   ),
                   IconButton(
-                    onPressed: splitQuantity < maxSplit ? () => setDialogState(() => splitQuantity++) : null,
+                    onPressed: splitQuantity < maxSplit
+                        ? () => setDialogState(() => splitQuantity++)
+                        : null,
                     icon: const Icon(Icons.add),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text('Original stack will have ${quantity - splitQuantity} items',
-                  style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                'Original stack will have ${quantity - splitQuantity} items',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: () => setDialogState(() => splitQuantity = maxSplit),
@@ -731,7 +842,10 @@ class _InventoryPanelState extends State<InventoryPanel> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(null), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(null),
+              child: const Text('Cancel'),
+            ),
             TextButton(
               onPressed: () => Navigator.of(context).pop(splitQuantity),
               child: const Text('Split'),
@@ -755,7 +869,9 @@ class _SectionHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: theme.colorScheme.primary, width: 2)),
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.primary, width: 2),
+        ),
       ),
       child: Text(
         title,
@@ -792,7 +908,9 @@ class _InventorySlot extends StatelessWidget {
     final itemRarity = itemDetails?['Rarity'] ?? 'common';
     final isStackable = itemDetails?['Stackable'] == true;
     final slotLabel = _wornOnLabel(itemDetails);
-    final displayName = (isStackable && quantity > 1) ? '$itemName x$quantity' : itemName;
+    final displayName = (isStackable && quantity > 1)
+        ? '$itemName x$quantity'
+        : itemName;
 
     return InkWell(
       onTap: onTap,
@@ -811,11 +929,17 @@ class _InventorySlot extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(RpgIcons.getEquipmentSlotIcon(slotLabel), size: 20, color: colorScheme.onSurfaceVariant),
+            Icon(
+              RpgIcons.getEquipmentSlotIcon(slotLabel),
+              size: 20,
+              color: colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 8),
             Text(
               _titleCase(slotLabel),
-              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -899,7 +1023,8 @@ class _InventoryGridItemState extends State<_InventoryGridItem> {
 
     final itemRarity = (widget.itemDetails?['Rarity'] as String?) ?? 'common';
     final effectiveStackable = widget.itemDetails?['Stackable'] == true;
-    final itemName = widget.itemDetails?['Name'] as String? ?? widget.itemId;
+    // Never show a raw item UUID; enrichment failures fall back to a placeholder.
+    final itemName = widget.itemDetails?['Name'] as String? ?? 'Unknown Item';
     final rarityColor = _rarityColor(itemRarity);
     final showCount = effectiveStackable && widget.quantity > 1;
 
@@ -917,10 +1042,18 @@ class _InventoryGridItemState extends State<_InventoryGridItem> {
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: rarityColor.withValues(alpha: 0.5), width: 2),
+                  border: Border.all(
+                    color: rarityColor.withValues(alpha: 0.5),
+                    width: 2,
+                  ),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: _buildIconZone(context, rarityColor, itemName, showCount: showCount),
+                child: _buildIconZone(
+                  context,
+                  rarityColor,
+                  itemName,
+                  showCount: showCount,
+                ),
               ),
             ),
             const SizedBox(height: 4),
@@ -1034,7 +1167,9 @@ class _InventoryGridItemState extends State<_InventoryGridItem> {
                 height: 14,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onPrimaryContainer),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    colorScheme.onPrimaryContainer,
+                  ),
                 ),
               )
             : const Icon(Icons.play_arrow_rounded, size: 14),
@@ -1052,7 +1187,9 @@ class _InventoryGridItemState extends State<_InventoryGridItem> {
                 height: 14,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(colorScheme.onTertiaryContainer),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    colorScheme.onTertiaryContainer,
+                  ),
                 ),
               )
             : const Icon(Icons.shield_outlined, size: 14),

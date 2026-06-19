@@ -289,8 +289,11 @@ def process_mechanical_segment(segment_def: dict, character: dict, active_segmen
             f"Mechanical segment {segment_def.get('SegmentID')} has no challenges or combat - "
             f"segment definition is incomplete or corrupted"
         )
-        overall_outcome = "normal"
-        results["SystemNote"] = "This segment had no challenges configured. Normal outcome granted."
+        # Fail closed: a mechanical segment is expected to have challenges and/or
+        # combat. Granting "normal" here would hand out normal-tier rewards for a
+        # malformed segment with zero risk, so resolve it as a failure instead.
+        overall_outcome = "failure"
+        results["SystemNote"] = "This segment had no challenges or combat configured; resolved as failure."
     elif "death" in outcomes:
         overall_outcome = "death"
     elif "failure" in outcomes:
@@ -349,6 +352,14 @@ def determine_next_segment(segment_def: dict, active_segment: dict, outcome: str
     logger.debug(f"determine_next_segment called for {active_segment_id}")
     logger.debug(f"  segment_type: {segment_type}")
     logger.debug(f"  outcome: {outcome}")
+
+    # A death outcome always ends the story: the character has died (see
+    # apply_death_or_unconscious_outcome), so there is no next segment even if
+    # the content authored a Death.NextSegmentID. The Death narrative/effects are
+    # still surfaced via the outcome results.
+    if (outcome or "").lower() == "death":
+        logger.info(f"Death outcome for {active_segment_id} - story ends")
+        return "", {"SelectionMethod": "death"}
 
     if segment_type == "decision":
         # Use decision to determine next segment (player choice)

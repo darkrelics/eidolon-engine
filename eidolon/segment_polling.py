@@ -6,6 +6,7 @@ Provides functions for the segment processing poller.
 
 from botocore.exceptions import ClientError
 
+from eidolon.constants import SEGMENT_RETRY_MIN_REMAINING_SECONDS, SEGMENT_STUCK_RETRY_SECONDS
 from eidolon.dynamo import TableName, dynamo
 from eidolon.logger import logger
 from eidolon.state_machines import claim_segment_for_processing as state_machine_claim
@@ -52,10 +53,17 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
     Get mechanical segments stuck in pending/processing that have time to retry.
 
     Criteria:
-    - StartTime > 5 minutes ago (stuck)
-    - EndTime > 60 seconds from now (enough time to process)
+    - StartTime more than SEGMENT_STUCK_RETRY_SECONDS ago (a worker normally
+      finishes within seconds of StartTime, so the message was lost or the
+      worker died)
+    - EndTime more than SEGMENT_RETRY_MIN_REMAINING_SECONDS from now (enough
+      time to process before expiry)
     - ProcessingStatus in (pending, processing)
     - SegmentType = mechanical
+
+    Segments too short to ever satisfy both bounds are recovered at expiry
+    instead: the poller requeues them once, then resolves them with the
+    exceptional outcome (see ops_segment_poller).
 
     Args:
         max_segments: Maximum number of segments to retrieve
@@ -64,8 +72,8 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
         List of stuck mechanical segment records
     """
     current_time = now_unix()
-    five_minutes_ago = current_time - 300
-    sixty_seconds_future = current_time + 60
+    stuck_cutoff = current_time - SEGMENT_STUCK_RETRY_SECONDS
+    min_remaining_cutoff = current_time + SEGMENT_RETRY_MIN_REMAINING_SECONDS
 
     try:
         # Use scan since we need to filter on StartTime which isn't indexed
@@ -82,8 +90,8 @@ def get_stuck_mechanical_segments(max_segments: int) -> list:
             ExpressionAttributeValues={
                 ":status": "active",
                 ":mechanical": "mechanical",
-                ":old_time": five_minutes_ago,
-                ":min_time": sixty_seconds_future,
+                ":old_time": stuck_cutoff,
+                ":min_time": min_remaining_cutoff,
                 ":pending": "pending",
                 ":processing": "processing",
             },

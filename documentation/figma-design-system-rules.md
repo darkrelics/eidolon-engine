@@ -639,11 +639,11 @@ eidolon-engine/
 ├── server/              # Go SSH MUD server
 ├── lambda/              # Python Lambda functions
 ├── eidolon/             # Shared Python libraries
-├── deployment/          # AWS CDK infrastructure
+├── scripts/             # Deployment orchestration (eidolon_deployment.py)
 ├── scripts_lua/         # Game logic scripts
 ├── documentation/       # All documentation
 ├── data/               # Game configuration
-├── cloudformation/     # CloudFormation templates
+├── cf/                 # CloudFormation templates
 └── buildspec/          # CodeBuild specifications
 ```
 

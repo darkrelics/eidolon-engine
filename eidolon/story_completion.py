@@ -133,5 +133,7 @@ def complete_story(character_id: str, story_id: str, story_instance_id, outcome:
 
     segments_completed = len(history.get("SegmentHistory", [])) if history else 0
     rewards = calculate_story_rewards(story_metadata, outcome, segments_completed)
-    if rewards.get("items") or rewards.get("currency", 0) > 0:
+    # calculate_story_rewards folds any currency into the items list as coin
+    # entries, so a single items check covers both items and currency rewards.
+    if rewards.get("items"):
         apply_story_rewards(character_id, rewards)

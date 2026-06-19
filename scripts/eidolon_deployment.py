@@ -1,5 +1,6 @@
 """Deploy Eidolon infrastructure using CloudFormation templates."""
 
+import argparse
 import sys
 import time
 from pathlib import Path
@@ -9,7 +10,7 @@ import yaml
 from botocore.exceptions import ClientError
 from deployment.acm import certificate_exists, wait_for_certificate_validation
 from deployment.apigateway import force_api_gateway_deployment
-from deployment.cloudformation import deploy_stack, get_stack_output
+from deployment.cloudformation import configure_template_uploads, deploy_stack, get_stack_output
 from deployment.cloudfront import wait_for_cloudfront_operational
 from deployment.codebuild import trigger_build
 from deployment.config_update import update_config_from_stacks
@@ -194,18 +195,66 @@ def extract_deploy_config(full_config: dict) -> dict:
     }
 
 
-def collect_deployment_params(config: dict) -> dict:
-    """Collect deployment parameters, prompting for overrides.
+def validate_required_params(config: dict) -> dict:
+    """Validate required config values are present without prompting.
 
-    Config values are shown as defaults. User can press Enter to accept
-    or type a new value to override.
+    Used in non-interactive mode in place of collect_deployment_params: the
+    system check that must pass before deployment proceeds. Exits with a
+    non-zero status if anything required is missing or the mode is invalid.
 
     Args:
         config: Flat config dictionary from extract_deploy_config
 
     Returns:
+        The config dictionary unchanged (when all required values are present)
+    """
+    required = [
+        "region",
+        "deployment_mode",
+        "s3_bucket",
+        "client_bucket",
+        "github_owner",
+        "github_repo",
+        "github_branch",
+        "domain",
+        "route53_zone_id",
+        "api_host",
+        "client_host",
+    ]
+    mode = config.get("deployment_mode", "")
+    if mode in ["mud", "hybrid"]:
+        required.append("scripts_bucket")
+
+    missing = [key for key in required if not config.get(key)]
+    if missing:
+        print(f"Error: Missing required config value(s): {', '.join(missing)}")
+        sys.exit(2)
+
+    if mode not in VALID_DEPLOYMENT_MODES:
+        print(f"Error: Invalid deployment mode: {mode}")
+        print(f"  Valid modes: {', '.join(VALID_DEPLOYMENT_MODES)}")
+        sys.exit(2)
+
+    return config
+
+
+def collect_deployment_params(config: dict, interactive: bool = True) -> dict:
+    """Collect deployment parameters, prompting for overrides.
+
+    Config values are shown as defaults. User can press Enter to accept
+    or type a new value to override. In non-interactive mode the config
+    values are used as-is after a required-field check.
+
+    Args:
+        config: Flat config dictionary from extract_deploy_config
+        interactive: When False, skip all prompts and use config as-is
+
+    Returns:
         Updated config dictionary with user overrides applied
     """
+    if not interactive:
+        return validate_required_params(config)
+
     print("\nDeployment Parameters:")
 
     config["region"] = prompt_param("AWS Region", config.get("region", ""), required=True)
@@ -235,7 +284,48 @@ def collect_deployment_params(config: dict) -> dict:
     return config
 
 
+def parse_args(argv=None):
+    """Parse command-line arguments.
+
+    Args:
+        argv: Optional argument list (defaults to sys.argv)
+
+    Returns:
+        Parsed argparse namespace
+    """
+    parser = argparse.ArgumentParser(
+        description="Deploy Eidolon infrastructure using CloudFormation templates.",
+    )
+    parser.add_argument(
+        "-y",
+        "--yes",
+        "--non-interactive",
+        dest="non_interactive",
+        action="store_true",
+        help=(
+            "Run without prompts: validate config and AWS resources, then deploy if "
+            "all checks pass; exit with a non-zero status otherwise."
+        ),
+    )
+    parser.add_argument(
+        "--branch",
+        dest="branch",
+        default=None,
+        help="Override the GitHub branch to build and deploy (defaults to config GitHub.Branch).",
+    )
+    parser.add_argument(
+        "--mode",
+        dest="mode",
+        default=None,
+        help="Override the deployment mode (mud/incremental/hybrid).",
+    )
+    return parser.parse_args(argv)
+
+
 def main():
+    args = parse_args()
+    interactive = not args.non_interactive
+
     base_dir = Path(__file__).resolve().parent.parent
     config_path = base_dir / "config.yml"
 
@@ -246,8 +336,14 @@ def main():
     with open(config_path, "r", encoding="utf-8") as config_file:
         config = extract_deploy_config(yaml.safe_load(config_file))
 
-    # Collect parameters interactively (config values shown as defaults)
-    config = collect_deployment_params(config)
+    # CLI overrides take precedence over config.yml values
+    if args.branch:
+        config["github_branch"] = args.branch
+    if args.mode:
+        config["deployment_mode"] = args.mode
+
+    # Collect parameters (interactive prompts, or a required-field check when -y)
+    config = collect_deployment_params(config, interactive=interactive)
 
     # Step 1: Validate
     print("\n=== Step 1: Validating Configuration ===")
@@ -271,10 +367,13 @@ def main():
 
     print_deployment_plan(config)
 
-    response = input("Proceed with deployment? [Y/n]: ").strip().lower()
-    if response == "n":
-        print("Deployment cancelled")
-        sys.exit(0)
+    if interactive:
+        response = input("Proceed with deployment? [Y/n]: ").strip().lower()
+        if response == "n":
+            print("Deployment cancelled")
+            sys.exit(0)
+    else:
+        print("Non-interactive mode: all checks passed, proceeding with deployment")
 
     # Extract config values
     region = config.get("region", "")
@@ -294,6 +393,10 @@ def main():
     # Initialize AWS clients
     cf = boto3.client("cloudformation", region_name=region)
     cf_dir = base_dir / "cf"
+
+    # Stage oversized templates (over CloudFormation's inline limit) to the
+    # Lambda artifacts bucket so they can be deployed via TemplateURL.
+    configure_template_uploads(s3_bucket, region)
 
     # Step 2: Deploy IAM Roles
     print("\n=== Step 2: Deploying IAM Roles ===")

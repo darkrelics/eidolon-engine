@@ -1,8 +1,8 @@
 # Eidolon Engine Incremental Game Implementation Guide
 
-This guide documents the actual implementation of the Incremental Game system as deployed in production. For architecture diagrams and design concepts, see incremental-design.md. For current bugs and missing features, see INCREMENTAL-STATUS.md.
+This guide documents the actual implementation of the Incremental Game system as deployed in production. For architecture diagrams and design concepts, see incremental-design.md. For current bugs and remaining work, see GitHub issues and the [Incremental Remediation Plan](incremental-remediation-plan.md).
 
-**Deployment Status:** All infrastructure deployed and operational. Core gameplay functional with known bugs in economy system and death mechanics.
+**Deployment Status:** All infrastructure deployed and operational. Core gameplay functional, including the economy (currency rewards, store purchases) and death mechanics.
 
 ## Table of Contents
 
@@ -20,9 +20,9 @@ This guide documents the actual implementation of the Incremental Game system as
 
 **AWS Infrastructure:**
 
-- 10 CDK Stacks: CodeBuild, DynamoDB, Lambda, Player, Character, Story, S3, CloudWatch, API, Client
-- 17 Lambda Functions deployed (18 total, cognito-player-delete not deployed)
-- 14 DynamoDB Tables with RemovalPolicy.RETAIN
+- 12 CloudFormation Stacks (`cf/eidolon-*.yml`; see deployment.md for the inventory)
+- Lambda Functions deployed per mode (cognito-player-delete not deployed)
+- 15 DynamoDB Tables with deletion protection enabled
 - 2 SQS Queues (processing, advancement)
 - 1 EventBridge Rule (1-minute polling, disabled by default)
 - 1 SSM Parameter (polling state)
@@ -43,7 +43,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 
 ### 2.1 DynamoDB Tables
 
-**14 Tables:**
+**15 Tables:**
 
 **Core Tables:**
 
@@ -52,6 +52,7 @@ All API calls authenticated via Cognito JWT tokens. Lambda functions use shared 
 - archetypes: Character class templates
 - items: Item instances
 - prototypes: Item templates
+- stores: Live store stock counts (catalog stays in JSON config)
 - rooms: MUD world rooms
 - exits: MUD world connections
 - motd: Message of the day
@@ -323,7 +324,7 @@ Health = MaxHealth - len(Wounds)
 
 ### 4.3 Currency System
 
-**Implementation:** eidolon/items.py, eidolon/story_rewards.py
+**Implementation:** eidolon/currency.py, eidolon/items.py, eidolon/story_rewards.py
 
 **Fundamental Units (FU):**
 
@@ -346,17 +347,21 @@ Gold Coin: 2400 FU (PrototypeID: 6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d)
 
 **Stack Management:**
 
-- Coins are stackable items with Quantity field
-- Stack merging uses UUIDv7 oldest-wins logic
-- Automatic consolidation when receiving rewards
-- Implemented in items.py:merge_stacks(), find_matching_stack()
+- Coins are ordinary stackable items with unbounded stacks (prototype
+  `MaxStack: -1`; a MaxStack of zero or less means no limit)
+- New coins merge into existing top-level stacks by PrototypeID
+- Implemented in items.py (stack_merge_quantity, load_top_level_stacks)
 
 **Currency Application:**
 
-- Story rewards converted to coins via create_coins_from_value()
-- Coins added to inventory with proper stacking
-- Resources.Value tracks total currency in FU
-- Characters start with 1 gold coin (2400 FU)
+- Story reward tiers carry a `currency` amount in FU;
+  calculate_story_rewards() converts it into coin item entries
+  (currency.coin_rewards_for_amount, greedy split) and apply_story_rewards()
+  grants them like any other item reward
+- The balance is derived from the coin stacks (currency.wallet_total);
+  there is no Resources.Value scalar
+- Store purchases spend coins atomically and re-mint canonical change
+- Characters start with no coins; currency is earned through stories
 
 **Design Specification:** See currency.md for complete currency system design.
 
@@ -502,17 +507,11 @@ Gold Coin: 2400 FU (PrototypeID: 6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d)
     - Queue mechanical segments
 14. If story ends:
     - Clear character: GameMode="None", remove ActiveStoryID/ActiveSegmentID
-    - Calculate story rewards
-    - Call apply_story_rewards() - EMPTY FUNCTION (bug)
+    - Calculate story rewards (items plus the tier's currency converted to coins)
+    - Call apply_story_rewards() to grant them
     - Update StoryHistory with FinalOutcome
 15. Delete processed ActiveSegment
 16. Check if any active segments remain, update polling state
-
-**Known Issues:**
-
-- apply_combat_rewards() is empty (story_rewards.py:72-95)
-- apply_story_rewards() is empty (story_rewards.py:51-66)
-- Story rewards never applied (currency stays at 0)
 
 **Eidolon Functions Used:**
 
@@ -521,7 +520,7 @@ Gold Coin: 2400 FU (PrototypeID: 6e9f1d4a-3c8b-4a7f-d2e5-8b3f6c9a1e7d)
 - process_decision_segment (segment_processing.py)
 - get_character (character_data.py)
 - apply_death_or_unconscious_outcome (mechanics.py)
-- apply_combat_rewards (story_rewards.py) - EMPTY
+- apply_story_rewards (story_rewards.py)
 - record_segment_history (segment_history.py)
 - add_segment_to_history (story_history.py)
 - update_story_history_xp (story_history.py)
@@ -892,11 +891,11 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 
 **Resources Field**
 
-- Characters created with Resources: {"Value": 2400} (start with 1 gold coin)
-- [OK] Resources.Value now tracks total currency in FU
-- [OK] Updated by apply_story_rewards() when receiving currency
-- Frontend ready to display but backend never sends data
-- Impact: No currency display
+- Characters are created with an empty Resources: {} (vestigial field)
+- Currency is not a scalar: the balance is derived from the character's coin
+  item stacks (see currency.md); apply_story_rewards() grants coins as items
+- Frontend currency display derives the balance from the coin stacks
+- Impact: dedicated balance field in API responses not yet provided
 
 **CharState Field:**
 
@@ -967,25 +966,17 @@ Character _applyUpdates(Character character, Map<String, dynamic> updates) {
 
 ### 9.1 Infrastructure as Code
 
-**10 CDK Stacks:**
-
-1. CodeBuild: Build projects and artifacts bucket
-2. DynamoDB: 14 tables with managed policy
-3. Lambda: Shared layer and execution role
-4. Player: Cognito User Pool and cognito-player-new function
-5. Character: 7 Lambda functions
-6. Story: 9 Lambda functions, SQS queues, EventBridge, SSM
-7. S3: Scripts bucket (MUD/Hybrid only)
-8. CloudWatch: Logging (MUD/Hybrid only)
-9. API: API Gateway with Lambda integrations
-10. Client: CloudFront, S3, automated portal build
+Infrastructure is plain CloudFormation: the `cf/eidolon-*.yml` templates,
+deployed in dependency order by `scripts/eidolon_deployment.py` according to
+the deployment mode. The canonical stack inventory and sequence are
+maintained in [Deployment Guide](deployment.md#system-architecture).
 
 **Post-Deployment:**
 
-- Phase 11: Lambda function code updates from S3
-- Cognito trigger configuration for imported pools
+- Lambda function code updates from S3 artifacts
 - S3 bucket policies for CloudFront
-- Portal build via CodeBuild
+- Client build via CodeBuild
+- `config.yml` updated with stack outputs
 
 ### 9.2 Deployment Modes
 
@@ -1106,16 +1097,14 @@ Required testing for client-side stack handling:
 
 **Implementation Files:**
 
-- Lambda: lambda/\*.py (18 files)
-- Eidolon Library: eidolon/\*.py (45 files, 9,640 lines)
-- Flutter: incremental/lib/\*_/_.dart (67 files)
-- Deployment: deployment/stacks/\*.py (13 files)
+- Lambda: lambda/\*.py
+- Eidolon Library: eidolon/\*.py
+- Flutter: incremental/lib/\*_/_.dart
+- Deployment: cf/eidolon-\*.yml templates driven by scripts/eidolon_deployment.py
 
 **Documentation:**
 
-- INCREMENTAL-STATUS.md - Current status, bugs, missing features
-- LAMBDA-REVIEW.md - Complete Lambda review (17 functions)
-- FLUTTER-REVIEW.md - Complete Flutter review (67 files)
+- incremental-remediation-plan.md - Current findings and remaining work
 - incremental-api.md - API endpoint specifications
 - incremental-design.md - Architecture and design
 - health.md - Health system specification

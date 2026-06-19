@@ -10,12 +10,18 @@ Handles different segment types appropriately and manages polling state.
 
 from botocore.exceptions import ClientError
 
+from eidolon.constants import SEGMENT_PROCESSING_GRACE_SECONDS
 from eidolon.environment import MAX_SEGMENTS_PER_POLL, SEGMENT_QUEUE_URL, STORY_ADVANCEMENT_QUEUE_URL
 from eidolon.logger import log_lambda_statistics, logger
 from eidolon.polling import get_polling_state, manage_eventbridge_rule, update_polling_state
 from eidolon.segment_polling import check_active_segments_exist, get_segments_approaching_expiry, get_stuck_mechanical_segments
-from eidolon.segment_state import mark_segment_as_completed_exceptional, reset_segment_processing_status
+from eidolon.segment_state import (
+    mark_segment_as_completed_exceptional,
+    mark_segment_recovery_attempted,
+    reset_segment_processing_status,
+)
 from eidolon.sqs import send_message_batch
+from eidolon.time_utils import now_unix
 
 
 def try_mark_segment_exceptional(active_segment_id: str) -> bool:
@@ -32,6 +38,22 @@ def try_mark_segment_exceptional(active_segment_id: str) -> bool:
         return True
     except Exception as err:
         logger.error(f"Failed to mark mechanical segment as exceptional: {active_segment_id} Error: {err}")
+        return False
+
+
+def try_flag_recovery_attempt(active_segment_id: str) -> bool:
+    """Attempt to flag a segment for its single recovery retry. Non-fatal on failure.
+
+    Args:
+        active_segment_id: Segment to flag
+
+    Returns:
+        True when the flag was set and the caller should requeue the segment
+    """
+    try:
+        return mark_segment_recovery_attempted(active_segment_id)
+    except Exception as err:
+        logger.error(f"Failed to flag recovery attempt for {active_segment_id} Error: {err}")
         return False
 
 
@@ -66,6 +88,7 @@ def poll_segments() -> None:
 
     segments_to_advance = 0
     segments_to_process = 0
+    segments_recovered = 0
     segments_marked_exceptional = 0
 
     # 1. Handle segments approaching expiry (within 60 seconds)
@@ -73,6 +96,8 @@ def poll_segments() -> None:
         expiring_segments = get_segments_approaching_expiry(MAX_SEGMENTS_PER_POLL)
 
         advancement_messages = []
+        recovery_messages = []
+        current_time = now_unix()
         for segment in expiring_segments:
             active_segment_id = segment.get("ActiveSegmentID")
             processing_status = segment.get("ProcessingStatus")
@@ -82,19 +107,37 @@ def poll_segments() -> None:
                 advancement_messages.append({"body": active_segment_id})
                 logger.debug(f"Segment ready for advancement: {active_segment_id}")
             elif processing_status == "processing":
-                # Worker is actively processing - do not interfere
-                # The stuck-segment handler will deal with this if it takes too long
-                logger.debug(f"Segment still being processed, skipping: {active_segment_id}")
+                # A worker holds the claim - do not interfere while it is
+                # plausibly alive. Once EndTime is well past, the worker is
+                # dead (its timeout is far shorter than the grace) and the
+                # segment would otherwise stay "processing" forever.
+                end_time = int(segment.get("EndTime", 0) or 0)
+                if end_time and current_time > end_time + SEGMENT_PROCESSING_GRACE_SECONDS:
+                    if try_mark_segment_exceptional(active_segment_id):
+                        advancement_messages.append({"body": active_segment_id})
+                        segments_marked_exceptional += 1
+                        logger.warning(f"Resolved dead-worker segment as exceptional: {active_segment_id}")
+                else:
+                    logger.debug(f"Segment still being processed, skipping: {active_segment_id}")
             else:
                 # Not processed in time (pending) - check segment type before marking exceptional
                 segment_type = segment.get("SegmentType")
 
                 if segment_type == "mechanical":
-                    # Only mechanical segments get exceptional outcome (system failure protection)
-                    if try_mark_segment_exceptional(active_segment_id):
-                        advancement_messages.append({"body": active_segment_id})
-                        segments_marked_exceptional += 1
-                        logger.warning(f"Marked unprocessed mechanical segment as exceptional: {active_segment_id}")
+                    # Give the segment one recovery requeue before falling back
+                    # to the exceptional outcome (system failure protection).
+                    # Segments shorter than the stuck-scan window get their only
+                    # retry here. The flag write is conditional, so concurrent
+                    # pollers cannot double-queue the retry; if it races with a
+                    # worker claim, the next poll resolves the segment.
+                    if not segment.get("RecoveryAttempted") and try_flag_recovery_attempt(active_segment_id):
+                        recovery_messages.append({"body": active_segment_id})
+                        logger.warning(f"Requeued unprocessed mechanical segment for recovery: {active_segment_id}")
+                    elif segment.get("RecoveryAttempted"):
+                        if try_mark_segment_exceptional(active_segment_id):
+                            advancement_messages.append({"body": active_segment_id})
+                            segments_marked_exceptional += 1
+                            logger.warning(f"Marked unprocessed mechanical segment as exceptional: {active_segment_id}")
                 else:
                     # Decision segments should flow through for normal processing
                     # Decision: will apply DefaultDecision or failure
@@ -113,10 +156,17 @@ def poll_segments() -> None:
                 result = send_message_batch(STORY_ADVANCEMENT_QUEUE_URL, advancement_messages)
                 segments_to_advance = result.get("successful", 0)
 
+        if recovery_messages:
+            if not SEGMENT_QUEUE_URL:
+                logger.error("SEGMENT_QUEUE_URL not set, cannot requeue unprocessed segments")
+            else:
+                result = send_message_batch(SEGMENT_QUEUE_URL, recovery_messages)
+                segments_recovered = result.get("successful", 0)
+
     except Exception as err:
         logger.error(f"Failed to process expiring segments: {err}", exc_info=True)
 
-    # 2. Handle stuck mechanical segments (>5 minutes old with time to retry)
+    # 2. Handle stuck mechanical segments (stuck beyond the retry threshold with time to retry)
     try:
         stuck_segments = get_stuck_mechanical_segments(MAX_SEGMENTS_PER_POLL)
 
@@ -144,7 +194,8 @@ def poll_segments() -> None:
 
     # Log statistics
     logger.info(
-        f"Polling complete - Advanced: {segments_to_advance}, Retried: {segments_to_process}, Marked exceptional: {segments_marked_exceptional}"
+        f"Polling complete - Advanced: {segments_to_advance}, Retried: {segments_to_process}, "
+        f"Recovered: {segments_recovered}, Marked exceptional: {segments_marked_exceptional}"
     )
 
     # Handle polling state transitions

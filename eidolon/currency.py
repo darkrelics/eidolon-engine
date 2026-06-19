@@ -1,15 +1,18 @@
 """Currency management: coins as stackable items, the wallet derived from them.
 
-Currency is held as stackable coin items at the character's top-level Contents
-(the purse). A coin prototype is any prototype carrying ``Metadata.Denomination``;
-its worth is the prototype's ``Value`` in Fundamental Units (FU). The smallest
-coin (bronze) is 10 FU, so every coin-representable amount is a multiple of 10.
+Coins are ordinary stackable items with unbounded stacks (their prototypes set
+``MaxStack: -1``), held at the character's top-level Contents (the purse). A
+coin prototype is any prototype carrying ``Metadata.Denomination``; its worth is
+the prototype's ``Value`` in Fundamental Units (FU). The smallest coin (bronze)
+is 10 FU, so every coin-representable amount is a multiple of 10.
 
-The wallet is canonicalized on every change: after a debit or credit the coins
-are replaced by the minimal set that represents the new total (greedy, largest
-denomination first), so a character holds at most one stack per denomination and
-the wallet total is the single source of truth - there is no separate scalar
-balance. Coin ItemIDs therefore change whenever the balance changes.
+Currency is granted through the standard item-reward path:
+:func:`coin_rewards_for_amount` converts an FU amount into coin item entries
+that merge into the character's existing stacks like any other stackable item.
+Spending canonicalizes: a purchase replaces the coin stacks with the minimal
+set for the post-payment balance (greedy, largest denomination first), so coin
+ItemIDs change when coins are spent. The wallet total derived from the stacks
+is the single source of truth - there is no separate scalar balance.
 """
 
 from functools import cache
@@ -87,6 +90,24 @@ def wallet_total(character: dict) -> int:
     return total_from_stacks(find_coin_stacks(character))
 
 
+def greedy_coin_split(amount_fu: int) -> tuple:
+    """Split ``amount_fu`` into coins greedily, largest denomination first.
+
+    Returns ``([(prototype_id, quantity)], remainder)`` where the remainder is
+    whatever portion of the amount is smaller than the smallest coin.
+    """
+    quantities: list = []
+    remaining = amount_fu
+    for prototype_id, value in coin_registry():
+        if remaining <= 0:
+            break
+        count = remaining // value
+        if count > 0:
+            quantities.append((prototype_id, int(count)))
+            remaining -= count * value
+    return quantities, remaining
+
+
 def canonical_coin_quantities(total_fu: int) -> list:
     """Return ``[(prototype_id, quantity)]`` for the minimal coins representing total_fu.
 
@@ -96,19 +117,27 @@ def canonical_coin_quantities(total_fu: int) -> list:
     if total_fu < 0:
         raise ValueError("Cannot represent negative currency")
 
-    quantities: list = []
-    remaining = total_fu
-    for prototype_id, value in coin_registry():
-        if remaining <= 0:
-            break
-        count = remaining // value
-        if count > 0:
-            quantities.append((prototype_id, int(count)))
-            remaining -= count * value
-
-    if remaining != 0:
+    quantities, remainder = greedy_coin_split(total_fu)
+    if remainder != 0:
         raise ValueError(f"Amount {total_fu} FU is not representable in the available coin denominations")
     return quantities
+
+
+def coin_rewards_for_amount(amount_fu: int) -> list:
+    """Convert an FU amount into ``[{"PrototypeID", "Quantity"}]`` reward entries.
+
+    Used by reward and drop paths to grant currency as ordinary stackable coin
+    items. Amounts that are not exactly representable are floored to the nearest
+    representable value; the dropped remainder is logged so bad reward data is
+    visible without failing the grant.
+    """
+    if amount_fu <= 0:
+        return []
+
+    quantities, remainder = greedy_coin_split(amount_fu)
+    if remainder:
+        logger.warning(f"Currency reward {amount_fu} FU is not coin-representable; dropping remainder {remainder}")
+    return [{"PrototypeID": prototype_id, "Quantity": quantity} for prototype_id, quantity in quantities]
 
 
 def plan_canonicalization(character_id: str, stacks: list, new_total: int) -> dict:
@@ -228,36 +257,3 @@ def build_contents_coin_update(character_id: str, character: dict, plan: dict, a
         update["Update"]["ConditionExpression"] = " AND ".join(conditions)
 
     return update
-
-
-def credit_coins(character_id: str, amount_fu: int) -> dict:
-    """Grant ``amount_fu`` of currency to a character as canonical coin stacks.
-
-    Provided for reward and drop paths (no caller grants currency yet). Reads the
-    wallet, canonicalizes to the new total, and commits the coin and Contents
-    changes in one transaction.
-
-    Returns the new wallet total in FU.
-    """
-    if amount_fu <= 0:
-        raise ValueError("Credit amount must be positive")
-
-    character = dynamo.get_item(TableName.CHARACTERS, {"CharacterID": character_id}, ProjectionExpression="CharacterID, Contents")
-    if not character:
-        raise ValueError("Character not found")
-
-    stacks = find_coin_stacks(character)
-    new_total = total_from_stacks(stacks) + amount_fu
-    plan = plan_canonicalization(character_id, stacks, new_total)
-
-    transact_items = coin_transaction_ops(plan)
-    transact_items.append(build_contents_coin_update(character_id, character, plan))
-
-    try:
-        dynamo.transact_write_items(transact_items)
-    except ClientError as err:
-        logger.error(f"Failed to credit {amount_fu} FU to {character_id}: {err}")
-        raise RuntimeError("Failed to credit currency") from err
-
-    logger.info(f"Credited {amount_fu} FU to {character_id}; new balance {new_total}")
-    return {"CurrencyTotal": new_total}

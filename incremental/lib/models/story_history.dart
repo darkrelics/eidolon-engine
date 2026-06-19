@@ -24,7 +24,9 @@ class StoryHistoryEntry {
 
   String get outcomeCategory {
     final normalized = outcome.toLowerCase();
-    if (normalized == 'exceptional' || normalized == 'success' || normalized == 'minimal') {
+    if (normalized == 'exceptional' ||
+        normalized == 'success' ||
+        normalized == 'minimal') {
       return 'success';
     }
     if (normalized == 'normal') {
@@ -61,7 +63,9 @@ class StoryHistoryEntry {
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
-    return other is StoryHistoryEntry && other.storyId == storyId && other.completedAt == completedAt;
+    return other is StoryHistoryEntry &&
+        other.storyId == storyId &&
+        other.completedAt == completedAt;
   }
 
   @override
@@ -120,6 +124,8 @@ class StoryHistoryStats {
     required this.totalXpGained,
   });
 
-  double get successRate => totalStories > 0 ? successfulStories / totalStories : 0.0;
-  double get failureRate => totalStories > 0 ? failedStories / totalStories : 0.0;
+  double get successRate =>
+      totalStories > 0 ? successfulStories / totalStories : 0.0;
+  double get failureRate =>
+      totalStories > 0 ? failedStories / totalStories : 0.0;
 }

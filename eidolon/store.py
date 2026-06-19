@@ -16,8 +16,8 @@ from eidolon.items import (
     build_item_from_prototype,
     distribute_into_stacks,
     get_item_prototype_full,
-    get_stack_space,
     load_top_level_stacks,
+    stack_merge_quantity,
 )
 from eidolon.logger import logger
 
@@ -173,7 +173,8 @@ def allocate_purchase(prototype: dict, prototype_id: str, quantity: int, top_lev
     """Plan the item records a purchase creates or tops up.
 
     Stackable purchases merge into existing top-level stacks first (up to
-    MaxStack), then mint new stacks; non-stackable purchases mint one record each.
+    MaxStack; a MaxStack of zero or less means the stack is unbounded), then
+    mint new stacks; non-stackable purchases mint one record each.
 
     Returns ``(item_ids, planned_new_items, planned_stack_updates, items_to_append)``
     where ``planned_stack_updates`` is ``(item_id, new_qty, expected_qty)`` tuples.
@@ -194,17 +195,14 @@ def allocate_purchase(prototype: dict, prototype_id: str, quantity: int, top_lev
         return item_ids, planned_new_items, planned_stack_updates, items_to_append
 
     max_stack = prototype.get("MaxStack", 99)
-    if max_stack <= 0:
-        max_stack = 99
 
     remaining_quantity = quantity
     for existing_id, current_qty in load_top_level_stacks(top_level, prototype_id):
         if remaining_quantity <= 0:
             break
-        space = get_stack_space(current_qty, max_stack)
-        if space <= 0:
+        add_qty = stack_merge_quantity(current_qty, remaining_quantity, max_stack)
+        if add_qty <= 0:
             continue
-        add_qty = min(remaining_quantity, space)
         remaining_quantity -= add_qty
         if existing_id not in item_ids:
             item_ids.append(existing_id)

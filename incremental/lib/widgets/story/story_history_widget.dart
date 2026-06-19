@@ -144,7 +144,10 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
       final timestamp = value.toDouble();
       if (timestamp.isNaN) return null;
       if (timestamp > 1000000000000) {
-        return DateTime.fromMillisecondsSinceEpoch(timestamp.round(), isUtc: true);
+        return DateTime.fromMillisecondsSinceEpoch(
+          timestamp.round(),
+          isUtc: true,
+        );
       }
       return DateTime.fromMillisecondsSinceEpoch(
         (timestamp * 1000).round(),
@@ -333,7 +336,6 @@ class _StoryHistoryWidgetState extends State<StoryHistoryWidget> {
       ),
     );
   }
-
 }
 
 class _FilterSortBar extends StatelessWidget {
@@ -521,7 +523,8 @@ class _StatisticsSummary extends StatelessWidget {
     final rawFailureCount = entries
         .where((entry) => entry.outcome.toLowerCase() == 'failure')
         .length;
-    final inferredFailures = totalStories -
+    final inferredFailures =
+        totalStories -
         (successCount + normalCount + rawFailureCount + deathCount);
     final failureCount = math.max(0, rawFailureCount + inferredFailures);
 
@@ -704,10 +707,7 @@ class _OutcomeStatCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: theme.colorScheme.surface.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: color.withValues(alpha: 0.4),
-            width: 1,
-          ),
+          border: Border.all(color: color.withValues(alpha: 0.4), width: 1),
         ),
         child: Row(
           children: [
@@ -720,8 +720,9 @@ class _OutcomeStatCard extends StatelessWidget {
                   Text(
                     label,
                     style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant
-                          .withValues(alpha: 0.85),
+                      color: theme.colorScheme.onSurfaceVariant.withValues(
+                        alpha: 0.85,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 2),

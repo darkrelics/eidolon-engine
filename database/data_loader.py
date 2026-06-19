@@ -379,6 +379,25 @@ def store_opponents(opponents_data):
                     "Tags": opponent.get("Tags", []),
                     "CreatedAt": opponent.get("CreatedAt", ""),
                 }
+            elif "OffensiveRating" in opponent or "OffensiveAction" in opponent:
+                # Incremental dual-action combat format - the fields segment_combat
+                # actually reads (OffensiveRating/DefensiveRating + actions, WeaponType).
+                opponent_item = {
+                    "OpponentID": opponent["OpponentID"],
+                    "Name": opponent["Name"],
+                    "Description": opponent.get("Description", ""),
+                    "OffensiveAction": opponent.get("OffensiveAction", "Melee"),
+                    "OffensiveRating": opponent.get("OffensiveRating", 5),
+                    "DefensiveAction": opponent.get("DefensiveAction", "Dodge"),
+                    "DefensiveRating": opponent.get("DefensiveRating", 5),
+                    "Health": opponent["Health"],
+                    "WeaponType": opponent.get("WeaponType", "bashing"),
+                    "WeaponDamage": opponent.get("WeaponDamage", 1),
+                    "ArmorRating": opponent.get("ArmorRating", 0),
+                    "Items": opponent.get("Items", []),
+                    "Tags": opponent.get("Tags", []),
+                    "CreatedAt": opponent.get("CreatedAt", ""),
+                }
             else:
                 # MUD format (legacy)
                 opponent_item = {

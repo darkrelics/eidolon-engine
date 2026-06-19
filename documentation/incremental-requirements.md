@@ -160,7 +160,7 @@ This document defines the functional and non-functional requirements for the Inc
 **NFR-006**: Database operations SHALL use on-demand scaling.
 
 - **Implementation**: DynamoDB pay-per-request pricing model
-- **Status**: All 14 tables configured with on-demand billing
+- **Status**: All 15 tables configured with on-demand billing
 
 **NFR-007**: Processing capacity SHALL handle peak loads without degradation.
 
@@ -176,13 +176,15 @@ This document defines the functional and non-functional requirements for the Inc
 
 **NFR-009**: Failed segment processing SHALL automatically retry.
 
-- **Implementation**: SQS retry logic, DLQ for failed messages
+- **Implementation**: Poller-driven recovery (stuck-segment requeue, one
+  recovery attempt at expiry, then the exceptional outcome); deliberately no
+  DLQ - the database is authoritative and messages are regenerated
 - **Status**: ProcessingStatus state transitions prevent duplicate processing
 
 **NFR-010**: Character state SHALL remain consistent during failures.
 
 - **Implementation**: DynamoDB transactions, conditional writes
-- **Status**: RemovalPolicy.RETAIN protects data
+- **Status**: DeletionProtectionEnabled protects data
 
 ### 3.4 Security
 
@@ -236,7 +238,7 @@ This document defines the functional and non-functional requirements for the Inc
 
 **CON-002**: Must integrate with existing DynamoDB tables.
 
-- **Status**: All 14 tables deployed with proper GSIs and retention policies
+- **Status**: All 15 tables deployed with proper GSIs and deletion protection
 
 **CON-003**: Must use Flutter for web interface.
 
@@ -266,8 +268,8 @@ This document defines the functional and non-functional requirements for the Inc
 - **COMPLETE**: Seamless character transitions between game modes (GameMode field)
 - **COMPLETE**: Proper timeout handling with default decisions (EventBridge polling)
 - **COMPLETE**: Equipment and wound persistence across modes (shared tables)
-- **BROKEN**: Currency rewards from story completion (apply_story_rewards empty)
-- **BROKEN**: Dead character prevention (story_eligibility doesn't check CharState)
+- **COMPLETE**: Currency rewards from story completion (reward tiers grant coin items; see currency.md)
+- **COMPLETE**: Dead character prevention (story_eligibility checks CharState)
 
 ### 5.2 Performance Acceptance
 
@@ -277,21 +279,17 @@ This document defines the functional and non-functional requirements for the Inc
 
 ### 5.3 Known Implementation Gaps
 
-**Critical Gaps:**
+Resolved since this section was first written: the currency/economy system
+(story rewards grant coin items; store purchases spend them atomically), dead
+character prevention, inventory name display, store endpoints, and item
+discarding are all implemented.
 
-1. Currency/economy system non-functional (apply_story_rewards empty)
-2. Dead characters can start stories (story_eligibility bug)
-3. Inventory displays UUIDs (get_inventory or Items table issue)
-4. Flutter polling timing violates INITIAL_POLL_DELAY specification
+**Remaining Gaps:**
 
-**Missing Features:**
+1. Flutter polling timing violates INITIAL_POLL_DELAY specification
+2. Ghost state (health.md spec, not in Python constants)
 
-1. Store system (no endpoints)
-2. Store system (pending)
-3. Item discarding (no api_item_discard endpoint)
-4. Ghost state (health.md spec, not in Python constants)
-
-See INCREMENTAL-STATUS.md for complete bug tracking.
+See GitHub issues and incremental-remediation-plan.md for complete tracking.
 
 ## 6. Frequently Asked Questions
 

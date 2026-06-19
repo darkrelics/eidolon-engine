@@ -50,7 +50,10 @@ class ApiService extends BaseApiService {
     required String name,
     required String archetype,
   }) async {
-    ApiMetrics.recordCall('POST /character', details: 'name=$name, archetype=$archetype');
+    ApiMetrics.recordCall(
+      'POST /character',
+      details: 'name=$name, archetype=$archetype',
+    );
 
     // Use base class post method for consistent error handling
     return post<Map<String, dynamic>>(
@@ -126,7 +129,9 @@ class ApiService extends BaseApiService {
   ///
   /// Returns the complete API response with Character, ActiveStory, and ActiveSegment fields.
   /// Used by polling service to get authoritative character state after story completion.
-  Future<Map<String, dynamic>> getCharacter({required String characterId}) async {
+  Future<Map<String, dynamic>> getCharacter({
+    required String characterId,
+  }) async {
     ApiMetrics.recordCall('GET /character (raw)', details: 'id=$characterId');
 
     return await get<Map<String, dynamic>>(
@@ -213,7 +218,10 @@ class ApiService extends BaseApiService {
     required String characterId,
     required String decision,
   }) async {
-    ApiMetrics.recordCall('POST /segment/decision', details: 'choice=$decision');
+    ApiMetrics.recordCall(
+      'POST /segment/decision',
+      details: 'choice=$decision',
+    );
 
     debugPrint(
       'ApiService: Submitting decision - characterId: $characterId, decision: $decision',
@@ -360,7 +368,10 @@ class ApiService extends BaseApiService {
   /// Prototypes are immutable and safe to cache indefinitely.
   /// Returns full prototype data.
   Future<Map<String, dynamic>> getItemPrototype(String prototypeId) async {
-    ApiMetrics.recordCall('GET /item/prototype', details: 'prototypeId=$prototypeId');
+    ApiMetrics.recordCall(
+      'GET /item/prototype',
+      details: 'prototypeId=$prototypeId',
+    );
 
     return get<Map<String, dynamic>>(
       '/item/prototype',
@@ -376,7 +387,10 @@ class ApiService extends BaseApiService {
     required String characterId,
     required String itemId,
   }) async {
-    ApiMetrics.recordCall('POST /item/consume', details: 'characterId=$characterId, itemId=$itemId');
+    ApiMetrics.recordCall(
+      'POST /item/consume',
+      details: 'characterId=$characterId, itemId=$itemId',
+    );
 
     return post<Map<String, dynamic>>(
       '/item/consume',
@@ -432,7 +446,8 @@ class ApiService extends BaseApiService {
   }) async {
     ApiMetrics.recordCall(
       'POST /item/consolidate',
-      details: 'characterId=$characterId, prototypeId=$prototypeId, all=$consolidateAll',
+      details:
+          'characterId=$characterId, prototypeId=$prototypeId, all=$consolidateAll',
     );
 
     final body = <String, dynamic>{

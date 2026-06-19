@@ -36,21 +36,27 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
     if (widget.character.availableStoriesDetails != null) {
       setState(() {
         _storiesFuture = Future.value(
-          widget.character.availableStoriesDetails!.map((story) => StoryMetadata.fromJson(story)).toList(),
+          widget.character.availableStoriesDetails!
+              .map((story) => StoryMetadata.fromJson(story))
+              .toList(),
         );
       });
     } else {
       // Fallback: fetch fresh character data to get stories
       setState(() {
-        _storiesFuture = _apiService.getCharacterById(widget.character.id).then((character) {
-          if (character == null) {
-            throw Exception('Character not found');
-          }
-          if (character.availableStoriesDetails != null) {
-            return character.availableStoriesDetails!.map((story) => StoryMetadata.fromJson(story)).toList();
-          }
-          return <StoryMetadata>[];
-        });
+        _storiesFuture = _apiService.getCharacterById(widget.character.id).then(
+          (character) {
+            if (character == null) {
+              throw Exception('Character not found');
+            }
+            if (character.availableStoriesDetails != null) {
+              return character.availableStoriesDetails!
+                  .map((story) => StoryMetadata.fromJson(story))
+                  .toList();
+            }
+            return <StoryMetadata>[];
+          },
+        );
       });
     }
   }
@@ -78,7 +84,10 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
       final characterProvider = context.read<CharacterProvider>();
       final navigator = Navigator.of(context);
 
-      final initialSegment = await _apiService.startStory(characterId: widget.character.id, storyId: story.storyID);
+      final initialSegment = await _apiService.startStory(
+        characterId: widget.character.id,
+        storyId: story.storyID,
+      );
 
       if (!mounted) return;
 
@@ -89,7 +98,12 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
         activeSegmentId: initialSegment['ActiveSegmentID']?.toString(),
         storyState: {
           'ActiveSegment': initialSegment,
-          'Story': {'Title': story.title, 'Description': story.description, 'Type': story.type, 'StoryID': story.storyID},
+          'Story': {
+            'Title': story.title,
+            'Description': story.description,
+            'Type': story.type,
+            'StoryID': story.storyID,
+          },
         },
       );
 
@@ -100,15 +114,16 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
       navigator.pushReplacement(
         MaterialPageRoute(
           builder: (context) => const GameScreen(),
-          settings: RouteSettings(
-            arguments: updatedCharacter,
-          ),
+          settings: RouteSettings(arguments: updatedCharacter),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(ErrorHandler.getUserFriendlyMessage(e)), backgroundColor: Theme.of(context).colorScheme.error),
+        SnackBar(
+          content: Text(ErrorHandler.getUserFriendlyMessage(e)),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
       );
     } finally {
       if (mounted) {
@@ -137,7 +152,12 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
       appBar: AppBar(
         title: const Text('Select Story'),
         backgroundColor: theme.colorScheme.inversePrimary,
-        actions: [IconButton(icon: const Icon(Icons.refresh), onPressed: _isLoading ? null : _loadStories)],
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _isLoading ? null : _loadStories,
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -153,13 +173,27 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.error_outline, size: 64, color: theme.colorScheme.error),
+                      Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: theme.colorScheme.error,
+                      ),
                       const SizedBox(height: 16),
-                      Text('Failed to load stories', style: theme.textTheme.headlineSmall),
+                      Text(
+                        'Failed to load stories',
+                        style: theme.textTheme.headlineSmall,
+                      ),
                       const SizedBox(height: 8),
-                      Text(snapshot.error.toString(), style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
+                      Text(
+                        snapshot.error.toString(),
+                        style: theme.textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
                       const SizedBox(height: 16),
-                      ElevatedButton(onPressed: _loadStories, child: const Text('Retry')),
+                      ElevatedButton(
+                        onPressed: _loadStories,
+                        child: const Text('Retry'),
+                      ),
                     ],
                   ),
                 );
@@ -172,13 +206,22 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.auto_stories, size: 64, color: theme.colorScheme.onSurfaceVariant),
+                      Icon(
+                        Icons.auto_stories,
+                        size: 64,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                       const SizedBox(height: 16),
-                      Text('No Stories Available', style: theme.textTheme.headlineSmall),
+                      Text(
+                        'No Stories Available',
+                        style: theme.textTheme.headlineSmall,
+                      ),
                       const SizedBox(height: 8),
                       Text(
                         'Check back later for new adventures!',
-                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -217,7 +260,12 @@ class _StoryCard extends StatelessWidget {
   final String Function(int) formatDuration;
   final String Function(int) formatCooldown;
 
-  const _StoryCard({required this.story, required this.onTap, required this.formatDuration, required this.formatCooldown});
+  const _StoryCard({
+    required this.story,
+    required this.onTap,
+    required this.formatDuration,
+    required this.formatCooldown,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -239,7 +287,11 @@ class _StoryCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       story.title,
-                      style: theme.textTheme.titleLarge?.copyWith(color: isAvailable ? null : theme.colorScheme.onSurfaceVariant),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        color: isAvailable
+                            ? null
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                   _StoryTypeChip(type: story.type),
@@ -248,28 +300,51 @@ class _StoryCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 story.description,
-                style: theme.textTheme.bodyMedium?.copyWith(color: isAvailable ? null : theme.colorScheme.onSurfaceVariant),
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isAvailable
+                      ? null
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(Icons.schedule, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                  Icon(
+                    Icons.schedule,
+                    size: 16,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                   const SizedBox(width: 4),
-                  Text(formatDuration(story.estimatedDuration), style: theme.textTheme.bodySmall),
+                  Text(
+                    formatDuration(story.estimatedDuration),
+                    style: theme.textTheme.bodySmall,
+                  ),
                   const Spacer(),
                   if (!isAvailable && story.cooldownRemaining > 0) ...[
-                    Icon(Icons.timer_off, size: 16, color: theme.colorScheme.error),
+                    Icon(
+                      Icons.timer_off,
+                      size: 16,
+                      color: theme.colorScheme.error,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       formatCooldown(story.cooldownRemaining),
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
                     ),
                   ] else if (isAvailable) ...[
-                    Icon(Icons.play_circle_outline, color: theme.colorScheme.primary),
+                    Icon(
+                      Icons.play_circle_outline,
+                      color: theme.colorScheme.primary,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Available',
-                      style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ],

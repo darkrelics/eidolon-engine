@@ -354,6 +354,43 @@ def reset_segment_processing_status(active_segment_id: str) -> None:
         raise RuntimeError(f"Failed to reset segment processing status: {err}") from err
 
 
+def mark_segment_recovery_attempted(active_segment_id: str) -> bool:
+    """
+    Flag an expiring unprocessed segment for its single recovery retry.
+
+    The poller gives an unprocessed mechanical segment one requeue before
+    resolving it with the exceptional outcome. The conditional write succeeds
+    only when the segment is still active, still pending, and not yet flagged,
+    so concurrent pollers cannot double-queue the retry.
+
+    Args:
+        active_segment_id: Active segment UUID
+
+    Returns:
+        True when the flag was set (the caller should requeue the segment);
+        False when the segment was already flagged, claimed, or resolved.
+
+    Raises:
+        RuntimeError: If the database operation fails for any other reason
+    """
+    try:
+        dynamo.update_item(
+            TableName.ACTIVE_SEGMENTS,
+            Key={"ActiveSegmentID": active_segment_id},
+            UpdateExpression="SET RecoveryAttempted = :flag",
+            ConditionExpression="#status = :active AND ProcessingStatus = :pending AND attribute_not_exists(RecoveryAttempted)",
+            ExpressionAttributeNames={"#status": "Status"},
+            ExpressionAttributeValues={":flag": True, ":active": "active", ":pending": "pending"},
+        )
+        logger.info(f"Flagged segment for recovery retry: {active_segment_id}")
+        return True
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        logger.error(f"Failed to flag segment for recovery retry {active_segment_id} Error: {err}", exc_info=True)
+        raise RuntimeError(f"Failed to flag segment for recovery retry: {err}") from err
+
+
 def mark_segment_as_completed(active_segment_id: str) -> None:
     """
     Mark a segment as completed.

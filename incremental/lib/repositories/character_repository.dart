@@ -4,7 +4,14 @@ import 'package:eidolon_incremental/services/indexeddb_service.dart';
 import 'package:flutter/foundation.dart';
 
 /// Error categories for repository operations
-enum RepositoryErrorType { cacheCorruption, cacheUnavailable, parsingError, updateLogicError, networkError, unknown }
+enum RepositoryErrorType {
+  cacheCorruption,
+  cacheUnavailable,
+  parsingError,
+  updateLogicError,
+  networkError,
+  unknown,
+}
 
 /// Exception thrown by repository operations with categorized error types
 class RepositoryException implements Exception {
@@ -13,7 +20,12 @@ class RepositoryException implements Exception {
   final Object? originalError;
   final StackTrace? stackTrace;
 
-  RepositoryException(this.message, {required this.type, this.originalError, this.stackTrace});
+  RepositoryException(
+    this.message, {
+    required this.type,
+    this.originalError,
+    this.stackTrace,
+  });
 
   @override
   String toString() {
@@ -41,9 +53,11 @@ class CharacterRepository {
   final ApiService _apiService;
   final IndexedDBService _indexedDB;
 
-  CharacterRepository({required ApiService apiService, IndexedDBService? indexedDBService})
-    : _apiService = apiService,
-      _indexedDB = indexedDBService ?? IndexedDBService();
+  CharacterRepository({
+    required ApiService apiService,
+    IndexedDBService? indexedDBService,
+  }) : _apiService = apiService,
+       _indexedDB = indexedDBService ?? IndexedDBService();
 
   /// Load all characters for a player from server and cache them.
   ///
@@ -58,7 +72,9 @@ class CharacterRepository {
       // Fetch from server
       final characterInfoList = await _apiService.listCharacters();
 
-      debugPrint('CharacterRepository: Loaded ${characterInfoList.length} characters');
+      debugPrint(
+        'CharacterRepository: Loaded ${characterInfoList.length} characters',
+      );
 
       // For each character in the list, fetch full details and cache
       // This ensures the cache is populated when user selects a character
@@ -70,7 +86,9 @@ class CharacterRepository {
           }
         } catch (e) {
           // Don't fail entire load if one character fails
-          debugPrint('CharacterRepository: Failed to cache character ${info.id}: $e');
+          debugPrint(
+            'CharacterRepository: Failed to cache character ${info.id}: $e',
+          );
         }
       }
 
@@ -97,25 +115,33 @@ class CharacterRepository {
       try {
         final cachedData = await _indexedDB.getCharacter(characterId);
         if (cachedData != null) {
-          debugPrint('CharacterRepository: Character $characterId found in cache');
+          debugPrint(
+            'CharacterRepository: Character $characterId found in cache',
+          );
           try {
             return Character.fromJson(cachedData);
           } catch (e) {
             // Cache corrupted - log details and fall through to server fetch
-            debugPrint('CharacterRepository: Cached data corrupted for $characterId: $e');
+            debugPrint(
+              'CharacterRepository: Cached data corrupted for $characterId: $e',
+            );
             debugPrint('CharacterRepository: Clearing corrupted cache entry');
             await deleteCharacterFromCache(characterId);
             // Continue to server fetch below
           }
         }
       } catch (e) {
-        debugPrint('CharacterRepository: Cache read error for $characterId: $e');
+        debugPrint(
+          'CharacterRepository: Cache read error for $characterId: $e',
+        );
         // Cache unavailable - continue to server fetch
       }
     }
 
     // Cache miss, corrupted, or unavailable - fetch from server
-    debugPrint('CharacterRepository: Fetching character $characterId from server');
+    debugPrint(
+      'CharacterRepository: Fetching character $characterId from server',
+    );
     try {
       final character = await _apiService.getCharacterById(characterId);
       if (character != null) {
@@ -123,7 +149,9 @@ class CharacterRepository {
       }
       return character;
     } catch (e, stackTrace) {
-      debugPrint('CharacterRepository: Network error fetching character $characterId: $e');
+      debugPrint(
+        'CharacterRepository: Network error fetching character $characterId: $e',
+      );
       throw RepositoryException(
         'Failed to fetch character from server',
         type: RepositoryErrorType.networkError,
@@ -140,17 +168,23 @@ class CharacterRepository {
   ///
   /// Throws [RepositoryException] for network errors.
   Future<Character?> refreshCharacterFromServer(String characterId) async {
-    debugPrint('CharacterRepository: Refreshing character $characterId from server');
+    debugPrint(
+      'CharacterRepository: Refreshing character $characterId from server',
+    );
 
     try {
       final character = await _apiService.getCharacterById(characterId);
       if (character != null) {
         await _cacheCharacter(character);
-        debugPrint('CharacterRepository: Character $characterId refreshed and cached');
+        debugPrint(
+          'CharacterRepository: Character $characterId refreshed and cached',
+        );
       }
       return character;
     } catch (e, stackTrace) {
-      debugPrint('CharacterRepository: Network error refreshing character $characterId: $e');
+      debugPrint(
+        'CharacterRepository: Network error refreshing character $characterId: $e',
+      );
       throw RepositoryException(
         'Failed to refresh character from server',
         type: RepositoryErrorType.networkError,
@@ -177,15 +211,24 @@ class CharacterRepository {
   /// Returns the updated character.
   ///
   /// Throws [RepositoryException] with categorized error type for proper handling.
-  Future<Character?> updateCharacterFromSegment(String characterId, Map<String, dynamic> segmentUpdates) async {
-    debugPrint('CharacterRepository: Applying segment updates to character $characterId');
+  Future<Character?> updateCharacterFromSegment(
+    String characterId,
+    Map<String, dynamic> segmentUpdates,
+  ) async {
+    debugPrint(
+      'CharacterRepository: Applying segment updates to character $characterId',
+    );
 
     try {
       // Get current cached character
-      final cachedData = _indexedDB.isSupported ? await _indexedDB.getCharacter(characterId) : null;
+      final cachedData = _indexedDB.isSupported
+          ? await _indexedDB.getCharacter(characterId)
+          : null;
 
       if (cachedData == null) {
-        debugPrint('CharacterRepository: No cached character found, fetching from server');
+        debugPrint(
+          'CharacterRepository: No cached character found, fetching from server',
+        );
         return await getCharacter(characterId);
       }
 
@@ -194,8 +237,12 @@ class CharacterRepository {
       try {
         character = Character.fromJson(cachedData);
       } catch (e, stackTrace) {
-        debugPrint('CharacterRepository: Cache data parsing failed for $characterId');
-        debugPrint('CharacterRepository: Cached data keys: ${cachedData.keys.toList()}');
+        debugPrint(
+          'CharacterRepository: Cache data parsing failed for $characterId',
+        );
+        debugPrint(
+          'CharacterRepository: Cached data keys: ${cachedData.keys.toList()}',
+        );
         debugPrint('CharacterRepository: Parse error: $e');
 
         // Cache corruption - fetch fresh and update cache
@@ -212,16 +259,21 @@ class CharacterRepository {
       final schemaVersion = segmentUpdates['SchemaVersion'] as String?;
 
       if (schemaVersion != expectedSchemaVersion) {
-        debugPrint('CharacterRepository: Schema version mismatch (Expected: $expectedSchemaVersion, Got: $schemaVersion)');
+        debugPrint(
+          'CharacterRepository: Schema version mismatch (Expected: $expectedSchemaVersion, Got: $schemaVersion)',
+        );
         debugPrint('CharacterRepository: Falling back to full server fetch');
         return await refreshCharacterFromServer(characterId);
       }
 
       // Extract character updates from segment response
-      final characterUpdates = segmentUpdates['CharacterUpdates'] as Map<String, dynamic>?;
+      final characterUpdates =
+          segmentUpdates['CharacterUpdates'] as Map<String, dynamic>?;
 
       if (characterUpdates == null || characterUpdates.isEmpty) {
-        debugPrint('CharacterRepository: No character updates in segment response');
+        debugPrint(
+          'CharacterRepository: No character updates in segment response',
+        );
         return character;
       }
 
@@ -231,7 +283,9 @@ class CharacterRepository {
         updatedCharacter = _applyUpdates(character, characterUpdates);
       } catch (e, stackTrace) {
         debugPrint('CharacterRepository: Update logic failed for $characterId');
-        debugPrint('CharacterRepository: Character data: ${character.toJson()}');
+        debugPrint(
+          'CharacterRepository: Character data: ${character.toJson()}',
+        );
         debugPrint('CharacterRepository: Updates: $characterUpdates');
         debugPrint('CharacterRepository: Update error: $e');
 
@@ -249,7 +303,9 @@ class CharacterRepository {
         await _cacheCharacter(updatedCharacter);
       } catch (e) {
         // Cache write failure is non-fatal - we have the updated character
-        debugPrint('CharacterRepository: Failed to cache updated character: $e');
+        debugPrint(
+          'CharacterRepository: Failed to cache updated character: $e',
+        );
         debugPrint('CharacterRepository: Continuing with in-memory character');
       }
 
@@ -263,9 +319,12 @@ class CharacterRepository {
           // Fetch fresh data to recover
           final freshCharacter = await getCharacter(characterId);
           if (freshCharacter != null) {
-            debugPrint('CharacterRepository: Cache recovered with fresh server data');
+            debugPrint(
+              'CharacterRepository: Cache recovered with fresh server data',
+            );
             // Apply the updates to the fresh character
-            final characterUpdates = segmentUpdates['CharacterUpdates'] as Map<String, dynamic>?;
+            final characterUpdates =
+                segmentUpdates['CharacterUpdates'] as Map<String, dynamic>?;
             if (characterUpdates != null && characterUpdates.isNotEmpty) {
               return _applyUpdates(freshCharacter, characterUpdates);
             }
@@ -285,7 +344,9 @@ class CharacterRepository {
       rethrow;
     } catch (e, stackTrace) {
       // Unexpected error - categorize and throw
-      debugPrint('CharacterRepository: Unexpected error applying segment updates: $e');
+      debugPrint(
+        'CharacterRepository: Unexpected error applying segment updates: $e',
+      );
       throw RepositoryException(
         'Unexpected error during segment update',
         type: RepositoryErrorType.unknown,
@@ -301,10 +362,14 @@ class CharacterRepository {
   /// and returns a new character instance with the changes applied.
   Character _applyUpdates(Character character, Map<String, dynamic> updates) {
     // Health updates
-    final health = updates['Health'] != null ? (updates['Health'] as num).toDouble() : character.health;
+    final health = updates['Health'] != null
+        ? (updates['Health'] as num).toDouble()
+        : character.health;
 
     // Essence updates
-    final essence = updates['Essence'] != null ? (updates['Essence'] as num).toDouble() : character.essence;
+    final essence = updates['Essence'] != null
+        ? (updates['Essence'] as num).toDouble()
+        : character.essence;
 
     // Skill XP updates
     final skillUpdates = updates['Skills'] as Map<String, dynamic>?;
@@ -325,7 +390,8 @@ class CharacterRepository {
       attributeUpdates.forEach((key, value) {
         if (value is num) {
           // Add XP to existing attribute value
-          updatedAttributes[key] = (updatedAttributes[key] ?? 0.0) + value.toDouble();
+          updatedAttributes[key] =
+              (updatedAttributes[key] ?? 0.0) + value.toDouble();
         }
       });
     }
@@ -344,16 +410,21 @@ class CharacterRepository {
 
     // Contents updates (replace the full top-level list if provided)
     final contentsUpdates = updates['Contents'] as List<dynamic>?;
-    final updatedContents =
-        contentsUpdates != null ? contentsUpdates.whereType<String>().toList() : character.contents;
+    final updatedContents = contentsUpdates != null
+        ? contentsUpdates.whereType<String>().toList()
+        : character.contents;
 
     // Wounds updates
     final woundsUpdate = updates['Wounds'] as List<dynamic>?;
-    final updatedWounds = woundsUpdate != null ? woundsUpdate.map((w) => w as Map<String, dynamic>).toList() : character.wounds;
+    final updatedWounds = woundsUpdate != null
+        ? woundsUpdate.map((w) => w as Map<String, dynamic>).toList()
+        : character.wounds;
 
     // Progress updates
     final progressUpdates = updates['Progress'] as Map<String, dynamic>?;
-    final updatedProgress = progressUpdates != null ? {...character.progress, ...progressUpdates} : character.progress;
+    final updatedProgress = progressUpdates != null
+        ? {...character.progress, ...progressUpdates}
+        : character.progress;
 
     // Create updated character using copyWith
     return character.copyWith(
@@ -398,9 +469,13 @@ class CharacterRepository {
 
     try {
       await _indexedDB.deleteCharacter(characterId);
-      debugPrint('CharacterRepository: Deleted character $characterId from cache');
+      debugPrint(
+        'CharacterRepository: Deleted character $characterId from cache',
+      );
     } catch (e) {
-      debugPrint('CharacterRepository: Failed to delete character from cache: $e');
+      debugPrint(
+        'CharacterRepository: Failed to delete character from cache: $e',
+      );
       // Don't throw - cache deletion is best-effort
     }
   }

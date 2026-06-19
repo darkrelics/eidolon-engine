@@ -1,5 +1,11 @@
 # GitHub Issues Status Report
 
+> **Historical snapshot (2025-10-19).** This is a point-in-time audit and is
+> not maintained; issue states and the code have changed substantially since
+> (a follow-up audit on 2026-06-12 closed ten of the issues listed as open
+> here). Check GitHub for current issue state and
+> `incremental-remediation-plan.md` for current findings.
+
 **Generated:** 2025-10-19
 **Total Issues:** 172 (OPEN + CLOSED)
 **Method:** `gh` CLI analysis with codebase verification

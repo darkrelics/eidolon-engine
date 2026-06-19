@@ -132,7 +132,8 @@ String? _extractOutcome(dynamic value) {
 
   if (value is Map) {
     // Try common field names for outcome type
-    final type = value['Type'] ?? value['type'] ?? value['Outcome'] ?? value['outcome'];
+    final type =
+        value['Type'] ?? value['type'] ?? value['Outcome'] ?? value['outcome'];
     if (type is String && type.isNotEmpty) {
       return type;
     }

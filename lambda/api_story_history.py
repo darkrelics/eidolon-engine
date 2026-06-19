@@ -92,6 +92,9 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
     if not validate_uuid(character_id):
         raise ValueError("Invalid CharacterID")
 
+    if not verify_character_ownership(character_id, player_id):
+        raise AccessDeniedError("Access denied")
+
     story_instance_ids = extract_story_instance_ids(event)
 
     if not story_instance_ids:
@@ -100,9 +103,6 @@ def lambda_handler(event: dict, context: object, player_id: str) -> dict:
             "status_code": 200,
             "body": {"CharacterID": character_id, "Stories": [], "Missing": []},
         }
-
-    if not verify_character_ownership(character_id, player_id):
-        raise AccessDeniedError("Access denied")
 
     # Validate UUID format for each requested story instance
     invalid_ids = [sid for sid in story_instance_ids if not validate_uuid(sid)]

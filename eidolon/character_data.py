@@ -11,7 +11,7 @@ from decimal import Decimal
 from botocore.exceptions import ClientError
 
 from eidolon.character_state import determine_character_state_from_wounds
-from eidolon.constants import DEFAULT_DEATH_ROOM_ID, MAX_SKILL_LEVEL, CharState
+from eidolon.constants import DAILY_STORY_COOLDOWN_SECONDS, DEFAULT_DEATH_ROOM_ID, MAX_SKILL_LEVEL, CharState
 from eidolon.dynamo import TABLE_ENV_MAP, TableName, dynamo, to_attribute_value
 from eidolon.environment import DEFAULT_ESSENCE, DEFAULT_HEALTH, MAX_CHARACTERS_PER_PLAYER
 from eidolon.errors import AccessDeniedError, NotFoundError, ValidationError
@@ -204,10 +204,10 @@ def cleanup_expired_daily_stories(character: dict) -> dict:
             filtered_stories.append(entry)
             continue
 
-        # Check if daily story has expired (24 hours = 86400 seconds)
+        # Check if daily story has expired (shared rule with validate_story_available)
         if story_type == "daily":
             time_elapsed = current_timestamp - completed_at
-            if time_elapsed < 86400:
+            if time_elapsed < DAILY_STORY_COOLDOWN_SECONDS:
                 # Still on cooldown, keep it
                 filtered_stories.append(entry)
             else:
@@ -534,9 +534,11 @@ def build_group_level_updates(group: str, increases: dict, current_members) -> t
     """Build the SET/ADD expression parts for one level group (Skills or Attributes).
 
     With ``current_members`` (the character's current levels) the increase is a
-    clamped ``SET``; without it, an atomic ``ADD`` that ``clamp_levels_to_max``
-    caps after the write. Placeholders are prefixed by the group so Skills and
-    Attributes never collide. Returns ``(set_parts, add_parts, names, values)``.
+    bounded ``SET``; without it, an atomic ``ADD``. Either way no separate clamp
+    is needed: ``calculate_skill_increase`` already caps each increment to the
+    headroom remaining below ``MAX_SKILL_LEVEL``. Placeholders are prefixed by the
+    group so Skills and Attributes never collide. Returns
+    ``(set_parts, add_parts, names, values)``.
 
     Args:
         group: "Skills" or "Attributes".
@@ -565,8 +567,12 @@ def build_group_level_updates(group: str, increases: dict, current_members) -> t
 def execute_character_update(character_id: str, set_parts: list, add_parts: list, names: dict, values: dict) -> None:
     """Apply the assembled SET/ADD expressions to the character record.
 
-    When an atomic ADD is present, requests the post-update values and clamps any
-    level that overflowed ``MAX_SKILL_LEVEL`` (the ADD cannot cap itself).
+    No post-write clamp is performed: ``calculate_skill_increase`` caps every
+    increment to the headroom below ``MAX_SKILL_LEVEL`` before it is accumulated,
+    and the exponential XP curve drives increments toward zero as a level nears
+    the cap, so an atomic ``ADD`` cannot carry a level past the ceiling through
+    normal play. (A skill/attribute already above the cap can only arrive that
+    way by inserting an over-cap entity into the data, which is a content error.)
 
     Raises:
         RuntimeError: If the database update fails.
@@ -583,13 +589,9 @@ def execute_character_update(character_id: str, set_parts: list, add_parts: list
     update_kwargs = {"UpdateExpression": " ".join(update_parts), "ExpressionAttributeValues": values}
     if names:
         update_kwargs["ExpressionAttributeNames"] = names
-    if add_parts:
-        update_kwargs["ReturnValues"] = "UPDATED_NEW"
 
     try:
-        response = dynamo.update_item(TableName.CHARACTERS, Key={"CharacterID": character_id}, **update_kwargs)
-        if add_parts:
-            clamp_levels_to_max(character_id, response or {})
+        dynamo.update_item(TableName.CHARACTERS, Key={"CharacterID": character_id}, **update_kwargs)
         logger.info(f"Character updates applied for {character_id}")
     except ClientError as err:
         logger.error(f"Failed to apply character updates for {character_id} Error: {err}", exc_info=True)
@@ -652,48 +654,6 @@ def apply_character_updates(character_id: str, updates: dict, current_character=
     values[":updated_at"] = datetime.now(timezone.utc).isoformat()
 
     execute_character_update(character_id, set_parts, add_parts, names, values)
-
-
-def clamp_levels_to_max(character_id: str, updated_attributes: dict) -> None:
-    """Clamp any skill or attribute that exceeded MAX_SKILL_LEVEL.
-
-    Atomic ``ADD`` increments cannot cap their result, so after the increment the
-    post-update values are inspected and any that overflowed are set back down to
-    the ceiling. Non-fatal: a failure here leaves the increment intact.
-
-    Args:
-        character_id: Character UUID.
-        updated_attributes: The DynamoDB ``UPDATED_NEW`` response, holding the
-            changed ``Skills`` and ``Attributes`` maps.
-    """
-    set_parts: list = []
-    names: dict = {}
-    values: dict = {}
-    for group in ("Skills", "Attributes"):
-        members = updated_attributes.get(group)
-        if not isinstance(members, dict):
-            continue
-        for name, level in members.items():
-            if level is not None and float(level) > MAX_SKILL_LEVEL:
-                safe = f"{group}_{name}".replace("-", "_")
-                set_parts.append(f"{group}.#m_{safe} = :v_{safe}")
-                names[f"#m_{safe}"] = name
-                values[f":v_{safe}"] = Decimal(str(MAX_SKILL_LEVEL))
-
-    if not set_parts:
-        return
-
-    try:
-        dynamo.update_item(
-            TableName.CHARACTERS,
-            Key={"CharacterID": character_id},
-            UpdateExpression="SET " + ", ".join(set_parts),
-            ExpressionAttributeNames=names,
-            ExpressionAttributeValues=values,
-        )
-        logger.info(f"Clamped {len(set_parts)} over-cap level(s) for {character_id}")
-    except ClientError as err:
-        logger.error(f"Failed to clamp over-cap levels for {character_id} Error: {err}", exc_info=True)
 
 
 def character_clear_story(character_id: str) -> None:
@@ -845,6 +805,14 @@ def apply_death_or_unconscious_outcome(character_id: str, outcome: str, wounds: 
 
     max_health = character.get("MaxHealth", DEFAULT_HEALTH)
     new_state = determine_character_state_from_wounds(max_health, wounds)
+
+    # A "death" outcome means the character died even when the segment inflicted
+    # no wounds - e.g. a skill-check death (any sigma <= SIGMA_CRITICAL_FAILURE,
+    # or an average below SIGMA_DEATH_AVG). The wound-derived state only reflects
+    # combat damage, so a death outcome that leaves the wound track non-lethal
+    # would otherwise leave the character standing and able to start new stories.
+    if new_state == CharState.STANDING.value:
+        new_state = CharState.DEAD.value
 
     if new_state == character.get("CharState", CharState.STANDING.value):
         return new_state

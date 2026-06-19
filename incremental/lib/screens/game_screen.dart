@@ -50,7 +50,11 @@ class _GameScreenViewState extends State<_GameScreenView> {
     } else if (args is CharacterInfo) {
       controller.initialize(null, args);
     } else {
-      controller.initialize(null, null, savedCharacter: characterProvider.character);
+      controller.initialize(
+        null,
+        null,
+        savedCharacter: characterProvider.character,
+      );
     }
   }
 
@@ -62,7 +66,10 @@ class _GameScreenViewState extends State<_GameScreenView> {
     final deviceType = ResponsiveLayout.getDeviceType(context);
 
     // Redirect if no character found after initialization
-    if (!controller.isLoading && controller.character == null && controller.characterInfo == null && controller.error == null) {
+    if (!controller.isLoading &&
+        controller.character == null &&
+        controller.characterInfo == null &&
+        controller.error == null) {
       // Use PostFrameCallback to avoid build-time navigation
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -84,7 +91,9 @@ class _GameScreenViewState extends State<_GameScreenView> {
         },
         onTogglePanel: () {
           if (deviceType != DeviceType.desktop) {
-            controller.setSelectedPanelIndex((controller.selectedPanelIndex + 1) % 3);
+            controller.setSelectedPanelIndex(
+              (controller.selectedPanelIndex + 1) % 3,
+            );
           }
         },
         child: Scaffold(
@@ -97,14 +106,25 @@ class _GameScreenViewState extends State<_GameScreenView> {
                         label: 'Characters',
                         icon: Icons.people,
                         onTap: () {
-                          Navigator.pushReplacementNamed(context, '/character-selection');
+                          Navigator.pushReplacementNamed(
+                            context,
+                            '/character-selection',
+                          );
                         },
                       ),
                       if (controller.characterInfo != null)
-                        BreadcrumbItem(label: controller.characterInfo!.name, icon: Icons.person),
-                      if (controller.character?.storyState != null && controller.character!.storyState!['Story'] != null)
                         BreadcrumbItem(
-                          label: controller.character!.storyState!['Story']['Title'] ?? 'Story',
+                          label: controller.characterInfo!.name,
+                          icon: Icons.person,
+                        ),
+                      if (controller.character?.storyState != null &&
+                          controller.character!.storyState!['Story'] != null)
+                        BreadcrumbItem(
+                          label:
+                              controller
+                                  .character!
+                                  .storyState!['Story']['Title'] ??
+                              'Story',
                           icon: Icons.auto_stories,
                         ),
                     ],
@@ -118,7 +138,11 @@ class _GameScreenViewState extends State<_GameScreenView> {
               tooltip: 'Back to Character Selection',
             ),
             actions: [
-              IconButton(icon: const Icon(Icons.refresh), onPressed: controller.refreshCharacterImmediate, tooltip: 'Refresh'),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: controller.refreshCharacterImmediate,
+                tooltip: 'Refresh',
+              ),
               IconButton(
                 icon: const Icon(Icons.settings),
                 onPressed: () {
@@ -147,14 +171,24 @@ class _GameScreenViewState extends State<_GameScreenView> {
                 ? _buildNoCharacterWidget(context)
                 : _buildGameInterface(context, controller, deviceType),
           ),
-          bottomNavigationBar: deviceType == DeviceType.mobile && controller.character != null
+          bottomNavigationBar:
+              deviceType == DeviceType.mobile && controller.character != null
               ? BottomNavigationBar(
                   currentIndex: controller.selectedPanelIndex,
                   onTap: controller.setSelectedPanelIndex,
                   items: const [
-                    BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Character'),
-                    BottomNavigationBarItem(icon: Icon(Icons.auto_stories), label: 'Story'),
-                    BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Inventory'),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person),
+                      label: 'Character',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.auto_stories),
+                      label: 'Story',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.inventory_2),
+                      label: 'Inventory',
+                    ),
                   ],
                 )
               : null,
@@ -163,27 +197,41 @@ class _GameScreenViewState extends State<_GameScreenView> {
     );
   }
 
-  Widget _buildErrorWidget(BuildContext context, GameScreenController controller) {
+  Widget _buildErrorWidget(
+    BuildContext context,
+    GameScreenController controller,
+  ) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
             const SizedBox(height: 16),
             Text(
               'Error loading character',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               controller.error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            FilledButton(onPressed: controller.refreshCharacterImmediate, child: const Text('Retry')),
+            FilledButton(
+              onPressed: controller.refreshCharacterImmediate,
+              child: const Text('Retry'),
+            ),
           ],
         ),
       ),
@@ -197,11 +245,23 @@ class _GameScreenViewState extends State<_GameScreenView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_off, size: 64, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.person_off,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
-            Text('No Character Selected', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              'No Character Selected',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 8),
-            Text('Please select a character to play', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            Text(
+              'Please select a character to play',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 24),
             FilledButton(
               onPressed: () {
@@ -215,7 +275,11 @@ class _GameScreenViewState extends State<_GameScreenView> {
     );
   }
 
-  Widget _buildGameInterface(BuildContext context, GameScreenController controller, DeviceType deviceType) {
+  Widget _buildGameInterface(
+    BuildContext context,
+    GameScreenController controller,
+    DeviceType deviceType,
+  ) {
     switch (deviceType) {
       case DeviceType.desktop:
         return _buildDesktopLayout(context, controller);
@@ -226,7 +290,10 @@ class _GameScreenViewState extends State<_GameScreenView> {
     }
   }
 
-  Widget _buildDesktopLayout(BuildContext context, GameScreenController controller) {
+  Widget _buildDesktopLayout(
+    BuildContext context,
+    GameScreenController controller,
+  ) {
     return Row(
       children: [
         // Character Panel (Left)
@@ -241,19 +308,26 @@ class _GameScreenViewState extends State<_GameScreenView> {
         // Story Panel (Center)
         Expanded(
           child: StoryPanel(
-            key: ValueKey('story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}'),
+            key: ValueKey(
+              'story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}',
+            ),
             character: controller.character!,
             segmentHistory: controller.getCompletedSegments(),
             storyHistoryArchive: controller.buildStoryHistoryArchive(),
             isLoading: controller.isLoading,
             error: controller.error,
             onRefresh: controller.refreshCharacterImmediate,
-            onStorySelect: (story) => controller.handleStorySelect(context, story),
-            onDecisionSelect: (choice) => controller.handleDecisionSelect(context, choice),
-            onAbandonStory: controller.character!.storyState != null ? () => _confirmAbandonStory(context, controller) : null,
+            onStorySelect: (story) =>
+                controller.handleStorySelect(context, story),
+            onDecisionSelect: (choice) =>
+                controller.handleDecisionSelect(context, choice),
+            onAbandonStory: controller.character!.storyState != null
+                ? () => _confirmAbandonStory(context, controller)
+                : null,
             onReturnToStories: controller.handleReturnToStories,
             isDecisionSubmitting: controller.isSubmittingDecision,
-            isStoryConfirmedComplete: controller.storyLifecycleState == StoryLifecycleState.completed,
+            isStoryConfirmedComplete:
+                controller.storyLifecycleState == StoryLifecycleState.completed,
           ),
         ),
         // Inventory Panel (Right)
@@ -269,7 +343,10 @@ class _GameScreenViewState extends State<_GameScreenView> {
     );
   }
 
-  Widget _buildTabletLayout(BuildContext context, GameScreenController controller) {
+  Widget _buildTabletLayout(
+    BuildContext context,
+    GameScreenController controller,
+  ) {
     return Row(
       children: [
         // Character Panel (Collapsible)
@@ -285,19 +362,26 @@ class _GameScreenViewState extends State<_GameScreenView> {
         // Story Panel (Center - Always visible)
         Expanded(
           child: StoryPanel(
-            key: ValueKey('story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}'),
+            key: ValueKey(
+              'story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}',
+            ),
             character: controller.character!,
             segmentHistory: controller.getCompletedSegments(),
             storyHistoryArchive: controller.buildStoryHistoryArchive(),
             isLoading: controller.isLoading,
             error: controller.error,
             onRefresh: controller.refreshCharacterImmediate,
-            onStorySelect: (story) => controller.handleStorySelect(context, story),
-            onDecisionSelect: (choice) => controller.handleDecisionSelect(context, choice),
-            onAbandonStory: controller.character!.storyState != null ? () => _confirmAbandonStory(context, controller) : null,
+            onStorySelect: (story) =>
+                controller.handleStorySelect(context, story),
+            onDecisionSelect: (choice) =>
+                controller.handleDecisionSelect(context, choice),
+            onAbandonStory: controller.character!.storyState != null
+                ? () => _confirmAbandonStory(context, controller)
+                : null,
             onReturnToStories: controller.handleReturnToStories,
             isDecisionSubmitting: controller.isSubmittingDecision,
-            isStoryConfirmedComplete: controller.storyLifecycleState == StoryLifecycleState.completed,
+            isStoryConfirmedComplete:
+                controller.storyLifecycleState == StoryLifecycleState.completed,
           ),
         ),
         // Inventory Panel (Collapsible)
@@ -314,7 +398,10 @@ class _GameScreenViewState extends State<_GameScreenView> {
     );
   }
 
-  Widget _buildMobileLayout(BuildContext context, GameScreenController controller) {
+  Widget _buildMobileLayout(
+    BuildContext context,
+    GameScreenController controller,
+  ) {
     // Show only the selected panel
     switch (controller.selectedPanelIndex) {
       case 0:
@@ -325,19 +412,26 @@ class _GameScreenViewState extends State<_GameScreenView> {
         );
       case 1:
         return StoryPanel(
-          key: ValueKey('story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}'),
+          key: ValueKey(
+            'story_panel_${controller.character!.id}_${controller.character!.activeSegmentID ?? "none"}',
+          ),
           character: controller.character!,
           segmentHistory: controller.getCompletedSegments(),
           storyHistoryArchive: controller.buildStoryHistoryArchive(),
           isLoading: controller.isLoading,
           error: controller.error,
           onRefresh: controller.refreshCharacterImmediate,
-          onStorySelect: (story) => controller.handleStorySelect(context, story),
-          onDecisionSelect: (choice) => controller.handleDecisionSelect(context, choice),
-          onAbandonStory: controller.character!.storyState != null ? () => _confirmAbandonStory(context, controller) : null,
+          onStorySelect: (story) =>
+              controller.handleStorySelect(context, story),
+          onDecisionSelect: (choice) =>
+              controller.handleDecisionSelect(context, choice),
+          onAbandonStory: controller.character!.storyState != null
+              ? () => _confirmAbandonStory(context, controller)
+              : null,
           onReturnToStories: controller.handleReturnToStories,
           isDecisionSubmitting: controller.isSubmittingDecision,
-          isStoryConfirmedComplete: controller.storyLifecycleState == StoryLifecycleState.completed,
+          isStoryConfirmedComplete:
+              controller.storyLifecycleState == StoryLifecycleState.completed,
         );
       case 2:
         return InventoryPanel(
@@ -350,17 +444,25 @@ class _GameScreenViewState extends State<_GameScreenView> {
     }
   }
 
-  Future<void> _confirmAbandonStory(BuildContext context, GameScreenController controller) async {
+  Future<void> _confirmAbandonStory(
+    BuildContext context,
+    GameScreenController controller,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Abandon Story'),
         content: const Text('Are you sure you want to abandon this story?'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Abandon'),
           ),
         ],
@@ -372,14 +474,22 @@ class _GameScreenViewState extends State<_GameScreenView> {
         await controller.handleAbandonStory(
           onAbandon: (message) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 4)));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(message),
+                  duration: const Duration(seconds: 4),
+                ),
+              );
             }
           },
           onError: (error) {
             if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(error), backgroundColor: Theme.of(context).colorScheme.error));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(error),
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ),
+              );
             }
           },
         );

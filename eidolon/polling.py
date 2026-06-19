@@ -103,30 +103,29 @@ def ensure_polling_enabled() -> None:
     """
     Ensure polling is enabled when starting a story.
     Enables EventBridge rule first, then sets SSM parameter to "run".
-    Used only by api-story-start.
+    Used only by api-story-start, before any story records are created.
 
     Order of operations:
     1. Enable EventBridge rule (idempotent - safe to enable if already enabled)
     2. Update SSM parameter to "run"
 
-    If EventBridge fails, we skip SSM update to avoid starting the poller
-    when it can't actually run.
+    Raises:
+        RuntimeError: If the EventBridge rule cannot be enabled. A story started
+            without a running poller would never advance, so the story start
+            must fail loudly rather than create a stalled story.
     """
     logger.info(f"Enabling polling system - Rule: {EVENTBRIDGE_RULE_NAME}, SSM: {SSM_POLLER_STATE_PARAMETER}")
 
-    # 1) Enable EventBridge rule first - if this fails, don't update SSM
-    try:
-        manage_eventbridge_rule(True)
-        logger.info("EventBridge rule enabled")
-    except Exception as err:
-        logger.error(f"Failed to enable EventBridge rule Error: {err}", exc_info=True)
-        logger.warning("Skipping SSM update because EventBridge rule enablement failed")
-        return
+    # 1) Enable EventBridge rule first. Failure is fatal: without the poller,
+    # segments would never process or advance.
+    manage_eventbridge_rule(True)
+    logger.info("EventBridge rule enabled")
 
-    # 2) Update SSM parameter to 'run'
+    # 2) Update SSM parameter to 'run'. Non-fatal: the poller self-corrects
+    # (it flips the parameter back to "run" when active segments exist).
     try:
         update_polling_state("run")
         logger.info("Polling system enabled successfully")
     except Exception as err:
         logger.error(f"Failed to update polling state to 'run' Error: {err}", exc_info=True)
-        logger.warning("EventBridge enabled but SSM update failed - poller may self-correct")
+        logger.warning("EventBridge enabled but SSM update failed - poller will self-correct")

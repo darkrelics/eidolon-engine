@@ -690,18 +690,19 @@ All Lambda functions are deployed with:
 - URL: `https://sqs.{region}.amazonaws.com/{account}/eidolon-processing-queue`
 - Feeds ops-segment-process Lambda
 - Handles mechanical segments only
-- Message retention: 4 days
-- Visibility timeout: 30 seconds
-- Dead-letter queue after 3 retries
+- Message retention: 24 hours (matches the longest segment cycle)
+- Visibility timeout: 180 seconds (6x the worker timeout)
+- No dead-letter queue (by design - messages are disposable nudges the poller
+  regenerates from database state)
 
 **eidolon-advancement-queue** (SQS Standard Queue):
 
 - URL: `https://sqs.{region}.amazonaws.com/{account}/eidolon-advancement-queue`
 - Feeds ops-story-advance Lambda
 - Handles all segment types for completion
-- Message retention: 4 days
-- Visibility timeout: 30 seconds
-- Dead-letter queue after 3 retries
+- Message retention: 24 hours
+- Visibility timeout: 180 seconds
+- No dead-letter queue (by design)
 
 ### Polling Infrastructure
 
@@ -709,17 +710,17 @@ All Lambda functions are deployed with:
 
 The ops-segment-poller Lambda (triggered every minute by EventBridge) uses a **two-query approach** for different segment scenarios:
 
-**Query 1 - Segments Approaching Expiry** (within 90 seconds):
+**Query 1 - Segments Approaching Expiry** (within 60 seconds, including already past):
 
-- Finds ALL segments that will expire before the next poll (90-second buffer)
+- Finds ALL segments that will expire before the next poll
 - For processed segments: Queues them to STORY_ADVANCEMENT_QUEUE for normal advancement
-- For unprocessed segments: Marks them as "exceptional" (protecting players from failures), then queues for advancement
+- For unprocessed segments: one recovery requeue, then the exceptional outcome; dead-worker claims resolve after a grace period (see [Error Recovery and Edge Cases](#error-recovery-and-edge-cases))
 
 **Query 2 - Stuck Mechanical Segments**:
 
 - Finds mechanical segments where:
-  - StartTime > 5 minutes ago (stuck threshold)
-  - EndTime > 90 seconds from now (enough time to retry)
+  - StartTime more than `SEGMENT_STUCK_RETRY_SECONDS` (60s) ago
+  - EndTime more than `SEGMENT_RETRY_MIN_REMAINING_SECONDS` (30s) from now
   - ProcessingStatus is "pending" or "processing"
 - Resets stuck "processing" segments to "pending"
 - Re-queues them to SEGMENT_QUEUE_URL for retry
@@ -792,48 +793,67 @@ stateDiagram-v2
 
 - Separation of concerns: SSM parameter controls polling behavior, EventBridge rule controls execution
 - Single responsibility: Each Lambda has specific polling authority
-- Graceful degradation: System continues even if polling management fails
+- Fail fast on enablement: api-story-start fails the request if the EventBridge rule cannot be enabled (a story started without a running poller would never advance); it enables polling before creating any story records, so the failure leaves nothing to roll back
+- Self-correction: an SSM update failure is non-fatal - the poller flips the parameter back to "run" whenever active segments exist
 - Cost optimization: Automatic shutdown when no stories active
 
 ## Error Recovery and Edge Cases
 
-### Timeout Recovery
+The poller (`ops-segment-poller`, every minute while polling is enabled) is
+the recovery authority. Every segment is guaranteed to either process normally
+or resolve deterministically; the constants live in `eidolon/constants.py`.
 
-- Segments past EndTime marked "exceptional"
-- Gives players best possible outcome
-- Prevents indefinite waiting
+### Stuck Segment Recovery (mid-flight)
 
-### Stuck Segment Recovery
+A worker normally processes a mechanical segment within seconds of its
+StartTime, so one still `pending` or `processing` more than
+`SEGMENT_STUCK_RETRY_SECONDS` (60s) after StartTime means the queue message
+was lost or the worker died. While at least
+`SEGMENT_RETRY_MIN_REMAINING_SECONDS` (30s) remain before EndTime, the poller
+resets a `processing` claim back to `pending` and requeues the segment.
+Segments too short to ever satisfy both bounds are recovered at expiry
+instead (below).
 
-- Mechanical segments stuck >15 minutes get retried
-- ProcessingStatus reset to pending to allow reprocessing
-- Maximum 3 retry attempts
+### Expiry Recovery
+
+When a segment comes within 60 seconds of its EndTime (or is already past
+it), the poller resolves it by ProcessingStatus:
+
+- **processed**: queued for normal advancement.
+- **pending, mechanical**: requeued once for a final processing attempt
+  (tracked by a conditional `RecoveryAttempted` flag, so concurrent pollers
+  cannot double-queue it). If it is still unprocessed on the next poll, it is
+  marked completed with the **exceptional** outcome - the player-favorable
+  system-failure protection - and advanced.
+- **pending, decision**: queued for advancement, which applies the
+  DefaultDecision or failure handling.
+- **processing**: left alone while the claim is plausibly alive; once
+  `SEGMENT_PROCESSING_GRACE_SECONDS` (120s) past EndTime - far beyond the
+  worker's 30s timeout - the worker is presumed dead and the segment is
+  resolved exceptionally rather than stranded.
 
 ### Concurrent Processing Prevention
 
 - ProcessingStatus state machine prevents duplicate processing
 - Atomic DynamoDB operations ensure consistency
-- SQS provides at-least-once delivery
+- SQS provides at-least-once delivery; duplicate enqueues are benign because
+  workers must win the conditional pending-to-processing claim before doing
+  any work
 
 ### Failure Modes
 
-**Processing Failure**:
-
-- Segment remains in processing state
-- Poller eventually marks as exceptional
-- Player protected from system errors
-
 **Queue Message Loss**:
 
-- Poller re-queues unprocessed segments
-- Idempotent processing prevents issues
+- The stuck scan requeues mid-flight segments; the expiry path requeues
+  short segments once
+- Idempotent processing prevents double application
 - History tables provide audit trail
 
-**Lambda Timeout**:
+**Worker Death (Lambda timeout or crash)**:
 
-- ProcessingStatus remains in processing state
-- Poller detects stuck segment
-- Automatic retry after 15 minutes
+- Mid-flight: claim reset to pending and requeued by the stuck scan
+- Near or past EndTime: resolved exceptionally after the processing grace
+  period, so no segment stays `processing` forever
 
 ## Summary
 

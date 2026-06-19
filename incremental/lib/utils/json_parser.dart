@@ -5,7 +5,11 @@
 class JsonParser {
   /// Extract an integer value from JSON, handling num to int conversion.
   /// DynamoDB returns numeric values as Decimal which Dart sees as num.
-  static int getInt(Map<String, dynamic> json, String key, {int defaultValue = 0}) {
+  static int getInt(
+    Map<String, dynamic> json,
+    String key, {
+    int defaultValue = 0,
+  }) {
     final value = json[key];
     if (value == null) return defaultValue;
     if (value is int) return value;
@@ -23,7 +27,11 @@ class JsonParser {
   }
 
   /// Extract a double value from JSON.
-  static double getDouble(Map<String, dynamic> json, String key, {double defaultValue = 0.0}) {
+  static double getDouble(
+    Map<String, dynamic> json,
+    String key, {
+    double defaultValue = 0.0,
+  }) {
     final value = json[key];
     if (value == null) return defaultValue;
     if (value is double) return value;
@@ -41,7 +49,11 @@ class JsonParser {
   }
 
   /// Extract a string value from JSON.
-  static String getString(Map<String, dynamic> json, String key, {String defaultValue = ''}) {
+  static String getString(
+    Map<String, dynamic> json,
+    String key, {
+    String defaultValue = '',
+  }) {
     final value = json[key];
     if (value == null) return defaultValue;
     if (value is String) return value;
@@ -57,7 +69,11 @@ class JsonParser {
   }
 
   /// Extract a boolean value from JSON.
-  static bool getBool(Map<String, dynamic> json, String key, {bool defaultValue = false}) {
+  static bool getBool(
+    Map<String, dynamic> json,
+    String key, {
+    bool defaultValue = false,
+  }) {
     final value = json[key];
     if (value == null) return defaultValue;
     if (value is bool) return value;
@@ -76,7 +92,10 @@ class JsonParser {
   }
 
   /// Extract an optional nested map from JSON.
-  static Map<String, dynamic>? getMapOrNull(Map<String, dynamic> json, String key) {
+  static Map<String, dynamic>? getMapOrNull(
+    Map<String, dynamic> json,
+    String key,
+  ) {
     final value = json[key];
     if (value == null) return null;
     if (value is Map<String, dynamic>) return value;
@@ -93,11 +112,17 @@ class JsonParser {
   }
 
   /// Extract a list of maps from JSON.
-  static List<Map<String, dynamic>> getMapList(Map<String, dynamic> json, String key) {
+  static List<Map<String, dynamic>> getMapList(
+    Map<String, dynamic> json,
+    String key,
+  ) {
     final value = json[key];
     if (value == null) return [];
     if (value is List) {
-      return value.whereType<Map>().map((m) => Map<String, dynamic>.from(m)).toList();
+      return value
+          .whereType<Map>()
+          .map((m) => Map<String, dynamic>.from(m))
+          .toList();
     }
     return [];
   }
@@ -107,7 +132,10 @@ class JsonParser {
     final value = json[key];
     if (value == null) return [];
     if (value is List) {
-      return value.map((e) => e?.toString() ?? '').where((s) => s.isNotEmpty).toList();
+      return value
+          .map((e) => e?.toString() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toList();
     }
     return [];
   }

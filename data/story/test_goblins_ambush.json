@@ -317,7 +317,7 @@
       "SegmentType": "mechanical",
       "SegmentDuration": 180,
       "Combat": {
-        "OpponentID": "b8c9d0e1-2f3a-4b5c-6d7e8f9a0b1c2d3e",
+        "OpponentID": "b8c9d0e1-2f3a-4b5c-6d7e-8f9a0b1c2d3e",
         "MaxRounds": 15
       },
       "Results": {

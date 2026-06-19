@@ -36,7 +36,10 @@ void main() async {
 
   // Initialize Services & Repositories
   final apiService = ApiService(authService: AuthService.instance);
-  final characterRepository = CharacterRepository(apiService: apiService, indexedDBService: IndexedDBService());
+  final characterRepository = CharacterRepository(
+    apiService: apiService,
+    indexedDBService: IndexedDBService(),
+  );
 
   // Set up global error handlers
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -57,7 +60,10 @@ void main() async {
             ChangeNotifierProvider(create: (_) => AuthProvider()),
             Provider<CharacterRepository>.value(value: characterRepository),
             ChangeNotifierProvider(
-              create: (_) => CharacterProvider(prefs: prefs, repository: characterRepository),
+              create: (_) => CharacterProvider(
+                prefs: prefs,
+                repository: characterRepository,
+              ),
             ),
             ChangeNotifierProvider(create: (_) => ThemeProvider.create()),
             ChangeNotifierProvider(create: (_) => TimerProvider()),
@@ -92,7 +98,8 @@ class EidolonIncrementalApp extends StatelessWidget {
             '/login': (context) => const LoginScreen(),
             '/register': (context) => const RegistrationScreen(),
             '/forgot-password': (context) => const PasswordResetScreen(),
-            '/password-reset-confirm': (context) => const PasswordResetConfirmScreen(),
+            '/password-reset-confirm': (context) =>
+                const PasswordResetConfirmScreen(),
             '/account-settings': (context) => const AccountSettingsScreen(),
             '/character-selection': (context) => const CharacterScreen(),
             '/game': (context) => const GameScreen(),
@@ -115,7 +122,9 @@ class AuthWrapper extends StatelessWidget {
         // );
         switch (authProvider.status) {
           case AuthStatus.uninitialized:
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
           case AuthStatus.unauthenticated:
             // debugPrint('AuthWrapper: Showing LoginScreen');
             return const LoginScreen();
@@ -123,7 +132,9 @@ class AuthWrapper extends StatelessWidget {
             // debugPrint('AuthWrapper: Showing CharacterScreen');
             return const CharacterScreen();
           case AuthStatus.loading:
-            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
         }
       },
     );

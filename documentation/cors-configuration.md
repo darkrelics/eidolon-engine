@@ -35,31 +35,26 @@ All CORS logic is centralized in `eidolon/cors.py` with automatic header injecti
 
 ### 1. API Gateway Configuration
 
-The API Gateway is configured with explicit CORS settings based on deployment configuration:
+The API Gateway template (`cf/eidolon-api-gateway.yml`) receives the allowed
+origin as the `AllowedOrigins` stack parameter and adds CORS headers to its
+gateway responses (4XX/5XX), so even errors produced before a Lambda runs
+carry the right headers. Success responses and preflight handling get their
+CORS headers from the Lambda layer (`eidolon/cors.py`).
 
-```python
-# In deployment/stacks/api_stack.py
-default_cors_preflight_options=apigateway.CorsOptions(
-    allow_origins=[client_origin],  # Explicit origin from deployment config
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token"],
-    allow_credentials=True,
-)
-```
-
-Where `client_origin` is constructed during deployment as `https://{client_host}.{domain}`.
+The origin value is constructed during deployment as `https://{client_host}.{domain}`.
 
 ### 2. Lambda Function Configuration
 
-Each Lambda function receives CORS configuration via environment variables:
+Each Lambda function receives CORS configuration via environment variables,
+set in the Lambda stack templates (`cf/eidolon-lambda-character.yml`,
+`cf/eidolon-lambda-story.yml`, `cf/eidolon-lambda-cognito.yml`):
 
-```python
-# Set in deployment/stacks/character_stack.py, player_stack.py, story_stack.py
-"ALLOWED_ORIGINS": cors_origin,  # e.g., "https://portal.darkrelics.net"
-"CORS_ALLOW_CREDENTIALS": "true",
-"CORS_ALLOW_HEADERS": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
-"CORS_ALLOW_METHODS": "GET,POST,PUT,DELETE,OPTIONS",
-"CORS_MAX_AGE": "86400",
+```yaml
+ALLOWED_ORIGINS: !Ref AllowedOrigins # e.g., "https://portal.darkrelics.net"
+CORS_ALLOW_CREDENTIALS: "true"
+CORS_ALLOW_HEADERS: Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token
+CORS_ALLOW_METHODS: GET,POST,PUT,DELETE,OPTIONS
+CORS_MAX_AGE: "86400"
 ```
 
 ### 3. Centralized CORS Handler
@@ -323,19 +318,15 @@ Expected response headers:
 
 ### Adding Localhost for Development
 
-Update deployment stack to include localhost:
+`ALLOWED_ORIGINS` accepts a comma-separated list, so pass an `AllowedOrigins`
+value that includes localhost when deploying the Lambda stacks:
 
-```python
-# In deployment/stacks/character_stack.py (and others)
-allowed_origins = [
-    cors_origin,  # Production: https://portal.domain.com
-    "http://localhost:3000",  # Flutter dev server
-    "http://localhost:8080",  # Alternative port
-]
-env_vars["ALLOWED_ORIGINS"] = ",".join(allowed_origins)
+```text
+https://portal.domain.com,http://localhost:3000,http://localhost:8080
 ```
 
-Then redeploy the Character, Player, and Story stacks.
+Then redeploy the Lambda stacks (`eidolon-lambda-character`,
+`eidolon-lambda-story`, `eidolon-lambda-cognito`).
 
 ### Testing Locally
 
@@ -355,10 +346,10 @@ Or configure ALLOWED_ORIGINS to include localhost as shown above.
 - `eidolon/cors.py` - CorsHandler class with all CORS logic
 - `eidolon/lambda_handler.py` - `@authenticated_handler` decorator integrating CORS
 - `eidolon/responses.py` - `lambda_response()` and `lambda_error()` helpers
-- `deployment/stacks/api_stack.py` - API Gateway CORS configuration
-- `deployment/stacks/character_stack.py` - Lambda environment variables (ALLOWED_ORIGINS, etc.)
-- `deployment/stacks/player_stack.py` - Lambda environment variables
-- `deployment/stacks/story_stack.py` - Lambda environment variables
+- `cf/eidolon-api-gateway.yml` - API Gateway CORS configuration (gateway responses)
+- `cf/eidolon-lambda-character.yml` - Lambda environment variables (ALLOWED_ORIGINS, etc.)
+- `cf/eidolon-lambda-story.yml` - Lambda environment variables
+- `cf/eidolon-lambda-cognito.yml` - Lambda environment variables
 
 **All Lambda Functions:** Use `@authenticated_handler` decorator (19 API functions verified).
 

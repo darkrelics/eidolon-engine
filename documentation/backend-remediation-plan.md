@@ -582,7 +582,13 @@ stack delete is guarded by its expected quantity and the Contents rewrite by a
 `contains` check on each spent coin, so a raced balance change cancels the
 purchase. `credit_coins` grants currency the same way and is ready for reward and
 drop paths (none award currency yet, per `documentation/currency.md`). The
-purchase and list APIs accept a `StoreID`. The canonicalization math and the
+purchase and list APIs accept a `StoreID`.
+
+**Update (2026-06-12):** coins are now unbounded ordinary stackable items and
+currency is granted through the standard item-reward path
+(`currency.coin_rewards_for_amount` via `calculate_story_rewards`);
+`credit_coins` was removed as superseded. See
+`incremental-remediation-plan.md` COR-1. The canonicalization math and the
 transaction assembly are covered by unit tests; `documentation/currency.md` was
 reconciled to the coins-authoritative model. The pure FU base unit (prototype
 `Value`) supersedes the plan's earlier "bronze-denomination" note.

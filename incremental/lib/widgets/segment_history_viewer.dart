@@ -258,9 +258,14 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
   }
 
   Widget _buildEventSummary(Map<String, dynamic> event) {
-    final eventType = event['eventType'] as String? ?? event['EventType'] as String?;
-    final title = event['title'] as String? ?? event['Title'] as String? ?? 'Event';
-    final description = event['description'] as String? ?? event['Description'] as String? ?? '';
+    final eventType =
+        event['eventType'] as String? ?? event['EventType'] as String?;
+    final title =
+        event['title'] as String? ?? event['Title'] as String? ?? 'Event';
+    final description =
+        event['description'] as String? ??
+        event['Description'] as String? ??
+        '';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -371,7 +376,8 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
   }
 
   List<Widget> _buildItemsList(Map<String, dynamic> segment, ThemeData theme) {
-    final characterUpdates = segment['CharacterUpdates'] as Map<String, dynamic>?;
+    final characterUpdates =
+        segment['CharacterUpdates'] as Map<String, dynamic>?;
     if (characterUpdates == null) {
       return [];
     }
@@ -397,7 +403,9 @@ class _SegmentHistoryViewerState extends State<SegmentHistoryViewer> {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.5,
+              ),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(
                 color: theme.colorScheme.outline.withValues(alpha: 0.5),

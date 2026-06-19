@@ -12,11 +12,11 @@ The Multi-User Dungeon economy uses physical coin items as the single source of 
 
 This is the model implemented in `eidolon/currency.py`:
 
-- **Coins are stackable items.** A coin prototype carries `Metadata.Denomination`, and its worth is the prototype's `Value` in FU (Bronze 10, Silver 120, Gold 2,400). Coins are minimal stackable records `{ItemID, PrototypeID, Quantity, OwnerID}` per the [item system](item-system.md).
+- **Coins are ordinary stackable items with unbounded stacks.** A coin prototype carries `Metadata.Denomination` and `MaxStack: -1` (a MaxStack of zero or less means the stack is unbounded), and its worth is the prototype's `Value` in FU (Bronze 10, Silver 120, Gold 2,400). Coins are minimal stackable records `{ItemID, PrototypeID, Quantity, OwnerID}` per the [item system](item-system.md).
 - **Balance is derived, not stored.** `wallet_total(character)` sums the FU value of the coin stacks at the character's top-level Contents (the purse). There is no `Resources.Value` scalar; the earlier hybrid design that tracked both is superseded.
-- **The wallet is canonicalized on every change.** After a debit or credit, the coins are replaced by the minimal canonical set for the new total (greedy, largest denomination first), so a character holds at most one stack per denomination. Coin ItemIDs change whenever the balance changes.
+- **Currency is granted through the standard item-reward path.** `calculate_story_rewards` converts a reward tier's `currency` amount (FU) into coin item entries via `coin_rewards_for_amount` (greedy split, largest denomination first), and `apply_story_rewards` merges them into the character's existing coin stacks like any other stackable item. There is no separate currency-granting transaction.
+- **Spending canonicalizes.** A purchase replaces the coin stacks with the minimal canonical set for the post-payment balance, so coin ItemIDs change when coins are spent. Between spends a wallet may hold a non-canonical mix (for example, earned bronze alongside a gold coin); the next purchase normalizes it.
 - **Purchases pay with coins atomically.** `purchase_item` spends coins via `plan_coin_spend`, and the goods records, coin changes, and the character Contents update all commit in a single transaction.
-- **Granting currency** uses `credit_coins(character_id, amount_fu)`; reward and drop paths can call it once they award currency (none do yet).
 
 The remainder of this document is the broader design rationale. Where it shows a `Resources.Value` scalar, exact change-making, or UUIDv7 stack merging, treat the canonicalized coin model above as authoritative.
 
@@ -130,51 +130,11 @@ Coins are physical items with prototype definitions:
 
 ### Stack Limits
 
-No artificial limits - stacks can grow to any size (limited only by integer representation).
-
-### Stack Operations
-
-```python
-def can_stack(item1: dict, item2: dict, prototype: dict) -> bool:
-    """Check if two items can stack together."""
-    # Must be stackable type
-    if not prototype.get("Stackable", False):
-        return False
-
-    # Must be same prototype
-    if item1["PrototypeID"] != item2["PrototypeID"]:
-        return False
-
-    # Must have no modifications (only base fields)
-    allowed_fields = {"ItemID", "PrototypeID", "Quantity", "OwnerID"}
-    if set(item1.keys()) != allowed_fields or set(item2.keys()) != allowed_fields:
-        return False
-
-    return True  # No stack limit
-
-def merge_stacks(item1: dict, item2: dict) -> dict:
-    """
-    Merge two stackable items.
-    The older stack (by UUIDv7 timestamp) keeps its ItemID.
-    """
-    # UUIDv7 has timestamp, so lexicographic comparison gives older item
-    if item1["ItemID"] < item2["ItemID"]:
-        # item1 is older, keep its ID
-        return {
-            "ItemID": item1["ItemID"],
-            "PrototypeID": item1["PrototypeID"],
-            "Quantity": item1.get("Quantity", 1) + item2.get("Quantity", 1),
-            "OwnerID": item1["OwnerID"]
-        }
-    else:
-        # item2 is older, keep its ID
-        return {
-            "ItemID": item2["ItemID"],
-            "PrototypeID": item2["PrototypeID"],
-            "Quantity": item1.get("Quantity", 1) + item2.get("Quantity", 1),
-            "OwnerID": item2["OwnerID"]
-        }
-```
+Coin stacks are unbounded: the coin prototypes set `MaxStack: -1`, and a
+MaxStack of zero or less means no limit, so a stack can grow to any size
+(limited only by integer representation). Stack merging is described in the
+[item system](item-system.md#stack-merging); coins use the same shared helpers
+as every other stackable item.
 
 ## Implementation Structure
 
@@ -210,7 +170,8 @@ Characters have both a Value tracker and physical coin items:
 
 ### Coin Creation
 
-When awarding currency, create coin items like any other stackable items:
+When awarding currency, create coin items like any other stackable items
+(implemented as `coin_rewards_for_amount` in `eidolon/currency.py`):
 
 ```python
 def create_coins_from_value(value: int) -> list:
@@ -273,7 +234,12 @@ def process_purchase(character: dict, item_cost: int) -> bool:
 
 ## Story Rewards Configuration
 
-Story rewards define value and items to award. The system converts value into appropriate coin items:
+Story rewards define value and items to award. This is the live mechanism:
+`calculate_story_rewards` reads the outcome tier's `currency` amount and
+converts it into coin item entries (greedy split, largest denomination first),
+which then merge into the character's coin stacks through the same path as the
+tier's other item rewards. Amounts that are not a multiple of the smallest coin
+(10 FU) are floored, and the dropped remainder is logged.
 
 ### Reward Schema
 
@@ -314,10 +280,8 @@ When a player completes a story with 450 value reward:
 
 1. System calculates: 450 ÷ 120 = 3 silver, 90 remainder
 2. Remainder: 90 ÷ 10 = 9 bronze
-3. Creates items:
-   - 1 stack of 3 silver coins
-   - 1 stack of 9 bronze coins
-4. Updates character Resources.Value += 450
+3. Grants coin items, merging into the character's existing silver and bronze
+   stacks (or minting new stacks when none exist)
 
 ## Item Valuation
 
@@ -524,27 +488,23 @@ def calculate_buyback_price(base_value: int, condition: float = 0.8) -> int:
 }
 ```
 
-## Migration Notes
+## Implementation Status
 
-### Current Implementation Status
+The core currency system is implemented end to end:
 
-- Database: `Resources` field exists but empty `{}`
-- Story rewards: Currently text strings (needs conversion to value)
-- Coin prototypes: Not yet added to test_prototypes.json
-- Stacking system: Not yet implemented
-- API: No currency endpoints yet implemented
-- Display: Frontend ready to show currency when provided
+- Coin prototypes exist in `data/test_prototypes.json` with `MaxStack: -1`
+  (unbounded stacks)
+- Stacking and merge helpers live in `eidolon/items.py`
+  (`stack_merge_quantity`, `distribute_into_stacks`, `load_top_level_stacks`)
+- Currency utilities live in `eidolon/currency.py` (wallet derivation, greedy
+  coin split, reward conversion, spend planning)
+- Story rewards grant currency: `calculate_story_rewards` converts the tier's
+  `currency` FU into coin items applied by `apply_story_rewards`
+- Store purchases spend coins atomically (`eidolon/store.py`)
 
-### Migration Steps
-
-1. Add coin prototypes to `data/test_prototypes.json`
-2. Update story files: Convert RewardTiers to value-based rewards
-3. Implement stacking system in `eidolon/items.py`
-4. Implement currency utilities in `eidolon/currency.py`
-5. Update `apply_story_rewards()` to create coin items and update Value
-6. Add currency display to character API responses
-7. Implement store endpoints with value-based pricing
-8. Update inventory management to handle stacks
+Not yet implemented: a dedicated currency display in character API responses
+(clients derive the balance from the coin stacks), buy-back, exchange NPCs, and
+the other Phase 2+ features below.
 
 ## Testing Guidelines
 
@@ -601,51 +561,6 @@ def calculate_buyback_price(base_value: int, condition: float = 0.8) -> int:
 - Transaction logging for audit trail
 - Atomic operations for currency transfers
 - Rate limiting on currency-generating actions
-
----
-
-## Implementation Checklist
-
-### Phase 1: Core Currency System
-
-- [ ] Add coin prototypes to `data/test_prototypes.json`
-- [ ] Add stack management functions to `eidolon/items.py`
-- [ ] Add `create_coins_from_value()` helper to `eidolon/items.py`
-
-### Phase 2: Story Rewards
-
-- [ ] Update story JSON files with value-based rewards
-- [ ] Implement `apply_story_rewards()` to create coin items
-- [ ] Update character Value tracker on reward
-- [ ] Test coin creation from story rewards
-
-### Phase 3: Inventory Management
-
-- [ ] Update `eidolon/items.py` with stacking logic
-- [ ] Implement stack merging on item pickup
-- [ ] Handle stack overflow (create new stacks)
-- [ ] Update inventory display for stacked items
-
-### Phase 4: Transactions
-
-- [ ] Implement coin payment calculation
-- [ ] Handle change-making logic
-- [ ] Create store pricing functions
-- [ ] Implement purchase transaction logic
-
-### Phase 5: API Integration
-
-- [ ] Add currency display to character API responses
-- [ ] Update inventory endpoints for stack display
-- [ ] Create coin exchange endpoints
-- [ ] Document all currency API endpoints
-
-### Phase 6: Testing & Polish
-
-- [ ] Write unit tests for stacking system
-- [ ] Write unit tests for currency conversion
-- [ ] Integration tests for transactions
-- [ ] Create admin tools for currency management
 
 ---
 

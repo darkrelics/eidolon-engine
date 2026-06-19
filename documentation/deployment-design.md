@@ -1,5 +1,12 @@
 # Eidolon Engine Deployment System Design
 
+> **Superseded (2026-06-12):** This document describes a CDK-based deployment
+> system that is no longer in the repository. The actual deployment mechanism
+> is plain CloudFormation - the `cf/eidolon-*.yml` templates orchestrated by
+> `scripts/eidolon_deployment.py` - and is documented in
+> [Deployment Guide](deployment.md). This file is retained as a historical
+> design record only.
+
 ## Executive Summary
 
 The Eidolon Engine deployment system provides a modular, CDK-based infrastructure deployment solution that supports multiple game modes while maintaining clean separation of concerns. Successfully replacing a monolithic 1800+ line deployment class, the new architecture features 10 independent CDK stacks, 3 deployment modes, and automated end-to-end deployment from infrastructure provisioning to portal deployment.
@@ -129,7 +136,7 @@ Modular deployment functions for each stack:
 
 3. **Stack Deployment Order (Mode-Dependent)**
 
-   The detailed sequence for each mode is maintained in [Deployment Guide](deployment.md#stack-deployment-order).
+   The detailed sequence for each mode is maintained in [Deployment Guide](deployment.md#system-architecture).
 
 4. **CDK Execution**
    - Pass parameters via CDK context (-c flags)

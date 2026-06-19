@@ -215,9 +215,15 @@ def lambda_handler(event, context):
 - add_items_to_inventory() - Adds items to character
 - create_items_from_prototypes() - Batch item creation
 - process_items_with_probability() - Handles item drop chances
-- merge_stacks() - Merges two stackable items, oldest wins
-- find_matching_stack() - Finds existing stack for prototype
-- create_coins_from_value() - Converts FU value to coin items
+- load_top_level_stacks() - Finds existing top-level stacks for a prototype
+- stack_merge_quantity() - How much fits on a stack (MaxStack <= 0 is unbounded)
+- distribute_into_stacks() - Splits a quantity into MaxStack-sized stacks
+
+**currency.py** - Coins as stackable items (see currency.md)
+
+- wallet_total() - Derives the balance from a character's coin stacks
+- coin_rewards_for_amount() - Converts an FU amount into coin item entries
+- plan_coin_spend() - Plans the atomic coin payment for a purchase
 
 **archetypes.py** - Archetype management
 
@@ -325,17 +331,11 @@ All eidolon modules are packaged in the `eidolon-dependencies` Lambda layer:
 
 **apply_story_rewards():**
 
-- [OK] NOW fully implemented
-- [OK] Creates coins from currency values
-- [OK] Adds coins to inventory with proper stacking
-- [OK] Updates Resources.Value field
-- [OK] Fixed: Currency and story rewards properly applied
-
-**apply_combat_rewards() (lines 72-95):**
-
-- Function exists but does nothing
-- Comment says "segment/story data must trigger distribution"
-- May be intentionally empty
+- [OK] Fully implemented
+- [OK] Reward tiers' currency amounts convert to coin items
+  (currency.coin_rewards_for_amount) and merge into existing unbounded stacks
+- [OK] There is no Resources.Value scalar - the balance is derived from the
+  coin stacks (see currency.md)
 - **Impact:** Combat rewards not applied
 
 ### Death Check

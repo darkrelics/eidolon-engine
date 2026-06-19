@@ -35,7 +35,10 @@ class CharacterPanel extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.emoji_people, color: colorScheme.onPrimaryContainer),
+                    Icon(
+                      Icons.emoji_people,
+                      color: colorScheme.onPrimaryContainer,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -98,7 +101,8 @@ class CharacterPanel extends StatelessWidget {
                   ),
 
                   // Wounds Indicator
-                  if (character.wounds != null && character.wounds!.isNotEmpty) ...[
+                  if (character.wounds != null &&
+                      character.wounds!.isNotEmpty) ...[
                     const SizedBox(height: 12),
                     _WoundsIndicator(wounds: character.wounds!),
                   ],
@@ -413,10 +417,7 @@ class _GameModeBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: modeColor.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: modeColor,
-          width: 1.5,
-        ),
+        border: Border.all(color: modeColor, width: 1.5),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -452,9 +453,7 @@ class _WoundsIndicator extends StatelessWidget {
     }
 
     // Format: "2 bashing, 1 lethal"
-    return counts.entries
-      .map((e) => '${e.value} ${e.key}')
-      .join(', ');
+    return counts.entries.map((e) => '${e.value} ${e.key}').join(', ');
   }
 
   @override
@@ -470,7 +469,11 @@ class _WoundsIndicator extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.warning_amber_rounded, size: 16, color: Colors.orange),
+          const Icon(
+            Icons.warning_amber_rounded,
+            size: 16,
+            color: Colors.orange,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

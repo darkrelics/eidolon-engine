@@ -71,9 +71,11 @@ class SegmentHistoryManager {
     final prompt = segment['Prompt']?.toString().trim();
 
     final parts = <String>[
-      if (storyInstanceId != null && storyInstanceId.isNotEmpty) storyInstanceId,
+      if (storyInstanceId != null && storyInstanceId.isNotEmpty)
+        storyInstanceId,
       if (storyId != null && storyId.isNotEmpty) storyId,
-      if (segmentActivity != null && segmentActivity.isNotEmpty) segmentActivity,
+      if (segmentActivity != null && segmentActivity.isNotEmpty)
+        segmentActivity,
       if (segmentTitle != null && segmentTitle.isNotEmpty) segmentTitle,
       if (prompt != null && prompt.isNotEmpty) prompt,
     ];
@@ -86,13 +88,18 @@ class SegmentHistoryManager {
   }
 
   /// Sorts segments in chronological order by their `_index` field.
-  void sortSegmentsChronologically(List<Map<String, dynamic>> segments, {bool newestFirst = false}) {
+  void sortSegmentsChronologically(
+    List<Map<String, dynamic>> segments, {
+    bool newestFirst = false,
+  }) {
     segments.sort((a, b) {
       final aIndex = a['_index'] as int?;
       final bIndex = b['_index'] as int?;
 
       if (aIndex != null && bIndex != null) {
-        return newestFirst ? bIndex.compareTo(aIndex) : aIndex.compareTo(bIndex);
+        return newestFirst
+            ? bIndex.compareTo(aIndex)
+            : aIndex.compareTo(bIndex);
       }
 
       if (aIndex == null && bIndex == null) return 0;
@@ -110,7 +117,9 @@ class SegmentHistoryManager {
     if (completedAt is num && completedAt > 0) return true;
     if (segment['Status']?.toString().toLowerCase() == 'completed') return true;
 
-    final processingStatus = segment['ProcessingStatus']?.toString().toLowerCase();
+    final processingStatus = segment['ProcessingStatus']
+        ?.toString()
+        .toLowerCase();
     if (processingStatus == 'processed') {
       final endTimeStr = segment['EndTime']?.toString();
       if (endTimeStr != null && endTimeStr.isNotEmpty) {
@@ -143,7 +152,10 @@ class SegmentHistoryManager {
   /// 4. Adding with a new _index or updating while preserving the existing _index
   ///
   /// Returns true if the segment was newly added, false if it was updated.
-  bool addOrUpdateSegment(Map<String, dynamic> segment, Map<String, dynamic>? lastStoryDetails) {
+  bool addOrUpdateSegment(
+    Map<String, dynamic> segment,
+    Map<String, dynamic>? lastStoryDetails,
+  ) {
     final copy = Map<String, dynamic>.from(segment);
     if (!copy.containsKey('StoryTitle') && lastStoryDetails != null) {
       copy['StoryTitle'] = lastStoryDetails['Title'];
@@ -174,15 +186,20 @@ class SegmentHistoryManager {
 
   /// Returns completed segments, excluding the currently active segment.
   List<Map<String, dynamic>> getCompletedSegments(String? activeSegmentId) {
-    final cacheKey = '${activeSegmentId ?? 'none'}_${_segments.length}_$_segmentCounter';
+    final cacheKey =
+        '${activeSegmentId ?? 'none'}_${_segments.length}_$_segmentCounter';
 
-    if (_completedSegmentsCacheKey == cacheKey && _cachedCompletedSegments != null) {
+    if (_completedSegmentsCacheKey == cacheKey &&
+        _cachedCompletedSegments != null) {
       return _cachedCompletedSegments!;
     }
 
     final completed = _segments.where((segment) {
-      final segmentActiveId = segment['ActiveSegmentID']?.toString() ?? segment['SegmentID']?.toString();
-      final isComplete = segmentActiveId != activeSegmentId && isSegmentComplete(segment);
+      final segmentActiveId =
+          segment['ActiveSegmentID']?.toString() ??
+          segment['SegmentID']?.toString();
+      final isComplete =
+          segmentActiveId != activeSegmentId && isSegmentComplete(segment);
       return isComplete;
     }).toList();
 
@@ -201,8 +218,10 @@ class SegmentHistoryManager {
     Map<String, dynamic>? storyState,
     List<Map<String, dynamic>> segmentHistory,
   ) {
-    final stateSegmentsLength = (storyState?['CompletedSegments'] as List?)?.length ?? 0;
-    final cacheKey = '${activeSegmentId ?? 'none'}_${segmentHistory.length}_${_segmentCounter}_$stateSegmentsLength';
+    final stateSegmentsLength =
+        (storyState?['CompletedSegments'] as List?)?.length ?? 0;
+    final cacheKey =
+        '${activeSegmentId ?? 'none'}_${segmentHistory.length}_${_segmentCounter}_$stateSegmentsLength';
 
     if (_storyHistoryCacheKey == cacheKey && _cachedStoryHistory != null) {
       return _cachedStoryHistory!;
@@ -213,17 +232,21 @@ class SegmentHistoryManager {
     void addSegments(Iterable<Map<String, dynamic>> segments) {
       for (final segment in segments) {
         final copy = Map<String, dynamic>.from(segment);
-        final segmentActiveId = copy['ActiveSegmentID']?.toString() ?? copy['SegmentID']?.toString();
+        final segmentActiveId =
+            copy['ActiveSegmentID']?.toString() ??
+            copy['SegmentID']?.toString();
         final key = segmentIdentity(copy);
 
-        final isActiveSegment = activeSegmentId != null && segmentActiveId == activeSegmentId;
+        final isActiveSegment =
+            activeSegmentId != null && segmentActiveId == activeSegmentId;
         if (!isActiveSegment) {
           deduped[key] = copy;
         }
       }
     }
 
-    final completedSegmentsDynamic = storyState?['CompletedSegments'] as List<dynamic>?;
+    final completedSegmentsDynamic =
+        storyState?['CompletedSegments'] as List<dynamic>?;
     if (completedSegmentsDynamic != null) {
       final completedSegments = completedSegmentsDynamic
           .whereType<Map<String, dynamic>>()
@@ -233,7 +256,9 @@ class SegmentHistoryManager {
     }
 
     if (segmentHistory.isNotEmpty) {
-      final historyCopies = segmentHistory.where(isSegmentComplete).map((segment) => Map<String, dynamic>.from(segment));
+      final historyCopies = segmentHistory
+          .where(isSegmentComplete)
+          .map((segment) => Map<String, dynamic>.from(segment));
       addSegments(historyCopies);
     }
 
@@ -249,14 +274,19 @@ class SegmentHistoryManager {
   /// Synchronizes story completion state on the character when no active segment
   /// exists. Returns an updated character if changes were made, or null if no
   /// changes were needed.
-  Character? synchronizeStoryCompletionState(Character? character, Map<String, dynamic>? lastStoryDetails) {
+  Character? synchronizeStoryCompletionState(
+    Character? character,
+    Map<String, dynamic>? lastStoryDetails,
+  ) {
     if (character == null || _segments.isEmpty) return null;
     if (character.activeSegmentID != null) return null;
 
     final currentStoryState = character.storyState ?? <String, dynamic>{};
     final updatedStoryState = Map<String, dynamic>.from(currentStoryState);
 
-    final synchronizedSegments = _segments.map((segment) => Map<String, dynamic>.from(segment)).toList();
+    final synchronizedSegments = _segments
+        .map((segment) => Map<String, dynamic>.from(segment))
+        .toList();
     sortSegmentsChronologically(synchronizedSegments);
     updatedStoryState['CompletedSegments'] = synchronizedSegments;
 
@@ -269,7 +299,9 @@ class SegmentHistoryManager {
 
   /// Assigns _index to segments that don't have one and increments the counter.
   /// Returns the processed list of segments.
-  List<Map<String, dynamic>> assignIndices(List<Map<String, dynamic>> segments) {
+  List<Map<String, dynamic>> assignIndices(
+    List<Map<String, dynamic>> segments,
+  ) {
     return segments.map((segment) {
       final copy = Map<String, dynamic>.from(segment);
       if (!copy.containsKey('_index')) {

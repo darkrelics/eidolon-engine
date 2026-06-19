@@ -34,12 +34,19 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final storyData = widget.character.storyState?['Story'] as Map<String, dynamic>?;
-    final segmentData = widget.character.storyState?['ActiveSegment'] as Map<String, dynamic>?;
+    final storyData =
+        widget.character.storyState?['Story'] as Map<String, dynamic>?;
+    final segmentData =
+        widget.character.storyState?['ActiveSegment'] as Map<String, dynamic>?;
 
     if (storyData == null && segmentData == null) {
       return Center(
-        child: Text('No active story', style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+        child: Text(
+          'No active story',
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
       );
     }
 
@@ -49,7 +56,10 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Story Card
-          if (storyData != null) ...[_StoryCard(story: storyData), const SizedBox(height: 16)],
+          if (storyData != null) ...[
+            _StoryCard(story: storyData),
+            const SizedBox(height: 16),
+          ],
 
           // Action Buttons
           _ActionButtons(onAbandon: widget.onAbandonStory),
@@ -58,7 +68,9 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
           // Active Segment
           if (segmentData != null) ...[
             _SimpleSegmentCard(
-              key: ValueKey('active_segment_${segmentData['ActiveSegmentID'] ?? segmentData['SegmentID'] ?? segmentData.hashCode}'),
+              key: ValueKey(
+                'active_segment_${segmentData['ActiveSegmentID'] ?? segmentData['SegmentID'] ?? segmentData.hashCode}',
+              ),
               segment: segmentData,
               isActive: true,
               characterName: widget.character.name,
@@ -75,7 +87,12 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
 
           // Previous Segments (newest first)
           if (widget.segmentHistory.isNotEmpty) ...[
-            Text('Previous Segments', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              'Previous Segments',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 12),
             // Use ListView.builder for large lists (>20 items) to enable virtualization
             // Use direct mapping for small lists (<= 20 items) for better performance
@@ -98,15 +115,17 @@ class _ActiveStoryWidgetState extends State<ActiveStoryWidget> {
                 },
               )
             else
-              ...widget.segmentHistory.map((segment) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _SimpleSegmentCard(
-                  segment: segment,
-                  isActive: false,
-                  characterName: widget.character.name,
-                  isDecisionSubmitting: false,
+              ...widget.segmentHistory.map(
+                (segment) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _SimpleSegmentCard(
+                    segment: segment,
+                    isActive: false,
+                    characterName: widget.character.name,
+                    isDecisionSubmitting: false,
+                  ),
                 ),
-              )),
+              ),
           ],
         ],
       ),
@@ -131,10 +150,19 @@ class _StoryCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [theme.colorScheme.primaryContainer, theme.colorScheme.primaryContainer.withValues(alpha: 0.7)],
+          colors: [
+            theme.colorScheme.primaryContainer,
+            theme.colorScheme.primaryContainer.withValues(alpha: 0.7),
+          ],
         ),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: theme.colorScheme.shadow.withValues(alpha: 0.1), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.shadow.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -143,7 +171,10 @@ class _StoryCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.auto_stories, color: theme.colorScheme.onPrimaryContainer),
+                Icon(
+                  Icons.auto_stories,
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -159,7 +190,12 @@ class _StoryCard extends StatelessWidget {
             ),
             if (description.isNotEmpty) ...[
               const SizedBox(height: 12),
-              Text(description, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer)),
+              Text(
+                description,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
             ],
           ],
         ),
@@ -192,7 +228,12 @@ class _TypeBadge extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             type.toUpperCase(),
-            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color, letterSpacing: 0.5),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+              letterSpacing: 0.5,
+            ),
           ),
         ],
       ),
@@ -277,10 +318,15 @@ class _SimpleSegmentCard extends StatelessWidget {
     final normalized = value.trim().toLowerCase();
     if (normalized.isEmpty) return false;
     if (normalized.startsWith('processing')) return true;
-    return normalized == '...processing...' || normalized == 'processing your actions...';
+    return normalized == '...processing...' ||
+        normalized == 'processing your actions...';
   }
 
-  static String _pickSegmentText(List<String?> candidates, {String? exclude, bool allowPlaceholders = false}) {
+  static String _pickSegmentText(
+    List<String?> candidates, {
+    String? exclude,
+    bool allowPlaceholders = false,
+  }) {
     final normalizedExclude = exclude?.trim().toLowerCase();
     for (final candidate in candidates) {
       if (candidate == null) continue;
@@ -289,7 +335,8 @@ class _SimpleSegmentCard extends StatelessWidget {
       if (!allowPlaceholders && _isProcessingPlaceholder(trimmed)) {
         continue;
       }
-      if (normalizedExclude != null && trimmed.toLowerCase() == normalizedExclude) {
+      if (normalizedExclude != null &&
+          trimmed.toLowerCase() == normalizedExclude) {
         continue;
       }
       return trimmed;
@@ -306,17 +353,25 @@ class _SimpleSegmentCard extends StatelessWidget {
     final rawSegmentTitle = segment['SegmentTitle']?.toString();
     final prompt = segment['Prompt']?.toString();
 
-    var segmentTitle = _pickSegmentText([rawSegmentTitle, rawSegmentActivity, prompt]);
+    var segmentTitle = _pickSegmentText([
+      rawSegmentTitle,
+      rawSegmentActivity,
+      prompt,
+    ]);
     if (segmentTitle.isEmpty) {
       segmentTitle = 'Processing...';
     }
 
-    final supplementalStatus = _pickSegmentText([prompt, rawSegmentTitle], exclude: segmentTitle);
+    final supplementalStatus = _pickSegmentText([
+      prompt,
+      rawSegmentTitle,
+    ], exclude: segmentTitle);
     final showSupplementalStatus = supplementalStatus.isNotEmpty;
 
     final outcome = segment['Outcome'];
     final endTimeStr = segment['EndTime']?.toString();
-    final processingStatus = segment['ProcessingStatus']?.toString() ?? 'pending';
+    final processingStatus =
+        segment['ProcessingStatus']?.toString() ?? 'pending';
 
     DateTime? endTime;
     if (endTimeStr != null && endTimeStr.isNotEmpty) {
@@ -328,11 +383,14 @@ class _SimpleSegmentCard extends StatelessWidget {
     }
 
     final statusStr = segment['Status']?.toString().toLowerCase();
-    final isSegmentComplete = statusStr == 'complete' || statusStr == 'completed';
+    final isSegmentComplete =
+        statusStr == 'complete' || statusStr == 'completed';
     final isStoryComplete = segment['StoryComplete'] == true;
     // For active segments, only consider segment completion status, not story completion
     // Story might be complete while the final segment is still running
-    final isCompleteFlag = isActive ? isSegmentComplete : (isSegmentComplete || isStoryComplete);
+    final isCompleteFlag = isActive
+        ? isSegmentComplete
+        : (isSegmentComplete || isStoryComplete);
 
     final dynamic timeRemainingValue = segment['TimeRemaining'];
     int? timeRemaining;
@@ -373,17 +431,25 @@ class _SimpleSegmentCard extends StatelessWidget {
     final bool shouldRevealResults;
     if (isActive) {
       // Active segment: Only reveal when timer has expired AND segment is processed
-      shouldRevealResults = hasTimerExpired && (processingStatus == 'processed' || isCompleteFlag);
-      debugPrint('ActiveStoryWidget: Active segment gating - timerExpired=$hasTimerExpired, processed=${processingStatus == 'processed'}, complete=$isCompleteFlag, reveal=$shouldRevealResults');
+      shouldRevealResults =
+          hasTimerExpired &&
+          (processingStatus == 'processed' || isCompleteFlag);
+      debugPrint(
+        'ActiveStoryWidget: Active segment gating - timerExpired=$hasTimerExpired, processed=${processingStatus == 'processed'}, complete=$isCompleteFlag, reveal=$shouldRevealResults',
+      );
     } else {
       // Historical segment: Reveal if processed (and it's not the active segment anymore)
       shouldRevealResults = processingStatus == 'processed' || isCompleteFlag;
-      debugPrint('ActiveStoryWidget: Historical segment - processed=${processingStatus == 'processed'}, complete=$isCompleteFlag, reveal=$shouldRevealResults');
+      debugPrint(
+        'ActiveStoryWidget: Historical segment - processed=${processingStatus == 'processed'}, complete=$isCompleteFlag, reveal=$shouldRevealResults',
+      );
     }
 
     final bool waitingOnTimer = isActive && !shouldRevealResults;
     if (waitingOnTimer) {
-      debugPrint('ActiveStoryWidget: Waiting on timer - showing processing indicator (timeRemaining=${timeRemaining ?? 'unknown'})');
+      debugPrint(
+        'ActiveStoryWidget: Waiting on timer - showing processing indicator (timeRemaining=${timeRemaining ?? 'unknown'})',
+      );
     }
 
     var processingIndicatorText = '';
@@ -393,7 +459,10 @@ class _SimpleSegmentCard extends StatelessWidget {
         allowPlaceholders: true,
         exclude: segmentTitle,
       );
-      processingIndicatorText = candidate.isEmpty || _isProcessingPlaceholder(candidate) ? 'Processing...' : candidate;
+      processingIndicatorText =
+          candidate.isEmpty || _isProcessingPlaceholder(candidate)
+          ? 'Processing...'
+          : candidate;
     }
 
     // Determine card color based on outcome
@@ -408,10 +477,14 @@ class _SimpleSegmentCard extends StatelessWidget {
     } else {
       // Segment not processed yet or no outcome - use neutral colors
       cardColor = theme.colorScheme.primary;
-      backgroundColor = isActive ? theme.colorScheme.primaryContainer.withValues(alpha: 0.1) : theme.colorScheme.surface;
+      backgroundColor = isActive
+          ? theme.colorScheme.primaryContainer.withValues(alpha: 0.1)
+          : theme.colorScheme.surface;
 
       if (isActive) {
-        icon = waitingOnTimer ? Icons.hourglass_empty : Icons.play_circle_outline;
+        icon = waitingOnTimer
+            ? Icons.hourglass_empty
+            : Icons.play_circle_outline;
       } else {
         icon = Icons.check_circle_outline;
       }
@@ -422,7 +495,12 @@ class _SimpleSegmentCard extends StatelessWidget {
       color: backgroundColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: isActive ? cardColor.withValues(alpha: 0.3) : Colors.transparent, width: isActive ? 2 : 1),
+        side: BorderSide(
+          color: isActive
+              ? cardColor.withValues(alpha: 0.3)
+              : Colors.transparent,
+          width: isActive ? 2 : 1,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -432,12 +510,20 @@ class _SimpleSegmentCard extends StatelessWidget {
             // Header row with SegmentTitle as title
             Row(
               children: [
-                Icon(icon, color: isActive ? cardColor : theme.colorScheme.onSurfaceVariant),
+                Icon(
+                  icon,
+                  color: isActive
+                      ? cardColor
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     segmentTitle,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: isActive ? cardColor : null),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: isActive ? cardColor : null,
+                    ),
                   ),
                 ),
               ],
@@ -447,9 +533,14 @@ class _SimpleSegmentCard extends StatelessWidget {
             if (waitingOnTimer) ...[
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+                  color: theme.colorScheme.tertiaryContainer.withValues(
+                    alpha: 0.5,
+                  ),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -460,13 +551,18 @@ class _SimpleSegmentCard extends StatelessWidget {
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.tertiary),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          theme.colorScheme.tertiary,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       processingIndicatorText,
-                      style: TextStyle(color: theme.colorScheme.tertiary, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: theme.colorScheme.tertiary,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ],
                 ),
@@ -484,25 +580,41 @@ class _SimpleSegmentCard extends StatelessWidget {
               ),
               if (showSupplementalStatus) ...[
                 const SizedBox(height: 8),
-                Text(supplementalStatus, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                Text(
+                  supplementalStatus,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ],
 
-            if (isActive && endTime == null && waitingOnTimer && showSupplementalStatus) ...[
+            if (isActive &&
+                endTime == null &&
+                waitingOnTimer &&
+                showSupplementalStatus) ...[
               const SizedBox(height: 12),
-              Text(supplementalStatus, style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+              Text(
+                supplementalStatus,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
             ],
 
             // Show narrative for processed segments OR initial prompt for unprocessed active segments
             // ClientEvents contain the narrative for processed segments
-            if ((shouldRevealResults && (segment['Narrative'] != null || segment['ClientEvents'] != null)) ||
+            if ((shouldRevealResults &&
+                    (segment['Narrative'] != null ||
+                        segment['ClientEvents'] != null)) ||
                 (waitingOnTimer && segment['Prompt'] != null)) ...[
               const SizedBox(height: 12),
               Builder(
                 builder: (context) {
                   final narrative = segment['Narrative']?.toString() ?? '';
                   final promptText = segment['Prompt']?.toString() ?? '';
-                  final clientEvents = segment['ClientEvents'] as List<dynamic>?;
+                  final clientEvents =
+                      segment['ClientEvents'] as List<dynamic>?;
 
                   // For processed segments, show narrative from ClientEvents or Narrative field
                   // For active unprocessed segments, show initial prompt
@@ -537,7 +649,11 @@ class _SimpleSegmentCard extends StatelessWidget {
                   }
 
                   if (shouldRevealResults) {
-                    return Text(displayText, style: theme.textTheme.bodyMedium, textAlign: TextAlign.justify);
+                    return Text(
+                      displayText,
+                      style: theme.textTheme.bodyMedium,
+                      textAlign: TextAlign.justify,
+                    );
                   }
 
                   return Container(
@@ -545,7 +661,9 @@ class _SimpleSegmentCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+                      border: Border.all(
+                        color: theme.colorScheme.outline.withValues(alpha: 0.2),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,8 +676,13 @@ class _SimpleSegmentCard extends StatelessWidget {
                               color: theme.colorScheme.primary,
                             ),
                           ),
-                        if (waitingOnTimer && promptText.isNotEmpty) const SizedBox(height: 4),
-                        Text(displayText, style: theme.textTheme.bodyMedium, textAlign: TextAlign.justify),
+                        if (waitingOnTimer && promptText.isNotEmpty)
+                          const SizedBox(height: 4),
+                        Text(
+                          displayText,
+                          style: theme.textTheme.bodyMedium,
+                          textAlign: TextAlign.justify,
+                        ),
                       ],
                     ),
                   );
@@ -572,23 +695,34 @@ class _SimpleSegmentCard extends StatelessWidget {
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(Icons.workspace_premium, size: 16, color: outcomeAccentColor(theme, outcome)),
+                  Icon(
+                    Icons.workspace_premium,
+                    size: 16,
+                    color: outcomeAccentColor(theme, outcome),
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     'Outcome: ${_formatOutcome(outcome)}',
-                    style: TextStyle(color: outcomeAccentColor(theme, outcome), fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      color: outcomeAccentColor(theme, outcome),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ],
               ),
             ],
 
             // Show chosen decision for completed decision segments
-            if (segmentType == 'decision' && !isActive && segment['Decision'] != null && segment['DecisionOptions'] != null) ...[
+            if (segmentType == 'decision' &&
+                !isActive &&
+                segment['Decision'] != null &&
+                segment['DecisionOptions'] != null) ...[
               const SizedBox(height: 12),
               Builder(
                 builder: (context) {
                   final decisionId = segment['Decision'] as String;
-                  final decisionOptions = segment['DecisionOptions'] as Map<String, dynamic>;
+                  final decisionOptions =
+                      segment['DecisionOptions'] as Map<String, dynamic>;
                   final choiceData = decisionOptions[decisionId];
 
                   String choiceText;
@@ -604,16 +738,24 @@ class _SimpleSegmentCard extends StatelessWidget {
                   return Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+                      color: theme.colorScheme.primaryContainer.withValues(
+                        alpha: 0.3,
+                      ),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.5)),
+                      border: Border.all(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                      ),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(Icons.check_circle, size: 16, color: theme.colorScheme.primary),
+                            Icon(
+                              Icons.check_circle,
+                              size: 16,
+                              color: theme.colorScheme.primary,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'Decision Made:',
@@ -648,7 +790,9 @@ class _SimpleSegmentCard extends StatelessWidget {
             ],
 
             // Decision options for decision segments
-            if (segmentType == 'decision' && isActive && segment['DecisionOptions'] != null) ...[
+            if (segmentType == 'decision' &&
+                isActive &&
+                segment['DecisionOptions'] != null) ...[
               const SizedBox(height: 12),
               if (segment['DecisionText'] != null) ...[
                 Text(
@@ -657,42 +801,43 @@ class _SimpleSegmentCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
               ],
-              ...((segment['DecisionOptions'] as Map<String, dynamic>).entries.map(
-                (entry) {
-                  final choiceData = entry.value;
-                  String choiceText;
-                  String? description;
+              ...((segment['DecisionOptions'] as Map<String, dynamic>).entries
+                  .map((entry) {
+                    final choiceData = entry.value;
+                    String choiceText;
+                    String? description;
 
-                  // Support both legacy (string) and rich (object) formats
-                  if (choiceData is Map<String, dynamic>) {
-                    choiceText = choiceData['Text'] as String? ?? entry.key;
-                    description = choiceData['Description'] as String?;
-                  } else {
-                    // Legacy format: display choice ID
-                    choiceText = entry.key.replaceAll('-', ' ').toUpperCase();
-                  }
+                    // Support both legacy (string) and rich (object) formats
+                    if (choiceData is Map<String, dynamic>) {
+                      choiceText = choiceData['Text'] as String? ?? entry.key;
+                      description = choiceData['Description'] as String?;
+                    } else {
+                      // Legacy format: display choice ID
+                      choiceText = entry.key.replaceAll('-', ' ').toUpperCase();
+                    }
 
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (description != null) ...[
-                          Text(
-                            description,
-                            style: theme.textTheme.bodyMedium,
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (description != null) ...[
+                            Text(
+                              description,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                          FilledButton(
+                            onPressed: isDecisionSubmitting
+                                ? null
+                                : () => onDecisionSelect?.call(entry.key),
+                            child: Text(choiceText),
                           ),
-                          const SizedBox(height: 8),
                         ],
-                        FilledButton(
-                          onPressed: isDecisionSubmitting ? null : () => onDecisionSelect?.call(entry.key),
-                          child: Text(choiceText),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              )),
+                      ),
+                    );
+                  })),
             ],
           ],
         ),
@@ -701,7 +846,9 @@ class _SimpleSegmentCard extends StatelessWidget {
   }
 
   String _formatOutcome(dynamic outcome) {
-    final outcomeStr = outcome is String ? outcome : outcome['Type'] ?? 'normal';
+    final outcomeStr = outcome is String
+        ? outcome
+        : outcome['Type'] ?? 'normal';
     return outcomeStr[0].toUpperCase() + outcomeStr.substring(1);
   }
 
@@ -725,7 +872,12 @@ class _SegmentTimer extends StatefulWidget {
   final dynamic duration;
   final VoidCallback? onTimeout;
 
-  const _SegmentTimer({required this.endTime, this.startTime, this.duration, this.onTimeout});
+  const _SegmentTimer({
+    required this.endTime,
+    this.startTime,
+    this.duration,
+    this.onTimeout,
+  });
 
   @override
   State<_SegmentTimer> createState() => _SegmentTimerState();
@@ -755,16 +907,24 @@ class _SegmentTimerState extends State<_SegmentTimer> {
       } catch (e) {
         // If parsing fails, fall back to calculation method
         if (widget.duration != null) {
-          _totalDuration = widget.duration is int ? widget.duration : int.tryParse(widget.duration.toString()) ?? 60;
+          _totalDuration = widget.duration is int
+              ? widget.duration
+              : int.tryParse(widget.duration.toString()) ?? 60;
         }
-        _startDateTime = _endDateTime!.subtract(Duration(seconds: _totalDuration));
+        _startDateTime = _endDateTime!.subtract(
+          Duration(seconds: _totalDuration),
+        );
       }
     } else {
       // No start time provided, calculate based on duration
       if (widget.duration != null) {
-        _totalDuration = widget.duration is int ? widget.duration : int.tryParse(widget.duration.toString()) ?? 60;
+        _totalDuration = widget.duration is int
+            ? widget.duration
+            : int.tryParse(widget.duration.toString()) ?? 60;
       }
-      _startDateTime = _endDateTime!.subtract(Duration(seconds: _totalDuration));
+      _startDateTime = _endDateTime!.subtract(
+        Duration(seconds: _totalDuration),
+      );
     }
 
     _updateRemainingTime();
@@ -849,7 +1009,9 @@ class _SegmentTimerState extends State<_SegmentTimer> {
     // Calculate progress based on elapsed time from start
     // Progress starts at 0 when segment begins and reaches 1.0 when it ends
     double progress = 0.0;
-    if (_startDateTime != null && _endDateTime != null && _timerProvider != null) {
+    if (_startDateTime != null &&
+        _endDateTime != null &&
+        _timerProvider != null) {
       progress = _timerProvider!.getProgress(_startDateTime!, _endDateTime!);
     }
 
@@ -862,7 +1024,9 @@ class _SegmentTimerState extends State<_SegmentTimer> {
           child: LinearProgressIndicator(
             value: progress.clamp(0.0, 1.0),
             backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              theme.colorScheme.primary,
+            ),
             minHeight: 6,
           ),
         ),
@@ -870,11 +1034,19 @@ class _SegmentTimerState extends State<_SegmentTimer> {
         // Timer display
         Row(
           children: [
-            Icon(Icons.timer, size: 16, color: theme.colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.timer,
+              size: 16,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 4),
             Text(
               timeDisplay,
-              style: TextStyle(fontFamily: 'monospace', color: theme.colorScheme.onSurfaceVariant, fontSize: 14),
+              style: TextStyle(
+                fontFamily: 'monospace',
+                color: theme.colorScheme.onSurfaceVariant,
+                fontSize: 14,
+              ),
             ),
           ],
         ),

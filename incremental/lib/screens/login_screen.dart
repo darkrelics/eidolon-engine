@@ -9,7 +9,10 @@ class LoginScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(create: (_) => LoginScreenController(), child: const _LoginScreenView());
+    return ChangeNotifierProvider(
+      create: (_) => LoginScreenController(),
+      child: const _LoginScreenView(),
+    );
   }
 }
 
@@ -25,11 +28,17 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-      if (args != null && args[NavigationConstants.messageKey] != null && mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(args[NavigationConstants.messageKey]), backgroundColor: Colors.green));
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+      if (args != null &&
+          args[NavigationConstants.messageKey] != null &&
+          mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(args[NavigationConstants.messageKey]),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     });
   }
@@ -77,7 +86,9 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
                           if (value == null || value.isEmpty) {
                             return 'Please enter your email';
                           }
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                          if (!RegExp(
+                            r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                          ).hasMatch(value)) {
                             return 'Please enter a valid email';
                           }
                           return null;
@@ -91,7 +102,11 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
                           border: const OutlineInputBorder(),
                           prefixIcon: const Icon(Icons.lock),
                           suffixIcon: IconButton(
-                            icon: Icon(controller.isPasswordVisible ? Icons.visibility_off : Icons.visibility),
+                            icon: Icon(
+                              controller.isPasswordVisible
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
                             onPressed: controller.togglePasswordVisibility,
                           ),
                         ),
@@ -112,16 +127,27 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
                           onPressed: controller.isLoading
                               ? null
                               : () {
-                                  Navigator.pushNamed(context, '/forgot-password');
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/forgot-password',
+                                  );
                                 },
                           child: const Text('Forgot Password?'),
                         ),
                       ),
                       const SizedBox(height: 24),
                       FilledButton(
-                        onPressed: controller.isLoading ? null : () => controller.signIn(context),
+                        onPressed: controller.isLoading
+                            ? null
+                            : () => controller.signIn(context),
                         child: controller.isLoading
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
                             : const Text('Sign In'),
                       ),
                       const SizedBox(height: 16),
@@ -155,8 +181,8 @@ class _LoginScreenViewState extends State<_LoginScreenView> {
                   return Text(
                     'v${snapshot.data!.version}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   );
                 }
                 return const SizedBox.shrink();

@@ -27,13 +27,16 @@ class CognitoConfig {
   /// without requiring actual AWS Cognito configuration.
   /// NEVER use these in production - they are intentionally invalid.
   static String get _devUserPoolId => kDebugMode ? 'us-east-1_devUserPool' : '';
-  static String get _devClientId => kDebugMode ? '1example2client3id4567890abc' : '';
+  static String get _devClientId =>
+      kDebugMode ? '1example2client3id4567890abc' : '';
 
   /// Returns the User Pool ID with fallback to development value in debug mode
-  static String get userPoolIdWithFallback => userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
+  static String get userPoolIdWithFallback =>
+      userPoolId.isNotEmpty ? userPoolId : _devUserPoolId;
 
   /// Returns the Client ID with fallback to development value in debug mode
-  static String get clientIdWithFallback => clientId.isNotEmpty ? clientId : _devClientId;
+  static String get clientIdWithFallback =>
+      clientId.isNotEmpty ? clientId : _devClientId;
 
   /// Validates that the Cognito configuration is properly set.
   /// In production (release mode), this ensures environment variables are provided.
@@ -54,16 +57,22 @@ class CognitoConfig {
 
     // Basic validation - user pool ID must have the correct format
     if (effectiveUserPoolId.isEmpty || !effectiveUserPoolId.contains('_')) {
-      throw ConfigurationException('Invalid User Pool ID format. Expected format: "region_poolId" (e.g., "us-east-1_abcd1234")');
+      throw ConfigurationException(
+        'Invalid User Pool ID format. Expected format: "region_poolId" (e.g., "us-east-1_abcd1234")',
+      );
     }
 
     // Client ID must be present and have reasonable length
     if (effectiveClientId.isEmpty) {
-      throw ConfigurationException('Client ID is missing. Ensure CLIENT_ID environment variable is set.');
+      throw ConfigurationException(
+        'Client ID is missing. Ensure CLIENT_ID environment variable is set.',
+      );
     }
 
     if (effectiveClientId.length < 10) {
-      throw ConfigurationException('Client ID appears invalid (too short). Expected a valid Cognito Client ID.');
+      throw ConfigurationException(
+        'Client ID appears invalid (too short). Expected a valid Cognito Client ID.',
+      );
     }
   }
 
@@ -108,7 +117,9 @@ class AuthExceptionMapper {
       // Log the error code in debug mode to help diagnose issues
       if (kDebugMode) {
         debugPrint('AuthExceptionMapper: Cognito error code: ${error.code}');
-        debugPrint('AuthExceptionMapper: Cognito error message: ${error.message}');
+        debugPrint(
+          'AuthExceptionMapper: Cognito error message: ${error.message}',
+        );
       }
 
       switch (error.code) {
@@ -134,9 +145,12 @@ class AuthExceptionMapper {
           return 'Verification code has expired. Please request a new one';
         default:
           // Check if the error message contains username exists indication
-          if (error.message?.toLowerCase().contains('username exists') == true ||
-              error.message?.toLowerCase().contains('user already exists') == true ||
-              error.message?.toLowerCase().contains('already registered') == true) {
+          if (error.message?.toLowerCase().contains('username exists') ==
+                  true ||
+              error.message?.toLowerCase().contains('user already exists') ==
+                  true ||
+              error.message?.toLowerCase().contains('already registered') ==
+                  true) {
             return 'The Player Account already exists.';
           }
           return 'An error occurred. Please try again';
@@ -225,7 +239,9 @@ class AuthService {
 
       return signUpResult;
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Account creation failed', err);
       rethrow;
@@ -244,7 +260,9 @@ class AuthService {
       final user = CognitoUser(email, userPool);
       return await user.confirmRegistration(code);
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Account verification failed', err);
       rethrow;
@@ -271,15 +289,22 @@ class AuthService {
       }
 
       final user = CognitoUser(email, userPool);
-      final authDetails = AuthenticationDetails(username: email, password: password);
+      final authDetails = AuthenticationDetails(
+        username: email,
+        password: password,
+      );
 
       try {
         _session = await user.authenticateUser(authDetails);
       } on CognitoClientException catch (e) {
-        if (e.code == 'InvalidParameterException' && e.message?.contains('USER_SRP_AUTH is not enabled') == true) {
+        if (e.code == 'InvalidParameterException' &&
+            e.message?.contains('USER_SRP_AUTH is not enabled') == true) {
           user.setAuthenticationFlowType('USER_PASSWORD_AUTH');
 
-          final passwordAuth = AuthenticationDetails(username: email, password: password);
+          final passwordAuth = AuthenticationDetails(
+            username: email,
+            password: password,
+          );
 
           _session = await user.authenticateUser(passwordAuth);
         } else if (e.code == 'SOFTWARE_TOKEN_MFA') {
@@ -287,7 +312,11 @@ class AuthService {
           _currentUser = user;
           // We don't have a session yet, but we have the user state needed to respond
           // Throw a specific exception that the UI can catch to show the MFA prompt
-          throw CognitoClientException('MFA_REQUIRED', code: 'MFA_REQUIRED', name: 'MFA_REQUIRED');
+          throw CognitoClientException(
+            'MFA_REQUIRED',
+            code: 'MFA_REQUIRED',
+            name: 'MFA_REQUIRED',
+          );
         } else {
           rethrow;
         }
@@ -301,7 +330,9 @@ class AuthService {
       if (err.code == 'MFA_REQUIRED') {
         rethrow;
       }
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Sign in failed', err);
       rethrow;
@@ -329,7 +360,9 @@ class AuthService {
       _session = null;
       final cleared = await _clearTokens();
       if (!cleared) {
-        throw AuthSignOutException('Sign-out partially failed. Please try again.');
+        throw AuthSignOutException(
+          'Sign-out partially failed. Please try again.',
+        );
       }
     }
   }
@@ -397,7 +430,9 @@ class AuthService {
       final user = CognitoUser(email, userPool);
       await user.resendConfirmationCode();
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Failed to send verification code', err);
       rethrow;
@@ -416,7 +451,9 @@ class AuthService {
       final user = CognitoUser(email, userPool);
       await user.forgotPassword();
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Failed to initiate password reset', err);
       rethrow;
@@ -424,7 +461,11 @@ class AuthService {
   }
 
   /// Confirms password reset with code and new password
-  Future<void> confirmPassword(String email, String code, String newPassword) async {
+  Future<void> confirmPassword(
+    String email,
+    String code,
+    String newPassword,
+  ) async {
     await _ensureInitialized();
 
     try {
@@ -445,7 +486,9 @@ class AuthService {
       final user = CognitoUser(email, userPool);
       await user.confirmPassword(code, newPassword);
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Failed to reset password', err);
       rethrow;
@@ -458,7 +501,9 @@ class AuthService {
 
     try {
       if (_currentUser == null || _session == null) {
-        throw CognitoClientException('User must be signed in to delete account');
+        throw CognitoClientException(
+          'User must be signed in to delete account',
+        );
       }
 
       if (!_session!.isValid()) {
@@ -474,7 +519,9 @@ class AuthService {
       _session = null;
       await _clearTokens();
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('Account deletion failed', err);
       rethrow;
@@ -505,7 +552,12 @@ class AuthService {
   }
 
   /// Generate HMAC for token data to detect tampering
-  Future<String> _generateTokenIntegrity(String accessToken, String idToken, String? refreshToken, String email) async {
+  Future<String> _generateTokenIntegrity(
+    String accessToken,
+    String idToken,
+    String? refreshToken,
+    String email,
+  ) async {
     try {
       final deviceKey = await _getDeviceKey();
       final tokenData = '$accessToken|$idToken|${refreshToken ?? ''}|$email';
@@ -530,7 +582,12 @@ class AuthService {
     String storedHmac,
   ) async {
     try {
-      final computedHmac = await _generateTokenIntegrity(accessToken, idToken, refreshToken, email);
+      final computedHmac = await _generateTokenIntegrity(
+        accessToken,
+        idToken,
+        refreshToken,
+        email,
+      );
 
       if (computedHmac.isEmpty || storedHmac.isEmpty) {
         debugPrint('AuthService: Integrity validation failed - empty HMAC');
@@ -540,7 +597,9 @@ class AuthService {
       final isValid = computedHmac == storedHmac;
 
       if (!isValid) {
-        debugPrint('AuthService: Token integrity check failed - possible tampering detected');
+        debugPrint(
+          'AuthService: Token integrity check failed - possible tampering detected',
+        );
       }
 
       return isValid;
@@ -563,12 +622,18 @@ class AuthService {
       }
 
       // Generate integrity hash before storing
-      final integrity = await _generateTokenIntegrity(accessToken, idToken, refreshToken, email);
+      final integrity = await _generateTokenIntegrity(
+        accessToken,
+        idToken,
+        refreshToken,
+        email,
+      );
 
       await Future.wait([
         _secureStorage.write(key: _accessTokenKey, value: accessToken),
         _secureStorage.write(key: _idTokenKey, value: idToken),
-        if (refreshToken != null) _secureStorage.write(key: _refreshTokenKey, value: refreshToken),
+        if (refreshToken != null)
+          _secureStorage.write(key: _refreshTokenKey, value: refreshToken),
         _secureStorage.write(key: _userEmailKey, value: email),
         _secureStorage.write(key: _integrityKey, value: integrity),
       ]);
@@ -594,7 +659,9 @@ class AuthService {
 
       final accessTokenValue = await _secureStorage.read(key: _accessTokenKey);
       final idTokenValue = await _secureStorage.read(key: _idTokenKey);
-      final refreshTokenValue = await _secureStorage.read(key: _refreshTokenKey);
+      final refreshTokenValue = await _secureStorage.read(
+        key: _refreshTokenKey,
+      );
       final emailValue = await _secureStorage.read(key: _userEmailKey);
       final integrityValue = await _secureStorage.read(key: _integrityKey);
 
@@ -617,7 +684,9 @@ class AuthService {
   Future<bool> _restoreSession() async {
     // If a session operation is already in progress, wait for it
     if (_sessionOperationLock != null) {
-      debugPrint('AuthService: Session restore already in progress, waiting...');
+      debugPrint(
+        'AuthService: Session restore already in progress, waiting...',
+      );
       return _sessionOperationLock!.future;
     }
 
@@ -652,10 +721,18 @@ class AuthService {
 
       // Validate token integrity if HMAC is present
       if (storedIntegrity != null && storedIntegrity.isNotEmpty) {
-        final isValid = await _validateTokenIntegrity(accessToken ?? '', idToken ?? '', refreshToken, email, storedIntegrity);
+        final isValid = await _validateTokenIntegrity(
+          accessToken ?? '',
+          idToken ?? '',
+          refreshToken,
+          email,
+          storedIntegrity,
+        );
 
         if (!isValid) {
-          debugPrint('AuthService: Token integrity validation failed - clearing potentially tampered tokens');
+          debugPrint(
+            'AuthService: Token integrity validation failed - clearing potentially tampered tokens',
+          );
           await _clearTokens();
           return false;
         }
@@ -664,7 +741,9 @@ class AuthService {
       } else {
         // No integrity hash found - tokens stored before integrity feature was added
         // Allow restore but re-persist with new integrity hash
-        debugPrint('AuthService: No integrity hash found - will generate on next persist');
+        debugPrint(
+          'AuthService: No integrity hash found - will generate on next persist',
+        );
       }
 
       _currentUser = CognitoUser(email, userPool);
@@ -731,7 +810,9 @@ class AuthService {
   bool _validatePassword(String password) {
     if (password.length < 8) return false;
 
-    return RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$').hasMatch(password);
+    return RegExp(
+      r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$',
+    ).hasMatch(password);
   }
 
   /// Logs errors in a secure way without exposing sensitive information
@@ -770,7 +851,9 @@ class AuthService {
       final secret = await _currentUser!.associateSoftwareToken();
       return secret ?? '';
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('MFA setup failed', err);
       rethrow;
@@ -797,7 +880,9 @@ class AuthService {
       }
       return result;
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('MFA verification failed', err);
       rethrow;
@@ -821,7 +906,9 @@ class AuthService {
       await _persistTokens(_session!, await currentUserEmail ?? '');
       return _currentUser!;
     } on CognitoClientException catch (err) {
-      throw CognitoClientException(AuthExceptionMapper.mapToUserFriendlyMessage(err));
+      throw CognitoClientException(
+        AuthExceptionMapper.mapToUserFriendlyMessage(err),
+      );
     } catch (err) {
       _logError('MFA challenge response failed', err);
       rethrow;
@@ -829,5 +916,6 @@ class AuthService {
   }
 
   /// Gets the current user's email
-  Future<String?> get currentUserEmail async => await _secureStorage.read(key: _userEmailKey);
+  Future<String?> get currentUserEmail async =>
+      await _secureStorage.read(key: _userEmailKey);
 }

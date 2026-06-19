@@ -156,7 +156,10 @@ class ErrorHandler {
       }
     }
 
-    // If it's a short, readable message without technical terms, consider it user-friendly
-    return message.length < 100 && !message.contains(':');
+    // If it's a short, readable message without technical terms, consider it
+    // user-friendly. Colons are fine: backend validation messages may contain
+    // them, and technical shapes (exceptions, stack traces, status codes) are
+    // already rejected by the term list above.
+    return message.length < 200;
   }
 }

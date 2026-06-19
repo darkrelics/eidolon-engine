@@ -4,10 +4,10 @@ on:
   push:
     branches: [develop, qa, prod]
     paths:
-      - "cloudformation/*.yml"
+      - "cf/*.yml"
   pull_request:
     paths:
-      - "cloudformation/*.yml"
+      - "cf/*.yml"
 
 permissions:
   contents: read
@@ -27,4 +27,4 @@ jobs:
           pip install --upgrade cfn-lint
       - name: Validate CloudFormation Templates
         run: |
-          cfn-lint ./cloudformation/*.yml
+          cfn-lint ./cf/*.yml

@@ -59,7 +59,11 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
       appBar: AppBar(
         title: const Text('Select Character'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: controller.loadCharacters, tooltip: 'Refresh'),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: controller.loadCharacters,
+            tooltip: 'Refresh',
+          ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
@@ -79,7 +83,9 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
           ),
         ],
       ),
-      body: SafeArea(child: _buildBody(context, controller, characters, isLoading, error)),
+      body: SafeArea(
+        child: _buildBody(context, controller, characters, isLoading, error),
+      ),
       floatingActionButton: characters != null && characters.isNotEmpty
           ? FloatingActionButton.extended(
               onPressed: () => _showAddCharacterDialog(),
@@ -103,7 +109,9 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    debugPrint('CharacterScreen: _buildBody - isLoading: $isLoading, error: $error, characters: ${characters?.length ?? "null"}');
+    debugPrint(
+      'CharacterScreen: _buildBody - isLoading: $isLoading, error: $error, characters: ${characters?.length ?? "null"}',
+    );
 
     if (isLoading && (characters == null || characters.isEmpty)) {
       return const Center(child: CircularProgressIndicator());
@@ -120,11 +128,16 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
               const SizedBox(height: 16),
               Text(
                 error,
-                style: theme.textTheme.titleMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              FilledButton(onPressed: controller.loadCharacters, child: const Text('Retry')),
+              FilledButton(
+                onPressed: controller.loadCharacters,
+                child: const Text('Retry'),
+              ),
             ],
           ),
         ),
@@ -138,7 +151,11 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.person_off, size: 64, color: colorScheme.onSurfaceVariant),
+              Icon(
+                Icons.person_off,
+                size: 64,
+                color: colorScheme.onSurfaceVariant,
+              ),
               const SizedBox(height: 16),
               Text('No Characters Found', style: theme.textTheme.headlineSmall),
               const SizedBox(height: 8),
@@ -164,7 +181,11 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Select a Character', style: theme.textTheme.headlineMedium, textAlign: TextAlign.center),
+          Text(
+            'Select a Character',
+            style: theme.textTheme.headlineMedium,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 24),
           Expanded(
             child: RefreshIndicator(
@@ -179,26 +200,46 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                       onTap: character.dead
                           ? null
                           : () {
-                              debugPrint('CharacterScreen: Character tapped - ${character.name} (${character.id})');
-                              debugPrint('CharacterScreen: Showing loading dialog for character selection');
+                              debugPrint(
+                                'CharacterScreen: Character tapped - ${character.name} (${character.id})',
+                              );
+                              debugPrint(
+                                'CharacterScreen: Showing loading dialog for character selection',
+                              );
                               _showEnterGameDialog(context, character);
                             },
                       child: ListTile(
                         leading: Icon(
                           character.dead ? Icons.person_off : Icons.person,
-                          color: character.dead ? colorScheme.error : colorScheme.primary,
+                          color: character.dead
+                              ? colorScheme.error
+                              : colorScheme.primary,
                         ),
                         title: Text(
                           character.name,
-                          style: TextStyle(decoration: character.dead ? TextDecoration.lineThrough : null),
+                          style: TextStyle(
+                            decoration: character.dead
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
                         ),
                         subtitle: character.dead
-                            ? Text('Deceased', style: TextStyle(color: colorScheme.error))
-                            : Text('Active', style: TextStyle(color: colorScheme.primary)),
+                            ? Text(
+                                'Deceased',
+                                style: TextStyle(color: colorScheme.error),
+                              )
+                            : Text(
+                                'Active',
+                                style: TextStyle(color: colorScheme.primary),
+                              ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(icon: const Icon(Icons.delete), onPressed: () => _showDeleteCharacterDialog(character)),
+                            IconButton(
+                              icon: const Icon(Icons.delete),
+                              onPressed: () =>
+                                  _showDeleteCharacterDialog(character),
+                            ),
                             const Icon(Icons.chevron_right),
                           ],
                         ),
@@ -224,7 +265,12 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(ErrorHandler.getUserFriendlyMessage(e, context: 'loading archetypes')),
+            content: Text(
+              ErrorHandler.getUserFriendlyMessage(
+                e,
+                context: 'loading archetypes',
+              ),
+            ),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -235,7 +281,9 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
     if (!mounted) return;
 
     final nameController = TextEditingController();
-    String? selectedArchetype = archetypes.isNotEmpty ? archetypes.first.name : null;
+    String? selectedArchetype = archetypes.isNotEmpty
+        ? archetypes.first.name
+        : null;
 
     await showDialog(
       context: context,
@@ -266,11 +314,14 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                       child: SingleChildScrollView(
                         child: Column(
                           children: archetypes.map((archetype) {
-                            final isSelected = selectedArchetype == archetype.name;
+                            final isSelected =
+                                selectedArchetype == archetype.name;
                             return Card(
                               elevation: isSelected ? 2 : 0,
                               color: isSelected
-                                  ? Theme.of(sbContext).colorScheme.primaryContainer
+                                  ? Theme.of(
+                                      sbContext,
+                                    ).colorScheme.primaryContainer
                                   : Theme.of(sbContext).colorScheme.surface,
                               margin: const EdgeInsets.symmetric(vertical: 4),
                               child: ListTile(
@@ -278,7 +329,9 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                                 title: Text(
                                   archetype.name,
                                   style: TextStyle(
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
                                   ),
                                 ),
                                 subtitle: archetype.description.isNotEmpty
@@ -286,7 +339,9 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                                         archetype.description,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(sbContext).textTheme.bodySmall,
+                                        style: Theme.of(
+                                          sbContext,
+                                        ).textTheme.bodySmall,
                                       )
                                     : null,
                                 onTap: () {
@@ -305,7 +360,9 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(sbContext).colorScheme.surfaceContainerHighest,
+                        color: Theme.of(
+                          sbContext,
+                        ).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -313,14 +370,19 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                           Icon(
                             Icons.info_outline,
                             size: 20,
-                            color: Theme.of(sbContext).colorScheme.onSurfaceVariant,
+                            color: Theme.of(
+                              sbContext,
+                            ).colorScheme.onSurfaceVariant,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               'No archetypes available. Default stats will be used.',
-                              style: Theme.of(sbContext).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(sbContext).colorScheme.onSurfaceVariant,
+                              style: Theme.of(sbContext).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      sbContext,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                             ),
                           ),
@@ -342,7 +404,9 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
                 final name = nameController.text.trim();
                 if (name.isEmpty) {
                   ScaffoldMessenger.of(dialogContext).showSnackBar(
-                    const SnackBar(content: Text('Please enter a character name')),
+                    const SnackBar(
+                      content: Text('Please enter a character name'),
+                    ),
                   );
                   return;
                 }
@@ -365,13 +429,18 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
       archetype,
       onSuccess: (message) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message), backgroundColor: Colors.green),
+          );
         }
       },
       onError: (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(error), backgroundColor: Theme.of(context).colorScheme.error),
+            SnackBar(
+              content: Text(error),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
           );
         }
       },
@@ -383,12 +452,19 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Character'),
-        content: Text('Are you sure you want to delete "${character.name}"? This action cannot be undone.'),
+        content: Text(
+          'Are you sure you want to delete "${character.name}"? This action cannot be undone.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -409,20 +485,28 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
       character,
       onSuccess: (message) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message), backgroundColor: Colors.green),
+          );
         }
       },
       onError: (error) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(error), backgroundColor: Theme.of(context).colorScheme.error));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
         }
       },
     );
   }
 
-  Future<void> _showEnterGameDialog(BuildContext context, CharacterInfo character) async {
+  Future<void> _showEnterGameDialog(
+    BuildContext context,
+    CharacterInfo character,
+  ) async {
     final controller = context.read<CharacterScreenController>();
     final rootNavigator = Navigator.of(context, rootNavigator: true);
     final navigator = Navigator.of(context);
@@ -445,7 +529,8 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
         // Navigate to game
         navigator.pushReplacementNamed(
           '/game',
-          arguments: character, // We pass info, game screen will load full data if needed or use provider
+          arguments:
+              character, // We pass info, game screen will load full data if needed or use provider
         );
       },
       onError: (error) {
@@ -453,9 +538,12 @@ class _CharacterScreenViewState extends State<_CharacterScreenView> {
         rootNavigator.pop();
 
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(error), backgroundColor: Theme.of(context).colorScheme.error));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
         }
       },
     );

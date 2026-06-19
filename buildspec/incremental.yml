@@ -16,7 +16,9 @@ phases:
       - export PATH="$PATH:$(pwd)/flutter/bin"
       - cd incremental
       - flutter pub get
-      - dart fix --apply
+      # Gate the deploy on the analyzer; never mutate source at build time so
+      # the deployed artifact is built from the commit as-is.
+      - flutter analyze
 
   build:
     commands:

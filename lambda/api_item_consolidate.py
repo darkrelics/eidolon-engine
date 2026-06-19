@@ -255,7 +255,8 @@ def handle_consolidation(character_id: str, player_id: str, prototype_id_filter:
     all_keep_updates = []
     all_removals = []
     for proto_id, group in prototype_map.items():
-        max_stack = prototype_cache[proto_id].get("MaxStack", 99) or 99
+        # MaxStack of zero or less means unbounded (coins): merge into one stack.
+        max_stack = prototype_cache[proto_id].get("MaxStack", 99)
         keep_updates, remove_entries, total_qty, stacks_after = consolidate_group(group, max_stack)
         if not remove_entries:
             continue

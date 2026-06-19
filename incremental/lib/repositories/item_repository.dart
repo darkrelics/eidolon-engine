@@ -27,8 +27,8 @@ class ItemRepository {
   ItemRepository({
     required ApiService apiService,
     IndexedDBService? indexedDBService,
-  })  : _apiService = apiService,
-        _indexedDB = indexedDBService ?? IndexedDBService();
+  }) : _apiService = apiService,
+       _indexedDB = indexedDBService ?? IndexedDBService();
 
   /// Get enriched item with full prototype data merged in.
   ///
@@ -54,7 +54,9 @@ class ItemRepository {
         ...itemBrief, // Item instance fields override (ItemID, Quantity)
       };
 
-      debugPrint('ItemRepository: Enriched item $itemId with prototype $prototypeId');
+      debugPrint(
+        'ItemRepository: Enriched item $itemId with prototype $prototypeId',
+      );
       return enrichedItem;
     } catch (e) {
       debugPrint('ItemRepository: Error enriching item $itemId: $e');
@@ -77,7 +79,9 @@ class ItemRepository {
       return {};
     }
 
-    debugPrint('ItemRepository: Loading inventory details for ${rootItemIds.length} root items');
+    debugPrint(
+      'ItemRepository: Loading inventory details for ${rootItemIds.length} root items',
+    );
 
     try {
       final seedIds = rootItemIds.where((id) => id.isNotEmpty).toSet();
@@ -90,7 +94,9 @@ class ItemRepository {
       final briefsById = <String, Map<String, dynamic>>{};
       var frontier = seedIds;
       while (frontier.isNotEmpty) {
-        final pending = frontier.where((id) => !briefsById.containsKey(id)).toList();
+        final pending = frontier
+            .where((id) => !briefsById.containsKey(id))
+            .toList();
         if (pending.isEmpty) {
           break;
         }
@@ -119,7 +125,9 @@ class ItemRepository {
           prototypeIds.add(prototypeId);
         }
       }
-      debugPrint('ItemRepository: Found ${prototypeIds.length} unique prototypes');
+      debugPrint(
+        'ItemRepository: Found ${prototypeIds.length} unique prototypes',
+      );
       await Future.wait(prototypeIds.map(_getPrototype));
 
       final enriched = <String, Map<String, dynamic>>{};
@@ -130,10 +138,7 @@ class ItemRepository {
           continue;
         }
         final prototype = await _getPrototype(prototypeId);
-        enriched[entry.key] = {
-          ...prototype,
-          ...brief,
-        };
+        enriched[entry.key] = {...prototype, ...brief};
       }
 
       debugPrint('ItemRepository: Loaded ${enriched.length} enriched items');
@@ -154,11 +159,15 @@ class ItemRepository {
       try {
         final cached = await _indexedDB.getItemBrief(itemId);
         if (cached != null) {
-          debugPrint('ItemRepository: Item brief $itemId found in IndexedDB cache');
+          debugPrint(
+            'ItemRepository: Item brief $itemId found in IndexedDB cache',
+          );
           return cached;
         }
       } catch (e) {
-        debugPrint('ItemRepository: IndexedDB read failed for item $itemId: $e');
+        debugPrint(
+          'ItemRepository: IndexedDB read failed for item $itemId: $e',
+        );
       }
     }
 
@@ -196,7 +205,9 @@ class ItemRepository {
   Future<Map<String, dynamic>> _getPrototype(String prototypeId) async {
     // Try memory cache first (fastest)
     if (_prototypeMemoryCache.containsKey(prototypeId)) {
-      debugPrint('ItemRepository: Prototype $prototypeId found in memory cache');
+      debugPrint(
+        'ItemRepository: Prototype $prototypeId found in memory cache',
+      );
       return _prototypeMemoryCache[prototypeId]!;
     }
 
@@ -205,13 +216,17 @@ class ItemRepository {
       try {
         final cached = await _indexedDB.getItemPrototype(prototypeId);
         if (cached != null) {
-          debugPrint('ItemRepository: Prototype $prototypeId found in IndexedDB cache');
+          debugPrint(
+            'ItemRepository: Prototype $prototypeId found in IndexedDB cache',
+          );
           // Store in memory cache for next time
           _prototypeMemoryCache[prototypeId] = cached;
           return cached;
         }
       } catch (e) {
-        debugPrint('ItemRepository: IndexedDB read failed for prototype $prototypeId: $e');
+        debugPrint(
+          'ItemRepository: IndexedDB read failed for prototype $prototypeId: $e',
+        );
       }
     }
 
@@ -228,9 +243,13 @@ class ItemRepository {
       if (_indexedDB.isSupported) {
         try {
           await _indexedDB.putItemPrototype(prototype);
-          debugPrint('ItemRepository: Cached prototype $prototypeId in IndexedDB');
+          debugPrint(
+            'ItemRepository: Cached prototype $prototypeId in IndexedDB',
+          );
         } catch (e) {
-          debugPrint('ItemRepository: Failed to cache prototype in IndexedDB: $e');
+          debugPrint(
+            'ItemRepository: Failed to cache prototype in IndexedDB: $e',
+          );
           // Don't throw - caching is best-effort
         }
       }

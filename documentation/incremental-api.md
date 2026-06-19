@@ -685,35 +685,266 @@ Consumes an inventory item and applies its effects server-side. Supports stackab
 - `409 Conflict` - Item has no effect in current state (e.g., no wounds, active story in progress)
 - `500 Internal Server Error` - Database update failed
 
-### Stack Operations (Future)
+### Split Item Stack
 
-These endpoints will manage stackable item operations when implemented:
+Splits a stackable item into two stacks.
 
-**Stack Merging:** Automatic during inventory updates
+**Endpoint:** `POST /item/split`
 
-- When picking up stackable items, system automatically merges with existing stacks
-- Uses UUIDv7 comparison - older stack keeps its ItemID
-- Updates Quantity field on the surviving stack
+**Authentication:** Required
 
-**Stack Splitting (Planned):** `POST /item/split`
+**Request Body:**
 
-- Split a stack into two separate stacks
-- Required for trade, dropping partial stacks
-- Body: `{"ItemID": "uuid", "Quantity": 50}`
-- Returns: New stack ItemID
+```json
+{
+  "CharacterID": "uuid",
+  "ItemID": "uuid",
+  "Quantity": 50
+}
+```
 
-**Inventory Consolidation (Planned):** `POST /inventory/consolidate`
+**Response (200 OK):**
 
-- Merges all matching stackable items in inventory
-- Reduces inventory slots used
-- Returns: Updated inventory with consolidated stacks
+```json
+{
+  "Success": true,
+  "OriginalStack": { "ItemID": "uuid", "RemainingQuantity": 49 },
+  "NewStack": { "ItemID": "uuid", "Quantity": 50 },
+  "PrototypeID": "uuid"
+}
+```
 
-**Stack Rules:**
+### Consolidate Item Stacks
 
-- Stackable items: Immutable except for Quantity field
-- Non-stackable items: Mutable, no Quantity field
-- Stack merging: Oldest ItemID (UUIDv7) wins
-- All coins are stackable with unlimited stack size
+Merges stacks sharing a prototype across the character's inventory tree,
+respecting `MaxStack` (a MaxStack of zero or less, e.g. coins, merges into a
+single unbounded stack). Pass `PrototypeID` to consolidate one prototype, or
+omit it to consolidate everything.
+
+**Endpoint:** `POST /item/consolidate`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "CharacterID": "uuid",
+  "PrototypeID": "uuid (optional)"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "Success": true,
+  "Message": "...",
+  "ConsolidatedStacks": [
+    {
+      "PrototypeID": "uuid",
+      "TotalQuantity": 120,
+      "StacksAfterConsolidation": 1,
+      "StacksConsolidated": 3,
+      "RemovedItemIDs": ["uuid", "uuid"]
+    }
+  ],
+  "TotalStacksRemoved": 2
+}
+```
+
+### Discard Item
+
+Discards an owned item, or part of a stack.
+
+**Endpoint:** `POST /item/discard`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "CharacterID": "uuid",
+  "ItemID": "uuid",
+  "Quantity": 1
+}
+```
+
+`Quantity` is optional and applies to stackables only; omitting it discards
+the entire stack (or the item, for non-stackables).
+
+**Response (200 OK):**
+
+```json
+{
+  "Success": true,
+  "ItemDiscarded": { "ItemID": "uuid", "PrototypeID": "uuid" },
+  "QuantityDiscarded": 1,
+  "ItemFullyDiscarded": false
+}
+```
+
+### Equip Item
+
+Equips a wearable item into a slot. The slot must be listed in the
+prototype's `WornOn`, and the slot must be free; hand slots use the
+character's `LeftHandID`/`RightHandID`, other slots the `WornSlots` map.
+Equipped items' `TraitMods` affect combat ratings.
+
+**Endpoint:** `POST /item/equip`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "CharacterID": "uuid",
+  "ItemID": "uuid",
+  "Slot": "weapon"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{ "Success": true, "ItemID": "uuid", "Slot": "weapon", "PrototypeID": "uuid" }
+```
+
+### Unequip Item
+
+Removes a worn item from its slot (it stays in inventory).
+
+**Endpoint:** `POST /item/unequip`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "CharacterID": "uuid",
+  "ItemID": "uuid"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{ "Success": true, "ItemID": "uuid", "Slot": "weapon" }
+```
+
+### Move Item
+
+Moves an item between containers, or to the character root (pass the
+CharacterID as the destination). Worn items must be unequipped first; moves
+that would nest a container inside itself are rejected.
+
+**Endpoint:** `POST /item/move`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "CharacterID": "uuid",
+  "ItemID": "uuid",
+  "DestinationID": "uuid"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{ "Success": true, "ItemID": "uuid", "DestinationID": "uuid" }
+```
+
+### List Store Inventory
+
+Lists a store's purchasable items, filtered by the character's level and live
+stock, enriched with full prototype details.
+
+**Endpoint:** `GET /store/list`
+
+**Authentication:** Required
+
+**Query Parameters:**
+
+- `CharacterID` (required)
+- `StoreID` (optional, defaults to `general-store`)
+
+**Response (200 OK):**
+
+```json
+{
+  "StoreID": "general-store",
+  "StoreName": "...",
+  "Description": "...",
+  "Items": [
+    {
+      "PrototypeID": "uuid",
+      "PrototypeName": "...",
+      "Price": 120,
+      "Stock": -1,
+      "Category": "...",
+      "Featured": false,
+      "Prototype": {}
+    }
+  ]
+}
+```
+
+### Purchase Item
+
+Purchases items from a store, paying with the character's coin items. The
+goods, coin spend (with canonicalized change), stock decrement, and inventory
+update commit in a single atomic transaction.
+
+**Endpoint:** `POST /store/purchase`
+
+**Authentication:** Required
+
+**Request Body:**
+
+```json
+{
+  "CharacterID": "uuid",
+  "PrototypeID": "uuid",
+  "Quantity": 1,
+  "StoreID": "general-store"
+}
+```
+
+`Quantity` defaults to 1 (maximum 99); `StoreID` defaults to `general-store`.
+
+**Response (200 OK):**
+
+```json
+{
+  "Success": true,
+  "ItemIDs": ["uuid"],
+  "Quantity": 1,
+  "TotalCost": 120,
+  "CurrencyRemaining": 880,
+  "Message": "Successfully purchased 1 item(s)"
+}
+```
+
+**Error Responses:**
+
+- `402 Payment Required` - Insufficient coins
+- `409 Conflict` - Out of stock, or balance/inventory changed during purchase
+
+### Stack Rules
+
+- Stackable items: immutable except for the Quantity field
+- Non-stackable items: mutable, no Quantity field
+- Stack merging happens by PrototypeID via the shared helpers in
+  `eidolon/items.py`; it does not depend on item-ID ordering
+- A prototype `MaxStack` of zero or less means unbounded stacks; coins use
+  `MaxStack: -1` (see [currency.md](currency.md))
 
 ## Client Polling Pattern (Incremental mode)
 

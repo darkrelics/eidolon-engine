@@ -425,13 +425,18 @@ paths:
       summary: Abandon active story
       description: Abandons a character's current story and resets game mode.
       operationId: abandonStory
-      parameters:
-        - in: query
-          name: CharacterID
-          required: true
-          schema:
-            type: string
-            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - CharacterID
+              properties:
+                CharacterID:
+                  type: string
+                  format: uuid
       responses:
         "200":
           description: Story abandoned

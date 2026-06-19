@@ -85,7 +85,8 @@ Functions are deployed via Character, Player, and Story stacks (not Lambda Stack
 Each function has a fixed logical ID to prevent recreation:
 
 ```python
-# From deployment/stacks/character_stack.py, player_stack.py, story_stack.py
+# Logical IDs as defined in cf/eidolon-lambda-character.yml,
+# cf/eidolon-lambda-cognito.yml, and cf/eidolon-lambda-story.yml
 logical_id_map = {
     # Character Stack (8 functions)
     "api-archetype-list": "ApiArchetypeListFunction",
@@ -195,27 +196,24 @@ All Lambda functions must follow these parameter standards:
 
 ## Deployment
 
-Lambda functions are deployed through the modular CDK stack system:
+Lambda functions are deployed through the CloudFormation templates in `cf/`,
+orchestrated by `scripts/eidolon_deployment.py` (see
+[Deployment Guide](deployment.md#system-architecture)):
 
-### CDK Stack Deployment (Lambda Stack #3)
+### Stack Deployment
 
-1. **CodeBuild Process** (Stack #1):
-   - Builds Lambda layer from `requirements/lambda-requirements.txt`
+1. **CodeBuild Process** (`eidolon-codebuild`):
+   - Builds the Lambda layer from `requirements/lambda-requirements.txt`
    - Packages each function with `eidolon` modules
-   - Uploads artifacts to S3 bucket
+   - Uploads artifacts to the S3 bucket
 
-2. **Lambda Stack Deployment** (Stack #3):
-   - Creates shared execution role
-   - Deploys Lambda layer
-   - No functions deployed in Lambda Stack itself
+2. **Function Stacks** (`eidolon-lambda-cognito`, `eidolon-lambda-character`,
+   `eidolon-lambda-story`):
+   - Deploy the functions with fixed logical IDs
+   - Reference the shared execution role and layer as stack parameters
+   - Set environment variables in the templates
 
-3. **Character, Player, Story Stacks** (Stacks #4, #5, #6):
-   - Deploy 17 functions total with fixed logical IDs
-   - Import shared role and layer from Lambda Stack
-   - Set environment variables from stack outputs
-   - Use shared DynamoDB managed policy
-
-4. **Post-Deployment Updates** (Phase 11):
+3. **Post-Deployment Updates**:
 
    ```python
    # Automatic update from S3 artifacts
@@ -280,7 +278,7 @@ response = lambda_handler(event, {})
 
 1. Create the function file in this directory
 2. Import any needed shared modules from `eidolon/`
-3. Add the function to the appropriate CDK stack
+3. Add the function to the appropriate CloudFormation template (`cf/eidolon-lambda-*.yml`) and the deployment script's update list
 4. The build process will automatically package it
 
 ## Lambda Function Architecture Pattern
