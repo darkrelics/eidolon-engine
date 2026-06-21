@@ -17,7 +17,7 @@ defusedxml==0.7.1
 dill==0.4.0
 filelock==3.29.1
 idna==3.15
-isort==7.0.0
+isort==8.0.1
 license-expression==30.4.4
 markdown-it-py==4.0.0
 mccabe==0.7.0
